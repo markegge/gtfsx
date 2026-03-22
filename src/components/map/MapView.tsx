@@ -25,14 +25,13 @@ export function MapView() {
   const {
     mapMode, setMapMode, stopPlacementMode,
     selectedRouteId, selectRoute, selectStop,
-    shapes, addShape, updateShapePoints, recalcShapeDistances,
+    shapes, updateShapePoints, recalcShapeDistances,
     stops, addStop, removeStop,
     routeStops, addRouteStop, removeRouteStop,
     trips,
-    drawingRouteId, setDrawingRouteId,
+    setDrawingRouteId,
     editingShapeId, setEditingShapeId,
     setSidebarSection,
-    snapToRoad: snapToRoadEnabled,
   } = store;
 
   // Popup state
@@ -200,7 +199,12 @@ export function MapView() {
     const feature = e.features[0];
     if (!feature) return;
 
-    if (feature.geometry.type === 'LineString' && drawingRouteId) {
+    // Read current state directly to avoid stale closures
+    const currentState = useStore.getState();
+    const currentDrawingRouteId = currentState.drawingRouteId;
+    const currentSnapToRoad = currentState.snapToRoad;
+
+    if (feature.geometry.type === 'LineString' && currentDrawingRouteId) {
       const rawCoords: [number, number][] = feature.geometry.coordinates;
 
       const createShapeFromCoords = (coords: [number, number][]) => {
@@ -211,14 +215,15 @@ export function MapView() {
           shape_pt_sequence: i,
           shape_dist_traveled: 0,
         }));
-        addShape({ shape_id: shapeId, points });
-        recalcShapeDistances(shapeId);
+        const st = useStore.getState();
+        st.addShape({ shape_id: shapeId, points });
+        st.recalcShapeDistances(shapeId);
 
         const tripId = generateId('trip');
-        useStore.getState().addTrip({
+        st.addTrip({
           trip_id: tripId,
-          route_id: drawingRouteId,
-          service_id: useStore.getState().calendars[0]?.service_id || 'service-1',
+          route_id: currentDrawingRouteId,
+          service_id: st.calendars[0]?.service_id || 'service-1',
           direction_id: 0,
           shape_id: shapeId,
           trip_headsign: '',
@@ -227,7 +232,7 @@ export function MapView() {
 
       if (drawRef.current) drawRef.current.deleteAll();
 
-      if (snapToRoadEnabled) {
+      if (currentSnapToRoad) {
         setIsSnapping(true);
         snapToRoad(rawCoords)
           .then((snappedCoords) => {
@@ -238,16 +243,16 @@ export function MapView() {
           })
           .finally(() => {
             setIsSnapping(false);
-            setMapMode('select');
-            setDrawingRouteId(null);
+            useStore.getState().setMapMode('select');
+            useStore.getState().setDrawingRouteId(null);
           });
       } else {
         createShapeFromCoords(rawCoords);
-        setMapMode('select');
-        setDrawingRouteId(null);
+        useStore.getState().setMapMode('select');
+        useStore.getState().setDrawingRouteId(null);
       }
     }
-  }, [drawingRouteId, addShape, recalcShapeDistances, setMapMode, setDrawingRouteId, snapToRoadEnabled]);
+  }, []); // No dependencies needed — reads directly from store
 
   const handleDrawUpdate = useCallback((e: any) => {
     // During edit_shape mode, updates happen in real-time as vertices are dragged

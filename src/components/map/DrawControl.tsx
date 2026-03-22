@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useControl } from 'react-map-gl/mapbox';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 
@@ -13,6 +13,15 @@ interface DrawControlProps {
 }
 
 export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawControlProps) {
+  // Use refs to always have the latest callbacks without re-registering listeners
+  const onCreateRef = useRef(onCreate);
+  const onUpdateRef = useRef(onUpdate);
+  const onDeleteRef = useRef(onDelete);
+
+  useEffect(() => { onCreateRef.current = onCreate; }, [onCreate]);
+  useEffect(() => { onUpdateRef.current = onUpdate; }, [onUpdate]);
+  useEffect(() => { onDeleteRef.current = onDelete; }, [onDelete]);
+
   const draw = useControl<MapboxDraw>(
     () => {
       const d = new MapboxDraw({
@@ -20,7 +29,6 @@ export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawContr
         controls: {},
         defaultMode: 'simple_select',
         styles: [
-          // Line during drawing
           {
             id: 'gl-draw-line',
             type: 'line',
@@ -31,7 +39,6 @@ export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawContr
               'line-dasharray': [2, 2],
             },
           },
-          // Vertices
           {
             id: 'gl-draw-point',
             type: 'circle',
@@ -43,7 +50,6 @@ export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawContr
               'circle-stroke-width': 2,
             },
           },
-          // Midpoints
           {
             id: 'gl-draw-midpoint',
             type: 'circle',
@@ -54,7 +60,6 @@ export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawContr
               'circle-opacity': 0.5,
             },
           },
-          // Polygon fill (for flex zones)
           {
             id: 'gl-draw-polygon-fill',
             type: 'fill',
@@ -64,7 +69,6 @@ export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawContr
               'fill-opacity': 0.15,
             },
           },
-          // Polygon outline
           {
             id: 'gl-draw-polygon-stroke',
             type: 'line',
@@ -80,14 +84,15 @@ export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawContr
       return d;
     },
     ({ map }) => {
-      if (onCreate) map.on('draw.create', onCreate);
-      if (onUpdate) map.on('draw.update', onUpdate);
-      if (onDelete) map.on('draw.delete', onDelete);
+      // Use stable wrapper functions that delegate to refs
+      map.on('draw.create', (e: any) => onCreateRef.current?.(e));
+      map.on('draw.update', (e: any) => onUpdateRef.current?.(e));
+      map.on('draw.delete', (e: any) => onDeleteRef.current?.(e));
     },
     ({ map }: { map: any }) => {
-      if (onCreate) map.off('draw.create', onCreate);
-      if (onUpdate) map.off('draw.update', onUpdate);
-      if (onDelete) map.off('draw.delete', onDelete);
+      map.off('draw.create');
+      map.off('draw.update');
+      map.off('draw.delete');
     },
   );
 

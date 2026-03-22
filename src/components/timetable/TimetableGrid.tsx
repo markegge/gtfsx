@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState, useRef } from 'react';
+import { type KeyboardEvent, useMemo, useCallback, useState, useRef } from 'react';
 import { useStore } from '../../store';
 import { formatTimeShort, normalizeTimeInput } from '../../utils/time';
 import { generateId } from '../../services/idGenerator';
@@ -6,7 +6,7 @@ import { generateId } from '../../services/idGenerator';
 export function TimetableGrid() {
   const {
     selectedRouteId, routes, trips, stopTimes, stops, routeStops, calendars,
-    setStopTime, addTrip, duplicateTrip, removeTrip, setStopTimes,
+    setStopTime, addTrip, duplicateTrip, removeTrip,
     interpolateStopTimes,
   } = useStore();
 
@@ -73,7 +73,7 @@ export function TimetableGrid() {
   }, [setStopTime]);
 
   // Tab key navigation
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>, tripIdx: number, stopIdx: number) => {
+  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>, tripIdx: number, stopIdx: number) => {
     if (e.key === 'Tab') {
       e.preventDefault();
       const totalStops = orderedStops.length;

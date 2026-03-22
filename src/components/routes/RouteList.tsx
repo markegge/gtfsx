@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import { RouteEditor } from './RouteEditor';

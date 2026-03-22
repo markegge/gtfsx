@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useControl } from 'react-map-gl/mapbox';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 
@@ -9,7 +9,7 @@ interface DrawControlProps {
   onCreate?: (e: any) => void;
   onUpdate?: (e: any) => void;
   onDelete?: (e: any) => void;
-  drawRef?: React.MutableRefObject<MapboxDraw | null>;
+  drawRef?: import('react').MutableRefObject<MapboxDraw | null>;
 }
 
 export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawControlProps) {
@@ -84,7 +84,7 @@ export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawContr
       if (onUpdate) map.on('draw.update', onUpdate);
       if (onDelete) map.on('draw.delete', onDelete);
     },
-    ({ map }) => {
+    ({ map }: { map: any }) => {
       if (onCreate) map.off('draw.create', onCreate);
       if (onUpdate) map.off('draw.update', onUpdate);
       if (onDelete) map.off('draw.delete', onDelete);

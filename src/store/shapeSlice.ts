@@ -1,7 +1,6 @@
 import type { StateCreator } from 'zustand';
 import type { Shape } from '../types/gtfs';
 import length from '@turf/length';
-import along from '@turf/along';
 import { lineString } from '@turf/helpers';
 
 export interface ShapeSlice {
@@ -28,8 +27,6 @@ export const createShapeSlice: StateCreator<ShapeSlice, [['zustand/immer', never
     const shape = state.shapes.find((s) => s.shape_id === shape_id);
     if (!shape || shape.points.length < 2) return;
     const coords = shape.points.map((p) => [p.shape_pt_lon, p.shape_pt_lat] as [number, number]);
-    const line = lineString(coords);
-    const totalLen = length(line, { units: 'meters' });
     shape.points[0].shape_dist_traveled = 0;
     for (let i = 1; i < shape.points.length; i++) {
       const subCoords = coords.slice(0, i + 1);

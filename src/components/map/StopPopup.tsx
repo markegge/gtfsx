@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Popup } from 'react-map-gl/mapbox';
 import { useStore } from '../../store';
 import { formatTimeShort } from '../../utils/time';

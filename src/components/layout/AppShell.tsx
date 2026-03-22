@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { TopBar } from './TopBar';
 import { Sidebar } from './Sidebar';
 import { BottomPanel } from './BottomPanel';

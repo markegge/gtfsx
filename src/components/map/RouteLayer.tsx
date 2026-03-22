@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Source, Layer } from 'react-map-gl/mapbox';
 import { useStore } from '../../store';
 import type { LayerProps } from 'react-map-gl/mapbox';

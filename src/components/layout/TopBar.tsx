@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useStore } from '../../store';
 import { ImportDialog } from '../import-export/ImportDialog';
 import { ExportDialog } from '../import-export/ExportDialog';

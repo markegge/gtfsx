@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { useStore } from '../../store';
 import type { SidebarSection } from '../../types/ui';
 

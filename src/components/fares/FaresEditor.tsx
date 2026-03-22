@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useStore } from '../../store';
 import { FormField } from '../ui/FormField';
 import { EmptyState } from '../ui/EmptyState';
@@ -146,7 +146,6 @@ export function FaresEditor() {
             </label>
             <div className="flex flex-wrap gap-1.5">
               {FARE_TYPES.map((type) => {
-                const typeTag = `_type_${type.toLowerCase()}`;
                 // We encode fare type in fare_id prefix or a convention. Use a simple approach:
                 // check if fare_id contains a type hint
                 return (

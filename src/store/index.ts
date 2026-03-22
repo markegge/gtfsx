@@ -25,17 +25,17 @@ export type AppStore = AgencySlice &
   ProjectSlice;
 
 export const useStore = create<AppStore>()(
-  immer((...args) => ({
-    ...createAgencySlice(...args),
-    ...createCalendarSlice(...args),
-    ...createRouteSlice(...args),
-    ...createStopSlice(...args),
-    ...createTripSlice(...args),
-    ...createShapeSlice(...args),
-    ...createFareSlice(...args),
-    ...createFeedInfoSlice(...args),
-    ...createValidationSlice(...args),
-    ...createUISlice(...args),
-    ...createProjectSlice(...args),
+  immer((...a) => ({
+    ...(createAgencySlice as any)(...a),
+    ...(createCalendarSlice as any)(...a),
+    ...(createRouteSlice as any)(...a),
+    ...(createStopSlice as any)(...a),
+    ...(createTripSlice as any)(...a),
+    ...(createShapeSlice as any)(...a),
+    ...(createFareSlice as any)(...a),
+    ...(createFeedInfoSlice as any)(...a),
+    ...(createValidationSlice as any)(...a),
+    ...(createUISlice as any)(...a),
+    ...(createProjectSlice as any)(...a),
   }))
 );

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { useStore } from '../../store';
 import { runValidation } from '../../services/validation';
 import { Badge } from '../ui/Badge';

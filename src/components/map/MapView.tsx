@@ -1,6 +1,6 @@
-import React, { useCallback, useRef, useMemo, useEffect, useState } from 'react';
+import { useCallback, useRef, useMemo, useEffect, useState } from 'react';
 import Map, { NavigationControl } from 'react-map-gl/mapbox';
-import MapboxDraw from '@mapbox/mapbox-gl-draw';
+import type MapboxDraw from '@mapbox/mapbox-gl-draw';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useStore } from '../../store';
 import { DrawControl } from './DrawControl';
@@ -25,10 +25,10 @@ export function MapView() {
     selectedRouteId, selectRoute, selectStop,
     shapes, addShape, updateShapePoints, recalcShapeDistances,
     stops, addStop, removeStop,
-    routes, routeStops, addRouteStop, removeRouteStop,
+    routeStops, addRouteStop, removeRouteStop,
     trips,
     drawingRouteId, setDrawingRouteId,
-    editingShapeId, setEditingShapeId, setEditingRouteId,
+    editingShapeId, setEditingShapeId,
     setSidebarSection,
   } = store;
 

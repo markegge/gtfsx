@@ -1,11 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import { DayToggle } from '../ui/DayToggle';
 import { FormField } from '../ui/FormField';
 import { CalendarPreview } from './CalendarPreview';
 import { generateId } from '../../services/idGenerator';
-import type { Calendar, CalendarDate } from '../../types/gtfs';
+import type { Calendar } from '../../types/gtfs';
 import { format } from 'date-fns';
 
 function formatGtfsDate(d: string): string {

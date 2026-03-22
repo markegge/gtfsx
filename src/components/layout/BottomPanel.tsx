@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { useStore } from '../../store';
 import { TimetableGrid } from '../timetable/TimetableGrid';
 import { ValidationPanel } from '../validation/ValidationPanel';

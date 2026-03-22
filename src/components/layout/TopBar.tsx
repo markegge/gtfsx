@@ -28,7 +28,7 @@ export function TopBar() {
             <circle cx="14" cy="19.5" r="1" fill="#FFF8F0"/>
             <circle cx="18" cy="19.5" r="1" fill="#FFF8F0"/>
           </svg>
-          Routeweaver
+          Transit Feeds
         </div>
 
         {/* Project name */}

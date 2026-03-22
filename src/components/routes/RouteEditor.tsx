@@ -40,7 +40,6 @@ function CostEstimationSection({ route }: { route: Route }) {
           className="w-full px-3 py-2 border-2 border-sand rounded-lg text-sm text-dark-brown bg-cream focus:outline-none focus:border-coral focus:bg-white transition-colors"
         />
       </div>
-
       <div className="flex flex-col gap-1.5 text-sm">
         <div className="flex justify-between">
           <span className="text-warm-gray">Daily Revenue Hours</span>
@@ -74,29 +73,31 @@ function CostEstimationSection({ route }: { route: Route }) {
 
 export function RouteEditor() {
   const {
-    routes, updateRoute, removeRoute, trips, shapes,
+    routes, updateRoute, removeRoute, trips, shapes, removeTrip,
     selectedRouteId, selectRoute,
     setMapMode, setDrawingRouteId,
     setEditingRouteId, setEditingShapeId,
     setSidebarSection,
     snapToRoad: snapToRoadEnabled, setSnapToRoad,
+    removeShape,
     updateShapePoints, recalcShapeDistances,
   } = useStore();
 
   const [costOpen, setCostOpen] = useState(false);
   const [snappingShapeId, setSnappingShapeId] = useState<string | null>(null);
+  const [drawDirection, setDrawDirection] = useState<0 | 1>(0);
+  const [confirmDeleteShapeId, setConfirmDeleteShapeId] = useState<string | null>(null);
 
   const route = routes.find((r) => r.route_id === selectedRouteId);
 
-  // Find shapes for this route (via trips)
   const routeShapes = useMemo(() => {
     if (!selectedRouteId) return [];
     const routeTrips = trips.filter((t) => t.route_id === selectedRouteId);
     const shapeIds = [...new Set(routeTrips.map((t) => t.shape_id).filter(Boolean))] as string[];
     return shapeIds.map((sid) => {
       const shape = shapes.find((s) => s.shape_id === sid);
-      const trip = routeTrips.find((t) => t.shape_id === sid);
-      return { shape, trip };
+      const shapeTrips = routeTrips.filter((t) => t.shape_id === sid);
+      return { shape, trips: shapeTrips, trip: shapeTrips[0] };
     }).filter((s) => s.shape);
   }, [selectedRouteId, trips, shapes]);
 
@@ -107,6 +108,8 @@ export function RouteEditor() {
   };
 
   const handleDrawShape = () => {
+    // Set direction on window for MapView to read
+    (window as any).__drawingDirection = drawDirection;
     setDrawingRouteId(route.route_id);
     setMapMode('draw_route');
   };
@@ -116,9 +119,25 @@ export function RouteEditor() {
     setMapMode('edit_shape');
   };
 
-  const handleStopEditShape = () => {
-    setEditingShapeId(null);
-    setMapMode('select');
+  const handleSaveShapeEdit = () => {
+    // Call the save function exposed by MapView
+    (window as any).__shapeEditSave?.();
+  };
+
+  const handleCancelShapeEdit = () => {
+    // Call the discard function exposed by MapView
+    (window as any).__shapeEditDiscard?.();
+  };
+
+  const handleDeleteShape = (shapeId: string) => {
+    // Remove all trips that use this shape
+    const shapeTrips = trips.filter((t) => t.shape_id === shapeId);
+    for (const trip of shapeTrips) {
+      removeTrip(trip.trip_id);
+    }
+    // Remove the shape itself
+    removeShape(shapeId);
+    setConfirmDeleteShapeId(null);
   };
 
   const handleDelete = () => {
@@ -275,60 +294,89 @@ export function RouteEditor() {
 
         {routeShapes.length > 0 ? (
           <div className="flex flex-col gap-1.5 mb-3">
-            {routeShapes.map(({ shape, trip }) => (
+            {routeShapes.map(({ shape, trips: shapeTrips, trip }) => (
               <div
                 key={shape!.shape_id}
-                className="flex items-center gap-2 px-3 py-2 bg-cream rounded-lg text-sm"
+                className="bg-cream rounded-lg text-sm"
               >
-                <div
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: `#${route.route_color}` }}
-                />
-                <div className="flex-1 min-w-0">
-                  <span className="text-dark-brown font-medium text-xs">
-                    {trip?.trip_headsign || (trip?.direction_id === 0 ? 'Outbound' : 'Inbound')}
-                  </span>
-                  <span className="text-[10px] text-warm-gray ml-1.5">
-                    {shape!.points.length} pts
-                  </span>
-                </div>
-                {mapMode === 'edit_shape' && editingShapeId === shape!.shape_id ? (
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => {
-                        // Discard: restore original and exit
-                        setEditingShapeId(null);
-                        setMapMode('select');
-                      }}
-                      className="px-2 py-1 bg-sand text-brown rounded text-[11px] font-semibold hover:bg-red-100 hover:text-red-600 transition-colors"
-                      title="Discard changes"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleStopEditShape}
-                      className="px-2 py-1 bg-teal text-white rounded text-[11px] font-semibold hover:bg-teal/80 transition-colors"
-                      title="Save changes"
-                    >
-                      Save
-                    </button>
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <div
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: `#${route.route_color}` }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-dark-brown font-medium text-xs">
+                      {trip?.trip_headsign || (trip?.direction_id === 0 ? 'Outbound' : 'Inbound')}
+                    </span>
+                    <span className="text-[10px] text-warm-gray ml-1.5">
+                      {shape!.points.length} pts · {shapeTrips.length} trip{shapeTrips.length !== 1 ? 's' : ''}
+                    </span>
                   </div>
-                ) : (
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => handleResnapShape(shape!.shape_id)}
-                      disabled={snappingShapeId === shape!.shape_id}
-                      className="px-2 py-1 bg-sand text-brown rounded text-[11px] font-semibold hover:bg-coral-light hover:text-coral transition-colors disabled:opacity-50"
-                      title="Re-snap to road"
-                    >
-                      {snappingShapeId === shape!.shape_id ? 'Snapping...' : 'Snap'}
-                    </button>
-                    <button
-                      onClick={() => handleEditShape(shape!.shape_id)}
-                      className="px-2 py-1 bg-sand text-brown rounded text-[11px] font-semibold hover:bg-coral-light hover:text-coral transition-colors"
-                    >
-                      Edit
-                    </button>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-1 px-3 pb-2">
+                  {mapMode === 'edit_shape' && editingShapeId === shape!.shape_id ? (
+                    <>
+                      <button
+                        onClick={handleCancelShapeEdit}
+                        className="flex-1 px-2 py-1.5 bg-sand text-brown rounded text-[11px] font-semibold hover:bg-red-100 hover:text-red-600 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSaveShapeEdit}
+                        className="flex-1 px-2 py-1.5 bg-teal text-white rounded text-[11px] font-semibold hover:bg-teal/80 transition-colors"
+                      >
+                        Save
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleEditShape(shape!.shape_id)}
+                        className="flex-1 px-2 py-1.5 bg-sand text-brown rounded text-[11px] font-semibold hover:bg-coral-light hover:text-coral transition-colors"
+                      >
+                        Edit Vertices
+                      </button>
+                      <button
+                        onClick={() => handleResnapShape(shape!.shape_id)}
+                        disabled={snappingShapeId === shape!.shape_id}
+                        className="px-2 py-1.5 bg-sand text-brown rounded text-[11px] font-semibold hover:bg-coral-light hover:text-coral transition-colors disabled:opacity-50"
+                      >
+                        {snappingShapeId === shape!.shape_id ? '...' : 'Snap'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteShapeId(shape!.shape_id)}
+                        className="px-2 py-1.5 bg-sand text-brown rounded text-[11px] font-semibold hover:bg-red-100 hover:text-red-600 transition-colors"
+                        title="Delete shape"
+                      >
+                        ×
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {/* Delete confirmation */}
+                {confirmDeleteShapeId === shape!.shape_id && (
+                  <div className="mx-3 mb-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-[11px] text-red-700 mb-2">
+                      Delete this shape and its {shapeTrips.length} trip{shapeTrips.length !== 1 ? 's' : ''}?
+                    </p>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setConfirmDeleteShapeId(null)}
+                        className="flex-1 px-2 py-1 bg-sand text-brown rounded text-[11px] font-semibold"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => handleDeleteShape(shape!.shape_id)}
+                        className="flex-1 px-2 py-1 bg-red-500 text-white rounded text-[11px] font-semibold"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -340,32 +388,56 @@ export function RouteEditor() {
           </p>
         )}
 
-        <div className="flex items-center gap-3 mb-2">
-          <button
-            onClick={handleDrawShape}
-            className="flex-1 px-4 py-2.5 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors"
-          >
-            {routeShapes.length > 0 ? 'Draw Another Shape' : 'Draw Route Shape'}
-          </button>
-        </div>
-
-        <label className="flex items-center gap-2 mb-3 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={snapToRoadEnabled}
-            onChange={(e) => setSnapToRoad(e.target.checked)}
-            className="w-3.5 h-3.5 rounded border-sand text-coral focus:ring-coral"
-          />
-          <span className="text-xs text-dark-brown font-medium">Snap to road</span>
-        </label>
-
         {mapMode === 'edit_shape' && (
-          <div className="mt-2 p-2.5 bg-gold-light rounded-lg">
+          <div className="mb-3 p-2.5 bg-gold-light rounded-lg">
             <p className="text-xs text-amber-800">
-              <strong>Editing shape:</strong> Drag vertices to move them. Click midpoints to add new vertices. Select a vertex and press Delete to remove it. Click "Done" when finished.
+              <strong>Editing shape:</strong> Drag vertices to move them. Click midpoints to add vertices. Select a vertex and press <kbd className="px-1 py-0.5 bg-amber-100 rounded text-[10px]">Delete</kbd> to remove it.
             </p>
           </div>
         )}
+
+        {/* Direction selector for new shapes */}
+        <div className="mb-2">
+          <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
+            Direction for new shape
+          </label>
+          <div className="flex rounded-md border border-sand overflow-hidden">
+            <button
+              onClick={() => setDrawDirection(0)}
+              className={`flex-1 px-3 py-1.5 text-xs font-semibold transition-colors
+                ${drawDirection === 0 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'}`}
+            >
+              Outbound (0)
+            </button>
+            <button
+              onClick={() => setDrawDirection(1)}
+              className={`flex-1 px-3 py-1.5 text-xs font-semibold transition-colors border-l border-sand
+                ${drawDirection === 1 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'}`}
+            >
+              Inbound (1)
+            </button>
+          </div>
+        </div>
+
+        <button
+          onClick={handleDrawShape}
+          className="w-full px-4 py-2.5 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors"
+        >
+          {routeShapes.length > 0 ? 'Draw Another Shape' : 'Draw Route Shape'}
+        </button>
+
+        <div className="flex items-center gap-2 mt-2">
+          <input
+            type="checkbox"
+            id="snap-to-road"
+            checked={snapToRoadEnabled}
+            onChange={(e) => setSnapToRoad(e.target.checked)}
+            className="rounded"
+          />
+          <label htmlFor="snap-to-road" className="text-xs text-dark-brown">
+            Snap to road
+          </label>
+        </div>
       </div>
 
       {/* Quick actions */}

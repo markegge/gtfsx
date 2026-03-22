@@ -16,14 +16,19 @@ export function TopBar() {
       <div className="h-14 bg-white border-b border-sand flex items-center px-5 gap-4 shrink-0">
         {/* Logo */}
         <div className="flex items-center gap-2 font-heading font-extrabold text-xl text-coral">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <rect width="28" height="28" rx="8" fill="#E8734A"/>
-            <path d="M7 20V10C7 8.3 8.3 7 10 7H18C19.7 7 21 8.3 21 10V20" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
-            <circle cx="10" cy="20" r="2.5" fill="white"/>
-            <circle cx="18" cy="20" r="2.5" fill="white"/>
-            <line x1="7" y1="14" x2="21" y2="14" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+          <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+            <rect width="32" height="32" rx="8" fill="#E8734A"/>
+            <path d="M6 24 C10 24, 10 8, 16 8 S22 24, 26 24" stroke="#FFF8F0" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+            <circle cx="8" cy="22" r="2.5" fill="#FFF8F0"/>
+            <circle cx="16" cy="8" r="2.5" fill="#FFF8F0"/>
+            <circle cx="24" cy="22" r="2.5" fill="#FFF8F0"/>
+            <rect x="12" y="14" width="8" height="5" rx="1.5" fill="#FFF8F0"/>
+            <rect x="13.5" y="15" width="2" height="2" rx="0.5" fill="#E8734A"/>
+            <rect x="16.5" y="15" width="2" height="2" rx="0.5" fill="#E8734A"/>
+            <circle cx="14" cy="19.5" r="1" fill="#FFF8F0"/>
+            <circle cx="18" cy="19.5" r="1" fill="#FFF8F0"/>
           </svg>
-          GTFS Builder
+          Routeweaver
         </div>
 
         {/* Project name */}

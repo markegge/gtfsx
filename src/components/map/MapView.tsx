@@ -362,12 +362,12 @@ export function MapView() {
     : 'grab';
 
   return (
-    <div className="flex-1 relative">
+    <div className="flex-1 relative min-h-0">
       <Map
         initialViewState={initialView}
         mapboxAccessToken={MAPBOX_TOKEN}
         mapStyle="mapbox://styles/mapbox/light-v11"
-        style={{ width: '100%', height: '100%' }}
+        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
         cursor={cursor}
         onClick={handleMapClick}
         interactiveLayerIds={mapMode === 'edit_shape' ? [] : ['stop-circles', 'route-lines']}

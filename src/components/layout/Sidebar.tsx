@@ -5,6 +5,7 @@ import { AgencyEditor } from '../agency/AgencyEditor';
 import { CalendarEditor } from '../calendar/CalendarEditor';
 import { RouteList } from '../routes/RouteList';
 import { StopList } from '../stops/StopList';
+import { FaresEditor } from '../fares/FaresEditor';
 import { TimetableSidebar } from '../timetable/TimetableSidebar';
 
 export function Sidebar() {
@@ -19,6 +20,7 @@ export function Sidebar() {
         {section === 'calendar' && <CalendarEditor />}
         {section === 'routes' && <RouteList />}
         {section === 'stops' && <StopList />}
+        {section === 'fares' && <FaresEditor />}
         {section === 'timetable' && <TimetableSidebar />}
       </div>
     </div>

@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import Papa from 'papaparse';
 import { useStore } from '../store';
-import type { Agency, Calendar, CalendarDate, Route, Shape, ShapePoint, Stop, Trip, StopTime, FeedInfo, RouteStop } from '../types/gtfs';
+import type { Agency, Calendar, CalendarDate, Route, Shape, ShapePoint, Stop, Trip, StopTime, FeedInfo, RouteStop, FareAttribute, FareRule } from '../types/gtfs';
 
 function parseCSV<T>(text: string): T[] {
   const result = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: false });
@@ -24,6 +24,8 @@ export async function importGtfsZip(file: File): Promise<{
   stopTimes: StopTime[];
   feedInfo: FeedInfo | null;
   routeStops: RouteStop[];
+  fareAttributes: FareAttribute[];
+  fareRules: FareRule[];
 }> {
   const zip = await JSZip.loadAsync(file);
 
@@ -192,6 +194,32 @@ export async function importGtfsZip(file: File): Promise<{
     }
   }
 
+  // Fare attributes
+  const fareAttrText = await readFile('fare_attributes.txt');
+  const fareAttributes: FareAttribute[] = fareAttrText
+    ? parseCSV<any>(fareAttrText).map((row) => ({
+        fare_id: String(row.fare_id),
+        price: String(row.price),
+        currency_type: String(row.currency_type || 'USD'),
+        payment_method: num(row.payment_method) as 0 | 1,
+        transfers: row.transfers === '' || row.transfers === undefined ? '' : (num(row.transfers) as 0 | 1 | 2),
+        transfer_duration: row.transfer_duration ? num(row.transfer_duration) : undefined,
+        agency_id: row.agency_id || undefined,
+      }))
+    : [];
+
+  // Fare rules
+  const fareRulesText = await readFile('fare_rules.txt');
+  const fareRules: FareRule[] = fareRulesText
+    ? parseCSV<any>(fareRulesText).map((row) => ({
+        fare_id: String(row.fare_id),
+        route_id: row.route_id || undefined,
+        origin_id: row.origin_id || undefined,
+        destination_id: row.destination_id || undefined,
+        contains_id: row.contains_id || undefined,
+      }))
+    : [];
+
   // Build routeStops from stop_times: for each route, find unique stops in order
   const routeStops: RouteStop[] = [];
   const routeStopSet = new Set<string>();
@@ -221,7 +249,7 @@ export async function importGtfsZip(file: File): Promise<{
     }
   }
 
-  return { agencies, calendars, calendarDates, routes, shapes, stops, trips, stopTimes, feedInfo, routeStops };
+  return { agencies, calendars, calendarDates, routes, shapes, stops, trips, stopTimes, feedInfo, routeStops, fareAttributes, fareRules };
 }
 
 function describeService(...days: number[]): string {
@@ -246,4 +274,6 @@ export function loadImportIntoStore(data: Awaited<ReturnType<typeof importGtfsZi
   store.setStopTimes(data.stopTimes);
   store.setFeedInfo(data.feedInfo);
   store.setRouteStops(data.routeStops);
+  store.setFareAttributes(data.fareAttributes);
+  store.setFareRules(data.fareRules);
 }

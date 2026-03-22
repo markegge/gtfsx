@@ -4,6 +4,7 @@ import { useStore } from '../store';
 const DATA_KEYS = [
   'agencies', 'calendars', 'calendarDates', 'routes', 'routeStops',
   'stops', 'trips', 'stopTimes', 'shapes', 'feedInfo',
+  'fareAttributes', 'fareRules',
   'projectId', 'projectName',
 ] as const;
 
@@ -45,6 +46,8 @@ export async function loadProject(projectId: string) {
   if (snapshot.stopTimes) state.setStopTimes(snapshot.stopTimes);
   if (snapshot.shapes) state.setShapes(snapshot.shapes);
   if (snapshot.feedInfo !== undefined) state.setFeedInfo(snapshot.feedInfo);
+  if (snapshot.fareAttributes) state.setFareAttributes(snapshot.fareAttributes);
+  if (snapshot.fareRules) state.setFareRules(snapshot.fareRules);
   if (snapshot.projectName) state.setProjectName(snapshot.projectName);
   if (snapshot.projectId) state.setProjectId(snapshot.projectId);
 

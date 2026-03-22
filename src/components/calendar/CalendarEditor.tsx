@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import { DayToggle } from '../ui/DayToggle';
 import { FormField } from '../ui/FormField';
+import { CalendarPreview } from './CalendarPreview';
 import { generateId } from '../../services/idGenerator';
 import type { Calendar, CalendarDate } from '../../types/gtfs';
-import { format, parse } from 'date-fns';
+import { format } from 'date-fns';
 
 function formatGtfsDate(d: string): string {
   if (!d || d.length !== 8) return '';
@@ -14,6 +15,73 @@ function formatGtfsDate(d: string): string {
 
 function toGtfsDate(d: string): string {
   return d.replace(/-/g, '');
+}
+
+function dateToGtfs(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}${m}${day}`;
+}
+
+/**
+ * Returns the date for the Nth occurrence of a given weekday in a month.
+ * @param year Full year
+ * @param month 0-based month
+ * @param weekday 0=Sunday, 1=Monday, etc.
+ * @param n Which occurrence (1=first, 2=second, etc.)
+ */
+function nthWeekdayOfMonth(year: number, month: number, weekday: number, n: number): Date {
+  const first = new Date(year, month, 1);
+  let dayOfWeek = first.getDay();
+  let diff = (weekday - dayOfWeek + 7) % 7;
+  const date = 1 + diff + (n - 1) * 7;
+  return new Date(year, month, date);
+}
+
+/**
+ * Returns the last Monday of the given month.
+ */
+function lastMondayOfMonth(year: number, month: number): Date {
+  const lastDay = new Date(year, month + 1, 0);
+  const dayOfWeek = lastDay.getDay();
+  const diff = (dayOfWeek - 1 + 7) % 7;
+  return new Date(year, month, lastDay.getDate() - diff);
+}
+
+interface USHoliday {
+  name: string;
+  getDate: (year: number) => Date;
+}
+
+const US_HOLIDAYS: USHoliday[] = [
+  { name: "New Year's Day", getDate: (y) => new Date(y, 0, 1) },
+  { name: 'MLK Day', getDate: (y) => nthWeekdayOfMonth(y, 0, 1, 3) }, // 3rd Monday of January
+  { name: "Presidents' Day", getDate: (y) => nthWeekdayOfMonth(y, 1, 1, 3) }, // 3rd Monday of February
+  { name: 'Memorial Day', getDate: (y) => lastMondayOfMonth(y, 4) }, // Last Monday of May
+  { name: 'Independence Day', getDate: (y) => new Date(y, 6, 4) },
+  { name: 'Labor Day', getDate: (y) => nthWeekdayOfMonth(y, 8, 1, 1) }, // 1st Monday of September
+  { name: 'Columbus Day', getDate: (y) => nthWeekdayOfMonth(y, 9, 1, 2) }, // 2nd Monday of October
+  { name: 'Veterans Day', getDate: (y) => new Date(y, 10, 11) },
+  { name: 'Thanksgiving', getDate: (y) => nthWeekdayOfMonth(y, 10, 4, 4) }, // 4th Thursday of November
+  { name: 'Christmas Day', getDate: (y) => new Date(y, 11, 25) },
+];
+
+function getUSHolidaysForYear(year: number): Array<{ name: string; gtfsDate: string }> {
+  return US_HOLIDAYS.map((h) => ({
+    name: h.name,
+    gtfsDate: dateToGtfs(h.getDate(year)),
+  }));
+}
+
+function isWeekdayService(cal: Calendar): boolean {
+  return (
+    cal.monday === 1 ||
+    cal.tuesday === 1 ||
+    cal.wednesday === 1 ||
+    cal.thursday === 1 ||
+    cal.friday === 1
+  );
 }
 
 export function CalendarEditor() {
@@ -50,6 +118,35 @@ export function CalendarEditor() {
 
   const selected = selectedServiceId ? calendars.find((c) => c.service_id === selectedServiceId) : null;
   const selectedDates = selectedServiceId ? calendarDates.filter((cd) => cd.service_id === selectedServiceId) : [];
+
+  const serviceYear = selected ? parseInt(selected.start_date.slice(0, 4)) : new Date().getFullYear();
+
+  const holidaysForYear = useMemo(() => getUSHolidaysForYear(serviceYear), [serviceYear]);
+
+  const existingDateSet = useMemo(() => {
+    return new Set(selectedDates.map((cd) => cd.date));
+  }, [selectedDates]);
+
+  const handleAddUSHolidays = () => {
+    if (!selected) return;
+    let addedCount = 0;
+    for (const holiday of holidaysForYear) {
+      if (!existingDateSet.has(holiday.gtfsDate)) {
+        addCalendarDate({
+          service_id: selected.service_id,
+          date: holiday.gtfsDate,
+          exception_type: 2,
+        });
+        addedCount++;
+      }
+    }
+  };
+
+  const alreadyAddedCount = holidaysForYear.filter((h) => existingDateSet.has(h.gtfsDate)).length;
+  const allHolidaysAdded = alreadyAddedCount === holidaysForYear.length;
+
+  // Holiday warning nudge
+  const showHolidayWarning = selected && isWeekdayService(selected) && selectedDates.length === 0;
 
   return (
     <div>
@@ -139,6 +236,16 @@ export function CalendarEditor() {
             </div>
           </div>
 
+          {/* Holiday warning nudge */}
+          {showHolidayWarning && (
+            <div className="mt-3 p-2.5 bg-gold-light rounded-lg border border-gold flex items-start gap-2">
+              <span className="text-base leading-none mt-0.5">&#9888;</span>
+              <p className="text-xs text-brown leading-snug">
+                Consider adding holiday exceptions — transit typically doesn't run on major holidays.
+              </p>
+            </div>
+          )}
+
           {/* Calendar Dates (Exceptions) */}
           <div className="mt-4">
             <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-2">
@@ -182,7 +289,34 @@ export function CalendarEditor() {
                 Add
               </button>
             </div>
+
+            {/* Add US Holidays button */}
+            <button
+              onClick={handleAddUSHolidays}
+              disabled={allHolidaysAdded}
+              className={`mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors
+                ${allHolidaysAdded
+                  ? 'bg-sand/60 text-warm-gray/60 cursor-not-allowed'
+                  : 'bg-gold-light text-brown border border-gold hover:bg-gold hover:text-dark-brown'
+                }`}
+            >
+              {allHolidaysAdded
+                ? `All ${serviceYear} US Holidays Added`
+                : `Add US Holidays (${serviceYear})`}
+              {!allHolidaysAdded && alreadyAddedCount > 0 && (
+                <span className="text-[10px] text-warm-gray ml-1">
+                  ({alreadyAddedCount}/{holidaysForYear.length} already added)
+                </span>
+              )}
+            </button>
           </div>
+
+          {/* Calendar Preview */}
+          <CalendarPreview
+            calendar={selected}
+            calendarDates={selectedDates}
+            onRemoveException={(date) => removeCalendarDate(selected.service_id, date)}
+          />
 
           <button
             onClick={() => {

@@ -26,3 +26,36 @@ export function formatTimeShort(time: string): string {
 export function isValidGtfsTime(time: string): boolean {
   return /^\d{1,2}:\d{2}:\d{2}$/.test(time);
 }
+
+/** Normalize a user-entered time to HH:MM:SS format.
+ *  Accepts: "7:30" → "07:30:00", "730" → "07:30:00", "07:30:00" → "07:30:00",
+ *  "1430" → "14:30:00", "14:30" → "14:30:00"
+ *  Returns empty string if input cannot be parsed.
+ */
+export function normalizeTimeInput(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+
+  // Already full format: H:MM:SS or HH:MM:SS
+  if (/^\d{1,2}:\d{2}:\d{2}$/.test(trimmed)) {
+    const [h, m, s] = trimmed.split(':').map(Number);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  // Partial format: H:MM or HH:MM
+  if (/^\d{1,2}:\d{2}$/.test(trimmed)) {
+    const [h, m] = trimmed.split(':').map(Number);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+  }
+
+  // Digits only: 3-4 digits like "730" or "1430"
+  if (/^\d{3,4}$/.test(trimmed)) {
+    const digits = trimmed.padStart(4, '0');
+    const h = parseInt(digits.slice(0, 2), 10);
+    const m = parseInt(digits.slice(2, 4), 10);
+    if (m > 59) return '';
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+  }
+
+  return '';
+}

@@ -7,6 +7,7 @@ const NAV_ITEMS: { key: SidebarSection; label: string; icon: string; bgClass: st
   { key: 'calendar', label: 'Calendars', icon: 'C', bgClass: 'bg-gold-light', textClass: 'text-amber-700' },
   { key: 'routes', label: 'Routes', icon: 'R', bgClass: 'bg-coral-light', textClass: 'text-coral' },
   { key: 'stops', label: 'Stops', icon: 'S', bgClass: 'bg-coral-light', textClass: 'text-coral' },
+  { key: 'fares', label: 'Fares', icon: '$', bgClass: 'bg-gold-light', textClass: 'text-amber-700' },
   { key: 'timetable', label: 'Timetables', icon: 'T', bgClass: 'bg-purple-light', textClass: 'text-purple' },
 ];
 

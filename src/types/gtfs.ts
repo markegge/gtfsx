@@ -105,6 +105,24 @@ export interface FeedInfo {
   feed_contact_url?: string;
 }
 
+export interface FareAttribute {
+  fare_id: string;
+  price: string;
+  currency_type: string;
+  payment_method: 0 | 1;       // 0=on board, 1=before boarding
+  transfers: 0 | 1 | 2 | '';   // ''=unlimited
+  transfer_duration?: number;   // seconds
+  agency_id?: string;
+}
+
+export interface FareRule {
+  fare_id: string;
+  route_id?: string;
+  origin_id?: string;
+  destination_id?: string;
+  contains_id?: string;
+}
+
 export interface RouteStop {
   route_id: string;
   stop_id: string;

@@ -3,6 +3,7 @@ export type SidebarSection =
   | 'calendar'
   | 'routes'
   | 'stops'
+  | 'fares'
   | 'timetable';
 
 export type BottomPanelTab = 'timetable' | 'validation';

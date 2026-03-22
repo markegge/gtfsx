@@ -73,6 +73,16 @@ export async function exportGtfsZip(): Promise<Blob> {
     zip.file('shapes.txt', toCSV(shapeRows));
   }
 
+  // fare_attributes.txt
+  if (state.fareAttributes.length > 0) {
+    zip.file('fare_attributes.txt', toCSV(state.fareAttributes.map(stripUIFields)));
+  }
+
+  // fare_rules.txt
+  if (state.fareRules.length > 0) {
+    zip.file('fare_rules.txt', toCSV(state.fareRules.map(stripUIFields)));
+  }
+
   // feed_info.txt
   if (state.feedInfo) {
     zip.file('feed_info.txt', toCSV([stripUIFields(state.feedInfo)]));

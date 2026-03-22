@@ -78,6 +78,16 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     }
   }
 
+  // Fare checks
+  if (state.fareAttributes.length === 0) {
+    messages.push(msg('warning', 'No fare information defined — strongly recommended'));
+  }
+  for (const rule of state.fareRules) {
+    if (rule.route_id && !state.routes.some((r) => r.route_id === rule.route_id)) {
+      messages.push(msg('error', `Fare rule for fare "${rule.fare_id}" references non-existent route "${rule.route_id}"`, 'fare_rule', rule.fare_id));
+    }
+  }
+
   // Unused stops
   const usedStopIds = new Set(state.stopTimes.map((st) => st.stop_id));
   for (const s of state.stops) {

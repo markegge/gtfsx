@@ -6,6 +6,7 @@ import { createRouteSlice, type RouteSlice } from './routeSlice';
 import { createStopSlice, type StopSlice } from './stopSlice';
 import { createTripSlice, type TripSlice } from './tripSlice';
 import { createShapeSlice, type ShapeSlice } from './shapeSlice';
+import { createFareSlice, type FareSlice } from './fareSlice';
 import { createFeedInfoSlice, type FeedInfoSlice } from './feedInfoSlice';
 import { createValidationSlice, type ValidationSlice } from './validationSlice';
 import { createUISlice, type UISlice } from './uiSlice';
@@ -17,6 +18,7 @@ export type AppStore = AgencySlice &
   StopSlice &
   TripSlice &
   ShapeSlice &
+  FareSlice &
   FeedInfoSlice &
   ValidationSlice &
   UISlice &
@@ -30,6 +32,7 @@ export const useStore = create<AppStore>()(
     ...createStopSlice(...args),
     ...createTripSlice(...args),
     ...createShapeSlice(...args),
+    ...createFareSlice(...args),
     ...createFeedInfoSlice(...args),
     ...createValidationSlice(...args),
     ...createUISlice(...args),

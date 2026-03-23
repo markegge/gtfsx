@@ -81,7 +81,24 @@ export function MapView() {
           return;
         }
         if (currentMode === 'draw_route') {
-          if (drawRef.current) drawRef.current.deleteAll();
+          if (drawRef.current) {
+            // Try to undo the last placed vertex instead of deleting the whole line
+            const all = drawRef.current.getAll();
+            const feature = all.features[0];
+            if (feature && feature.geometry.type === 'LineString') {
+              const coords = feature.geometry.coordinates;
+              // coords includes the cursor position as the last element during drawing,
+              // so >2 means at least 1 user-placed point + cursor
+              if (coords.length > 2) {
+                // Remove the last placed point (second to last; last is cursor)
+                coords.splice(coords.length - 2, 1);
+                drawRef.current.set(all);
+                return; // Stay in draw mode
+              }
+            }
+            // No points left or couldn't undo — cancel drawing entirely
+            drawRef.current.deleteAll();
+          }
           useStore.getState().setMapMode('select');
           useStore.getState().setDrawingRouteId(null);
           return;

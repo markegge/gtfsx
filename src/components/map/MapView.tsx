@@ -11,6 +11,9 @@ import { DrawingIndicator } from './DrawingIndicator';
 import { StopPopup } from './StopPopup';
 import { RoutePopup } from './RoutePopup';
 import { CoverageLayer } from './CoverageLayer';
+import { DensityHeatmap } from './DensityHeatmap';
+import { MapLayerControls } from './MapLayerControls';
+import type { MapStyleId, HeatmapMetric } from './MapLayerControls';
 import { generateId } from '../../services/idGenerator';
 import { snapToRoad } from '../../services/snapToRoad';
 import { simplifyShapePoints } from '../../services/simplifyShape';
@@ -43,6 +46,9 @@ export function MapView() {
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   // Snapping indicator
   const [isSnapping, setIsSnapping] = useState(false);
+  // Map layer controls
+  const [mapStyleId, setMapStyleId] = useState<MapStyleId>('light');
+  const [heatmapMetric, setHeatmapMetric] = useState<HeatmapMetric>('off');
 
   // Compute initial view from stops or shapes
   const initialView = useMemo(() => {
@@ -403,7 +409,10 @@ export function MapView() {
       <Map
         initialViewState={initialView}
         mapboxAccessToken={MAPBOX_TOKEN}
-        mapStyle="mapbox://styles/mapbox/light-v11"
+        mapStyle={mapStyleId === 'satellite'
+          ? 'mapbox://styles/mapbox/satellite-streets-v12'
+          : 'mapbox://styles/mapbox/light-v11'
+        }
         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
         cursor={cursor}
         onClick={handleMapClick}
@@ -415,6 +424,7 @@ export function MapView() {
           onCreate={handleDrawCreate}
           onUpdate={handleDrawUpdate}
         />
+        <DensityHeatmap visible={heatmapMetric !== 'off'} metric={heatmapMetric === 'off' ? 'population' : heatmapMetric} />
         <CoverageLayer />
         <RouteLayer />
         <StopLayer />
@@ -435,6 +445,12 @@ export function MapView() {
         )}
       </Map>
       <MapToolbar />
+      <MapLayerControls
+        mapStyle={mapStyleId}
+        onMapStyleChange={setMapStyleId}
+        heatmapMetric={heatmapMetric}
+        onHeatmapMetricChange={setHeatmapMetric}
+      />
       <DrawingIndicator />
 
       {/* Delete vertex button — visible during shape editing */}

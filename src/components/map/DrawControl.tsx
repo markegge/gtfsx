@@ -29,35 +29,50 @@ export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawContr
         controls: {},
         defaultMode: 'simple_select',
         styles: [
+          // Line being drawn/edited
           {
             id: 'gl-draw-line',
             type: 'line',
             filter: ['all', ['==', '$type', 'LineString'], ['!=', 'mode', 'static']],
             paint: {
               'line-color': '#E8734A',
-              'line-width': 3,
-              'line-dasharray': [2, 2],
+              'line-width': 4,
+              'line-dasharray': [2, 1],
             },
           },
+          // Active (selected) vertices — larger with highlight ring
+          {
+            id: 'gl-draw-point-active',
+            type: 'circle',
+            filter: ['all', ['==', '$type', 'Point'], ['==', 'meta', 'vertex'], ['==', 'active', 'true']],
+            paint: {
+              'circle-radius': 9,
+              'circle-color': '#E8734A',
+              'circle-stroke-color': '#FFFFFF',
+              'circle-stroke-width': 3,
+            },
+          },
+          // Inactive vertices — smaller white circles with colored border
           {
             id: 'gl-draw-point',
             type: 'circle',
-            filter: ['all', ['==', '$type', 'Point'], ['==', 'meta', 'vertex']],
+            filter: ['all', ['==', '$type', 'Point'], ['==', 'meta', 'vertex'], ['!=', 'active', 'true']],
             paint: {
-              'circle-radius': 6,
-              'circle-color': '#fff',
+              'circle-radius': 5,
+              'circle-color': '#FFFFFF',
               'circle-stroke-color': '#E8734A',
               'circle-stroke-width': 2,
             },
           },
+          // Midpoints — clickable add-vertex indicators
           {
             id: 'gl-draw-midpoint',
             type: 'circle',
             filter: ['all', ['==', '$type', 'Point'], ['==', 'meta', 'midpoint']],
             paint: {
-              'circle-radius': 4,
+              'circle-radius': 3.5,
               'circle-color': '#E8734A',
-              'circle-opacity': 0.5,
+              'circle-opacity': 0.4,
             },
           },
           {

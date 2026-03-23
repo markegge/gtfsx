@@ -44,7 +44,9 @@ export function RouteLayer() {
     return { type: 'FeatureCollection' as const, features };
   }, [shapes, routes, trips, selectedRouteId, editingShapeId, mapMode, hiddenRouteIds]);
 
-  // Base line styling
+  const isEditing = mapMode === 'edit_shape';
+
+  // Base line styling — dimmed when editing a shape
   const lineStyle: LayerProps = {
     id: 'route-lines',
     type: 'line',
@@ -55,11 +57,13 @@ export function RouteLayer() {
         ['get', 'isSelected'], 5,
         3,
       ],
-      'line-opacity': [
-        'case',
-        ['get', 'isSelected'], 1,
-        0.7,
-      ],
+      'line-opacity': isEditing
+        ? 0.15
+        : [
+            'case',
+            ['get', 'isSelected'], 1,
+            0.7,
+          ],
     },
     layout: {
       'line-join': 'round',
@@ -90,20 +94,22 @@ export function RouteLayer() {
       'text-color': ['get', 'color'],
       'text-halo-color': '#FFFFFF',
       'text-halo-width': 1,
-      'text-opacity': [
-        'case',
-        ['get', 'isSelected'], 1,
-        0.6,
-      ],
+      'text-opacity': isEditing
+        ? 0.1
+        : [
+            'case',
+            ['get', 'isSelected'], 1,
+            0.6,
+          ],
     },
   };
 
-  // Route name labels (only on selected or at high zoom)
+  // Route name labels (hidden during editing)
   const nameLabelStyle: LayerProps = {
     id: 'route-labels',
     type: 'symbol',
     minzoom: 13,
-    filter: ['==', ['get', 'isSelected'], true],
+    filter: isEditing ? ['==', 'impossible', 'true'] : ['==', ['get', 'isSelected'], true],
     layout: {
       'symbol-placement': 'line-center',
       'text-field': ['get', 'route_name'],

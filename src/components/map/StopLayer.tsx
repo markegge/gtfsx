@@ -9,6 +9,8 @@ export function StopLayer() {
   const routeStops = useStore((s) => s.routeStops);
   const selectedStopId = useStore((s) => s.selectedStopId);
   const selectedRouteId = useStore((s) => s.selectedRouteId);
+  const mapMode = useStore((s) => s.mapMode);
+  const isEditingShape = mapMode === 'edit_shape';
   const hiddenRouteIds = useStore((s) => s.hiddenRouteIds);
 
   const geojson = useMemo(() => {
@@ -85,7 +87,7 @@ export function StopLayer() {
         14, ['case', ['get', 'isSelected'], 10, ['case', ['get', 'isTransfer'], 7, 6]],
       ],
       'circle-color': ['get', 'color'],
-      'circle-opacity': [
+      'circle-opacity': isEditingShape ? 0.15 : [
         'case',
         ['get', 'isSelected'], 1,
         0.9,
@@ -108,14 +110,15 @@ export function StopLayer() {
         ['get', 'isSelected'], ['get', 'color'],
         '#FFFFFF',
       ],
+      'circle-opacity': isEditingShape ? 0.15 : 1,
     },
   };
 
-  // Selected stop — extra white outer ring for emphasis
+  // Selected stop — extra white outer ring for emphasis (hidden during shape editing)
   const selectionRing: LayerProps = {
     id: 'stop-selection-ring',
     type: 'circle',
-    filter: ['==', ['get', 'isSelected'], true],
+    filter: isEditingShape ? ['==', 'impossible', 'true'] : ['==', ['get', 'isSelected'], true],
     paint: {
       'circle-radius': [
         'interpolate', ['linear'], ['zoom'],
@@ -162,6 +165,7 @@ export function StopLayer() {
       ],
       'text-halo-color': '#FFFFFF',
       'text-halo-width': 2,
+      'text-opacity': isEditingShape ? 0.1 : 1,
     },
   };
 

@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useStore } from '../../store';
 import { ImportDialog } from '../import-export/ImportDialog';
 import { ExportDialog } from '../import-export/ExportDialog';
+import { HelpDialog } from '../help/HelpDialog';
 
 export function TopBar() {
   const { projectName, setProjectName, lastSavedAt, isDirty } = useStore();
   const [showImport, setShowImport] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [editing, setEditing] = useState(false);
 
   const saveStatus = isDirty ? 'Unsaved changes' : lastSavedAt ? 'Saved' : 'New project';
@@ -60,6 +62,13 @@ export function TopBar() {
 
         {/* Actions */}
         <button
+          onClick={() => setShowHelp(true)}
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors text-sm font-bold"
+          title="Help"
+        >
+          ?
+        </button>
+        <button
           onClick={() => setShowImport(true)}
           className="px-4 py-2 rounded-lg font-heading font-bold text-sm bg-sand text-brown hover:bg-coral-light hover:text-coral transition-colors"
         >
@@ -75,6 +84,7 @@ export function TopBar() {
 
       {showImport && <ImportDialog onClose={() => setShowImport(false)} />}
       {showExport && <ExportDialog onClose={() => setShowExport(false)} />}
+      {showHelp && <HelpDialog onClose={() => setShowHelp(false)} />}
     </>
   );
 }

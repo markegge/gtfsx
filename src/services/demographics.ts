@@ -7,58 +7,33 @@ export interface BlockGroupData {
   lon: number;
 }
 
-interface TigerFeature {
-  attributes: {
-    GEOID: string;
-    CENTLAT: string;
-    CENTLON: string;
-    AREALAND: number;
-  };
-}
-
-interface TigerResponse {
-  features?: TigerFeature[];
-  exceededTransferLimit?: boolean;
-}
-
 /**
- * Fetch block group centroids from TIGERweb for a given state+county.
- * Returns a map from GEOID to { lat, lon }.
+ * Fetch Census tract centroids for a state from the Census Bureau's
+ * population centroid file. Returns a map from state+county+tract FIPS to { lat, lon }.
  */
-async function fetchBlockGroupCentroids(
+async function fetchTractCentroids(
   stateFips: string,
-  countyFips: string,
 ): Promise<Map<string, { lat: number; lon: number }>> {
+  const url = `https://www2.census.gov/geo/docs/reference/cenpop2020/tract/CenPop2020_Mean_TR${stateFips}.txt`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch tract centroids: ${res.status}`);
+
+  const text = await res.text();
+  const lines = text.trim().split('\n');
   const centroids = new Map<string, { lat: number; lon: number }>();
-  let offset = 0;
-  const batchSize = 5000;
 
-  // Paginate through results
-  for (;;) {
-    const url =
-      `https://tigerweb.geo.census.gov/arcrest/rest/services/TIGERweb/tigerWMS_ACS2023/MapServer/10/query` +
-      `?where=STATE='${stateFips}' AND COUNTY='${countyFips}'` +
-      `&outFields=GEOID,CENTLAT,CENTLON,AREALAND` +
-      `&f=json` +
-      `&resultRecordCount=${batchSize}` +
-      `&resultOffset=${offset}`;
-
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`TIGERweb request failed: ${res.status}`);
-
-    const data: TigerResponse = await res.json();
-    if (!data.features || data.features.length === 0) break;
-
-    for (const feat of data.features) {
-      const { GEOID, CENTLAT, CENTLON } = feat.attributes;
-      centroids.set(GEOID, {
-        lat: parseFloat(CENTLAT),
-        lon: parseFloat(CENTLON),
-      });
+  // Skip header
+  for (let i = 1; i < lines.length; i++) {
+    const parts = lines[i].split(',');
+    if (parts.length < 6) continue;
+    const state = parts[0].trim();
+    const county = parts[1].trim();
+    const tract = parts[2].trim();
+    const lat = parseFloat(parts[4].trim());
+    const lon = parseFloat(parts[5].trim());
+    if (!isNaN(lat) && !isNaN(lon)) {
+      centroids.set(state + county + tract, { lat, lon });
     }
-
-    if (!data.exceededTransferLimit) break;
-    offset += batchSize;
   }
 
   return centroids;
@@ -66,17 +41,16 @@ async function fetchBlockGroupCentroids(
 
 /**
  * Fetch Census ACS5 block-group-level demographic data for a state+county,
- * merged with TIGERweb centroids.
+ * with coordinates from tract centroids (block groups share their parent tract's centroid).
  */
 export async function fetchCensusData(
   stateFips: string,
   countyFips: string,
 ): Promise<BlockGroupData[]> {
-  // Fetch centroids and census data concurrently
   const [centroids, censusRes] = await Promise.all([
-    fetchBlockGroupCentroids(stateFips, countyFips),
+    fetchTractCentroids(stateFips),
     fetch(
-      `https://api.census.gov/data/2023/acs/acs5?get=B01003_001E,B25001_001E,B08301_001E` +
+      `https://api.census.gov/data/2022/acs/acs5?get=B01003_001E,B25001_001E,B08301_001E` +
         `&for=block%20group:*&in=state:${stateFips}&in=county:${countyFips}&in=tract:*`,
     ),
   ]);
@@ -84,7 +58,6 @@ export async function fetchCensusData(
   if (!censusRes.ok) throw new Error(`Census API request failed: ${censusRes.status}`);
 
   const rows: string[][] = await censusRes.json();
-  // First row is header
   const header = rows[0];
   const stateIdx = header.indexOf('state');
   const countyIdx = header.indexOf('county');
@@ -95,11 +68,15 @@ export async function fetchCensusData(
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    const geoid =
-      row[stateIdx] + row[countyIdx] + row[tractIdx] + row[bgIdx];
+    const stFips = row[stateIdx];
+    const coFips = row[countyIdx];
+    const trFips = row[tractIdx];
+    const bgFips = row[bgIdx];
+    const geoid = stFips + coFips + trFips + bgFips;
+    const tractKey = stFips + coFips + trFips;
 
-    const centroid = centroids.get(geoid);
-    if (!centroid) continue; // skip if we can't locate this block group
+    const centroid = centroids.get(tractKey);
+    if (!centroid) continue;
 
     results.push({
       geoid,

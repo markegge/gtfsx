@@ -4,9 +4,10 @@ export type SidebarSection =
   | 'routes'
   | 'stops'
   | 'fares'
+  | 'timetable'
+  | 'flex'
   | 'costs'
-  | 'coverage'
-  | 'timetable';
+  | 'coverage';
 
 export type BottomPanelTab = 'timetable' | 'validation';
 

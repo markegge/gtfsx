@@ -9,6 +9,7 @@ import { FaresEditor } from '../fares/FaresEditor';
 import { CostSummary } from '../costs/CostSummary';
 import { CoveragePanel } from '../coverage/CoveragePanel';
 import { TimetableSidebar } from '../timetable/TimetableSidebar';
+import { FlexEditor } from '../flex/FlexEditor';
 
 export function Sidebar() {
   const section = useStore((s) => s.sidebarSection);
@@ -23,9 +24,10 @@ export function Sidebar() {
         {section === 'routes' && <RouteList />}
         {section === 'stops' && <StopList />}
         {section === 'fares' && <FaresEditor />}
+        {section === 'timetable' && <TimetableSidebar />}
+        {section === 'flex' && <FlexEditor />}
         {section === 'costs' && <CostSummary />}
         {section === 'coverage' && <CoveragePanel />}
-        {section === 'timetable' && <TimetableSidebar />}
       </div>
     </div>
   );

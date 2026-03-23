@@ -5,6 +5,7 @@ import { ROUTE_COLORS, getContrastTextColor } from '../../utils/colors';
 import { ROUTE_TYPES } from '../../utils/constants';
 import { calculateRouteStats } from '../../services/costEstimation';
 import { snapToRoad } from '../../services/snapToRoad';
+import { simplifyShapePoints, SIMPLIFY_LEVELS } from '../../services/simplifyShape';
 import type { Route } from '../../types/gtfs';
 
 function formatCurrency(n: number): string {
@@ -87,6 +88,7 @@ export function RouteEditor() {
   const [snappingShapeId, setSnappingShapeId] = useState<string | null>(null);
   const [drawDirection, setDrawDirection] = useState<0 | 1>(0);
   const [confirmDeleteShapeId, setConfirmDeleteShapeId] = useState<string | null>(null);
+  const [simplifyShapeId, setSimplifyShapeId] = useState<string | null>(null);
 
   const route = routes.find((r) => r.route_id === selectedRouteId);
 
@@ -337,7 +339,14 @@ export function RouteEditor() {
                         onClick={() => handleEditShape(shape!.shape_id)}
                         className="flex-1 px-2 py-1.5 bg-sand text-brown rounded text-[11px] font-semibold hover:bg-coral-light hover:text-coral transition-colors"
                       >
-                        Edit Vertices
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => setSimplifyShapeId(simplifyShapeId === shape!.shape_id ? null : shape!.shape_id)}
+                        className={`px-2 py-1.5 rounded text-[11px] font-semibold transition-colors
+                          ${simplifyShapeId === shape!.shape_id ? 'bg-coral-light text-coral' : 'bg-sand text-brown hover:bg-coral-light hover:text-coral'}`}
+                      >
+                        Simplify
                       </button>
                       <button
                         onClick={() => handleResnapShape(shape!.shape_id)}
@@ -356,6 +365,36 @@ export function RouteEditor() {
                     </>
                   )}
                 </div>
+
+                {/* Simplify picker */}
+                {simplifyShapeId === shape!.shape_id && (
+                  <div className="mx-3 mb-2 p-2 bg-cream border border-sand rounded-lg">
+                    <p className="text-[11px] text-dark-brown font-semibold mb-2">
+                      Reduce vertices ({shape!.points.length} pts)
+                    </p>
+                    <div className="flex flex-col gap-1">
+                      {SIMPLIFY_LEVELS.map((level) => {
+                        const preview = simplifyShapePoints(shape!.points, level.tolerance);
+                        return (
+                          <button
+                            key={level.label}
+                            onClick={() => {
+                              updateShapePoints(shape!.shape_id, preview);
+                              recalcShapeDistances(shape!.shape_id);
+                              setSimplifyShapeId(null);
+                            }}
+                            className="flex items-center justify-between px-2 py-1.5 bg-sand rounded text-[11px] hover:bg-coral-light hover:text-coral transition-colors"
+                          >
+                            <span className="font-semibold">{level.label}</span>
+                            <span className="text-warm-gray">
+                              {level.description} → {preview.length} pts
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Delete confirmation */}
                 {confirmDeleteShapeId === shape!.shape_id && (

@@ -13,6 +13,7 @@ import { RoutePopup } from './RoutePopup';
 import { CoverageLayer } from './CoverageLayer';
 import { generateId } from '../../services/idGenerator';
 import { snapToRoad } from '../../services/snapToRoad';
+import { simplifyShapePoints } from '../../services/simplifyShape';
 import nearestPointOnLine from '@turf/nearest-point-on-line';
 import distance from '@turf/distance';
 import { lineString, point } from '@turf/helpers';
@@ -206,12 +207,18 @@ export function MapView() {
 
       const createShapeFromCoords = (coords: [number, number][]) => {
         const shapeId = generateId('shape');
-        const points = coords.map((c, i) => ({
+        let points = coords.map((c, i) => ({
           shape_pt_lat: c[1],
           shape_pt_lon: c[0],
           shape_pt_sequence: i,
           shape_dist_traveled: 0,
         }));
+
+        // Auto-simplify if the drawn line has too many points (freehand creates ~1 per pixel)
+        if (points.length > 20) {
+          points = simplifyShapePoints(points, 0.00005); // Light simplify ~5m
+        }
+
         const st = useStore.getState();
         st.addShape({ shape_id: shapeId, points });
         st.recalcShapeDistances(shapeId);

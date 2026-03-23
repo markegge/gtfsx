@@ -30,6 +30,7 @@
     "@turf/helpers": "^7.3.4",
     "@turf/length": "^7.3.4",
     "@turf/nearest-point-on-line": "^7.3.4",
+    "@turf/simplify": "^7.3.4",
     "@turf/transform-translate": "^7.3.4",
     "date-fns": "^4.1.0",
     "dexie": "^4.3.0",

@@ -9,14 +9,21 @@ export function StopLayer() {
   const routeStops = useStore((s) => s.routeStops);
   const selectedStopId = useStore((s) => s.selectedStopId);
   const selectedRouteId = useStore((s) => s.selectedRouteId);
+  const hiddenRouteIds = useStore((s) => s.hiddenRouteIds);
 
   const geojson = useMemo(() => {
-    // Build a lookup: stop_id → primary route color
-    // Primary = selected route if the stop belongs to it, otherwise first route
+    const hiddenSet = new Set(hiddenRouteIds);
+
+    // Build a lookup: stop_id → primary route color (excluding hidden routes)
     const stopRouteColor = new Map<string, string>();
     const stopRouteCount = new Map<string, number>();
+    // Track which stops are ONLY on hidden routes (to hide them entirely)
+    const stopVisibleRoutes = new Map<string, number>();
 
     for (const rs of routeStops) {
+      if (!hiddenSet.has(rs.route_id)) {
+        stopVisibleRoutes.set(rs.stop_id, (stopVisibleRoutes.get(rs.stop_id) || 0) + 1);
+      }
       const count = (stopRouteCount.get(rs.stop_id) || 0) + 1;
       stopRouteCount.set(rs.stop_id, count);
 
@@ -34,29 +41,38 @@ export function StopLayer() {
 
     return {
       type: 'FeatureCollection' as const,
-      features: stops.map((stop) => {
-        const color = stopRouteColor.get(stop.stop_id) || '#8B7E74'; // warm-gray fallback for unassigned
-        const isSelected = stop.stop_id === selectedStopId;
-        const numRoutes = stopRouteCount.get(stop.stop_id) || 0;
+      features: stops
+        .filter((stop) => {
+          // Show stops that: have no route assignment, have at least one visible route, or are selected
+          const visibleCount = stopVisibleRoutes.get(stop.stop_id) || 0;
+          const totalCount = stopRouteCount.get(stop.stop_id) || 0;
+          if (totalCount === 0) return true; // unassigned stop — always show
+          if (stop.stop_id === selectedStopId) return true; // selected — always show
+          return visibleCount > 0; // at least one visible route
+        })
+        .map((stop) => {
+          const color = stopRouteColor.get(stop.stop_id) || '#8B7E74';
+          const isSelected = stop.stop_id === selectedStopId;
+          const numRoutes = stopRouteCount.get(stop.stop_id) || 0;
 
-        return {
-          type: 'Feature' as const,
-          properties: {
-            stop_id: stop.stop_id,
-            stop_name: stop.stop_name,
-            isSelected,
-            color,
-            numRoutes,
-            isTransfer: numRoutes > 1,
-          },
-          geometry: {
-            type: 'Point' as const,
-            coordinates: [stop.stop_lon, stop.stop_lat],
-          },
-        };
-      }),
+          return {
+            type: 'Feature' as const,
+            properties: {
+              stop_id: stop.stop_id,
+              stop_name: stop.stop_name,
+              isSelected,
+              color,
+              numRoutes,
+              isTransfer: numRoutes > 1,
+            },
+            geometry: {
+              type: 'Point' as const,
+              coordinates: [stop.stop_lon, stop.stop_lat],
+            },
+          };
+        }),
     };
-  }, [stops, routes, routeStops, selectedStopId, selectedRouteId]);
+  }, [stops, routes, routeStops, selectedStopId, selectedRouteId, hiddenRouteIds]);
 
   // Outer ring — route-colored border
   const outerCircle: LayerProps = {

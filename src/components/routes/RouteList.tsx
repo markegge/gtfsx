@@ -11,6 +11,7 @@ export function RouteList() {
     routes, addRoute, trips, routeStops,
     selectedRouteId, selectRoute,
     editingRouteId, setEditingRouteId,
+    hiddenRouteIds, toggleRouteVisibility,
   } = useStore();
 
   const handleAdd = () => {
@@ -65,18 +66,32 @@ export function RouteList() {
                 routeStops.filter((rs) => rs.route_id === route.route_id).map((rs) => rs.stop_id)
               ).size;
 
+              const isHidden = hiddenRouteIds.includes(route.route_id);
+
               return (
                 <div
                   key={route.route_id}
                   onClick={() => selectRoute(route.route_id)}
-                  className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors cursor-pointer group
+                  className={`flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors cursor-pointer group
                     ${selectedRouteId === route.route_id ? 'bg-sand' : 'hover:bg-cream'}`}
                 >
+                  {/* Visibility toggle */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleRouteVisibility(route.route_id);
+                    }}
+                    className={`w-5 h-5 rounded flex items-center justify-center text-[11px] shrink-0 transition-colors
+                      ${isHidden ? 'text-sand hover:text-warm-gray' : 'text-warm-gray hover:text-dark-brown'}`}
+                    title={isHidden ? 'Show on map' : 'Hide from map'}
+                  >
+                    {isHidden ? '◻' : '◼'}
+                  </button>
                   <div
-                    className="w-3.5 h-3.5 rounded shrink-0"
+                    className={`w-3.5 h-3.5 rounded shrink-0 transition-opacity ${isHidden ? 'opacity-30' : ''}`}
                     style={{ backgroundColor: `#${route.route_color}` }}
                   />
-                  <div className="flex flex-col min-w-0 flex-1">
+                  <div className={`flex flex-col min-w-0 flex-1 transition-opacity ${isHidden ? 'opacity-40' : ''}`}>
                     <span className="font-semibold text-sm text-dark-brown truncate">
                       {route.route_short_name || route.route_long_name || 'Untitled Route'}
                     </span>

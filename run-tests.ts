@@ -1,0 +1,240 @@
+/**
+ * Run GTFS Builder integration tests headlessly via tsx.
+ * Usage: npx tsx run-tests.ts
+ */
+import { readFileSync } from 'fs';
+import { importGtfsZip, loadImportIntoStore } from './src/services/gtfsImport';
+import { exportGtfsZip } from './src/services/gtfsExport';
+import { runValidation } from './src/services/validation';
+import { useStore } from './src/store';
+
+// Polyfill File for Node
+class NodeFile extends Blob {
+  name: string;
+  lastModified: number;
+  constructor(bits: BlobPart[], name: string, opts?: FilePropertyBag) {
+    super(bits, opts);
+    this.name = name;
+    this.lastModified = Date.now();
+  }
+}
+
+let passed = 0;
+let failed = 0;
+const failures: string[] = [];
+
+function assert(name: string, condition: boolean, detail?: string) {
+  if (condition) {
+    passed++;
+    console.log(`  ✓ ${name}`);
+  } else {
+    failed++;
+    const msg = `  ✗ ${name}${detail ? ': ' + detail : ''}`;
+    console.log(msg);
+    failures.push(msg);
+  }
+}
+
+function s() { return useStore.getState(); }
+
+async function main() {
+  console.log('=== GTFS Builder Integration Tests ===\n');
+
+  // Load Pittsburgh GTFS — pass Buffer directly, JSZip handles it natively
+  const zipBuffer = readFileSync('pittsburgh_gtfs.zip');
+  const zipFile = zipBuffer as unknown as File;
+
+  // ---- PHASE 1: IMPORT ----
+  console.log('Phase 1: Import Pittsburgh GTFS');
+  const data = await importGtfsZip(zipFile);
+  loadImportIntoStore(data);
+
+  assert('agencies loaded', s().agencies.length === 1, `got ${s().agencies.length}`);
+  assert('agency name correct', s().agencies[0]?.agency_name === 'Pittsburgh Regional Transit');
+  assert('routes loaded (101)', s().routes.length === 101, `got ${s().routes.length}`);
+  assert('stops loaded (6424)', s().stops.length === 6424, `got ${s().stops.length}`);
+  assert('trips loaded (15826)', s().trips.length === 15826, `got ${s().trips.length}`);
+  assert('calendars loaded (7)', s().calendars.length === 7, `got ${s().calendars.length}`);
+  assert('shapes loaded', s().shapes.length > 0, `got ${s().shapes.length}`);
+  assert('stop_times loaded', s().stopTimes.length > 0, `got ${s().stopTimes.length}`);
+  assert('fare attributes loaded', s().fareAttributes.length > 0, `got ${s().fareAttributes.length}`);
+  assert('feed info loaded', s().feedInfo !== null);
+  assert('route stops built', s().routeStops.length > 0, `got ${s().routeStops.length}`);
+
+  // ---- PHASE 2: DATA INTEGRITY ----
+  console.log('\nPhase 2: Data Integrity');
+  const route1 = s().routes.find(r => r.route_short_name === '1');
+  assert('Route 1 exists', !!route1);
+  assert('Route 1 name = FREEPORT ROAD', route1?.route_long_name === 'FREEPORT ROAD');
+
+  const routeIds = new Set(s().routes.map(r => r.route_id));
+  const orphanTrips = s().trips.filter(t => !routeIds.has(t.route_id));
+  assert('no orphan trips', orphanTrips.length === 0, `${orphanTrips.length} orphans`);
+
+  const serviceIds = new Set(s().calendars.map(c => c.service_id));
+  const badCalTrips = s().trips.filter(t => !serviceIds.has(t.service_id));
+  assert('trips reference valid calendars', badCalTrips.length === 0, `${badCalTrips.length} bad refs`);
+
+  const stopIdSet = new Set(s().stops.map(st => st.stop_id));
+  const badST = s().stopTimes.filter(st => !stopIdSet.has(st.stop_id)).length;
+  assert('stop_times reference valid stops', badST === 0, `${badST} bad refs`);
+
+  // ---- PHASE 3: MODIFY AGENCY ----
+  console.log('\nPhase 3: Modify Agency');
+  s().updateAgency(s().agencies[0].agency_id, { agency_phone: '412-555-1234' });
+  assert('phone updated', s().agencies[0].agency_phone === '412-555-1234');
+  s().updateFeedInfo({ feed_version: 'test-2026' });
+  assert('feed version updated', s().feedInfo?.feed_version === 'test-2026');
+
+  // ---- PHASE 4: MODIFY CALENDARS ----
+  console.log('\nPhase 4: Modify Calendars');
+  const origCalCount = s().calendars.length;
+  s().addCalendar({
+    service_id: 'test-summer', monday: 1, tuesday: 1, wednesday: 1, thursday: 1,
+    friday: 1, saturday: 1, sunday: 0, start_date: '20260601', end_date: '20260831',
+    _description: 'Summer Weekdays+Sat',
+  });
+  assert('add calendar', s().calendars.length === origCalCount + 1);
+  s().addCalendarDate({ service_id: 'test-summer', date: '20260704', exception_type: 2 });
+  assert('add exception', s().calendarDates.filter(cd => cd.service_id === 'test-summer').length === 1);
+  s().updateCalendar(s().calendars[0].service_id, { _description: 'Modified' });
+  assert('modify calendar', s().calendars[0]._description === 'Modified');
+
+  // ---- PHASE 5: MODIFY ROUTES ----
+  console.log('\nPhase 5: Modify Routes');
+  const origRouteCount = s().routes.length;
+  if (route1) {
+    s().updateRoute(route1.route_id, { route_color: 'FF0000', route_desc: 'Test modified' });
+    assert('route color updated', s().routes.find(r => r.route_id === route1.route_id)?.route_color === 'FF0000');
+  }
+  s().addRoute({
+    route_id: 'test-route', agency_id: 'PRT', route_short_name: 'T99',
+    route_long_name: 'TEST EXPRESS', route_type: 3, route_color: '00FF00', route_text_color: '000000',
+  });
+  assert('add route', s().routes.length === origRouteCount + 1);
+
+  // ---- PHASE 6: MODIFY STOPS ----
+  console.log('\nPhase 6: Modify Stops');
+  const origStopCount = s().stops.length;
+  s().addStop({
+    stop_id: 'test-stop', stop_name: 'Test Stop', stop_lat: 40.4406, stop_lon: -79.9959,
+    location_type: 0, wheelchair_boarding: 1,
+  });
+  assert('add stop', s().stops.length === origStopCount + 1);
+  s().updateStop(s().stops[0].stop_id, { stop_name: 'MODIFIED' });
+  assert('modify stop', s().stops[0].stop_name === 'MODIFIED');
+  s().addRouteStop({
+    route_id: 'test-route', stop_id: 'test-stop', direction_id: 0, stop_sequence: 0, _snapped: false,
+  });
+  assert('link stop to route', s().routeStops.filter(rs => rs.route_id === 'test-route').length === 1);
+
+  // ---- PHASE 7: MODIFY TIMETABLES ----
+  console.log('\nPhase 7: Modify Timetables');
+  const origTripCount = s().trips.length;
+  s().addTrip({
+    trip_id: 'test-trip-1', route_id: 'test-route', service_id: 'test-summer',
+    direction_id: 0, trip_headsign: 'Test Downtown',
+  });
+  assert('add trip', s().trips.length === origTripCount + 1);
+
+  s().setStopTime('test-trip-1', 'test-stop', 0, {
+    arrival_time: '08:00:00', departure_time: '08:00:00', timepoint: 1,
+  });
+  assert('add stop time', s().stopTimes.filter(st => st.trip_id === 'test-trip-1').length === 1);
+
+  // Modify existing trip
+  const existTrip = s().trips.find(t => t.route_id === route1?.route_id);
+  if (existTrip) {
+    const existST = s().stopTimes.find(st => st.trip_id === existTrip.trip_id);
+    if (existST) {
+      const orig = existST.arrival_time;
+      s().setStopTime(existTrip.trip_id, existST.stop_id, existST.stop_sequence, {
+        arrival_time: '05:30:00', departure_time: '05:30:00',
+      });
+      assert('modify stop time', s().stopTimes.find(
+        st => st.trip_id === existTrip.trip_id && st.stop_id === existST.stop_id
+      )?.arrival_time === '05:30:00');
+      s().setStopTime(existTrip.trip_id, existST.stop_id, existST.stop_sequence, {
+        arrival_time: orig, departure_time: orig,
+      });
+    }
+  }
+
+  // Duplicate trip
+  s().duplicateTrip('test-trip-1', 'test-trip-2', 30);
+  assert('duplicate trip exists', s().trips.some(t => t.trip_id === 'test-trip-2'));
+  assert('duplicate offset correct',
+    s().stopTimes.find(st => st.trip_id === 'test-trip-2')?.arrival_time === '08:30:00');
+
+  // Delete trip
+  s().removeTrip('test-trip-2');
+  assert('delete trip', !s().trips.some(t => t.trip_id === 'test-trip-2'));
+  assert('delete cascades stop times', s().stopTimes.filter(st => st.trip_id === 'test-trip-2').length === 0);
+
+  // ---- PHASE 8: FARES ----
+  console.log('\nPhase 8: Modify Fares');
+  const origFareCount = s().fareAttributes.length;
+  s().addFareAttribute({
+    fare_id: 'test-fare', price: '2.75', currency_type: 'USD',
+    payment_method: 0, transfers: 1, transfer_duration: 7200,
+  });
+  assert('add fare', s().fareAttributes.length === origFareCount + 1);
+  s().addFareRule({ fare_id: 'test-fare', route_id: 'test-route' });
+  assert('add fare rule', s().fareRules.some(fr => fr.fare_id === 'test-fare'));
+
+  // ---- PHASE 9: VALIDATION ----
+  console.log('\nPhase 9: Validation');
+  const msgs = runValidation(s());
+  const errors = msgs.filter(m => m.severity === 'error');
+  assert('no validation errors', errors.length === 0,
+    errors.map(e => e.message).join('; '));
+
+  // ---- PHASE 10: EXPORT & ROUND-TRIP ----
+  console.log('\nPhase 10: Export & Round-trip');
+  const blob = await exportGtfsZip();
+  assert('export produces ZIP', blob.size > 1000, `size: ${blob.size}`);
+
+  const preRoutes = s().routes.length;
+  const preStops = s().stops.length;
+  const preTrips = s().trips.length;
+
+  const reBuffer = Buffer.from(await blob.arrayBuffer());
+  const reFile = reBuffer as unknown as File;
+  const reimported = await importGtfsZip(reFile);
+  loadImportIntoStore(reimported);
+
+  assert('round-trip routes', s().routes.length === preRoutes, `${preRoutes} → ${s().routes.length}`);
+  assert('round-trip stops', s().stops.length === preStops, `${preStops} → ${s().stops.length}`);
+  assert('round-trip trips', s().trips.length === preTrips, `${preTrips} → ${s().trips.length}`);
+  assert('round-trip agency phone', s().agencies[0]?.agency_phone === '412-555-1234');
+  assert('round-trip new route', !!s().routes.find(r => r.route_id === 'test-route'));
+  assert('round-trip route color', s().routes.find(r => r.route_id === route1?.route_id)?.route_color === 'FF0000');
+
+  const postErrors = runValidation(s()).filter(m => m.severity === 'error');
+  assert('round-trip no errors', postErrors.length === 0,
+    postErrors.map(e => e.message).join('; '));
+
+  // ---- PHASE 11: DELETES ----
+  console.log('\nPhase 11: Delete Operations');
+  s().removeRoute('test-route');
+  assert('delete route', !s().routes.some(r => r.route_id === 'test-route'));
+  assert('delete cascades routeStops', s().routeStops.filter(rs => rs.route_id === 'test-route').length === 0);
+  s().removeStop('test-stop');
+  assert('delete stop', !s().stops.some(st => st.stop_id === 'test-stop'));
+  s().removeCalendar('test-summer');
+  assert('delete calendar', !s().calendars.some(c => c.service_id === 'test-summer'));
+  assert('delete cascades dates', s().calendarDates.filter(cd => cd.service_id === 'test-summer').length === 0);
+
+  // ---- SUMMARY ----
+  console.log(`\n${'='.repeat(50)}`);
+  console.log(`Results: ${passed} passed, ${failed} failed out of ${passed + failed} tests`);
+  if (failures.length > 0) {
+    console.log('\nFailures:');
+    failures.forEach(f => console.log(f));
+  }
+  console.log('='.repeat(50));
+
+  process.exit(failed > 0 ? 1 : 0);
+}
+
+main().catch(e => { console.error(e); process.exit(1); });

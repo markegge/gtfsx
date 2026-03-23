@@ -43,7 +43,18 @@ export const useStore = create<AppStore>()(
   }))
 );
 
-// Expose store for testing/debugging
+// Expose store and test runner for testing/debugging
 if (typeof window !== 'undefined') {
   (window as any).__gtfsStore = useStore;
+
+  // Lazy-load test runner
+  (window as any).__runTests = async (zipPath?: string) => {
+    const { runAllTests } = await import('../tests/feedTests');
+    const path = zipPath || '/pittsburgh_gtfs.zip';
+    console.log(`Fetching ${path}...`);
+    const resp = await fetch(path);
+    const blob = await resp.blob();
+    const file = new File([blob], 'pittsburgh_gtfs.zip', { type: 'application/zip' });
+    return runAllTests(file);
+  };
 }

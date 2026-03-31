@@ -49,6 +49,8 @@ export function MapView() {
   // Map layer controls
   const [mapStyleId, setMapStyleId] = useState<MapStyleId>('light');
   const [heatmapMetric, setHeatmapMetric] = useState<HeatmapMetric>('off');
+  // Cursor: pointer when hovering over a clickable feature in select mode
+  const [hoveringFeature, setHoveringFeature] = useState(false);
 
   // Compute initial view from stops or shapes
   const initialView = useMemo(() => {
@@ -399,9 +401,19 @@ export function MapView() {
     }
   }, []);
 
+  const handleMouseMove = useCallback((e: any) => {
+    if (mapMode !== 'select') return;
+    setHoveringFeature(!!(e.features && e.features.length > 0));
+  }, [mapMode]);
+
+  const handleMouseLeave = useCallback(() => {
+    setHoveringFeature(false);
+  }, []);
+
   const cursor = mapMode === 'draw_route' ? 'crosshair'
     : mapMode === 'place_stop' ? 'crosshair'
     : mapMode === 'edit_shape' ? 'default'
+    : hoveringFeature ? 'pointer'
     : 'grab';
 
   return (
@@ -416,6 +428,8 @@ export function MapView() {
         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
         cursor={cursor}
         onClick={handleMapClick}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
         interactiveLayerIds={mapMode === 'edit_shape' ? [] : ['stop-circles', 'route-lines']}
       >
         <NavigationControl position="bottom-right" />

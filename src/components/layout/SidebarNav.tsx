@@ -73,7 +73,6 @@ export function SidebarNav() {
     items: NavItem[],
     isOpen: boolean,
     setOpen: (v: boolean) => void,
-    isActive: boolean,
   ) => (
     <div className="mt-1">
       <button
@@ -99,9 +98,9 @@ export function SidebarNav() {
     <div className="flex flex-col p-3 gap-0.5">
       {COMMON_ITEMS.map(renderItem)}
 
-      {renderAccordion('Fixed Route Service', FIXED_ROUTE_ITEMS, fixedRouteOpen, setFixedRouteOpen, isFixedRouteActive)}
-      {renderAccordion('GTFS-Flex', FLEX_ITEMS, flexOpen, setFlexOpen, isFlexActive)}
-      {renderAccordion('Analysis', ANALYSIS_ITEMS, analysisOpen, setAnalysisOpen, isAnalysisActive)}
+      {renderAccordion('Fixed Route Service', FIXED_ROUTE_ITEMS, fixedRouteOpen, setFixedRouteOpen)}
+      {renderAccordion('GTFS-Flex', FLEX_ITEMS, flexOpen, setFlexOpen)}
+      {renderAccordion('Analysis', ANALYSIS_ITEMS, analysisOpen, setAnalysisOpen)}
     </div>
   );
 }

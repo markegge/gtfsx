@@ -3,9 +3,9 @@ import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import { fetchCensusData, lookupFips } from '../../services/demographics';
 import {
-  calculateCoverage,
   getBufferForRoute,
   generateBufferGeoJSON,
+  type CoverageResult,
 } from '../../services/coverageAnalysis';
 
 function formatNumber(n: number): string {
@@ -42,14 +42,35 @@ export function CoveragePanel() {
       // Get the full store state for headway calculations
       const state = useStore.getState();
 
-      // System-wide coverage at 0.25 miles
-      const systemResult = calculateCoverage(stops, blockGroups, 0.25);
-
-      // Per-route coverage
+      // Per-route coverage (uses per-route buffer: 0.5mi for light rail /
+      // headway ≤15min, 0.25mi otherwise)
       const routeResults = routes.map((route) => ({
         routeId: route.route_id,
         result: getBufferForRoute(route.route_id, state, blockGroups),
       }));
+
+      // System summary: for each block group, take the max apportionment
+      // fraction across all routes, then sum apportioned populations.
+      const bgMap = new Map(blockGroups.map((bg) => [bg.geoid, bg]));
+      const systemFractions = new Map<string, number>();
+      for (const { result } of routeResults) {
+        for (const [geoid, f] of result.fractions) {
+          if ((systemFractions.get(geoid) ?? 0) < f) systemFractions.set(geoid, f);
+        }
+      }
+      let sysPop = 0, sysHH = 0, sysWorkers = 0;
+      for (const [geoid, f] of systemFractions) {
+        const bg = bgMap.get(geoid);
+        if (bg) { sysPop += f * bg.population; sysHH += f * bg.households; sysWorkers += f * bg.workers; }
+      }
+      const systemResult: CoverageResult = {
+        totalPopulation:      Math.round(sysPop),
+        totalHouseholds:      Math.round(sysHH),
+        totalWorkers:         Math.round(sysWorkers),
+        coveredBlockGroupIds: [...systemFractions.keys()],
+        bufferMiles:          0.25,
+        fractions:            systemFractions,
+      };
 
       // Generate buffer GeoJSON for map display
       // Combine buffers: for each route, use its specific buffer distance

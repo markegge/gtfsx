@@ -272,7 +272,7 @@ export function StopList() {
       {/* Selected stop editor */}
       {selectedStop && (
         <div className="mt-4 pt-4 border-t border-sand">
-          <h4 className="font-heading font-bold text-sm text-dark-brown mb-3">Stop Properties</h4>
+          <h4 id="stop-properties" className="font-heading font-bold text-sm text-dark-brown mb-3">Stop Properties</h4>
           <FormField
             label="Stop Name"
             value={selectedStop.stop_name}

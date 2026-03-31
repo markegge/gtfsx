@@ -3,6 +3,15 @@ import { Popup } from 'react-map-gl/mapbox';
 import { useStore } from '../../store';
 import { formatTimeShort } from '../../utils/time';
 
+function scrollToStopProperties() {
+  // Double rAF ensures we're past React's render cycle before scrolling
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      document.getElementById('stop-properties')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
 interface StopPopupProps {
   stopId: string;
   onClose: () => void;
@@ -14,6 +23,15 @@ export function StopPopup({ stopId, onClose }: StopPopupProps) {
   const routeStops = useStore((s) => s.routeStops);
   const trips = useStore((s) => s.trips);
   const stopTimes = useStore((s) => s.stopTimes);
+  const selectStop = useStore((s) => s.selectStop);
+  const setSidebarSection = useStore((s) => s.setSidebarSection);
+
+  const handleEdit = () => {
+    selectStop(stopId);
+    setSidebarSection('stops');
+    onClose();
+    scrollToStopProperties();
+  };
 
   const info = useMemo(() => {
     if (!stop) return null;
@@ -108,6 +126,16 @@ export function StopPopup({ stopId, onClose }: StopPopupProps) {
             </div>
           </div>
         )}
+
+        {/* Edit button */}
+        <div className="border-t border-sand pt-2 mt-2">
+          <button
+            onClick={handleEdit}
+            className="w-full px-3 py-1.5 text-xs font-semibold text-coral bg-coral-light hover:bg-coral hover:text-white rounded-md transition-colors"
+          >
+            Edit Stop Properties
+          </button>
+        </div>
       </div>
     </Popup>
   );

@@ -8,6 +8,16 @@
     <title>GTFS Builder – Free Online GTFS Feed Editor</title>
     <meta name="description" content="Free, browser-based GTFS feed editor. Build transit routes, stops, schedules, fares, and timetables with an interactive map. Import and export standard GTFS ZIP files. No account or installation required." />
     <link rel="canonical" href="https://www.transitfeeds.net/" />
+    <script>
+      // Restore path after GitHub Pages 404 redirect
+      (function () {
+        var path = sessionStorage.getItem('__spa_redirect');
+        if (path && path !== '/') {
+          sessionStorage.removeItem('__spa_redirect');
+          window.history.replaceState(null, '', path);
+        }
+      })();
+    </script>
 
     <!-- Open Graph -->
     <meta property="og:title" content="GTFS Builder – Free Online GTFS Feed Editor" />

@@ -45,11 +45,22 @@ function generateServiceArea(
 }
 
 export function FlexEditor() {
-  const { shapes, routes, trips, hiddenRouteIds, flexZones, addFlexZone, removeFlexZone } = useStore();
+  const {
+    shapes, routes, trips, hiddenRouteIds,
+    flexZones, addFlexZone, removeFlexZone,
+    mapMode, setMapMode, editingFlexZoneId, setEditingFlexZoneId,
+  } = useStore();
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const busRoutes = routes.filter((r) => r.route_type !== 0 && !hiddenRouteIds.includes(r.route_id));
+
+  const hasShapes = shapes.some((s) => {
+    const trip = trips.find((t) => t.shape_id === s.shape_id);
+    if (!trip) return false;
+    const route = routes.find((r) => r.route_id === trip.route_id);
+    return route && route.route_type !== 0 && !hiddenRouteIds.includes(route.route_id);
+  });
 
   const handleGenerate = useCallback(() => {
     setError(null);
@@ -60,13 +71,12 @@ export function FlexEditor() {
         setError('No visible bus route shapes found. Draw routes on the map first.');
         return;
       }
-      const zone: FlexZone = {
+      addFlexZone({
         id: `flex-zone-${Date.now()}`,
         name: `Service Area ${zoneCounter++}`,
         bufferMiles: FLEX_BUFFER_MILES,
         geojson,
-      };
-      addFlexZone(zone);
+      });
     } catch (e: any) {
       setError(e.message || 'Failed to generate service area');
     } finally {
@@ -74,12 +84,25 @@ export function FlexEditor() {
     }
   }, [shapes, routes, trips, hiddenRouteIds, addFlexZone]);
 
-  const hasShapes = shapes.some((s) => {
-    const trip = trips.find((t) => t.shape_id === s.shape_id);
-    if (!trip) return false;
-    const route = routes.find((r) => r.route_id === trip.route_id);
-    return route && route.route_type !== 0 && !hiddenRouteIds.includes(route.route_id);
-  });
+  const handleDrawZone = () => {
+    setMapMode('draw_flex_zone');
+  };
+
+  const handleEditZone = (zone: FlexZone) => {
+    setEditingFlexZoneId(zone.id);
+    setMapMode('edit_flex_zone');
+  };
+
+  const handleSaveEdit = () => {
+    (window as any).__flexZoneEditSave?.();
+  };
+
+  const handleCancelEdit = () => {
+    (window as any).__flexZoneEditDiscard?.();
+  };
+
+  const isDrawing = mapMode === 'draw_flex_zone';
+  const isEditing = mapMode === 'edit_flex_zone';
 
   return (
     <div className="space-y-4">
@@ -90,41 +113,96 @@ export function FlexEditor() {
         </p>
       </div>
 
-      {/* Auto-generate from fixed routes */}
-      <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 space-y-2">
-        <p className="text-xs font-semibold text-purple-800">Auto-generate from fixed routes</p>
-        <p className="text-[11px] text-purple-700">
-          Creates a ¾-mile service area buffer around all visible bus routes
-          ({busRoutes.length} route{busRoutes.length !== 1 ? 's' : ''} visible).
-          Light rail / tram routes are excluded.
-        </p>
-        {error && (
-          <p className="text-[11px] text-red-600">{error}</p>
-        )}
-        <button
-          onClick={handleGenerate}
-          disabled={generating || !hasShapes}
-          className="w-full px-3 py-2 bg-purple text-white rounded-lg text-xs font-heading font-bold hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {generating ? 'Generating…' : 'Generate ¾ mi Buffer'}
-        </button>
-        {!hasShapes && (
-          <p className="text-[11px] text-purple-600 opacity-70">
-            Draw route shapes on the map to enable this feature.
+      {/* Zone editing active */}
+      {isEditing && editingFlexZoneId && (
+        <div className="bg-purple-50 border border-purple-300 rounded-lg p-3 space-y-2">
+          <p className="text-xs font-semibold text-purple-800">
+            Editing: {flexZones.find((z) => z.id === editingFlexZoneId)?.name}
           </p>
-        )}
-      </div>
+          <p className="text-[11px] text-purple-700">
+            Drag vertices to reshape. Click midpoints to add vertices. Use "Delete Vertex" on the map to remove.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleCancelEdit}
+              className="flex-1 px-3 py-1.5 bg-white border border-sand text-warm-gray rounded-lg text-xs font-semibold hover:bg-sand transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveEdit}
+              className="flex-1 px-3 py-1.5 bg-purple text-white rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Zone drawing active */}
+      {isDrawing && (
+        <div className="bg-purple-50 border border-purple-300 rounded-lg p-3 space-y-2">
+          <p className="text-xs font-semibold text-purple-800">Drawing zone…</p>
+          <p className="text-[11px] text-purple-700">
+            Click on the map to add vertices. Double-click to close and save the polygon.
+          </p>
+          <button
+            onClick={() => setMapMode('select')}
+            className="w-full px-3 py-1.5 bg-white border border-sand text-warm-gray rounded-lg text-xs font-semibold hover:bg-sand transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* Actions (not shown while editing) */}
+      {!isEditing && !isDrawing && (
+        <>
+          {/* Draw zone manually */}
+          <button
+            onClick={handleDrawZone}
+            className="w-full px-3 py-2 bg-purple text-white rounded-lg text-xs font-heading font-bold hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+          >
+            <span>✏</span> Draw Zone on Map
+          </button>
+
+          {/* Auto-generate from fixed routes */}
+          <div className="bg-cream border border-sand rounded-lg p-3 space-y-2">
+            <p className="text-xs font-semibold text-dark-brown">Auto-generate from fixed routes</p>
+            <p className="text-[11px] text-warm-gray">
+              ¾-mile buffer around all visible bus routes
+              ({busRoutes.length} route{busRoutes.length !== 1 ? 's' : ''}).
+              Light rail / tram excluded.
+            </p>
+            {error && <p className="text-[11px] text-red-600">{error}</p>}
+            <button
+              onClick={handleGenerate}
+              disabled={generating || !hasShapes}
+              className="w-full px-3 py-2 bg-teal text-white rounded-lg text-xs font-heading font-bold hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {generating ? 'Generating…' : 'Generate ¾ mi Buffer'}
+            </button>
+            {!hasShapes && (
+              <p className="text-[11px] text-warm-gray">Draw route shapes on the map to enable.</p>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Zone list */}
       {flexZones.length > 0 ? (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <p className="text-[11px] font-semibold text-dark-brown uppercase tracking-wide">
-            Defined Service Areas
+            Service Areas ({flexZones.length})
           </p>
           {flexZones.map((zone) => (
             <div
               key={zone.id}
-              className="flex items-center gap-2 px-3 py-2 bg-cream rounded-lg border border-sand"
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors
+                ${editingFlexZoneId === zone.id
+                  ? 'bg-purple-50 border-purple-300'
+                  : 'bg-cream border-sand'
+                }`}
             >
               <span
                 className="w-3 h-3 rounded-sm shrink-0 border border-purple-300"
@@ -133,31 +211,44 @@ export function FlexEditor() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-dark-brown truncate">{zone.name}</p>
                 <p className="text-[11px] text-warm-gray">
-                  {zone.geojson.features.length} polygon{zone.geojson.features.length !== 1 ? 's' : ''} · {zone.bufferMiles} mi buffer
+                  {zone.geojson.features.length} polygon{zone.geojson.features.length !== 1 ? 's' : ''}
+                  {zone.bufferMiles > 0 ? ` · ${zone.bufferMiles} mi buffer` : ' · hand-drawn'}
                 </p>
               </div>
-              <button
-                onClick={() => removeFlexZone(zone.id)}
-                className="text-warm-gray hover:text-red-500 transition-colors text-sm leading-none px-1"
-                title="Remove zone"
-              >
-                ×
-              </button>
+              {!isEditing && !isDrawing && (
+                <div className="flex gap-1 shrink-0">
+                  <button
+                    onClick={() => handleEditZone(zone)}
+                    className="px-2 py-1 text-[11px] font-semibold text-warm-gray hover:text-purple hover:bg-purple-50 rounded transition-colors"
+                    title="Edit zone shape"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => removeFlexZone(zone.id)}
+                    className="px-1.5 py-1 text-[11px] text-warm-gray hover:text-red-500 transition-colors rounded"
+                    title="Remove zone"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
       ) : (
-        <EmptyState
-          icon="📍"
-          title="No service areas yet"
-          description="Generate a service area from your fixed routes, or draw zones manually (coming soon)."
-        />
+        !isDrawing && !isEditing && (
+          <EmptyState
+            icon="📍"
+            title="No service areas yet"
+            description="Draw a zone on the map or generate one from your fixed routes."
+          />
+        )
       )}
 
       <div className="border-t border-sand pt-3">
         <p className="text-[10px] text-warm-gray">
-          Service areas are exported as <code className="px-1 bg-sand rounded">locations.geojson</code> per the GTFS-Flex specification.
-          Booking rules and time windows will be configurable in a future update.
+          Exported as <code className="px-1 bg-sand rounded">locations.geojson</code> per the GTFS-Flex spec.
         </p>
       </div>
     </div>

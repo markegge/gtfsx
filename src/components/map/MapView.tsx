@@ -29,6 +29,7 @@ export function MapView() {
   // Only destructure values used for rendering; handlers read from useStore.getState() directly
   const mapMode = useStore((s) => s.mapMode);
   const editingShapeId = useStore((s) => s.editingShapeId);
+  const editingFlexZoneId = useStore((s) => s.editingFlexZoneId);
   const stops = useStore((s) => s.stops);
   const shapes = useStore((s) => s.shapes);
 
@@ -39,10 +40,12 @@ export function MapView() {
 
   // Track the last stop placed (for ESC undo)
   const lastPlacedStopRef = useRef<string | null>(null);
-  // Track the draw feature ID for shape editing
+  // Track the draw feature ID for shape/zone editing
   const editDrawFeatureIdRef = useRef<string | null>(null);
   // Snapshot of original shape points before editing (for discard)
   const originalShapePointsRef = useRef<any[] | null>(null);
+  // Snapshot of original flex zone geojson before editing (for discard)
+  const originalFlexZoneGeojsonRef = useRef<GeoJSON.FeatureCollection | null>(null);
   // Confirm discard dialog
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   // Snapping indicator
@@ -116,6 +119,24 @@ export function MapView() {
           setShowDiscardConfirm(true);
           return;
         }
+        if (currentMode === 'draw_flex_zone') {
+          if (drawRef.current) drawRef.current.deleteAll();
+          useStore.getState().setMapMode('select');
+          return;
+        }
+        if (currentMode === 'edit_flex_zone') {
+          // Revert to original zone geometry
+          const zoneId = useStore.getState().editingFlexZoneId;
+          if (zoneId && originalFlexZoneGeojsonRef.current) {
+            useStore.getState().updateFlexZone(zoneId, { geojson: originalFlexZoneGeojsonRef.current });
+          }
+          if (drawRef.current) drawRef.current.deleteAll();
+          originalFlexZoneGeojsonRef.current = null;
+          editDrawFeatureIdRef.current = null;
+          useStore.getState().setEditingFlexZoneId(null);
+          useStore.getState().setMapMode('select');
+          return;
+        }
         setPopupStopId(null);
         setPopupRouteId(null);
       }
@@ -177,21 +198,47 @@ export function MapView() {
     setShowDiscardConfirm(false);
   }, []);
 
-  // Expose save/discard on window so RouteEditor can call them
+  // Save / discard for flex zone editing
+  const saveFlexZoneEdit = useCallback(() => {
+    if (drawRef.current) drawRef.current.deleteAll();
+    originalFlexZoneGeojsonRef.current = null;
+    editDrawFeatureIdRef.current = null;
+    useStore.getState().setEditingFlexZoneId(null);
+    useStore.getState().setMapMode('select');
+  }, []);
+
+  const discardFlexZoneEdit = useCallback(() => {
+    const zoneId = useStore.getState().editingFlexZoneId;
+    if (zoneId && originalFlexZoneGeojsonRef.current) {
+      useStore.getState().updateFlexZone(zoneId, { geojson: originalFlexZoneGeojsonRef.current });
+    }
+    if (drawRef.current) drawRef.current.deleteAll();
+    originalFlexZoneGeojsonRef.current = null;
+    editDrawFeatureIdRef.current = null;
+    useStore.getState().setEditingFlexZoneId(null);
+    useStore.getState().setMapMode('select');
+  }, []);
+
+  // Expose save/discard on window so RouteEditor / FlexEditor can call them
   useEffect(() => {
     (window as any).__shapeEditSave = saveShapeEdit;
     (window as any).__shapeEditDiscard = discardShapeEdit;
+    (window as any).__flexZoneEditSave = saveFlexZoneEdit;
+    (window as any).__flexZoneEditDiscard = discardFlexZoneEdit;
     return () => {
       delete (window as any).__shapeEditSave;
       delete (window as any).__shapeEditDiscard;
+      delete (window as any).__flexZoneEditSave;
+      delete (window as any).__flexZoneEditDiscard;
     };
-  }, [saveShapeEdit, discardShapeEdit]);
+  }, [saveShapeEdit, discardShapeEdit, saveFlexZoneEdit, discardFlexZoneEdit]);
 
-  // Load shape into draw when entering edit_shape mode
+  // Load shape / flex zone into draw when entering the relevant editing mode
   useEffect(() => {
     if (!drawRef.current) return;
     const currentMode = useStore.getState().mapMode;
     const currentEditingId = useStore.getState().editingShapeId;
+    const currentFlexZoneId = useStore.getState().editingFlexZoneId;
 
     if (currentMode === 'edit_shape' && currentEditingId) {
       const shape = useStore.getState().shapes.find((s) => s.shape_id === currentEditingId);
@@ -218,18 +265,53 @@ export function MapView() {
 
       // Switch to direct_select mode so vertices are immediately editable
       drawRef.current.changeMode('direct_select', { featureId });
+    } else if (currentMode === 'edit_flex_zone' && currentFlexZoneId) {
+      const zone = useStore.getState().flexZones.find((z) => z.id === currentFlexZoneId);
+      if (!zone || zone.geojson.features.length === 0) return;
+
+      // Snapshot original geometry for discard
+      originalFlexZoneGeojsonRef.current = JSON.parse(JSON.stringify(zone.geojson));
+
+      drawRef.current.deleteAll();
+
+      // Load the first polygon feature into draw
+      const feat = zone.geojson.features[0];
+      const ids = drawRef.current.add(feat);
+      const featureId = Array.isArray(ids) ? ids[0] : ids;
+      editDrawFeatureIdRef.current = featureId;
+
+      drawRef.current.changeMode('direct_select', { featureId });
+    } else if (currentMode === 'draw_flex_zone') {
+      drawRef.current.deleteAll();
+      drawRef.current.changeMode('draw_polygon');
     } else if (currentMode === 'draw_route') {
       drawRef.current.changeMode('draw_line_string');
-    } else if (currentMode !== 'edit_shape') {
+    } else if (currentMode === 'select') {
       try { drawRef.current.changeMode('simple_select'); } catch { /* ignore */ }
     }
-  }, [mapMode, editingShapeId]);
+  }, [mapMode, editingShapeId, editingFlexZoneId]);
 
   const handleDrawCreate = useCallback((e: any) => {
     const feature = e.features[0];
     if (!feature) return;
 
     const currentState = useStore.getState();
+
+    // Flex zone drawn — save as new zone
+    if (currentState.mapMode === 'draw_flex_zone' && feature.geometry.type === 'Polygon') {
+      const geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [feature] };
+      const zoneNum = currentState.flexZones.length + 1;
+      currentState.addFlexZone({
+        id: `flex-zone-${Date.now()}`,
+        name: `Zone ${zoneNum}`,
+        bufferMiles: 0,
+        geojson,
+      });
+      useStore.getState().setMapMode('select');
+      if (drawRef.current) drawRef.current.deleteAll();
+      return;
+    }
+
     const currentDrawingRouteId = currentState.drawingRouteId;
     const currentSnapToRoad = currentState.snapToRoad;
 
@@ -295,6 +377,16 @@ export function MapView() {
   const handleDrawUpdate = useCallback((e: any) => {
     // Read current state directly to avoid stale closures
     const currentState = useStore.getState();
+
+    // Flex zone vertex edit
+    if (currentState.mapMode === 'edit_flex_zone' && currentState.editingFlexZoneId) {
+      const feature = e.features[0];
+      if (!feature || feature.geometry.type !== 'Polygon') return;
+      const geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [feature] };
+      currentState.updateFlexZone(currentState.editingFlexZoneId, { geojson });
+      return;
+    }
+
     if (currentState.mapMode === 'edit_shape' && currentState.editingShapeId) {
       const feature = e.features[0];
       if (!feature || feature.geometry.type !== 'LineString') return;
@@ -411,9 +503,9 @@ export function MapView() {
     setHoveringFeature(false);
   }, []);
 
-  const cursor = mapMode === 'draw_route' ? 'crosshair'
+  const cursor = mapMode === 'draw_route' || mapMode === 'draw_flex_zone' ? 'crosshair'
     : mapMode === 'place_stop' ? 'crosshair'
-    : mapMode === 'edit_shape' ? 'default'
+    : mapMode === 'edit_shape' || mapMode === 'edit_flex_zone' ? 'default'
     : hoveringFeature ? 'pointer'
     : 'grab';
 
@@ -431,7 +523,7 @@ export function MapView() {
         onClick={handleMapClick}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        interactiveLayerIds={mapMode === 'edit_shape' ? [] : ['stop-circles', 'route-lines']}
+        interactiveLayerIds={mapMode === 'edit_shape' || mapMode === 'edit_flex_zone' || mapMode === 'draw_flex_zone' ? [] : ['stop-circles', 'route-lines']}
       >
         <NavigationControl position="bottom-right" />
         <DrawControl
@@ -469,7 +561,7 @@ export function MapView() {
       />
       <DrawingIndicator />
 
-      {/* Delete vertex button — visible during shape editing */}
+      {/* Delete vertex / save buttons — shape editing */}
       {mapMode === 'edit_shape' && (
         <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 flex gap-2">
           <button
@@ -477,6 +569,30 @@ export function MapView() {
             className="px-4 py-2 bg-white text-red-600 rounded-full text-xs font-heading font-bold shadow-md hover:bg-red-50 transition-colors border border-red-200"
           >
             Delete Selected Vertex
+          </button>
+        </div>
+      )}
+
+      {/* Flex zone editing controls */}
+      {mapMode === 'edit_flex_zone' && (
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 flex gap-2">
+          <button
+            onClick={() => { if (drawRef.current) drawRef.current.trash(); }}
+            className="px-4 py-2 bg-white text-red-600 rounded-full text-xs font-heading font-bold shadow-md hover:bg-red-50 transition-colors border border-red-200"
+          >
+            Delete Vertex
+          </button>
+          <button
+            onClick={discardFlexZoneEdit}
+            className="px-4 py-2 bg-white text-warm-gray rounded-full text-xs font-heading font-bold shadow-md hover:bg-sand transition-colors border border-sand"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={saveFlexZoneEdit}
+            className="px-4 py-2 bg-purple text-white rounded-full text-xs font-heading font-bold shadow-md hover:opacity-90 transition-opacity"
+          >
+            Save Zone
           </button>
         </div>
       )}

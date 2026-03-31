@@ -13,6 +13,7 @@ export interface UISlice {
   drawingRouteId: string | null;
   editingRouteId: string | null;
   editingShapeId: string | null;
+  editingFlexZoneId: string | null;
   snapToRoad: boolean;
   hiddenRouteIds: string[];
   hiddenShapeIds: string[];
@@ -30,6 +31,7 @@ export interface UISlice {
   setDrawingRouteId: (id: string | null) => void;
   setEditingRouteId: (id: string | null) => void;
   setEditingShapeId: (id: string | null) => void;
+  setEditingFlexZoneId: (id: string | null) => void;
   setSnapToRoad: (v: boolean) => void;
 }
 
@@ -45,6 +47,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   drawingRouteId: null,
   editingRouteId: null,
   editingShapeId: null,
+  editingFlexZoneId: null,
   snapToRoad: true,
   hiddenRouteIds: [],
   hiddenShapeIds: [],
@@ -70,5 +73,6 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setDrawingRouteId: (id) => set((state) => { state.drawingRouteId = id; }),
   setEditingRouteId: (id) => set((state) => { state.editingRouteId = id; }),
   setEditingShapeId: (id) => set((state) => { state.editingShapeId = id; }),
+  setEditingFlexZoneId: (id) => set((state) => { state.editingFlexZoneId = id; }),
   setSnapToRoad: (v) => set((state) => { state.snapToRoad = v; }),
 });

@@ -12,6 +12,8 @@ export function DrawingIndicator() {
     place_stop: `Placing Stops — Click ${stopPlacementMode === 'snap_to_route' ? 'along route' : 'anywhere'} to add a stop`,
     edit_vertices: 'Editing Shape — Drag vertices to adjust',
     edit_shape: 'Editing Shape — Drag vertices, click midpoints to add, Delete key to remove. Press Esc when done.',
+    draw_flex_zone: 'Drawing Flex Zone — Click to add vertices, double-click to close polygon',
+    edit_flex_zone: 'Editing Flex Zone — Drag vertices, click midpoints to add, Delete key to remove',
   };
 
   return (

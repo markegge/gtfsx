@@ -17,7 +17,9 @@ export type MapMode =
   | 'draw_route'
   | 'place_stop'
   | 'edit_vertices'
-  | 'edit_shape';
+  | 'edit_shape'
+  | 'draw_flex_zone'
+  | 'edit_flex_zone';
 
 export type StopPlacementMode = 'snap_to_route' | 'freehand';
 

@@ -5,33 +5,30 @@ import { useStore } from '../../store';
 
 export function FlexLayer() {
   const flexZones = useStore((s) => s.flexZones);
-  const visible = flexZones.length > 0;
+  const editingFlexZoneId = useStore((s) => s.editingFlexZoneId);
 
   const combinedGeojson = useMemo(() => {
-    if (flexZones.length === 0) return featureCollection([]) as GeoJSON.FeatureCollection;
-    const allFeatures = flexZones.flatMap((z) =>
+    // Exclude the zone currently being edited in draw (draw renders it instead)
+    const zones = flexZones.filter((z) => z.id !== editingFlexZoneId);
+    if (zones.length === 0) return featureCollection([]) as GeoJSON.FeatureCollection;
+    const allFeatures = zones.flatMap((z) =>
       z.geojson.features.map((f) => ({
         ...f,
         properties: { ...f.properties, zoneId: z.id, zoneName: z.name },
       })),
     );
     return featureCollection(allFeatures) as GeoJSON.FeatureCollection;
-  }, [flexZones]);
+  }, [flexZones, editingFlexZoneId]);
 
-  if (!visible) return null;
+  if (flexZones.length === 0) return null;
 
   return (
     <Source id="flex-zones" type="geojson" data={combinedGeojson}>
-      {/* Fill */}
       <Layer
         id="flex-zone-fill"
         type="fill"
-        paint={{
-          'fill-color': '#7C3AED',
-          'fill-opacity': 0.12,
-        }}
+        paint={{ 'fill-color': '#7C3AED', 'fill-opacity': 0.12 }}
       />
-      {/* Outline */}
       <Layer
         id="flex-zone-outline"
         type="line"

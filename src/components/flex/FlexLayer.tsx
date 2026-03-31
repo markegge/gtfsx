@@ -5,9 +5,6 @@ import { useStore } from '../../store';
 
 export function FlexLayer() {
   const flexZones = useStore((s) => s.flexZones);
-  const sidebarSection = useStore((s) => s.sidebarSection);
-
-  // Only render when the flex panel is active or zones exist
   const visible = flexZones.length > 0;
 
   const combinedGeojson = useMemo(() => {

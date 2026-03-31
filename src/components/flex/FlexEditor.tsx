@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import buffer from '@turf/buffer';
-import { featureCollection, lineString } from '@turf/helpers';
+import { featureCollection, multiLineString } from '@turf/helpers';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import type { FlexZone } from '../../store/flexSlice';
@@ -17,8 +17,8 @@ function generateServiceArea(
 ): GeoJSON.FeatureCollection | null {
   const hiddenSet = new Set(hiddenRouteIds);
 
-  // Collect LineString features for all visible bus routes (route_type !== 0)
-  const lines: GeoJSON.Feature<GeoJSON.LineString>[] = [];
+  // Collect coordinate arrays for all visible bus route shapes (route_type !== 0)
+  const lineCoords: [number, number][][] = [];
 
   for (const shape of shapes) {
     if (shape.points.length < 2) continue;
@@ -29,14 +29,19 @@ function generateServiceArea(
     if (hiddenSet.has(route.route_id)) continue;
     if (route.route_type === 0) continue; // skip light rail / tram
 
-    const coords = shape.points.map((p) => [p.shape_pt_lon, p.shape_pt_lat] as [number, number]);
-    lines.push(lineString(coords, { route_id: route.route_id }));
+    lineCoords.push(shape.points.map((p) => [p.shape_pt_lon, p.shape_pt_lat]));
   }
 
-  if (lines.length === 0) return null;
+  if (lineCoords.length === 0) return null;
 
-  const buffered = buffer(featureCollection(lines), FLEX_BUFFER_MILES, { units: 'miles' });
-  return (buffered ?? featureCollection([])) as GeoJSON.FeatureCollection;
+  // Buffer a single MultiLineString so that overlapping buffers are
+  // automatically dissolved — produces a Polygon for connected routes
+  // or a MultiPolygon for disconnected service areas.
+  const ml = multiLineString(lineCoords);
+  const buffered = buffer(ml, FLEX_BUFFER_MILES, { units: 'miles' });
+  if (!buffered) return null;
+
+  return featureCollection([buffered]) as GeoJSON.FeatureCollection;
 }
 
 export function FlexEditor() {

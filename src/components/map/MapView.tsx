@@ -12,6 +12,7 @@ import { StopPopup } from './StopPopup';
 import { RoutePopup } from './RoutePopup';
 import { CoverageLayer } from './CoverageLayer';
 import { DensityHeatmap } from './DensityHeatmap';
+import { FlexLayer } from '../flex/FlexLayer';
 import { MapLayerControls } from './MapLayerControls';
 import type { MapStyleId, HeatmapMetric } from './MapLayerControls';
 import { generateId } from '../../services/idGenerator';
@@ -440,6 +441,7 @@ export function MapView() {
         />
         <DensityHeatmap visible={heatmapMetric !== 'off'} metric={heatmapMetric === 'off' ? 'population' : heatmapMetric} />
         <CoverageLayer />
+        <FlexLayer />
         <RouteLayer />
         <StopLayer />
 

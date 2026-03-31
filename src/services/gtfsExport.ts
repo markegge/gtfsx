@@ -88,6 +88,21 @@ export async function exportGtfsZip(): Promise<Blob> {
     zip.file('feed_info.txt', toCSV([stripUIFields(state.feedInfo)]));
   }
 
+  // locations.geojson (GTFS-Flex)
+  if (state.flexZones.length > 0) {
+    const allFeatures = state.flexZones.flatMap((zone) =>
+      zone.geojson.features.map((f, i) => ({
+        ...f,
+        properties: {
+          stop_id: `${zone.id}-${i}`,
+          stop_name: zone.name,
+          location_type: 4,
+        },
+      })),
+    );
+    zip.file('locations.geojson', JSON.stringify({ type: 'FeatureCollection', features: allFeatures }, null, 2));
+  }
+
   return await zip.generateAsync({ type: 'blob' });
 }
 

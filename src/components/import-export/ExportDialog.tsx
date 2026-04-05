@@ -31,7 +31,6 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
     const s = useStore.getState();
     const routeIds = new Set(s.routes.map((r) => r.route_id));
     const stopIds = new Set(s.stops.map((st) => st.stop_id));
-    const tripIds = new Set(s.trips.map((t) => t.trip_id));
 
     // Only remove trips referencing routes that no longer exist.
     // Never remove trips just because their calendar is missing — keep

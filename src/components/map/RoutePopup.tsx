@@ -15,7 +15,6 @@ export function RoutePopup({ routeId, directionId, lngLat, onClose }: RoutePopup
   const route = useStore((s) => s.routes.find((r) => r.route_id === routeId));
   const trips = useStore((s) => s.trips);
   const stopTimes = useStore((s) => s.stopTimes);
-  const stops = useStore((s) => s.stops);
   const routeStops = useStore((s) => s.routeStops);
   const { setSidebarSection, selectRoute, setEditingRouteId } = useStore();
 

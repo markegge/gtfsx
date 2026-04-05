@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../../store';
 import { TimetableGrid } from '../timetable/TimetableGrid';
+import { StopDepartures } from '../timetable/StopDepartures';
 import { ValidationPanel } from '../validation/ValidationPanel';
 
 const MIN_HEIGHT = 120;
@@ -63,7 +64,7 @@ export function BottomPanel() {
         onClick={() => toggleBottomPanel()}
       >
         <span className="text-xs text-warm-gray">{bottomPanelOpen ? '▼' : '▲'}</span>
-        {(['timetable', 'validation'] as const).map((tab) => (
+        {(['timetable', 'stops', 'validation'] as const).map((tab) => (
           <button
             key={tab}
             onClick={(e) => {
@@ -77,7 +78,7 @@ export function BottomPanel() {
                 : 'text-warm-gray hover:text-dark-brown'
               }`}
           >
-            {tab === 'timetable' ? 'Timetable' : 'Validation'}
+            {tab === 'timetable' ? 'Timetable' : tab === 'stops' ? 'Stops' : 'Validation'}
           </button>
         ))}
         {bottomPanelOpen && (
@@ -102,6 +103,7 @@ export function BottomPanel() {
       {bottomPanelOpen && (
         <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
           {bottomPanelTab === 'timetable' && <TimetableGrid />}
+          {bottomPanelTab === 'stops' && <StopDepartures />}
           {bottomPanelTab === 'validation' && <ValidationPanel />}
         </div>
       )}

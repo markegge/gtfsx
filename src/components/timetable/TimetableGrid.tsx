@@ -1,7 +1,6 @@
-import { type KeyboardEvent, useMemo, useCallback, useState, useRef, useEffect } from 'react';
+import { type KeyboardEvent, useMemo, useCallback, useState, useRef } from 'react';
 import { useStore } from '../../store';
 import { formatTimeShort, normalizeTimeInput, gtfsTimeToSeconds, secondsToGtfsTime } from '../../utils/time';
-import { generateId } from '../../services/idGenerator';
 import { directionName } from '../../utils/constants';
 import type { Route } from '../../types/gtfs';
 
@@ -546,7 +545,7 @@ function TimeCell({
   onCommit,
   inputRef: externalRef,
   onKeyDown,
-  isTimepoint,
+  isTimepoint: _isTimepoint,
   timeError,
 }: {
   value: string; // stored arrival_time (HH:MM:SS or raw)

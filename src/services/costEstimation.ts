@@ -50,7 +50,7 @@ function countServiceDaysPerYear(
     ];
 
     // Count active days per week from the pattern
-    const activeDaysPerWeek = dayFlags.reduce((sum, v) => sum + v, 0);
+    const activeDaysPerWeek = dayFlags.reduce<number>((sum, v) => sum + v, 0);
     if (activeDaysPerWeek === 0) continue;
 
     // Calculate span in days, capped to avoid iterating huge ranges

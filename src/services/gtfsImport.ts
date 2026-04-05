@@ -333,7 +333,6 @@ export function mergeImportIntoStore(
   const existingStopIds  = new Set(store.stops.map((s) => s.stop_id));
   const existingTripIds  = new Set(store.trips.map((t) => t.trip_id));
   const existingShapeIds = new Set(store.shapes.map((s) => s.shape_id));
-  const existingCalendarIds = new Set(store.calendars.map((c) => c.service_id));
 
   const hasConflict =
     data.routes.some((r) => existingRouteIds.has(r.route_id)) ||

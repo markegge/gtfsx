@@ -14,7 +14,7 @@ interface DrawControlProps {
 
 // Custom direct_select mode that prevents dragging the entire feature
 const DirectSelectNoDrag = {
-  ...MapboxDraw.modes.direct_select,
+  ...(MapboxDraw as any).modes.direct_select,
   dragFeature() {
     // no-op: prevent dragging the entire route/shape
   },
@@ -37,7 +37,7 @@ export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawContr
         controls: {},
         defaultMode: 'simple_select',
         modes: {
-          ...MapboxDraw.modes,
+          ...(MapboxDraw as any).modes,
           direct_select: DirectSelectNoDrag,
         },
         styles: [

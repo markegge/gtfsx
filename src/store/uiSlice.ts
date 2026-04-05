@@ -7,6 +7,8 @@ export interface UISlice {
   bottomPanelTab: BottomPanelTab;
   mapMode: MapMode;
   stopPlacementMode: StopPlacementMode;
+  stopPlacementDirection: 0 | 1;
+  timetableDirectionId: 0 | 1;
   selectedRouteId: string | null;
   selectedStopId: string | null;
   selectedTripId: string | null;
@@ -25,6 +27,8 @@ export interface UISlice {
   setBottomPanelTab: (tab: BottomPanelTab) => void;
   setMapMode: (mode: MapMode) => void;
   setStopPlacementMode: (mode: StopPlacementMode) => void;
+  setStopPlacementDirection: (dir: 0 | 1) => void;
+  setTimetableDirectionId: (dir: 0 | 1) => void;
   selectRoute: (id: string | null) => void;
   selectStop: (id: string | null) => void;
   selectTrip: (id: string | null) => void;
@@ -41,6 +45,8 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   bottomPanelTab: 'timetable',
   mapMode: 'select',
   stopPlacementMode: 'snap_to_route',
+  stopPlacementDirection: 0,
+  timetableDirectionId: 0,
   selectedRouteId: null,
   selectedStopId: null,
   selectedTripId: null,
@@ -67,6 +73,8 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setBottomPanelTab: (tab) => set((state) => { state.bottomPanelTab = tab; }),
   setMapMode: (mode) => set((state) => { state.mapMode = mode; }),
   setStopPlacementMode: (mode) => set((state) => { state.stopPlacementMode = mode; }),
+  setStopPlacementDirection: (dir) => set((state) => { state.stopPlacementDirection = dir; }),
+  setTimetableDirectionId: (dir) => set((state) => { state.timetableDirectionId = dir; }),
   selectRoute: (id) => set((state) => { state.selectedRouteId = id; }),
   selectStop: (id) => set((state) => { state.selectedStopId = id; }),
   selectTrip: (id) => set((state) => { state.selectedTripId = id; }),

@@ -12,6 +12,11 @@ export function BottomPanel() {
   const { bottomPanelOpen, bottomPanelTab, setBottomPanelTab, toggleBottomPanel } = useStore();
   const [panelHeight, setPanelHeight] = useState(DEFAULT_HEIGHT);
   const isDragging = useRef(false);
+
+  // Trigger map resize when panel opens/closes or height changes
+  useEffect(() => {
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+  }, [bottomPanelOpen, panelHeight]);
   const dragStartY = useRef(0);
   const dragStartHeight = useRef(0);
 
@@ -75,11 +80,27 @@ export function BottomPanel() {
             {tab === 'timetable' ? 'Timetable' : 'Validation'}
           </button>
         ))}
+        {bottomPanelOpen && (
+          <>
+            <div className="flex-1" />
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                useStore.getState().selectRoute(null);
+                useStore.getState().setBottomPanelOpen(false);
+              }}
+              className="w-7 h-7 flex items-center justify-center text-warm-gray hover:text-red-500 hover:bg-red-50 rounded-md text-lg transition-colors"
+              title="Close"
+            >
+              ×
+            </button>
+          </>
+        )}
       </div>
 
       {/* Content */}
       {bottomPanelOpen && (
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
           {bottomPanelTab === 'timetable' && <TimetableGrid />}
           {bottomPanelTab === 'validation' && <ValidationPanel />}
         </div>

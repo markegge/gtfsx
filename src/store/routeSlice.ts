@@ -89,6 +89,18 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
     state.routeStops = state.routeStops.filter(
       (rs) => !(rs.route_id === route_id && rs.stop_id === stop_id && rs.direction_id === direction_id)
     );
+    // Also remove stop_times for this stop on trips in this route+direction
+    const fullState = get() as unknown as RouteSlice & TripSlice;
+    const affectedTripIds = new Set(
+      fullState.trips
+        .filter((t) => t.route_id === route_id && t.direction_id === direction_id)
+        .map((t) => t.trip_id),
+    );
+    if (affectedTripIds.size > 0) {
+      (state as any).stopTimes = fullState.stopTimes.filter(
+        (st) => !(affectedTripIds.has(st.trip_id) && st.stop_id === stop_id)
+      );
+    }
   }),
   reorderRouteStops: (route_id, direction_id, stopIds) => set((state) => {
     const others = state.routeStops.filter(

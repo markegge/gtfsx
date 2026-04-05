@@ -41,14 +41,46 @@ export async function exportGtfsZip(): Promise<Blob> {
     zip.file('routes.txt', toCSV(state.routes.map(stripUIFields)));
   }
 
-  // stops.txt
-  if (state.stops.length > 0) {
-    zip.file('stops.txt', toCSV(state.stops.map(stripUIFields)));
+  // directions.txt (non-standard but widely supported)
+  const directionRows: Record<string, any>[] = [];
+  for (const route of state.routes) {
+    if (route._direction_0_name) {
+      directionRows.push({ route_id: route.route_id, direction_id: 0, direction: route._direction_0_name });
+    }
+    if (route._direction_1_name) {
+      directionRows.push({ route_id: route.route_id, direction_id: 1, direction: route._direction_1_name });
+    }
+  }
+  if (directionRows.length > 0) {
+    zip.file('directions.txt', toCSV(directionRows));
   }
 
-  // trips.txt
+  // stops.txt — only export stops referenced by route-stop associations or stop_times
+  if (state.stops.length > 0) {
+    const referencedStopIds = new Set([
+      ...state.routeStops.map((rs) => rs.stop_id),
+      ...state.stopTimes.map((st) => st.stop_id),
+    ]);
+    const usedStops = state.stops.filter((s) => referencedStopIds.has(s.stop_id));
+    if (usedStops.length > 0) {
+      zip.file('stops.txt', toCSV(usedStops.map(stripUIFields)));
+    }
+  }
+
+  // trips.txt — populate trip_headsign from route direction names if not already set
   if (state.trips.length > 0) {
-    zip.file('trips.txt', toCSV(state.trips.map(stripUIFields)));
+    const routeMap = new Map(state.routes.map((r) => [r.route_id, r]));
+    zip.file('trips.txt', toCSV(state.trips.map((trip) => {
+      const clean = stripUIFields(trip);
+      if (!clean.trip_headsign) {
+        const route = routeMap.get(trip.route_id);
+        if (route) {
+          const name = trip.direction_id === 0 ? route._direction_0_name : route._direction_1_name;
+          if (name) clean.trip_headsign = name;
+        }
+      }
+      return clean;
+    })));
   }
 
   // stop_times.txt

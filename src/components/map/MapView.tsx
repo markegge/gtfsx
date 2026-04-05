@@ -1,5 +1,5 @@
 import { useCallback, useRef, useMemo, useEffect, useState } from 'react';
-import Map, { NavigationControl } from 'react-map-gl/mapbox';
+import Map, { NavigationControl, type MapRef } from 'react-map-gl/mapbox';
 import type MapboxDraw from '@mapbox/mapbox-gl-draw';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useStore } from '../../store';
@@ -25,6 +25,7 @@ import { lineString, point } from '@turf/helpers';
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
 export function MapView() {
+  const mapRef = useRef<MapRef | null>(null);
   const drawRef = useRef<MapboxDraw | null>(null);
   // Only destructure values used for rendering; handlers read from useStore.getState() directly
   const mapMode = useStore((s) => s.mapMode);
@@ -37,6 +38,7 @@ export function MapView() {
   const [popupStopId, setPopupStopId] = useState<string | null>(null);
   const [popupRouteId, setPopupRouteId] = useState<string | null>(null);
   const [popupLngLat, setPopupLngLat] = useState<{ lng: number; lat: number } | null>(null);
+  const [popupDirectionId, setPopupDirectionId] = useState<0 | 1>(0);
 
   // Track the last stop placed (for ESC undo)
   const lastPlacedStopRef = useRef<string | null>(null);
@@ -55,6 +57,10 @@ export function MapView() {
   const [heatmapMetric, setHeatmapMetric] = useState<HeatmapMetric>('off');
   // Cursor: pointer when hovering over a clickable feature in select mode
   const [hoveringFeature, setHoveringFeature] = useState(false);
+  // Stop dragging state
+  const draggingStopRef = useRef<string | null>(null);
+  const didDragStopRef = useRef(false);
+  const [isDraggingStop, setIsDraggingStop] = useState(false);
 
   // Compute initial view from stops or shapes
   const initialView = useMemo(() => {
@@ -73,8 +79,16 @@ export function MapView() {
     return { latitude: 45.68, longitude: -111.05, zoom: 12 };
   }, [stops.length === 0 && shapes.length === 0]);
 
-  // ESC key handler
+  // ESC key handler — use capture phase so we fire before mapbox-gl-draw
   useEffect(() => {
+    // Prevent mapbox-gl-draw's own Escape handling (keyup) from canceling the draw
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && useStore.getState().mapMode === 'draw_route') {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         const currentMode = useStore.getState().mapMode;
@@ -93,6 +107,8 @@ export function MapView() {
           return;
         }
         if (currentMode === 'draw_route') {
+          e.preventDefault();
+          e.stopPropagation();
           if (drawRef.current) {
             // Try to undo the last placed vertex instead of deleting the whole line
             const all = drawRef.current.getAll();
@@ -152,8 +168,12 @@ export function MapView() {
         }
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('keyup', handleKeyUp, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keyup', handleKeyUp, true);
+    };
   }, []);
 
   // === Shape editing: Save and Discard ===
@@ -217,6 +237,14 @@ export function MapView() {
     editDrawFeatureIdRef.current = null;
     useStore.getState().setEditingFlexZoneId(null);
     useStore.getState().setMapMode('select');
+  }, []);
+
+  // Expose map flyTo on window for sidebar components
+  useEffect(() => {
+    (window as any).__mapFlyTo = (lng: number, lat: number, zoom?: number) => {
+      mapRef.current?.flyTo({ center: [lng, lat], zoom: zoom ?? mapRef.current.getZoom(), duration: 500 });
+    };
+    return () => { delete (window as any).__mapFlyTo; };
   }, []);
 
   // Expose save/discard on window so RouteEditor / FlexEditor can call them
@@ -291,6 +319,59 @@ export function MapView() {
     }
   }, [mapMode, editingShapeId, editingFlexZoneId]);
 
+  // Stop dragging via native map events
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+
+    const onMouseDown = (e: any) => {
+      const state = useStore.getState();
+      if (state.mapMode !== 'select') return;
+      if (!state.selectedStopId) return;
+      const features = map.queryRenderedFeatures(e.point, { layers: ['stop-circles'] });
+      if (features.length === 0) return;
+      const stopId = features[0].properties?.stop_id;
+      // Only allow dragging the currently selected stop
+      if (stopId !== state.selectedStopId) return;
+
+      e.preventDefault();
+      draggingStopRef.current = stopId;
+      setIsDraggingStop(true);
+      map.getCanvas().style.cursor = 'grabbing';
+      map.dragPan.disable();
+    };
+
+    const onMouseMove = (e: any) => {
+      if (!draggingStopRef.current) return;
+      didDragStopRef.current = true;
+      const stopId = draggingStopRef.current;
+      useStore.getState().updateStop(stopId, {
+        stop_lat: e.lngLat.lat,
+        stop_lon: e.lngLat.lng,
+      });
+    };
+
+    const onMouseUp = () => {
+      if (!draggingStopRef.current) return;
+      draggingStopRef.current = null;
+      setIsDraggingStop(false);
+      map.getCanvas().style.cursor = '';
+      map.dragPan.enable();
+      // Clear the drag flag after a tick so the click handler can check it
+      setTimeout(() => { didDragStopRef.current = false; }, 0);
+    };
+
+    map.on('mousedown', onMouseDown);
+    map.on('mousemove', onMouseMove);
+    map.on('mouseup', onMouseUp);
+
+    return () => {
+      map.off('mousedown', onMouseDown);
+      map.off('mousemove', onMouseMove);
+      map.off('mouseup', onMouseUp);
+    };
+  }, [mapMode]);
+
   const handleDrawCreate = useCallback((e: any) => {
     const feature = e.features[0];
     if (!feature) return;
@@ -339,11 +420,18 @@ export function MapView() {
         st.addShape({ shape_id: shapeId, points });
         st.recalcShapeDistances(shapeId);
 
-        const tripId = generateId('trip');
+        const route = st.routes.find((r) => r.route_id === currentDrawingRouteId);
+        const routeName = route?.route_short_name || route?.route_long_name || '';
+        const serviceId = st.calendars[0]?.service_id || 'service-1';
+        const svcIdx = st.calendars.findIndex((c) => c.service_id === serviceId) + 1 || 1;
+        const prefix = (routeName || 'trip').replace(/\s+/g, '').slice(0, 4).toLowerCase();
+        const existingIds = new Set(st.trips.map((t) => t.trip_id));
+        let tripId = `${svcIdx}${prefix}_new`;
+        if (existingIds.has(tripId)) { let s = 2; while (existingIds.has(`${tripId}${s}`)) s++; tripId = `${tripId}${s}`; }
         st.addTrip({
           trip_id: tripId,
           route_id: currentDrawingRouteId,
-          service_id: st.calendars[0]?.service_id || 'service-1',
+          service_id: serviceId,
           direction_id: drawingDirection,
           shape_id: shapeId,
           trip_headsign: '',
@@ -403,6 +491,9 @@ export function MapView() {
   }, []);
 
   const handleMapClick = useCallback((e: any) => {
+    // Ignore clicks that are the end of a stop drag
+    if (didDragStopRef.current) return;
+
     const currentState = useStore.getState();
 
     // Don't handle map clicks during shape editing
@@ -414,7 +505,7 @@ export function MapView() {
       const clickLon = e.lngLat.lng;
       let stopLat = clickLat;
       let stopLon = clickLon;
-      let bestDirectionId: 0 | 1 = 0;
+      let bestDirectionId: 0 | 1 = currentState.stopPlacementDirection;
 
       if (currentState.stopPlacementMode === 'snap_to_route') {
         const routeTrips = currentState.trips.filter((t) => t.route_id === currentState.selectedRouteId);
@@ -481,8 +572,10 @@ export function MapView() {
       const routeFeature = e.features?.find((f: any) => f.layer?.id === 'route-lines');
       if (routeFeature) {
         const rid = routeFeature.properties.route_id;
+        const did = routeFeature.properties.direction_id;
         currentState.selectRoute(rid);
         setPopupRouteId(rid);
+        setPopupDirectionId(typeof did === 'number' ? did as 0 | 1 : 0);
         setPopupStopId(null);
         setPopupLngLat({ lng: e.lngLat.lng, lat: e.lngLat.lat });
         currentState.setSidebarSection('routes');
@@ -503,7 +596,8 @@ export function MapView() {
     setHoveringFeature(false);
   }, []);
 
-  const cursor = mapMode === 'draw_route' || mapMode === 'draw_flex_zone' ? 'crosshair'
+  const cursor = isDraggingStop ? 'grabbing'
+    : mapMode === 'draw_route' || mapMode === 'draw_flex_zone' ? 'crosshair'
     : mapMode === 'place_stop' ? 'crosshair'
     : mapMode === 'edit_shape' || mapMode === 'edit_flex_zone' ? 'default'
     : hoveringFeature ? 'pointer'
@@ -512,6 +606,7 @@ export function MapView() {
   return (
     <div className="flex-1 relative min-h-0">
       <Map
+        ref={mapRef}
         initialViewState={initialView}
         mapboxAccessToken={MAPBOX_TOKEN}
         mapStyle={mapStyleId === 'satellite'
@@ -547,6 +642,7 @@ export function MapView() {
         {popupRouteId && popupLngLat && (
           <RoutePopup
             routeId={popupRouteId}
+            directionId={popupDirectionId}
             lngLat={popupLngLat}
             onClose={() => setPopupRouteId(null)}
           />

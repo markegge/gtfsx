@@ -19,7 +19,6 @@ const COMMON_ITEMS: NavItem[] = [
 const FIXED_ROUTE_ITEMS: NavItem[] = [
   { key: 'routes', label: 'Routes', icon: 'R', bgClass: 'bg-coral-light', textClass: 'text-coral' },
   { key: 'stops', label: 'Stops', icon: 'S', bgClass: 'bg-coral-light', textClass: 'text-coral' },
-  { key: 'timetable', label: 'Timetables', icon: 'T', bgClass: 'bg-purple-light', textClass: 'text-purple' },
 ];
 
 const FLEX_ITEMS: NavItem[] = [

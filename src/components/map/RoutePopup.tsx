@@ -2,15 +2,16 @@ import { useMemo } from 'react';
 import { Popup } from 'react-map-gl/mapbox';
 import { useStore } from '../../store';
 import { formatTimeShort } from '../../utils/time';
-import { ROUTE_TYPES } from '../../utils/constants';
+import { ROUTE_TYPES, directionName } from '../../utils/constants';
 
 interface RoutePopupProps {
   routeId: string;
+  directionId: 0 | 1;
   lngLat: { lng: number; lat: number };
   onClose: () => void;
 }
 
-export function RoutePopup({ routeId, lngLat, onClose }: RoutePopupProps) {
+export function RoutePopup({ routeId, directionId, lngLat, onClose }: RoutePopupProps) {
   const route = useStore((s) => s.routes.find((r) => r.route_id === routeId));
   const trips = useStore((s) => s.trips);
   const stopTimes = useStore((s) => s.stopTimes);
@@ -22,39 +23,31 @@ export function RoutePopup({ routeId, lngLat, onClose }: RoutePopupProps) {
     if (!route) return null;
 
     const routeTrips = trips.filter((t) => t.route_id === routeId);
+    const dirTrips = routeTrips.filter((t) => t.direction_id === directionId);
 
-    // Group by direction
-    const directions = [0, 1].map((dir) => {
-      const dirTrips = routeTrips.filter((t) => t.direction_id === dir);
-      // Get first stop time of each trip as the "start time"
-      const startTimes = dirTrips
-        .map((t) => {
-          const firstSt = stopTimes
-            .filter((st) => st.trip_id === t.trip_id)
-            .sort((a, b) => a.stop_sequence - b.stop_sequence)[0];
-          return {
-            time: firstSt?.arrival_time || '',
-            headsign: t.trip_headsign || '',
-          };
-        })
-        .filter((t) => t.time)
-        .sort((a, b) => a.time.localeCompare(b.time));
+    // Get first stop time of each trip as the "start time"
+    const startTimes = dirTrips
+      .map((t) => {
+        const firstSt = stopTimes
+          .filter((st) => st.trip_id === t.trip_id)
+          .sort((a, b) => a.stop_sequence - b.stop_sequence)[0];
+        return {
+          time: firstSt?.arrival_time || '',
+          headsign: t.trip_headsign || '',
+        };
+      })
+      .filter((t) => t.time)
+      .sort((a, b) => a.time.localeCompare(b.time));
 
-      return {
-        direction_id: dir,
-        headsign: dirTrips[0]?.trip_headsign || (dir === 0 ? 'Outbound' : 'Inbound'),
-        tripCount: dirTrips.length,
-        startTimes: startTimes.slice(0, 4),
-      };
-    }).filter((d) => d.tripCount > 0);
+    const headsign = dirTrips[0]?.trip_headsign || directionName(route, directionId);
 
-    // Stop count
+    // Stop count for this direction
     const stopCount = new Set(
-      routeStops.filter((rs) => rs.route_id === routeId).map((rs) => rs.stop_id)
+      routeStops.filter((rs) => rs.route_id === routeId && rs.direction_id === directionId).map((rs) => rs.stop_id)
     ).size;
 
-    return { directions, stopCount, totalTrips: routeTrips.length };
-  }, [route, routeId, trips, stopTimes, stops, routeStops]);
+    return { headsign, tripCount: dirTrips.length, startTimes: startTimes.slice(0, 4), stopCount };
+  }, [route, routeId, directionId, trips, stopTimes, routeStops]);
 
   if (!route || !info) return null;
 
@@ -86,30 +79,29 @@ export function RoutePopup({ routeId, lngLat, onClose }: RoutePopupProps) {
           <p className="text-[11px] text-warm-gray mb-1">{route.route_desc}</p>
         )}
         <p className="text-[11px] text-warm-gray mb-2">
-          {ROUTE_TYPES[route.route_type] || 'Transit'} · {info.stopCount} stops · {info.totalTrips} trips
+          {ROUTE_TYPES[route.route_type] || 'Transit'} · {info.stopCount} stops · {info.tripCount} trips
         </p>
 
-        {/* Directions with start times */}
-        {info.directions.map((dir) => (
-          <div key={dir.direction_id} className="border-t border-sand pt-2 mb-2">
-            <p className="text-[10px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-              {dir.headsign} ({dir.tripCount} trips)
-            </p>
+        <div className="border-t border-sand pt-2 mb-2">
+          <p className="text-[10px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
+            {info.headsign} ({info.tripCount} trips)
+          </p>
+          {info.startTimes.length > 0 && (
             <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-              {dir.startTimes.map((t, i) => (
+              {info.startTimes.map((t, i) => (
                 <span key={i} className="text-xs font-mono tabular-nums text-dark-brown">
                   {formatTimeShort(t.time)}
                 </span>
               ))}
-              {dir.tripCount > 4 && (
-                <span className="text-[11px] text-warm-gray">+{dir.tripCount - 4} more</span>
+              {info.tripCount > 4 && (
+                <span className="text-[11px] text-warm-gray">+{info.tripCount - 4} more</span>
               )}
             </div>
-          </div>
-        ))}
+          )}
+        </div>
 
-        {/* Edit button */}
-        <div className="border-t border-sand pt-2">
+        {/* Action buttons */}
+        <div className="border-t border-sand pt-2 flex gap-2">
           <button
             onClick={() => {
               selectRoute(routeId);
@@ -117,9 +109,20 @@ export function RoutePopup({ routeId, lngLat, onClose }: RoutePopupProps) {
               setSidebarSection('routes');
               onClose();
             }}
-            className="w-full px-3 py-1.5 bg-coral-light text-coral rounded-lg text-xs font-heading font-bold hover:bg-coral hover:text-white transition-colors"
+            className="flex-1 px-3 py-1.5 bg-coral-light text-coral rounded-lg text-xs font-heading font-bold hover:bg-coral hover:text-white transition-colors"
           >
             Edit Route
+          </button>
+          <button
+            onClick={() => {
+              selectRoute(routeId);
+              useStore.getState().setBottomPanelOpen(true);
+              useStore.getState().setBottomPanelTab('timetable');
+              onClose();
+            }}
+            className="flex-1 px-3 py-1.5 bg-purple-light text-purple rounded-lg text-xs font-heading font-bold hover:bg-purple hover:text-white transition-colors"
+          >
+            Edit Timetable
           </button>
         </div>
       </div>

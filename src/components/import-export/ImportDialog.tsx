@@ -21,6 +21,9 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
   const [mode, setMode] = useState<ImportMode>('replace');
   const [selectedRouteIds, setSelectedRouteIds] = useState<Set<string>>(new Set());
 
+  // Warnings from parsing
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
+
   // Success state
   const [importedCounts, setImportedCounts] = useState<{
     routes: number; stops: number; trips: number;
@@ -32,6 +35,7 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
     try {
       const data = await importGtfsZip(file);
       const name = file.name.replace(/\.zip$/i, '');
+      setImportWarnings(data.warnings);
       // If the project is empty, skip the options screen and import immediately
       if (useStore.getState().routes.length === 0) {
         loadImportIntoStore(data);
@@ -122,6 +126,11 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
               {mode === 'merge' ? 'Routes Added' : 'Import Successful'}
             </h3>
           </div>
+          {importWarnings.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 text-xs text-amber-700">
+              {importWarnings.map((w, i) => <p key={i}>{w}</p>)}
+            </div>
+          )}
           <div className="flex flex-col gap-2 mb-4">
             {([['Routes', importedCounts.routes], ['Stops', importedCounts.stops], ['Trips', importedCounts.trips]] as [string, number][]).map(
               ([label, count]) => (
@@ -153,30 +162,43 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
           <h3 className="font-heading font-bold text-lg text-dark-brown mb-1">Import Options</h3>
           <p className="text-xs text-warm-gray mb-4">{fileName}.zip — {parsedData.routes.length} route{parsedData.routes.length !== 1 ? 's' : ''}</p>
 
-          {/* Mode toggle */}
-          <div className="flex gap-2 mb-4">
-            {(['replace', 'merge'] as ImportMode[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                disabled={m === 'merge' && !hasExistingRoutes}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors
-                  ${mode === m
-                    ? 'bg-coral text-white border-coral'
-                    : 'bg-white text-warm-gray border-sand hover:border-coral hover:text-dark-brown'
-                  }
-                  disabled:opacity-40 disabled:cursor-not-allowed`}
-              >
-                {m === 'replace' ? 'Replace project' : 'Add to current project'}
-              </button>
-            ))}
-          </div>
-
-          {mode === 'replace' && (
+          {importWarnings.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 text-xs text-amber-700">
-              This will replace all current routes, stops, and timetable data.
+              {importWarnings.map((w, i) => <p key={i}>{w}</p>)}
             </div>
           )}
+
+          {/* Mode selection */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => {
+                if (!parsedData) return;
+                loadImportIntoStore(parsedData);
+                useStore.getState().setProjectName(fileName);
+                setMode('replace');
+                setImportedCounts({
+                  routes: parsedData.routes.length,
+                  stops: parsedData.stops.length,
+                  trips: parsedData.trips.length,
+                });
+              }}
+              className="flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors bg-white text-warm-gray border-sand hover:border-coral hover:text-dark-brown"
+            >
+              Replace project
+            </button>
+            <button
+              onClick={() => setMode('merge')}
+              disabled={!hasExistingRoutes}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors
+                ${mode === 'merge'
+                  ? 'bg-coral text-white border-coral'
+                  : 'bg-white text-warm-gray border-sand hover:border-coral hover:text-dark-brown'
+                }
+                disabled:opacity-40 disabled:cursor-not-allowed`}
+            >
+              Add to current project
+            </button>
+          </div>
 
           {/* Route list (merge mode) */}
           {mode === 'merge' && (
@@ -231,13 +253,15 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
             >
               ← Back
             </button>
-            <button
-              onClick={handleImport}
-              disabled={mode === 'merge' && selectedRouteIds.size === 0}
-              className="flex-1 px-4 py-2.5 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {mode === 'merge' ? `Add ${selectedRouteIds.size} route${selectedRouteIds.size !== 1 ? 's' : ''}` : 'Replace & Import'}
-            </button>
+            {mode === 'merge' && (
+              <button
+                onClick={handleImport}
+                disabled={selectedRouteIds.size === 0}
+                className="flex-1 px-4 py-2.5 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {`Add ${selectedRouteIds.size} route${selectedRouteIds.size !== 1 ? 's' : ''}`}
+              </button>
+            )}
           </div>
         </div>
       </div>

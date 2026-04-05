@@ -25,6 +25,14 @@ export const LOCATION_TYPES: Record<number, string> = {
   4: 'Boarding Area',
 };
 
+import type { Route } from '../types/gtfs';
+
+export function directionName(route: Route | undefined | null, directionId: 0 | 1): string {
+  if (!route) return directionId === 0 ? 'Outbound' : 'Inbound';
+  const name = directionId === 0 ? route._direction_0_name : route._direction_1_name;
+  return name || (directionId === 0 ? 'Outbound' : 'Inbound');
+}
+
 export const US_TIMEZONES = [
   'America/New_York',
   'America/Chicago',

@@ -94,9 +94,20 @@ export function CalendarEditor() {
   const selected = selectedServiceId ? calendars.find((c) => c.service_id === selectedServiceId) : null;
   const selectedDates = selectedServiceId ? calendarDates.filter((cd) => cd.service_id === selectedServiceId) : [];
 
-  const serviceYear = selected ? parseInt(selected.start_date.slice(0, 4)) : new Date().getFullYear();
-
-  const holidaysForYear = useMemo(() => getUSHolidaysForYear(serviceYear), [serviceYear]);
+  const holidaysInRange = useMemo(() => {
+    if (!selected) return [];
+    const startYear = parseInt(selected.start_date.slice(0, 4));
+    const endYear = parseInt(selected.end_date.slice(0, 4));
+    const holidays: Array<{ name: string; gtfsDate: string }> = [];
+    for (let y = startYear; y <= endYear; y++) {
+      for (const h of getUSHolidaysForYear(y)) {
+        if (h.gtfsDate >= selected.start_date && h.gtfsDate <= selected.end_date) {
+          holidays.push(h);
+        }
+      }
+    }
+    return holidays;
+  }, [selected?.start_date, selected?.end_date]);
 
   const existingDateSet = useMemo(() => {
     return new Set(selectedDates.map((cd) => cd.date));
@@ -129,21 +140,19 @@ export function CalendarEditor() {
 
   const handleAddUSHolidays = () => {
     if (!selected) return;
-    let addedCount = 0;
-    for (const holiday of holidaysForYear) {
+    for (const holiday of holidaysInRange) {
       if (!existingDateSet.has(holiday.gtfsDate)) {
         addCalendarDate({
           service_id: selected.service_id,
           date: holiday.gtfsDate,
           exception_type: 2,
         });
-        addedCount++;
       }
     }
   };
 
-  const alreadyAddedCount = holidaysForYear.filter((h) => existingDateSet.has(h.gtfsDate)).length;
-  const allHolidaysAdded = alreadyAddedCount === holidaysForYear.length;
+  const alreadyAddedCount = holidaysInRange.filter((h) => existingDateSet.has(h.gtfsDate)).length;
+  const allHolidaysAdded = holidaysInRange.length > 0 && alreadyAddedCount === holidaysInRange.length;
 
   // Holiday warning nudge
   const showHolidayWarning = selected && isWeekdayService(selected) && selectedDates.length === 0;
@@ -301,11 +310,11 @@ export function CalendarEditor() {
                 }`}
             >
               {allHolidaysAdded
-                ? `All ${serviceYear} US Holidays Added`
-                : `Add US Holidays (${serviceYear})`}
+                ? `All US Holidays Added (${holidaysInRange.length})`
+                : `Add US Holidays (${holidaysInRange.length - alreadyAddedCount} to add)`}
               {!allHolidaysAdded && alreadyAddedCount > 0 && (
                 <span className="text-[10px] text-warm-gray ml-1">
-                  ({alreadyAddedCount}/{holidaysForYear.length} already added)
+                  ({alreadyAddedCount} already added)
                 </span>
               )}
             </button>

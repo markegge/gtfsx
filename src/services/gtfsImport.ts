@@ -26,8 +26,23 @@ export async function importGtfsZip(file: File): Promise<{
   routeStops: RouteStop[];
   fareAttributes: FareAttribute[];
   fareRules: FareRule[];
+  warnings: string[];
 }> {
   const zip = await JSZip.loadAsync(file);
+
+  // Detect if files are nested inside a subfolder
+  const warnings: string[] = [];
+  const hasRootAgency = !!zip.file('agency.txt');
+  const hasRootRoutes = !!zip.file('routes.txt');
+  if (!hasRootAgency && !hasRootRoutes) {
+    const nestedAgency = zip.file(/agency\.txt$/);
+    const nestedRoutes = zip.file(/routes\.txt$/);
+    if (nestedAgency.length > 0 || nestedRoutes.length > 0) {
+      const path = (nestedAgency[0] || nestedRoutes[0]).name;
+      const folder = path.split('/').slice(0, -1).join('/');
+      warnings.push(`Feed files are inside a subfolder "${folder}/" in the ZIP. GTFS files should be at the root of the archive. This has been handled automatically and will be corrected on export.`);
+    }
+  }
 
   const readFile = async (name: string): Promise<string | null> => {
     // Try both with and without folder prefix
@@ -249,7 +264,29 @@ export async function importGtfsZip(file: File): Promise<{
     }
   }
 
-  return { agencies, calendars, calendarDates, routes, shapes, stops, trips, stopTimes, feedInfo, routeStops, fareAttributes, fareRules };
+  // directions.txt (non-standard but widely supported)
+  const directionsText = await readFile('directions.txt');
+  if (directionsText) {
+    const dirRows = parseCSV<any>(directionsText);
+    for (const row of dirRows) {
+      const route = routes.find((r) => r.route_id === String(row.route_id));
+      if (!route) continue;
+      const dir = num(row.direction_id);
+      if (dir === 0) route._direction_0_name = row.direction || undefined;
+      else if (dir === 1) route._direction_1_name = row.direction || undefined;
+    }
+  } else {
+    // Fallback: populate direction names from trip_headsign values
+    for (const route of routes) {
+      const routeTrips = trips.filter((t) => t.route_id === route.route_id);
+      const dir0Trip = routeTrips.find((t) => t.direction_id === 0 && t.trip_headsign);
+      const dir1Trip = routeTrips.find((t) => t.direction_id === 1 && t.trip_headsign);
+      if (dir0Trip?.trip_headsign) route._direction_0_name = dir0Trip.trip_headsign;
+      if (dir1Trip?.trip_headsign) route._direction_1_name = dir1Trip.trip_headsign;
+    }
+  }
+
+  return { agencies, calendars, calendarDates, routes, shapes, stops, trips, stopTimes, feedInfo, routeStops, fareAttributes, fareRules, warnings };
 }
 
 function describeService(...days: number[]): string {
@@ -280,8 +317,8 @@ export function loadImportIntoStore(data: Awaited<ReturnType<typeof importGtfsZi
 
 /**
  * Merge selected routes (and their associated stops, trips, stop times, shapes,
- * and route-stop associations) from an imported feed into the existing project.
- * Agency info, calendars, and fares are NOT imported.
+ * calendars, and route-stop associations) from an imported feed into the
+ * existing project. Agency info and fares are NOT imported.
  * If any IDs conflict with existing ones, a numeric prefix is applied to all
  * imported IDs to guarantee uniqueness.
  */
@@ -296,6 +333,7 @@ export function mergeImportIntoStore(
   const existingStopIds  = new Set(store.stops.map((s) => s.stop_id));
   const existingTripIds  = new Set(store.trips.map((t) => t.trip_id));
   const existingShapeIds = new Set(store.shapes.map((s) => s.shape_id));
+  const existingCalendarIds = new Set(store.calendars.map((c) => c.service_id));
 
   const hasConflict =
     data.routes.some((r) => existingRouteIds.has(r.route_id)) ||
@@ -317,6 +355,43 @@ export function mergeImportIntoStore(
 
   const pfx = (id: string) => (prefix ? prefix + id : id);
 
+  // Build calendar service_id remap: match imported calendars to existing ones
+  // by day-of-week pattern (the 7 boolean fields)
+  const calendarDayKey = (c: { monday: number; tuesday: number; wednesday: number; thursday: number; friday: number; saturday: number; sunday: number }) =>
+    `${c.monday}${c.tuesday}${c.wednesday}${c.thursday}${c.friday}${c.saturday}${c.sunday}`;
+
+  const existingCalByPattern = new Map<string, string>();
+  for (const c of store.calendars) {
+    existingCalByPattern.set(calendarDayKey(c), c.service_id);
+  }
+
+  const serviceIdRemap = new Map<string, string>();
+  for (const c of data.calendars) {
+    const pattern = calendarDayKey(c);
+    const existingId = existingCalByPattern.get(pattern);
+    if (existingId) {
+      serviceIdRemap.set(c.service_id, existingId);
+    }
+  }
+
+  const remapServiceId = (id: string) => serviceIdRemap.get(id) ?? id;
+
+  // Build stop remap: match imported stops to existing stops by name + location
+  const stopIdRemap = new Map<string, string>();
+  for (const importedStop of data.stops) {
+    for (const existingStop of store.stops) {
+      const sameName = existingStop.stop_name === importedStop.stop_name;
+      const sameLat = Math.abs(existingStop.stop_lat - importedStop.stop_lat) < 0.0001;
+      const sameLon = Math.abs(existingStop.stop_lon - importedStop.stop_lon) < 0.0001;
+      if (sameName && sameLat && sameLon) {
+        stopIdRemap.set(importedStop.stop_id, existingStop.stop_id);
+        break;
+      }
+    }
+  }
+
+  const remapStopId = (id: string) => stopIdRemap.get(id) ?? pfx(id);
+
   // Narrow to selected routes and their dependent data
   const selectedRoutes    = data.routes.filter((r) => selectedRouteIds.has(r.route_id));
   const selRouteGtfsIds   = new Set(selectedRoutes.map((r) => r.route_id));
@@ -330,7 +405,10 @@ export function mergeImportIntoStore(
     ...selectedStopTimes.map((st) => st.stop_id),
     ...data.routeStops.filter((rs) => selRouteGtfsIds.has(rs.route_id)).map((rs) => rs.stop_id),
   ]);
-  const selectedStops = data.stops.filter((s) => neededStopIds.has(s.stop_id));
+  // Only import stops that aren't remapped to existing ones
+  const selectedStops = data.stops.filter(
+    (s) => neededStopIds.has(s.stop_id) && !stopIdRemap.has(s.stop_id)
+  );
 
   const neededShapeIds = new Set(
     selectedTrips.map((t) => t.shape_id).filter(Boolean) as string[],
@@ -343,7 +421,7 @@ export function mergeImportIntoStore(
     store.addRoute({ ...route, route_id: pfx(route.route_id) });
   }
 
-  // Append stops (skip any whose prefixed ID already exists)
+  // Append stops that aren't matched to existing ones
   const storeAfterRoutes  = useStore.getState();
   const existingStopIdsNow = new Set(storeAfterRoutes.stops.map((s) => s.stop_id));
   for (const stop of selectedStops) {
@@ -353,12 +431,13 @@ export function mergeImportIntoStore(
     }
   }
 
-  // Append trips
+  // Append trips (remap service_id to existing calendar if pattern matches)
   for (const trip of selectedTrips) {
     store.addTrip({
       ...trip,
       trip_id:  pfx(trip.trip_id),
       route_id: pfx(trip.route_id),
+      service_id: remapServiceId(trip.service_id),
       shape_id: trip.shape_id ? pfx(trip.shape_id) : undefined,
     });
   }
@@ -370,7 +449,7 @@ export function mergeImportIntoStore(
     ...selectedStopTimes.map((st) => ({
       ...st,
       trip_id: pfx(st.trip_id),
-      stop_id: pfx(st.stop_id),
+      stop_id: remapStopId(st.stop_id),
     })),
   ]);
 
@@ -386,7 +465,33 @@ export function mergeImportIntoStore(
     ...selectedRouteStops.map((rs) => ({
       ...rs,
       route_id: pfx(rs.route_id),
-      stop_id:  pfx(rs.stop_id),
+      stop_id:  remapStopId(rs.stop_id),
     })),
   ]);
+
+  // Append calendars referenced by selected trips that weren't remapped
+  const neededServiceIds = new Set(selectedTrips.map((t) => t.service_id));
+  const s3 = useStore.getState();
+  const currentCalendarIds = new Set(s3.calendars.map((c) => c.service_id));
+  const calendarsToAdd = data.calendars.filter(
+    (c) =>
+      neededServiceIds.has(c.service_id) &&
+      !currentCalendarIds.has(c.service_id) &&
+      !serviceIdRemap.has(c.service_id),
+  );
+  if (calendarsToAdd.length > 0) {
+    s3.setCalendars([...s3.calendars, ...calendarsToAdd]);
+  }
+
+  // Append calendar_dates for newly added calendars
+  const addedServiceIds = new Set(calendarsToAdd.map((c) => c.service_id));
+  if (addedServiceIds.size > 0) {
+    const calDatesToAdd = data.calendarDates.filter(
+      (cd) => addedServiceIds.has(cd.service_id),
+    );
+    if (calDatesToAdd.length > 0) {
+      const s4 = useStore.getState();
+      s4.setCalendarDates([...s4.calendarDates, ...calDatesToAdd]);
+    }
+  }
 }

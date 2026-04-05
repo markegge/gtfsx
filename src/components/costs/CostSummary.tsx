@@ -93,12 +93,12 @@ export function CostSummary() {
           System Totals
         </div>
         <div className="flex flex-col gap-1.5 text-sm">
-          <StatRow label="Daily Revenue Hours" value={systemStats.totalRevenueHoursDaily.toFixed(1)} />
-          <StatRow label="Daily Total Hours" value={systemStats.totalHoursDaily.toFixed(1)} sub={`× ${deadheadFactor}`} />
-          <StatRow label="Total Trips / Day" value={String(systemStats.totalTripsPerDay)} />
+          <StatRow label="Weekly Revenue Hours" value={systemStats.totalRevenueHoursWeekly.toFixed(1)} />
+          <StatRow label="Weekly Total Hours" value={systemStats.totalHoursWeekly.toFixed(1)} sub={`× ${deadheadFactor}`} />
+          <StatRow label="Total Trips / Week" value={String(systemStats.totalTripsPerWeek)} />
           <StatRow label="Peak Vehicles" value={String(systemStats.totalPeakVehicles)} />
           <div className="h-px bg-sand my-1" />
-          <StatRow label="Daily Cost" value={formatCurrency(systemStats.totalDailyCost)} highlight />
+          <StatRow label="Weekly Cost" value={formatCurrency(systemStats.totalWeeklyCost)} highlight />
           <StatRow label="Annual Cost" value={formatCurrency(systemStats.totalAnnualCost)} highlight />
         </div>
       </div>
@@ -111,22 +111,60 @@ export function CostSummary() {
       {routes.length === 0 ? (
         <p className="text-xs text-warm-gray">No routes created yet.</p>
       ) : (
-        <div className="flex flex-col gap-2">
-          {routeRows.map(({ route, stats }) => {
-            const hasCustomCost = route._cost_per_revenue_hour != null && route._cost_per_revenue_hour > 0;
-            return (
-              <RouteCard
-                key={route.route_id}
-                name={route.route_short_name || route.route_long_name || 'Untitled Route'}
-                color={route.route_color}
-                stats={stats}
-                costPerHour={hasCustomCost ? route._cost_per_revenue_hour! : defaultCostPerHour}
-                isDefault={!hasCustomCost}
-                onEditRoute={() => handleOpenRoute(route.route_id)}
-              />
-            );
-          })}
-        </div>
+        <>
+          <div className="flex flex-col gap-2">
+            {routeRows.map(({ route, stats }) => {
+              const hasCustomCost = route._cost_per_revenue_hour != null && route._cost_per_revenue_hour > 0;
+              return (
+                <RouteCard
+                  key={route.route_id}
+                  name={route.route_short_name || route.route_long_name || 'Untitled Route'}
+                  color={route.route_color}
+                  stats={stats}
+                  costPerHour={hasCustomCost ? route._cost_per_revenue_hour! : defaultCostPerHour}
+                  isDefault={!hasCustomCost}
+                  onEditRoute={() => handleOpenRoute(route.route_id)}
+                />
+              );
+            })}
+          </div>
+          <button
+            onClick={() => {
+              const rows = [
+                ['Route', 'Rev Hours/Wk', 'Total Hours/Wk', 'Trips/Wk', 'Peak Vehicles', 'Cost/Hour', 'Weekly Cost', 'Annual Cost'],
+                ...routeRows.map(({ route, stats }) => {
+                  const cph = (route._cost_per_revenue_hour != null && route._cost_per_revenue_hour > 0)
+                    ? route._cost_per_revenue_hour : defaultCostPerHour;
+                  return [
+                    route.route_short_name || route.route_long_name || route.route_id,
+                    stats.revenueHoursWeekly.toFixed(1),
+                    stats.totalHoursWeekly.toFixed(1),
+                    String(stats.tripsPerWeek),
+                    String(stats.peakVehicles),
+                    String(cph),
+                    String(Math.round(stats.weeklyCost)),
+                    String(Math.round(stats.annualCost)),
+                  ];
+                }),
+                [],
+                ['TOTAL', systemStats.totalRevenueHoursWeekly.toFixed(1), systemStats.totalHoursWeekly.toFixed(1),
+                  String(systemStats.totalTripsPerWeek), String(systemStats.totalPeakVehicles), '',
+                  String(Math.round(systemStats.totalWeeklyCost)), String(Math.round(systemStats.totalAnnualCost))],
+              ];
+              const csv = rows.map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = 'cost_analysis.csv';
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="mt-4 w-full px-3 py-2 border-2 border-dashed border-sand rounded-lg text-xs font-semibold text-warm-gray hover:border-coral hover:text-coral hover:bg-coral-light transition-colors"
+          >
+            Export to CSV
+          </button>
+        </>
       )}
     </div>
   );
@@ -177,16 +215,16 @@ function RouteCard({
 
       <div className="flex flex-col gap-1 text-xs">
         <div className="flex justify-between">
-          <span className="text-warm-gray">Rev Hours</span>
-          <span className="text-dark-brown font-medium">{stats.revenueHoursDaily.toFixed(1)}</span>
+          <span className="text-warm-gray">Rev Hours / Wk</span>
+          <span className="text-dark-brown font-medium">{stats.revenueHoursWeekly.toFixed(1)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-warm-gray">Total Hours</span>
-          <span className="text-dark-brown font-medium">{stats.totalHoursDaily.toFixed(1)}</span>
+          <span className="text-warm-gray">Total Hours / Wk</span>
+          <span className="text-dark-brown font-medium">{stats.totalHoursWeekly.toFixed(1)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-warm-gray">Trips</span>
-          <span className="text-dark-brown font-medium">{stats.tripsPerDay}</span>
+          <span className="text-warm-gray">Trips / Wk</span>
+          <span className="text-dark-brown font-medium">{stats.tripsPerWeek}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-warm-gray">Peak Vehicles</span>
@@ -201,8 +239,8 @@ function RouteCard({
         </div>
         <div className="h-px bg-sand my-0.5" />
         <div className="flex justify-between">
-          <span className="text-warm-gray">Daily Cost</span>
-          <span className="text-coral font-semibold">{formatCurrency(stats.dailyCost)}</span>
+          <span className="text-warm-gray">Weekly Cost</span>
+          <span className="text-coral font-semibold">{formatCurrency(stats.weeklyCost)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-warm-gray">Annual Cost</span>

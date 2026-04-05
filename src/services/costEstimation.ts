@@ -2,20 +2,20 @@ import type { AppStore } from '../store';
 import { gtfsTimeToSeconds } from '../utils/time';
 
 export interface RouteStats {
-  revenueHoursDaily: number;
-  totalHoursDaily: number; // revenue hours * deadhead factor
-  tripsPerDay: number;
+  revenueHoursWeekly: number;
+  totalHoursWeekly: number; // revenue hours * deadhead factor
+  tripsPerWeek: number;
   peakVehicles: number;
-  dailyCost: number;
+  weeklyCost: number;
   annualCost: number;
 }
 
 export interface SystemStats {
-  totalRevenueHoursDaily: number;
-  totalHoursDaily: number;
-  totalTripsPerDay: number;
+  totalRevenueHoursWeekly: number;
+  totalHoursWeekly: number;
+  totalTripsPerWeek: number;
   totalPeakVehicles: number;
-  totalDailyCost: number;
+  totalWeeklyCost: number;
   totalAnnualCost: number;
 }
 
@@ -32,8 +32,7 @@ function countServiceDaysPerYear(
 
   if (relevantCalendars.length === 0) return 365;
 
-  // Collect all service dates across all relevant calendars
-  let totalDays = 0;
+  let bestDaysPerYear = 0;
 
   for (const cal of relevantCalendars) {
     const start = parseYYYYMMDD(cal.start_date);
@@ -50,35 +49,52 @@ function countServiceDaysPerYear(
       cal.saturday,
     ];
 
-    let days = 0;
-    const cursor = new Date(start);
-    while (cursor <= end) {
-      if (dayFlags[cursor.getDay()]) {
-        days++;
+    // Count active days per week from the pattern
+    const activeDaysPerWeek = dayFlags.reduce((sum, v) => sum + v, 0);
+    if (activeDaysPerWeek === 0) continue;
+
+    // Calculate span in days, capped to avoid iterating huge ranges
+    const spanMs = end.getTime() - start.getTime();
+    const spanDays = Math.max(1, Math.round(spanMs / 86400000) + 1);
+
+    // For spans over 2 years, use weekly rate × 52 instead of iterating
+    let serviceDays: number;
+    if (spanDays > 730) {
+      serviceDays = activeDaysPerWeek * 52;
+    } else {
+      // Count actual service days in the range
+      serviceDays = 0;
+      const cursor = new Date(start);
+      while (cursor <= end) {
+        if (dayFlags[cursor.getDay()]) serviceDays++;
+        cursor.setDate(cursor.getDate() + 1);
       }
-      cursor.setDate(cursor.getDate() + 1);
+
+      // Apply calendar_dates exceptions
+      const exceptions = state.calendarDates.filter(
+        (cd) => cd.service_id === cal.service_id
+      );
+      for (const ex of exceptions) {
+        const exDate = parseYYYYMMDD(ex.date);
+        if (!exDate || exDate < start || exDate > end) continue;
+        if (ex.exception_type === 1) {
+          if (!dayFlags[exDate.getDay()]) serviceDays++;
+        } else if (ex.exception_type === 2) {
+          if (dayFlags[exDate.getDay()]) serviceDays--;
+        }
+      }
+
+      // Normalize to a full year if the range is shorter or longer than 1 year
+      const spanYears = spanDays / 365.25;
+      if (spanYears > 0) {
+        serviceDays = Math.round(serviceDays / spanYears);
+      }
     }
 
-    // Apply calendar_dates exceptions for this service
-    const exceptions = state.calendarDates.filter(
-      (cd) => cd.service_id === cal.service_id
-    );
-    for (const ex of exceptions) {
-      const exDate = parseYYYYMMDD(ex.date);
-      if (!exDate || exDate < start || exDate > end) continue;
-      if (ex.exception_type === 1) {
-        // Added — only count if not already a regular service day
-        if (!dayFlags[exDate.getDay()]) days++;
-      } else if (ex.exception_type === 2) {
-        // Removed — only subtract if it was a regular service day
-        if (dayFlags[exDate.getDay()]) days--;
-      }
-    }
-
-    totalDays = Math.max(totalDays, days);
+    if (serviceDays > bestDaysPerYear) bestDaysPerYear = serviceDays;
   }
 
-  return totalDays || 365;
+  return bestDaysPerYear || 365;
 }
 
 function parseYYYYMMDD(s: string): Date | null {
@@ -89,29 +105,24 @@ function parseYYYYMMDD(s: string): Date | null {
   return new Date(y, m, d);
 }
 
-/** Get the first and last stop time seconds for a trip. Returns null if no stop times. */
+/** Get the first and last stop time seconds for a trip by stop_sequence order.
+ *  Uses the first and last non-blank times in sequence order for a robust span. */
 function getTripSpan(
   tripId: string,
   stopTimes: AppStore['stopTimes']
 ): { start: number; end: number } | null {
-  const times = stopTimes.filter(
-    (st) => st.trip_id === tripId && st.arrival_time
-  );
+  const times = stopTimes
+    .filter((st) => st.trip_id === tripId && st.arrival_time)
+    .sort((a, b) => a.stop_sequence - b.stop_sequence);
   if (times.length < 2) return null;
 
-  let earliest = Infinity;
-  let latest = -Infinity;
-  for (const st of times) {
-    const arr = gtfsTimeToSeconds(st.arrival_time);
-    const dep = gtfsTimeToSeconds(st.departure_time || st.arrival_time);
-    if (arr < earliest) earliest = arr;
-    if (dep > latest) latest = dep;
-    if (arr > latest) latest = arr;
-  }
+  const first = times[0];
+  const last = times[times.length - 1];
+  const start = gtfsTimeToSeconds(first.arrival_time);
+  const end = gtfsTimeToSeconds(last.departure_time || last.arrival_time);
 
-  if (earliest === Infinity || latest === -Infinity || latest <= earliest)
-    return null;
-  return { start: earliest, end: latest };
+  if (end <= start) return null;
+  return { start, end };
 }
 
 /** Estimate peak overlapping vehicles using a sweep-line algorithm. */
@@ -145,35 +156,63 @@ export function calculateRouteStats(
 ): RouteStats {
   const route = state.routes.find((r) => r.route_id === routeId);
   const routeTrips = state.trips.filter((t) => t.route_id === routeId);
+  const costPerHour = route?._cost_per_revenue_hour ?? defaultCostPerHour;
 
-  const spans: { start: number; end: number }[] = [];
-  let totalRevSeconds = 0;
-
+  // Group trips by service_id — trips on different service patterns don't run on the same day
+  const tripsByService = new Map<string, typeof routeTrips>();
   for (const trip of routeTrips) {
-    const span = getTripSpan(trip.trip_id, state.stopTimes);
-    if (span) {
-      spans.push(span);
-      totalRevSeconds += span.end - span.start;
-    }
+    const group = tripsByService.get(trip.service_id) || [];
+    group.push(trip);
+    tripsByService.set(trip.service_id, group);
   }
 
-  const revenueHoursDaily = totalRevSeconds / 3600;
-  const totalHoursDaily = revenueHoursDaily * deadheadFactor;
-  const tripsPerDay = routeTrips.length;
-  const peakVehicles = computePeakVehicles(spans);
-  const costPerHour = route?._cost_per_revenue_hour ?? defaultCostPerHour;
-  const dailyCost = totalHoursDaily * costPerHour;
+  // Calculate stats per service pattern, then sum to weekly totals
+  let weeklyRevHours = 0;
+  let weeklyTotalHours = 0;
+  let weeklyTrips = 0;
+  let maxPeakVehicles = 0;
+  let weeklyCost = 0;
+  let annualCost = 0;
 
-  const serviceIds = [...new Set(routeTrips.map((t) => t.service_id))];
-  const serviceDays = countServiceDaysPerYear(serviceIds, state);
-  const annualCost = dailyCost * serviceDays;
+  for (const [serviceId, serviceTrips] of tripsByService) {
+    const spans: { start: number; end: number }[] = [];
+    let revSeconds = 0;
+
+    for (const trip of serviceTrips) {
+      const span = getTripSpan(trip.trip_id, state.stopTimes);
+      if (span) {
+        spans.push(span);
+        revSeconds += span.end - span.start;
+      }
+    }
+
+    const revHours = revSeconds / 3600;
+    const totalHours = revHours * deadheadFactor;
+    const peak = computePeakVehicles(spans);
+    const dailyCostForPattern = totalHours * costPerHour;
+
+    // Count how many days per week this pattern operates
+    const cal = state.calendars.find((c) => c.service_id === serviceId);
+    const daysPerWeek = cal
+      ? cal.monday + cal.tuesday + cal.wednesday + cal.thursday + cal.friday + cal.saturday + cal.sunday
+      : 1;
+
+    weeklyRevHours += revHours * daysPerWeek;
+    weeklyTotalHours += totalHours * daysPerWeek;
+    weeklyTrips += serviceTrips.length * daysPerWeek;
+    if (peak > maxPeakVehicles) maxPeakVehicles = peak;
+    weeklyCost += dailyCostForPattern * daysPerWeek;
+
+    const serviceDaysPerYear = countServiceDaysPerYear([serviceId], state);
+    annualCost += dailyCostForPattern * serviceDaysPerYear;
+  }
 
   return {
-    revenueHoursDaily,
-    totalHoursDaily,
-    tripsPerDay,
-    peakVehicles,
-    dailyCost,
+    revenueHoursWeekly: weeklyRevHours,
+    totalHoursWeekly: weeklyTotalHours,
+    tripsPerWeek: weeklyTrips,
+    peakVehicles: maxPeakVehicles,
+    weeklyCost,
     annualCost,
   };
 }
@@ -183,29 +222,29 @@ export function calculateSystemStats(
   defaultCostPerHour = 0,
   deadheadFactor = 1.2,
 ): SystemStats {
-  let totalRevenueHoursDaily = 0;
-  let totalHoursDaily = 0;
-  let totalTripsPerDay = 0;
+  let totalRevenueHoursWeekly = 0;
+  let totalHoursWeekly = 0;
+  let totalTripsPerWeek = 0;
   let totalPeakVehicles = 0;
-  let totalDailyCost = 0;
+  let totalWeeklyCost = 0;
   let totalAnnualCost = 0;
 
   for (const route of state.routes) {
     const stats = calculateRouteStats(route.route_id, state, defaultCostPerHour, deadheadFactor);
-    totalRevenueHoursDaily += stats.revenueHoursDaily;
-    totalHoursDaily += stats.totalHoursDaily;
-    totalTripsPerDay += stats.tripsPerDay;
+    totalRevenueHoursWeekly += stats.revenueHoursWeekly;
+    totalHoursWeekly += stats.totalHoursWeekly;
+    totalTripsPerWeek += stats.tripsPerWeek;
     totalPeakVehicles += stats.peakVehicles;
-    totalDailyCost += stats.dailyCost;
+    totalWeeklyCost += stats.weeklyCost;
     totalAnnualCost += stats.annualCost;
   }
 
   return {
-    totalRevenueHoursDaily,
-    totalHoursDaily,
-    totalTripsPerDay,
+    totalRevenueHoursWeekly,
+    totalHoursWeekly,
+    totalTripsPerWeek,
     totalPeakVehicles,
-    totalDailyCost,
+    totalWeeklyCost,
     totalAnnualCost,
   };
 }

@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -18,7 +18,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import { FormField } from '../ui/FormField';
-import { WHEELCHAIR_BOARDING, LOCATION_TYPES } from '../../utils/constants';
+import { WHEELCHAIR_BOARDING, LOCATION_TYPES, directionName } from '../../utils/constants';
 import type { Stop } from '../../types/gtfs';
 
 function SortableStopItem({
@@ -27,12 +27,14 @@ function SortableStopItem({
   isSelected,
   routeColor,
   onSelect,
+  onRemove,
 }: {
   stop: Stop;
   index: number;
   isSelected: boolean;
   routeColor: string;
   onSelect: () => void;
+  onRemove: () => void;
 }) {
   const {
     attributes,
@@ -54,7 +56,7 @@ function SortableStopItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors
+      className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors group
         ${isSelected ? 'bg-sand' : 'hover:bg-cream'}
         ${isDragging ? 'shadow-md' : ''}`}
     >
@@ -86,31 +88,46 @@ function SortableStopItem({
           <span className="text-[10px] text-warm-gray">Code: {stop.stop_code}</span>
         )}
       </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onRemove(); }}
+        className="text-warm-gray hover:text-red-500 text-xs shrink-0 opacity-0 group-hover:opacity-100 transition-opacity px-0.5"
+        title="Remove from route"
+      >
+        ×
+      </button>
     </div>
   );
 }
 
 export function StopList() {
   const {
-    stops, updateStop, removeStop,
-    routes, routeStops, reorderRouteStops,
+    stops, updateStop, removeStop, stopTimes,
+    routes, routeStops, reorderRouteStops, addRouteStop, removeRouteStop,
     selectedRouteId, selectRoute,
     selectedStopId, selectStop,
     mapMode, setMapMode, stopPlacementMode, setStopPlacementMode,
+    stopPlacementDirection, setStopPlacementDirection,
   } = useStore();
+
+  const [addExistingStopId, setAddExistingStopId] = useState<string>('');
+  const [confirmRemoveStop, setConfirmRemoveStop] = useState<{ stopId: string; isUnique: boolean } | null>(null);
+  const directionId = stopPlacementDirection;
+  const setDirectionId = setStopPlacementDirection;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  // Get ordered stop IDs for the selected route + direction 0
+  const selectedRoute = selectedRouteId ? routes.find((r) => r.route_id === selectedRouteId) : null;
+
+  // Get ordered stop IDs for the selected route + selected direction
   const orderedRouteStops = useMemo(() => {
     if (!selectedRouteId) return [];
     return routeStops
-      .filter((rs) => rs.route_id === selectedRouteId && rs.direction_id === 0)
+      .filter((rs) => rs.route_id === selectedRouteId && rs.direction_id === directionId)
       .sort((a, b) => a.stop_sequence - b.stop_sequence);
-  }, [selectedRouteId, routeStops]);
+  }, [selectedRouteId, routeStops, directionId]);
 
   const routeFilteredStops = useMemo(() => {
     if (!selectedRouteId) return stops;
@@ -120,7 +137,6 @@ export function StopList() {
   }, [selectedRouteId, orderedRouteStops, stops]);
 
   const selectedStop = selectedStopId ? stops.find((s) => s.stop_id === selectedStopId) : null;
-  const selectedRoute = selectedRouteId ? routes.find((r) => r.route_id === selectedRouteId) : null;
   const routeColor = selectedRoute ? `#${selectedRoute.route_color}` : '#E8734A';
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
@@ -136,8 +152,16 @@ export function StopList() {
     const [moved] = newOrder.splice(oldIndex, 1);
     newOrder.splice(newIndex, 0, moved);
 
-    reorderRouteStops(selectedRouteId, 0, newOrder);
-  }, [selectedRouteId, orderedRouteStops, reorderRouteStops]);
+    reorderRouteStops(selectedRouteId, directionId, newOrder);
+  }, [selectedRouteId, directionId, orderedRouteStops, reorderRouteStops]);
+
+  const handleSelectStop = useCallback((stopId: string) => {
+    selectStop(stopId);
+    const stop = stops.find((s) => s.stop_id === stopId);
+    if (stop && (window as any).__mapFlyTo) {
+      (window as any).__mapFlyTo(stop.stop_lon, stop.stop_lat);
+    }
+  }, [stops, selectStop]);
 
   const stopIds = useMemo(() => routeFilteredStops.map((s) => s.stop_id), [routeFilteredStops]);
 
@@ -163,6 +187,28 @@ export function StopList() {
           ))}
         </select>
       </div>
+
+      {/* Direction toggle */}
+      {selectedRouteId && (
+        <div className="mb-3">
+          <div className="flex rounded-md border border-sand overflow-hidden">
+            <button
+              onClick={() => setDirectionId(0)}
+              className={`flex-1 px-3 py-1.5 text-xs font-semibold transition-colors
+                ${directionId === 0 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'}`}
+            >
+              {directionName(selectedRoute, 0)}
+            </button>
+            <button
+              onClick={() => setDirectionId(1)}
+              className={`flex-1 px-3 py-1.5 text-xs font-semibold transition-colors border-l border-sand
+                ${directionId === 1 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'}`}
+            >
+              {directionName(selectedRoute, 1)}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Placement mode */}
       {selectedRouteId && (
@@ -193,6 +239,54 @@ export function StopList() {
           >
             {mapMode === 'place_stop' ? 'Done Placing Stops' : 'Place Stops on Map'}
           </button>
+
+          {/* Add existing stop to route */}
+          {(() => {
+            const routeStopIds = new Set(
+              routeStops.filter((rs) => rs.route_id === selectedRouteId && rs.direction_id === directionId).map((rs) => rs.stop_id),
+            );
+            const availableStops = stops.filter((s) => !routeStopIds.has(s.stop_id))
+              .sort((a, b) => (a.stop_name || a.stop_id).localeCompare(b.stop_name || b.stop_id));
+            if (availableStops.length === 0) return null;
+
+            return (
+              <div className="mt-2 flex gap-1">
+                <select
+                  value={addExistingStopId}
+                  onChange={(e) => setAddExistingStopId(e.target.value)}
+                  className="flex-1 px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral min-w-0"
+                >
+                  <option value="">Add existing stop...</option>
+                  {availableStops.map((s) => (
+                    <option key={s.stop_id} value={s.stop_id}>
+                      {s.stop_name || s.stop_id}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => {
+                    if (!addExistingStopId || !selectedRouteId) return;
+                    const existing = routeStops.filter(
+                      (rs) => rs.route_id === selectedRouteId && rs.direction_id === directionId,
+                    );
+                    addRouteStop({
+                      route_id: selectedRouteId,
+                      stop_id: addExistingStopId,
+                      direction_id: directionId,
+                      stop_sequence: existing.length,
+                      _snapped: false,
+                    });
+                    handleSelectStop(addExistingStopId);
+                    setAddExistingStopId('');
+                  }}
+                  disabled={!addExistingStopId}
+                  className="px-3 py-1.5 bg-coral text-white rounded-lg text-xs font-bold hover:bg-[#d4603a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                >
+                  Add
+                </button>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -233,7 +327,22 @@ export function StopList() {
                       index={i}
                       isSelected={selectedStopId === stop.stop_id}
                       routeColor={routeColor}
-                      onSelect={() => selectStop(stop.stop_id)}
+                      onSelect={() => handleSelectStop(stop.stop_id)}
+                      onRemove={() => {
+                        // Check if this stop is used elsewhere (other routes, other direction, or stop_times)
+                        const otherRouteStopUses = routeStops.filter(
+                          (rs) => rs.stop_id === stop.stop_id
+                            && !(rs.route_id === selectedRouteId && rs.direction_id === directionId),
+                        );
+                        const hasStopTimeUses = stopTimes.some((st) => st.stop_id === stop.stop_id);
+                        const isOrphaned = otherRouteStopUses.length === 0 && !hasStopTimeUses;
+                        if (isOrphaned) {
+                          setConfirmRemoveStop({ stopId: stop.stop_id, isUnique: true });
+                        } else {
+                          // Used elsewhere — just remove from this route/direction
+                          removeRouteStop(selectedRouteId!, stop.stop_id, directionId);
+                        }
+                      }}
                     />
                   ))}
                 </div>
@@ -245,7 +354,7 @@ export function StopList() {
               {routeFilteredStops.map((stop, i) => (
                 <button
                   key={stop.stop_id}
-                  onClick={() => selectStop(stop.stop_id)}
+                  onClick={() => handleSelectStop(stop.stop_id)}
                   className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors text-left
                     ${selectedStopId === stop.stop_id ? 'bg-sand' : 'hover:bg-cream'}`}
                 >
@@ -347,6 +456,52 @@ export function StopList() {
           </button>
         </div>
       )}
+
+      {/* Confirm remove stop from route */}
+      {confirmRemoveStop && (() => {
+        const stop = stops.find((s) => s.stop_id === confirmRemoveStop.stopId);
+        const stopName = stop?.stop_name || confirmRemoveStop.stopId;
+        return (
+          <div className="fixed inset-0 flex items-center justify-center z-50">
+            <div className="absolute inset-0 bg-black/20" onClick={() => setConfirmRemoveStop(null)} />
+            <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-xs mx-4">
+              <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
+                Remove "{stopName}"?
+              </h3>
+              <p className="text-sm text-warm-gray mb-4">
+                This stop is not used by any other route. Would you like to delete it entirely, or just remove it from this route?
+              </p>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    removeRouteStop(selectedRouteId!, confirmRemoveStop.stopId, directionId);
+                    setConfirmRemoveStop(null);
+                  }}
+                  className="w-full px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
+                >
+                  Remove from route only
+                </button>
+                <button
+                  onClick={() => {
+                    removeStop(confirmRemoveStop.stopId);
+                    if (selectedStopId === confirmRemoveStop.stopId) selectStop(null);
+                    setConfirmRemoveStop(null);
+                  }}
+                  className="w-full px-3 py-2 bg-red-500 text-white rounded-lg font-heading font-bold text-sm hover:bg-red-600 transition-colors"
+                >
+                  Delete stop entirely
+                </button>
+                <button
+                  onClick={() => setConfirmRemoveStop(null)}
+                  className="w-full px-3 py-1.5 text-xs text-warm-gray hover:text-dark-brown"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -41,6 +41,8 @@ export interface Route {
   route_text_color: string;  // 6-char hex without #
   _cost_per_revenue_hour?: number;  // UI-only
   _vehicles_required?: number;      // UI-only
+  _direction_0_name?: string;       // UI-only, default "Outbound"
+  _direction_1_name?: string;       // UI-only, default "Inbound"
 }
 
 export interface ShapePoint {

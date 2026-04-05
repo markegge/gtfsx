@@ -1,5 +1,7 @@
 import type { StateCreator } from 'zustand';
 import type { Stop } from '../types/gtfs';
+import type { TripSlice } from './tripSlice';
+import type { RouteSlice } from './routeSlice';
 
 export interface StopSlice {
   stops: Stop[];
@@ -9,7 +11,7 @@ export interface StopSlice {
   setStops: (stops: Stop[]) => void;
 }
 
-export const createStopSlice: StateCreator<StopSlice, [['zustand/immer', never]], [], StopSlice> = (set) => ({
+export const createStopSlice: StateCreator<StopSlice, [['zustand/immer', never]], [], StopSlice> = (set, get) => ({
   stops: [],
   addStop: (stop) => set((state) => { state.stops.push(stop); }),
   updateStop: (stop_id, updates) => set((state) => {
@@ -18,6 +20,13 @@ export const createStopSlice: StateCreator<StopSlice, [['zustand/immer', never]]
   }),
   removeStop: (stop_id) => set((state) => {
     state.stops = state.stops.filter((s) => s.stop_id !== stop_id);
+
+    // Cascade: remove stop_times referencing this stop
+    const fullState = get() as unknown as StopSlice & TripSlice & RouteSlice;
+    (state as any).stopTimes = fullState.stopTimes.filter((st) => st.stop_id !== stop_id);
+
+    // Remove route-stop associations
+    (state as any).routeStops = fullState.routeStops.filter((rs) => rs.stop_id !== stop_id);
   }),
   setStops: (stops) => set((state) => { state.stops = stops; }),
 });

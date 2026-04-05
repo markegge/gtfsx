@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { FormField } from '../ui/FormField';
 import { ROUTE_COLORS, getContrastTextColor } from '../../utils/colors';
-import { ROUTE_TYPES } from '../../utils/constants';
+import { ROUTE_TYPES, directionName } from '../../utils/constants';
 import { calculateRouteStats } from '../../services/costEstimation';
 import { snapToRoad } from '../../services/snapToRoad';
 import { simplifyShapePoints, SIMPLIFY_LEVELS } from '../../services/simplifyShape';
@@ -43,16 +43,16 @@ function CostEstimationSection({ route }: { route: Route }) {
       </div>
       <div className="flex flex-col gap-1.5 text-sm">
         <div className="flex justify-between">
-          <span className="text-warm-gray">Daily Revenue Hours</span>
-          <span className="font-semibold text-dark-brown">{stats.revenueHoursDaily.toFixed(1)}</span>
+          <span className="text-warm-gray">Weekly Revenue Hours</span>
+          <span className="font-semibold text-dark-brown">{stats.revenueHoursWeekly.toFixed(1)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-warm-gray">Total Hours (w/ deadhead)</span>
-          <span className="font-semibold text-dark-brown">{stats.totalHoursDaily.toFixed(1)}</span>
+          <span className="font-semibold text-dark-brown">{stats.totalHoursWeekly.toFixed(1)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-warm-gray">Trips / Day</span>
-          <span className="font-semibold text-dark-brown">{stats.tripsPerDay}</span>
+          <span className="text-warm-gray">Trips / Week</span>
+          <span className="font-semibold text-dark-brown">{stats.tripsPerWeek}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-warm-gray">Peak Vehicles</span>
@@ -62,8 +62,8 @@ function CostEstimationSection({ route }: { route: Route }) {
           <>
             <div className="h-px bg-sand my-1" />
             <div className="flex justify-between">
-              <span className="text-warm-gray">Daily Cost</span>
-              <span className="font-semibold text-coral">{formatCurrency(stats.dailyCost)}</span>
+              <span className="text-warm-gray">Weekly Cost</span>
+              <span className="font-semibold text-coral">{formatCurrency(stats.weeklyCost)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-warm-gray">Annual Cost</span>
@@ -328,6 +328,33 @@ export function RouteEditor() {
         </div>
       </div>
 
+      {/* Direction Names */}
+      <div className="mb-4">
+        <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-2">
+          Direction Labels
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-[10px] text-warm-gray mb-0.5">Direction 0</label>
+            <input
+              value={route._direction_0_name || ''}
+              onChange={(e) => updateRoute(route.route_id, { _direction_0_name: e.target.value })}
+              placeholder="Outbound"
+              className="w-full px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] text-warm-gray mb-0.5">Direction 1</label>
+            <input
+              value={route._direction_1_name || ''}
+              onChange={(e) => updateRoute(route.route_id, { _direction_1_name: e.target.value })}
+              placeholder="Inbound"
+              className="w-full px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Cost Estimation */}
       <div className="border-2 border-sand rounded-lg mb-4">
         <button
@@ -369,7 +396,7 @@ export function RouteEditor() {
                   />
                   <div className={`flex-1 min-w-0 transition-opacity ${isShapeHidden ? 'opacity-40' : ''}`}>
                     <span className="text-dark-brown font-medium text-xs">
-                      {trip?.trip_headsign || (trip?.direction_id === 0 ? 'Outbound' : 'Inbound')}
+                      {trip?.trip_headsign || directionName(route, trip?.direction_id ?? 0)}
                     </span>
                     <span className="text-[10px] text-warm-gray ml-1.5">
                       {shape!.points.length} pts · {shapeTrips.length} trip{shapeTrips.length !== 1 ? 's' : ''}
@@ -535,35 +562,67 @@ export function RouteEditor() {
           </div>
         )}
 
-        {/* Direction selector for new shapes */}
-        <div className="mb-2">
-          <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-            Direction for new shape
-          </label>
-          <div className="flex rounded-md border border-sand overflow-hidden">
-            <button
-              onClick={() => setDrawDirection(0)}
-              className={`flex-1 px-3 py-1.5 text-xs font-semibold transition-colors
-                ${drawDirection === 0 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'}`}
-            >
-              Outbound (0)
-            </button>
-            <button
-              onClick={() => setDrawDirection(1)}
-              className={`flex-1 px-3 py-1.5 text-xs font-semibold transition-colors border-l border-sand
-                ${drawDirection === 1 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'}`}
-            >
-              Inbound (1)
-            </button>
-          </div>
-        </div>
+        {/* Direction selector + draw button, or "both directions full" message */}
+        {(() => {
+          const hasOutbound = routeShapes.some((s) => s.trip?.direction_id === 0);
+          const hasInbound = routeShapes.some((s) => s.trip?.direction_id === 1);
 
-        <button
-          onClick={handleDrawShape}
-          className="w-full px-4 py-2.5 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors"
-        >
-          {routeShapes.length > 0 ? 'Draw Another Shape' : 'Draw Route Shape'}
-        </button>
+          if (hasOutbound && hasInbound) {
+            return (
+              <div className="bg-cream rounded-lg px-3 py-2 text-xs text-warm-gray">
+                Both directions have shapes. Delete one to draw a replacement.
+              </div>
+            );
+          }
+
+          // If one direction exists, only allow drawing the other
+          const onlyOneAvailable = hasOutbound || hasInbound;
+          const availableDirection: 0 | 1 = hasOutbound ? 1 : 0;
+
+          return (
+            <>
+              {/* Show direction selector only when no shapes exist yet (both directions available) */}
+              {!onlyOneAvailable && (
+                <div className="mb-2">
+                  <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
+                    Direction for new shape
+                  </label>
+                  <div className="flex rounded-md border border-sand overflow-hidden">
+                    <button
+                      onClick={() => setDrawDirection(0)}
+                      className={`flex-1 px-3 py-1.5 text-xs font-semibold transition-colors
+                        ${drawDirection === 0 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'}`}
+                    >
+                      {directionName(route, 0)}
+                    </button>
+                    <button
+                      onClick={() => setDrawDirection(1)}
+                      className={`flex-1 px-3 py-1.5 text-xs font-semibold transition-colors border-l border-sand
+                        ${drawDirection === 1 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'}`}
+                    >
+                      {directionName(route, 1)}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  if (onlyOneAvailable) {
+                    setDrawDirection(availableDirection);
+                    (window as any).__drawingDirection = availableDirection;
+                  }
+                  handleDrawShape();
+                }}
+                className="w-full px-4 py-2.5 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors"
+              >
+                {onlyOneAvailable
+                  ? `Draw ${directionName(route, availableDirection)} Shape`
+                  : routeShapes.length > 0 ? 'Draw Another Shape' : 'Draw Route Shape'}
+              </button>
+            </>
+          );
+        })()}
 
         <div className="flex items-center gap-2 mt-2">
           <input

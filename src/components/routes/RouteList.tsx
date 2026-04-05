@@ -1,4 +1,5 @@
 
+import { useEffect } from 'react';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import { RouteEditor } from './RouteEditor';
@@ -36,8 +37,18 @@ export function RouteList() {
     setEditingRouteId(routeId);
   };
 
+  // Clear stale editingRouteId if the route no longer exists or isn't selected
+  useEffect(() => {
+    if (editingRouteId) {
+      const exists = routes.some((r) => r.route_id === editingRouteId);
+      if (!exists || selectedRouteId !== editingRouteId) {
+        setEditingRouteId(null);
+      }
+    }
+  }, [editingRouteId, routes, selectedRouteId, setEditingRouteId]);
+
   // If editing a route, show the dedicated editor
-  if (editingRouteId) {
+  if (editingRouteId && routes.some((r) => r.route_id === editingRouteId) && selectedRouteId === editingRouteId) {
     return <RouteEditor />;
   }
 

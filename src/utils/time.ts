@@ -13,13 +13,13 @@ export function secondsToGtfsTime(totalSeconds: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-/** Format for display: 6:46 AM or 14:30 */
+/** Format for display in 24-hour format: 06:31, 14:30 */
 export function formatTimeShort(time: string): string {
   if (!time) return '';
   const parts = time.split(':').map(Number);
   const h = parts[0] || 0;
   const m = parts[1] || 0;
-  return `${h}:${String(m).padStart(2, '0')}`;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 /** Validate GTFS time format */

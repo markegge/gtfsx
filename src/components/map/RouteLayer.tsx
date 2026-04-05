@@ -12,6 +12,10 @@ export function RouteLayer() {
   const mapMode = useStore((s) => s.mapMode);
   const hiddenRouteIds = useStore((s) => s.hiddenRouteIds);
   const hiddenShapeIds = useStore((s) => s.hiddenShapeIds);
+  const bottomPanelOpen = useStore((s) => s.bottomPanelOpen);
+  const bottomPanelTab = useStore((s) => s.bottomPanelTab);
+  const timetableDirectionId = useStore((s) => s.timetableDirectionId);
+  const isTimetableEditing = bottomPanelOpen && bottomPanelTab === 'timetable' && !!selectedRouteId;
 
   const geojson = useMemo(() => {
     const hiddenRouteSet = new Set(hiddenRouteIds);
@@ -62,11 +66,13 @@ export function RouteLayer() {
       ],
       'line-opacity': isEditing
         ? 0.15
-        : [
-            'case',
-            ['get', 'isSelected'], 1,
-            0.7,
-          ],
+        : isTimetableEditing
+          ? ['case',
+              ['all', ['get', 'isSelected'], ['==', ['get', 'direction_id'], timetableDirectionId]], 1,
+              ['get', 'isSelected'], 0.4,
+              0.2,
+            ]
+          : ['case', ['get', 'isSelected'], 1, 0.7],
     },
     layout: {
       'line-join': 'round',
@@ -99,11 +105,13 @@ export function RouteLayer() {
       'text-halo-width': 1,
       'text-opacity': isEditing
         ? 0.1
-        : [
-            'case',
-            ['get', 'isSelected'], 1,
-            0.6,
-          ],
+        : isTimetableEditing
+          ? ['case',
+              ['all', ['get', 'isSelected'], ['==', ['get', 'direction_id'], timetableDirectionId]], 1,
+              ['get', 'isSelected'], 0.3,
+              0.15,
+            ]
+          : ['case', ['get', 'isSelected'], 1, 0.6],
     },
   };
 

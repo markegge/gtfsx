@@ -3,6 +3,7 @@ import { useStore } from '../../store';
 import { ImportDialog } from '../import-export/ImportDialog';
 import { ExportDialog } from '../import-export/ExportDialog';
 import { HelpDialog } from '../help/HelpDialog';
+import { db } from '../../db/dexie';
 
 export function TopBar() {
   const { projectName, setProjectName, lastSavedAt, isDirty } = useStore();
@@ -10,14 +11,30 @@ export function TopBar() {
   const [showExport, setShowExport] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const handleHomeClick = () => {
+    // Check if there's any data worth warning about
+    const state = useStore.getState();
+    const hasData = state.routes.length > 0 || state.stops.length > 0 || state.shapes.length > 0;
+    if (hasData) {
+      setShowResetConfirm(true);
+    } else {
+      db.projectData.clear().then(() => db.projects.clear()).then(() => window.location.reload());
+    }
+  };
 
   const saveStatus = isDirty ? 'Unsaved changes' : lastSavedAt ? 'Saved' : 'New project';
 
   return (
     <>
       <div className="h-14 bg-white border-b border-sand flex items-center px-5 gap-4 shrink-0">
-        {/* Logo */}
-        <div className="flex items-center gap-2 font-heading font-extrabold text-xl text-coral">
+        {/* Logo — home link */}
+        <button
+          onClick={handleHomeClick}
+          className="flex items-center gap-2 font-heading font-extrabold text-xl text-coral hover:opacity-80 transition-opacity"
+          title="Start new project"
+        >
           <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
             <rect width="32" height="32" rx="8" fill="#E8734A"/>
             <path d="M6 24 C10 24, 10 8, 16 8 S22 24, 26 24" stroke="#FFF8F0" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
@@ -31,7 +48,7 @@ export function TopBar() {
             <circle cx="18" cy="19.5" r="1" fill="#FFF8F0"/>
           </svg>
           GTFS Builder
-        </div>
+        </button>
 
         {/* Project name */}
         {editing ? (
@@ -85,6 +102,38 @@ export function TopBar() {
       {showImport && <ImportDialog onClose={() => setShowImport(false)} />}
       {showExport && <ExportDialog onClose={() => setShowExport(false)} />}
       {showHelp && <HelpDialog onClose={() => setShowHelp(false)} />}
+
+      {showResetConfirm && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black/20" onClick={() => setShowResetConfirm(false)} />
+          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-xs mx-4">
+            <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
+              Start a new project?
+            </h3>
+            <p className="text-sm text-warm-gray mb-4">
+              Your current project has not been exported. Any unsaved work will be lost.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  await db.projectData.clear();
+                  await db.projects.clear();
+                  window.location.reload();
+                }}
+                className="flex-1 px-3 py-2 bg-red-500 text-white rounded-lg font-heading font-bold text-sm hover:bg-red-600 transition-colors"
+              >
+                Discard & Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

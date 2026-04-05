@@ -12,6 +12,14 @@ interface DrawControlProps {
   drawRef?: import('react').MutableRefObject<MapboxDraw | null>;
 }
 
+// Custom direct_select mode that prevents dragging the entire feature
+const DirectSelectNoDrag = {
+  ...MapboxDraw.modes.direct_select,
+  dragFeature() {
+    // no-op: prevent dragging the entire route/shape
+  },
+};
+
 export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawControlProps) {
   // Use refs to always have the latest callbacks without re-registering listeners
   const onCreateRef = useRef(onCreate);
@@ -28,6 +36,10 @@ export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawContr
         displayControlsDefault: false,
         controls: {},
         defaultMode: 'simple_select',
+        modes: {
+          ...MapboxDraw.modes,
+          direct_select: DirectSelectNoDrag,
+        },
         styles: [
           // Line being drawn/edited
           {
@@ -70,9 +82,11 @@ export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawContr
             type: 'circle',
             filter: ['all', ['==', '$type', 'Point'], ['==', 'meta', 'midpoint']],
             paint: {
-              'circle-radius': 3.5,
+              'circle-radius': 5,
               'circle-color': '#E8734A',
-              'circle-opacity': 0.4,
+              'circle-opacity': 0.7,
+              'circle-stroke-color': '#FFFFFF',
+              'circle-stroke-width': 1.5,
             },
           },
           {

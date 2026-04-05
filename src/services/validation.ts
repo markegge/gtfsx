@@ -75,7 +75,7 @@ export function runValidation(state: AppStore): ValidationMessage[] {
       messages.push(msg('error', `Trip "${t.trip_id}" references non-existent route "${t.route_id}"`, 'trip', t.trip_id));
     }
     if (!serviceIdSet.has(t.service_id)) {
-      messages.push(msg('error', `Trip "${t.trip_id}" references non-existent calendar "${t.service_id}"`, 'trip', t.trip_id));
+      messages.push(msg('warning', `Trip "${t.trip_id}" references non-existent calendar "${t.service_id}"`, 'trip', t.trip_id));
     }
     if (!stopTimesByTrip.has(t.trip_id)) {
       messages.push(msg('warning', `Trip "${t.trip_id}" has no stop times`, 'trip', t.trip_id));

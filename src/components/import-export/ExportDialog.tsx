@@ -11,6 +11,9 @@ interface ExportDialogProps {
 export function ExportDialog({ onClose }: ExportDialogProps) {
   const [exporting, setExporting] = useState(false);
   const state = useStore();
+  const [fileName, setFileName] = useState(
+    () => state.projectName.replace(/\s+/g, '_').toLowerCase()
+  );
 
   const messages = runValidation(state);
   const errors = messages.filter((m) => m.severity === 'error');
@@ -27,40 +30,37 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
   const handleCleanOrphans = useCallback(() => {
     const s = useStore.getState();
     const routeIds = new Set(s.routes.map((r) => r.route_id));
-    const calendarIds = new Set(s.calendars.map((c) => c.service_id));
     const stopIds = new Set(s.stops.map((st) => st.stop_id));
+    const tripIds = new Set(s.trips.map((t) => t.trip_id));
 
-    // Remove trips referencing deleted routes or calendars
-    const validTrips = s.trips.filter(
-      (t) => routeIds.has(t.route_id) && calendarIds.has(t.service_id)
-    );
+    // Only remove trips referencing routes that no longer exist.
+    // Never remove trips just because their calendar is missing — keep
+    // shapes and routes intact even without timetables.
+    const validTrips = s.trips.filter((t) => routeIds.has(t.route_id));
     const removedTripIds = new Set(
-      s.trips.filter((t) => !routeIds.has(t.route_id) || !calendarIds.has(t.service_id)).map((t) => t.trip_id)
+      s.trips.filter((t) => !routeIds.has(t.route_id)).map((t) => t.trip_id),
     );
 
     // Remove stop_times for removed trips, and those referencing deleted stops
     const validStopTimes = s.stopTimes.filter(
-      (st) => !removedTripIds.has(st.trip_id) && stopIds.has(st.stop_id)
+      (st) => !removedTripIds.has(st.trip_id) && stopIds.has(st.stop_id),
     );
 
     // Remove fare rules referencing deleted routes
     const validFareRules = s.fareRules.filter(
-      (fr) => !fr.route_id || routeIds.has(fr.route_id)
+      (fr) => !fr.route_id || routeIds.has(fr.route_id),
     );
 
-    // Remove orphan shapes (not referenced by any remaining trip)
-    const usedShapeIds = new Set(validTrips.map((t) => t.shape_id).filter(Boolean));
-    const validShapes = s.shapes.filter((sh) => usedShapeIds.has(sh.shape_id));
-
-    // Remove orphan routeStops
+    // Remove orphan routeStops (route deleted)
     const validRouteStops = s.routeStops.filter((rs) => routeIds.has(rs.route_id));
+
+    // Never delete shapes — they are user-created geometry and should persist
+    // even if no trip currently references them.
 
     s.setTrips(validTrips);
     s.setStopTimes(validStopTimes);
-    s.setShapes(validShapes);
     s.setRouteStops(validRouteStops);
     if (validFareRules.length !== s.fareRules.length) {
-      // Clear and re-add (no setFareRules available, use store methods)
       for (const fr of s.fareRules) {
         if (fr.route_id && !routeIds.has(fr.route_id)) {
           s.removeFareRule(fr.fare_id, fr.route_id);
@@ -73,8 +73,12 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
     setExporting(true);
     try {
       const blob = await exportGtfsZip();
-      const name = state.projectName.replace(/\s+/g, '_').toLowerCase();
+      const name = fileName.trim() || state.projectName.replace(/\s+/g, '_').toLowerCase();
       downloadBlob(blob, `${name}.zip`);
+      // Update project name to match exported filename
+      if (fileName.trim() && fileName.trim() !== state.projectName.replace(/\s+/g, '_').toLowerCase()) {
+        useStore.getState().setProjectName(fileName.trim());
+      }
       onClose();
     } finally {
       setExporting(false);
@@ -85,7 +89,21 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-heading font-bold text-lg text-dark-brown mb-1">Export GTFS Feed</h3>
-        <p className="text-xs text-warm-gray mb-4">Your feed will be exported as a ZIP file</p>
+        <p className="text-xs text-warm-gray mb-3">Your feed will be exported as a ZIP file</p>
+
+        <div className="mb-4">
+          <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
+            File Name
+          </label>
+          <div className="flex items-center gap-1">
+            <input
+              value={fileName}
+              onChange={(e) => setFileName(e.target.value)}
+              className="flex-1 px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral"
+            />
+            <span className="text-sm text-warm-gray">.zip</span>
+          </div>
+        </div>
 
         {/* Validation summary */}
         <div className="flex gap-2 mb-4">
@@ -106,7 +124,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
                 onClick={handleCleanOrphans}
                 className="mt-2 w-full px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-heading font-bold hover:bg-red-700 transition-colors"
               >
-                Auto-fix: Remove orphaned trips, stop times, and shapes
+                Auto-fix: Remove orphaned trips and stop times
               </button>
             )}
           </div>

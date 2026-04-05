@@ -14,6 +14,7 @@ export interface TripSlice {
   setTrips: (trips: Trip[]) => void;
   setStopTime: (trip_id: string, stop_id: string, stop_sequence: number, updates: Partial<StopTime>) => void;
   setStopTimes: (stopTimes: StopTime[]) => void;
+  renameTripId: (oldId: string, newId: string) => void;
   duplicateTrip: (trip_id: string, newTripId: string, offsetMinutes: number) => void;
   interpolateStopTimes: (tripId: string) => void;
 }
@@ -41,8 +42,9 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
   }),
   setTrips: (trips) => set((state) => { state.trips = trips; }),
   setStopTime: (trip_id, stop_id, stop_sequence, updates) => set((state) => {
+    // Match on trip_id + stop_id (stop_sequence may differ between visual index and stored value)
     const idx = state.stopTimes.findIndex(
-      (st) => st.trip_id === trip_id && st.stop_id === stop_id && st.stop_sequence === stop_sequence
+      (st) => st.trip_id === trip_id && st.stop_id === stop_id
     );
     if (idx !== -1) {
       Object.assign(state.stopTimes[idx], updates);
@@ -55,6 +57,14 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
     }
   }),
   setStopTimes: (stopTimes) => set((state) => { state.stopTimes = stopTimes; }),
+  renameTripId: (oldId, newId) => set((state) => {
+    const trip = state.trips.find((t) => t.trip_id === oldId);
+    if (!trip) return;
+    trip.trip_id = newId;
+    for (const st of state.stopTimes) {
+      if (st.trip_id === oldId) st.trip_id = newId;
+    }
+  }),
   duplicateTrip: (trip_id, newTripId, offsetMinutes) => set((state) => {
     const trip = state.trips.find((t) => t.trip_id === trip_id);
     if (!trip) return;
@@ -64,8 +74,8 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
       state.stopTimes.push({
         ...st,
         trip_id: newTripId,
-        arrival_time: addMinutesToGtfsTime(st.arrival_time, offsetMinutes),
-        departure_time: addMinutesToGtfsTime(st.departure_time, offsetMinutes),
+        arrival_time: st.arrival_time ? addMinutesToGtfsTime(st.arrival_time, offsetMinutes) : '',
+        departure_time: st.departure_time ? addMinutesToGtfsTime(st.departure_time, offsetMinutes) : '',
       });
     }
   }),

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../../store';
 import { TimetableGrid } from '../timetable/TimetableGrid';
 import { StopDepartures } from '../timetable/StopDepartures';
+import { ServiceSummary } from '../timetable/ServiceSummary';
 import { ValidationPanel } from '../validation/ValidationPanel';
 
 const MIN_HEIGHT = 120;
@@ -14,10 +15,11 @@ export function BottomPanel() {
   const [panelHeight, setPanelHeight] = useState(DEFAULT_HEIGHT);
   const isDragging = useRef(false);
 
-  // Trigger map resize when panel opens/closes or height changes
+  // Trigger map resize when panel opens/closes
   useEffect(() => {
     requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
-  }, [bottomPanelOpen, panelHeight]);
+  }, [bottomPanelOpen]);
+
   const dragStartY = useRef(0);
   const dragStartHeight = useRef(0);
 
@@ -27,7 +29,12 @@ export function BottomPanel() {
       const delta = dragStartY.current - e.clientY;
       setPanelHeight(Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, dragStartHeight.current + delta)));
     };
-    const onMouseUp = () => { isDragging.current = false; };
+    const onMouseUp = () => {
+      if (isDragging.current) {
+        isDragging.current = false;
+        requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+      }
+    };
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
     return () => {
@@ -64,23 +71,31 @@ export function BottomPanel() {
         onClick={() => toggleBottomPanel()}
       >
         <span className="text-xs text-warm-gray">{bottomPanelOpen ? '▼' : '▲'}</span>
-        {(['timetable', 'stops', 'validation'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={(e) => {
-              e.stopPropagation();
-              setBottomPanelTab(tab);
-              if (!bottomPanelOpen) toggleBottomPanel();
-            }}
-            className={`text-[13px] font-heading font-semibold px-3 py-1 rounded-md transition-colors
-              ${bottomPanelTab === tab && bottomPanelOpen
-                ? 'bg-coral-light text-coral'
-                : 'text-warm-gray hover:text-dark-brown'
-              }`}
-          >
-            {tab === 'timetable' ? 'Timetable' : tab === 'stops' ? 'Stops' : 'Validation'}
-          </button>
-        ))}
+        {(['timetable', 'stops', 'service-summary', 'validation'] as const).map((tab) => {
+          const labels: Record<string, string> = {
+            timetable: 'Timetable',
+            stops: 'Stops',
+            'service-summary': 'Service Summary',
+            validation: 'Validation',
+          };
+          return (
+            <button
+              key={tab}
+              onClick={(e) => {
+                e.stopPropagation();
+                setBottomPanelTab(tab);
+                if (!bottomPanelOpen) toggleBottomPanel();
+              }}
+              className={`text-[13px] font-heading font-semibold px-3 py-1 rounded-md transition-colors
+                ${bottomPanelTab === tab && bottomPanelOpen
+                  ? 'bg-coral-light text-coral'
+                  : 'text-warm-gray hover:text-dark-brown'
+                }`}
+            >
+              {labels[tab]}
+            </button>
+          );
+        })}
         {bottomPanelOpen && (
           <>
             <div className="flex-1" />
@@ -104,6 +119,7 @@ export function BottomPanel() {
         <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
           {bottomPanelTab === 'timetable' && <TimetableGrid />}
           {bottomPanelTab === 'stops' && <StopDepartures />}
+          {bottomPanelTab === 'service-summary' && <ServiceSummary />}
           {bottomPanelTab === 'validation' && <ValidationPanel />}
         </div>
       )}

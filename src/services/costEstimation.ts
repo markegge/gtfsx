@@ -50,7 +50,7 @@ function countServiceDaysPerYear(
     ];
 
     // Count active days per week from the pattern
-    const activeDaysPerWeek = dayFlags.reduce<number>((sum, v) => sum + v, 0);
+    const activeDaysPerWeek = dayFlags.reduce<number>((sum, v) => sum + Number(v), 0);
     if (activeDaysPerWeek === 0) continue;
 
     // Calculate span in days, capped to avoid iterating huge ranges
@@ -106,20 +106,21 @@ function parseYYYYMMDD(s: string): Date | null {
 }
 
 /** Get the first and last stop time seconds for a trip by stop_sequence order.
- *  Uses the first and last non-blank times in sequence order for a robust span. */
+ *  Uses the first and last non-blank times in sequence order for a robust span.
+ *  Considers both arrival_time and departure_time (first stop may have only departure). */
 function getTripSpan(
   tripId: string,
   stopTimes: AppStore['stopTimes']
 ): { start: number; end: number } | null {
   const times = stopTimes
-    .filter((st) => st.trip_id === tripId && st.arrival_time)
+    .filter((st) => st.trip_id === tripId && (st.arrival_time || st.departure_time))
     .sort((a, b) => a.stop_sequence - b.stop_sequence);
   if (times.length < 2) return null;
 
   const first = times[0];
   const last = times[times.length - 1];
-  const start = gtfsTimeToSeconds(first.arrival_time);
-  const end = gtfsTimeToSeconds(last.departure_time || last.arrival_time);
+  const start = gtfsTimeToSeconds(first.departure_time || first.arrival_time);
+  const end = gtfsTimeToSeconds(last.arrival_time || last.departure_time);
 
   if (end <= start) return null;
   return { start, end };
@@ -194,8 +195,8 @@ export function calculateRouteStats(
     // Count how many days per week this pattern operates
     const cal = state.calendars.find((c) => c.service_id === serviceId);
     const daysPerWeek = cal
-      ? cal.monday + cal.tuesday + cal.wednesday + cal.thursday + cal.friday + cal.saturday + cal.sunday
-      : 1;
+      ? Number(cal.monday) + Number(cal.tuesday) + Number(cal.wednesday) + Number(cal.thursday) + Number(cal.friday) + Number(cal.saturday) + Number(cal.sunday)
+      : 7;
 
     weeklyRevHours += revHours * daysPerWeek;
     weeklyTotalHours += totalHours * daysPerWeek;

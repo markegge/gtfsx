@@ -439,7 +439,7 @@ export function TimetableGrid() {
                         className={`px-1 py-0.5 border-b border-[#F5F0EB] ${isTimepoint ? 'bg-coral/10' : ''}`}
                       >
                         <TimeCell
-                          value={st?.arrival_time || ''}
+                          value={st?.arrival_time || st?.departure_time || ''}
                           onCommit={(normalized) => {
                             if (normalized) {
                               setStopTime(trip.trip_id, stop.stop_id, stopIdx, { arrival_time: normalized, departure_time: normalized });

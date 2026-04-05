@@ -4,6 +4,7 @@ import { formatTimeShort } from '../../utils/time';
 import { directionName } from '../../utils/constants';
 
 type SortMode = 'time' | 'route';
+type TimeField = 'departure' | 'arrival';
 
 interface Departure {
   time: string;
@@ -19,10 +20,15 @@ export function StopDepartures() {
   const {
     stops, routes, trips, stopTimes, calendars,
     selectedStopId, selectStop,
+    hiddenRouteIds,
   } = useStore();
 
   const [sortMode, setSortMode] = useState<SortMode>('time');
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [showAllRoutes, setShowAllRoutes] = useState(false);
+  const [timeField, setTimeField] = useState<TimeField>('departure');
+
+  const hiddenRouteSet = useMemo(() => new Set(hiddenRouteIds), [hiddenRouteIds]);
 
   // Auto-select first calendar if none selected
   const activeServiceId = useMemo(() => {
@@ -36,20 +42,50 @@ export function StopDepartures() {
 
     const deps: Departure[] = [];
     // Find all stop_times for this stop
-    const relevantStopTimes = stopTimes.filter((st) => st.stop_id === selectedStopId && st.arrival_time);
+    // Build first/last stop_sequence per trip for GTFS convention
+    const tripFirstLast = new Map<string, { first: number; last: number }>();
+    for (const st of stopTimes) {
+      const entry = tripFirstLast.get(st.trip_id);
+      if (!entry) {
+        tripFirstLast.set(st.trip_id, { first: st.stop_sequence, last: st.stop_sequence });
+      } else {
+        if (st.stop_sequence < entry.first) entry.first = st.stop_sequence;
+        if (st.stop_sequence > entry.last) entry.last = st.stop_sequence;
+      }
+    }
+
+    const relevantStopTimes = stopTimes.filter((st) => {
+      if (st.stop_id !== selectedStopId) return false;
+      return !!(st.arrival_time || st.departure_time);
+    });
 
     for (const st of relevantStopTimes) {
       const trip = trips.find((t) => t.trip_id === st.trip_id);
       if (!trip) continue;
-      // Filter by service pattern
       if (activeServiceId && trip.service_id !== activeServiceId) continue;
 
       const route = routes.find((r) => r.route_id === trip.route_id);
       if (!route) continue;
+      if (!showAllRoutes && hiddenRouteSet.has(route.route_id)) continue;
+
+      // Apply GTFS convention: first stop = departure only, last stop = arrival only
+      const fl = tripFirstLast.get(st.trip_id);
+      const isFirstStop = fl && st.stop_sequence === fl.first;
+      const isLastStop = fl && st.stop_sequence === fl.last;
+
+      let timeValue: string;
+      if (timeField === 'departure') {
+        if (isLastStop) continue; // last stop has no departure
+        timeValue = st.departure_time || st.arrival_time;
+      } else {
+        if (isFirstStop) continue; // first stop has no arrival
+        timeValue = st.arrival_time || st.departure_time;
+      }
+      if (!timeValue) continue;
 
       deps.push({
-        time: formatTimeShort(st.arrival_time),
-        timeSortKey: st.arrival_time,
+        time: formatTimeShort(timeValue),
+        timeSortKey: timeValue,
         routeName: route.route_short_name || route.route_long_name || route.route_id,
         routeColor: route.route_color,
         direction: directionName(route, trip.direction_id),
@@ -66,7 +102,7 @@ export function StopDepartures() {
     }
 
     return deps;
-  }, [selectedStopId, stopTimes, trips, routes, activeServiceId, sortMode]);
+  }, [selectedStopId, stopTimes, trips, routes, activeServiceId, sortMode, showAllRoutes, hiddenRouteSet, timeField]);
 
   // Compute frequency stats
   const stats = useMemo(() => {
@@ -144,6 +180,37 @@ export function StopDepartures() {
           </button>
         </div>
 
+        {/* Arrival/departure toggle */}
+        <div className="flex rounded-md border border-sand overflow-hidden">
+          <button
+            onClick={() => setTimeField('departure')}
+            className={`px-2 py-1 text-xs font-semibold transition-colors ${
+              timeField === 'departure' ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'
+            }`}
+          >
+            Dep
+          </button>
+          <button
+            onClick={() => setTimeField('arrival')}
+            className={`px-2 py-1 text-xs font-semibold transition-colors border-l border-sand ${
+              timeField === 'arrival' ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'
+            }`}
+          >
+            Arr
+          </button>
+        </div>
+
+        {/* Visible/all routes toggle */}
+        <label className="flex items-center gap-1.5 text-xs text-warm-gray whitespace-nowrap cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showAllRoutes}
+            onChange={(e) => setShowAllRoutes(e.target.checked)}
+            className="accent-coral"
+          />
+          All routes
+        </label>
+
         {stats && (
           <span className="text-xs text-warm-gray whitespace-nowrap">
             {stats.totalDepartures} departures ({stats.routeCount} route{stats.routeCount !== 1 ? 's' : ''}) &middot; {stats.firstDeparture}&ndash;{stats.lastDeparture}
@@ -166,7 +233,7 @@ export function StopDepartures() {
             <thead>
               <tr>
                 <th className="sticky top-0 bg-cream px-3 py-2 text-left font-semibold text-warm-gray text-[11px] border-b border-sand">
-                  Time
+                  {timeField === 'departure' ? 'Departure' : 'Arrival'}
                 </th>
                 <th className="sticky top-0 bg-cream px-3 py-2 text-left font-semibold text-warm-gray text-[11px] border-b border-sand">
                   Route

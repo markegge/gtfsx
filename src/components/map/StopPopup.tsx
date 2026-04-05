@@ -107,9 +107,21 @@ export function StopPopup({ stopId, onClose }: StopPopupProps) {
         {/* Stop times */}
         {info.enrichedTimes.length > 0 && (
           <div className="border-t border-sand pt-2">
-            <p className="text-[10px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-              Departures
-            </p>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[10px] font-semibold text-warm-gray uppercase tracking-wide">
+                Departures
+              </p>
+              <button
+                onClick={() => {
+                  useStore.getState().setBottomPanelOpen(true);
+                  useStore.getState().setBottomPanelTab('stops');
+                  onClose();
+                }}
+                className="text-[10px] text-coral hover:underline"
+              >
+                View All
+              </button>
+            </div>
             <div className="flex flex-col gap-0.5">
               {info.enrichedTimes.map((t, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs">

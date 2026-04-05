@@ -83,9 +83,29 @@ export async function exportGtfsZip(): Promise<Blob> {
     })));
   }
 
-  // stop_times.txt
+  // stop_times.txt — blank arrival on first stop, blank departure on last stop per trip
   if (state.stopTimes.length > 0) {
-    zip.file('stop_times.txt', toCSV(state.stopTimes.map(stripUIFields)));
+    // Build first/last stop_sequence per trip
+    const tripFirstLast = new Map<string, { first: number; last: number }>();
+    for (const st of state.stopTimes) {
+      const entry = tripFirstLast.get(st.trip_id);
+      if (!entry) {
+        tripFirstLast.set(st.trip_id, { first: st.stop_sequence, last: st.stop_sequence });
+      } else {
+        if (st.stop_sequence < entry.first) entry.first = st.stop_sequence;
+        if (st.stop_sequence > entry.last) entry.last = st.stop_sequence;
+      }
+    }
+
+    zip.file('stop_times.txt', toCSV(state.stopTimes.map((st) => {
+      const clean = stripUIFields(st);
+      const fl = tripFirstLast.get(st.trip_id);
+      if (fl) {
+        if (st.stop_sequence === fl.first) clean.arrival_time = '';
+        if (st.stop_sequence === fl.last) clean.departure_time = '';
+      }
+      return clean;
+    })));
   }
 
   // shapes.txt

@@ -8,25 +8,16 @@ interface Props {
 
 export function DemandDotsLayer({ visible }: Props) {
   const [data, setData] = useState<GeoJSON.FeatureCollection | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!visible || data) return;
-    setLoading(true);
     fetch('/data/demand_dots.geojson')
       .then((r) => {
         if (!r.ok) throw new Error('Not found');
         return r.json();
       })
-      .then((geojson) => {
-        setData(geojson);
-        setLoading(false);
-      })
-      .catch(() => {
-        setError(true);
-        setLoading(false);
-      });
+      .then((geojson) => setData(geojson))
+      .catch(() => {});
   }, [visible, data]);
 
   const layerStyle: LayerProps = useMemo(() => ({

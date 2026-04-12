@@ -69,19 +69,41 @@ Already handled by `demand-dots/build_dots.py`. For nationwide, we just need to 
                                                   │ R2: gtfs-builder│
                                                   │ -tiles bucket   │
                                                   └────────┬────────┘
-                                                           │ HTTP Range
+                                                           │ R2 binding (TILES)
+                                                           ▼
+                                                  ┌─────────────────┐
+                                                  │ gtfs-builder    │
+                                                  │ Worker          │
+                                                  │ (worker/index.ts│
+                                                  │  reads PMTiles  │
+                                                  │  via Range)     │
+                                                  └────────┬────────┘
+                                                           │ /_demand-tiles/{archive}/{z}/{x}/{y}.pbf
                                                            ▼
                                                   ┌─────────────────┐
                                                   │  DemandDotsLayer│
-                                                  │ (pmtiles://...) │
+                                                  │ (vector source, │
+                                                  │  URL template)  │
                                                   └─────────────────┘
 ```
 
-**Why PMTiles, not MBTiles / a tileserver / a big GeoJSON:**
-- Single-file format, HTTP Range requests → no tile server needed
-- R2 serves range requests natively
-- Existing JS client (`pmtiles` npm package) integrates with Mapbox GL via `addProtocol`
-- File can be 5–10 GB and it doesn't matter — the browser only reads the tiles it needs
+**Why the Worker step exists (and isn't optional):**
+Mapbox GL JS 3.x does NOT support MapLibre's `addProtocol` API, so the
+pmtiles npm package can't plug itself into Mapbox sources directly. The
+first POC attempt failed with `TypeError: addProtocol is not a function`
+in production. The Worker bridges that gap: it reads the PMTiles file
+from R2 via Range requests (how PMTiles was designed to be consumed) and
+emits individual `.pbf` tiles for Mapbox's standard vector source. This
+is only ~40 lines of code and runs at the edge on the same domain as
+the SPA, so there are no CORS concerns and cache-hit tiles never touch
+the Worker at all.
+
+**Why PMTiles on R2, not exploded tile directories:**
+- Single-file upload beats uploading 90k–10M individual tiles (Montana
+  exploded is 91k tiles; nationwide would be millions)
+- R2 class-A write cost for bulk tile uploads adds up quickly
+- Regens become a single `wrangler r2 object put` instead of an rclone
+  sync operation
 
 ---
 
@@ -147,98 +169,98 @@ Key flags:
 
 ---
 
-## 6. R2 hosting setup
+## 6. R2 bucket + Worker binding
 
-One-time setup:
+One-time setup (already done as of the Montana POC):
 
 ```bash
-# Create a new bucket
+# Create the bucket
 npx wrangler r2 bucket create gtfs-builder-tiles
 
-# Make it public via a custom domain. Two options:
-# Option A (simplest): R2 public dev URL
-npx wrangler r2 bucket dev-url enable gtfs-builder-tiles
-#   → https://pub-<hash>.r2.dev/<file>
-
-# Option B (cleaner): custom domain tiles.gtfsbuilder.net
-#   Configure via Cloudflare dashboard:
-#   R2 → bucket → Settings → Custom Domains → Connect Domain
-#   Pick `tiles.gtfsbuilder.net` (zone is already on CF)
+# Optional: attach a custom domain for direct-file access (e.g. debugging).
+# This is NOT used by the map itself — the map hits /_demand-tiles/... on
+# the main gtfs-builder Worker, which reads the PMTiles via the R2 binding.
+npx wrangler r2 bucket domain add gtfs-builder-tiles \
+  --domain tiles.gtfsbuilder.net \
+  --zone-id <gtfsbuilder.net zone id> \
+  --force
 ```
 
-Recommend **Option B** — a `tiles.gtfsbuilder.net` custom domain. No CORS issues, cacheable via CF, and it means the URL is stable regardless of R2 account changes.
-
-**CORS config** (R2 bucket):
-```json
-[{
-  "AllowedOrigins": ["https://www.gtfsbuilder.net", "https://gtfsbuilder.net", "http://localhost:5173"],
-  "AllowedMethods": ["GET", "HEAD"],
-  "AllowedHeaders": ["Range", "If-Match", "If-None-Match"],
-  "ExposeHeaders": ["ETag", "Content-Length", "Content-Range"],
-  "MaxAgeSeconds": 3600
-}]
+**Worker binding** (in `wrangler.jsonc`):
+```jsonc
+"r2_buckets": [
+  { "binding": "TILES", "bucket_name": "gtfs-builder-tiles" }
+]
 ```
 
-**Upload:**
+**Uploads** are remote-scoped (`--remote`) and versioned by filename:
 ```bash
-npx wrangler r2 object put gtfs-builder-tiles/mt.pmtiles --file=tiles/mt.pmtiles
+npx wrangler r2 object put gtfs-builder-tiles/mt-2026.pmtiles \
+  --file=tiles/mt-2026.pmtiles \
+  --remote \
+  --content-type=application/vnd.pmtiles \
+  --cache-control="public, max-age=31536000, immutable"
 ```
 
-**Cache-Control header:** set to `public, max-age=31536000, immutable` on the PMTiles object, then use a versioned filename (`us-2026.pmtiles`) to invalidate on regen. This gets the browser + CF cache working for you.
+`--remote` is critical — without it, wrangler writes to local simulated storage.
+
+**CORS** on the R2 bucket matters only if/when you expose the bucket via
+its custom domain and let the browser fetch directly. Since the map goes
+through the main Worker (same origin as the SPA), CORS isn't in play for
+the production path. The bucket still has a CORS rule (`tiles/cors.json`
+in this repo) for direct-file debugging.
 
 ---
 
-## 7. Client integration
+## 7. The tile-serving Worker (`worker/index.ts`)
 
-Current: `src/components/map/DemandDotsLayer.tsx` fetches one GeoJSON file and renders it as a circle layer.
+~40 lines. Reads the PMTiles archive from R2 via Range requests (using
+the pmtiles library's `Source` interface) and serves each tile as a
+standalone response. Path shape: `/_demand-tiles/{archive}/{z}/{x}/{y}.pbf`.
 
-New behavior:
-1. Register the `pmtiles://` protocol with Mapbox GL once at app startup.
-2. Swap the `<Source>` from `type="geojson"` to `type="vector"` pointing at the PMTiles URL.
-3. Layer definition becomes a `circle` layer with `"source-layer": "demand"`.
+The archive name is a URL segment so multiple archives can coexist —
+when the nationwide build ships, switching to `us-2026` is a client-side
+string change, and the MT POC file can hang around for comparison.
 
-### New deps
-```bash
-npm install pmtiles
-```
+Per-request flow:
+1. Regex-match the URL. If it doesn't match, forward to `env.ASSETS.fetch`
+   (the static-assets binding) so the SPA fallback still works.
+2. Cache the `PMTiles` instance per-archive in a module-level `Map` so
+   the header isn't re-read on every request (still read fresh per
+   Worker isolate, but isolates are long-lived).
+3. `pmtiles.getZxy(z, x, y)` → byte range pull from R2 → `.pbf` body.
+4. Respond with `Content-Type: application/x-protobuf` and a year-long
+   `Cache-Control` so Cloudflare's edge cache fronts most requests.
+5. Missing tiles return `204 No Content` with a shorter cache. Mapbox
+   GL handles 204 by treating the tile as empty.
 
-### One-time protocol setup (in `src/components/map/MapView.tsx` near Mapbox init):
-```ts
-import { Protocol } from 'pmtiles';
-import mapboxgl from 'mapbox-gl';
+**Build config:** the Worker needs Cloudflare types (`R2Bucket`, `Fetcher`)
+that the React app shouldn't pull in. `tsconfig.worker.json` handles
+this — the Worker's tsconfig has `"types": ["@cloudflare/workers-types"]`
+and includes only `worker/**/*`. The React tsconfig excludes `worker/`.
 
-const pmtilesProtocol = new Protocol();
-mapboxgl.addProtocol('pmtiles', pmtilesProtocol.tile);
-```
+---
 
-### New `DemandDotsLayer.tsx` shape:
+## 8. Client integration
+
+`src/components/map/DemandDotsLayer.tsx` is a plain Mapbox vector source
+with a URL template. No client-side pmtiles library, no protocol
+registration.
+
 ```tsx
-const TILES_URL = 'pmtiles://https://tiles.gtfsbuilder.net/us-2026.pmtiles';
+const ARCHIVE = 'mt-2026';
+const TILE_URL = `${window.location.origin}/_demand-tiles/${ARCHIVE}/{z}/{x}/{y}.pbf`;
 
-<Source id="demand-dots" type="vector" url={TILES_URL}>
-  <Layer
-    id="demand-dots"
-    type="circle"
-    source="demand-dots"
-    source-layer="demand"
-    paint={{
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 12, 1.25, 15, 2],
-      'circle-color': ['match', ['get', 'class'],
-        'high', '#22c55e',
-        'jobs', '#f97316',
-        'other', '#9ca3af',
-        '#9ca3af',
-      ],
-      'circle-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.4, 12, 0.6, 15, 0.8],
-    }}
-  />
+<Source id="demand-dots" type="vector" tiles={[TILE_URL]} minzoom={6} maxzoom={15}>
+  <Layer id="demand-dots" type="circle" source-layer="demand" paint={...} />
 </Source>
 ```
 
-No `useEffect` / `fetch` needed — Mapbox handles tile loading/unloading itself based on viewport.
+Yearly regen: update the `ARCHIVE` constant to the new filename, commit.
+No other client changes required.
 
-### Legacy cleanup
-Delete `public/data/demand_dots.geojson` from the repo (it's 5 MB in git-LFS territory already). Make sure nothing else references it.
+### Legacy cleanup (already done)
+`public/data/demand_dots.geojson` has been deleted from the repo.
 
 ---
 
@@ -262,33 +284,43 @@ tippecanoe \
   --base-zoom=12 \
   tiles/dots_mt.geojson.ldjson
 
-# 3. Set up R2 bucket (first time)
+# 3. R2 bucket + Worker binding (first time only — already done for the
+#    POC; listed here for completeness)
 npx wrangler r2 bucket create gtfs-builder-tiles
-# then in CF dashboard, attach custom domain tiles.gtfsbuilder.net and set CORS
+# ensure wrangler.jsonc has:
+#   "main": "worker/index.ts"
+#   "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application" }
+#   "r2_buckets": [{ "binding": "TILES", "bucket_name": "gtfs-builder-tiles" }]
 
-# 4. Upload
+# 4. Upload (use --remote; --local writes to simulated storage, not R2)
 npx wrangler r2 object put gtfs-builder-tiles/mt-2026.pmtiles \
   --file=tiles/mt-2026.pmtiles \
+  --remote \
   --content-type=application/vnd.pmtiles \
   --cache-control="public, max-age=31536000, immutable"
 
-# 5. Update DemandDotsLayer.tsx to point at:
-#    pmtiles://https://tiles.gtfsbuilder.net/mt-2026.pmtiles
+# 5. Update the ARCHIVE constant in src/components/map/DemandDotsLayer.tsx
+#    from the previous version to 'mt-2026'.
 
-# 6. npm run dev, pan to Montana, verify dots render smoothly at zoom 6-15
+# 6. npm run dev OR push and wait for CI. Pan to Montana,
+#    toggle Map Layers → Transit Demand → Demand Dots, verify dots render
+#    smoothly at zoom 6-15.
 
-# 7. Check bundle size and network panel — expect:
-#    - pmtiles library: ~15 KB gzipped added to bundle
-#    - Per-view tile requests: 4–20 tiles, ~10–100 KB each
+# 7. Check the network panel — expect:
+#    - Per-view tile requests to /_demand-tiles/mt-2026/{z}/{x}/{y}.pbf
+#    - Each tile 0–200 KB
+#    - Subsequent views hit cf-cache-status: HIT
 ```
 
 **POC acceptance criteria:**
 - [ ] Dots render at all zoom levels 6–15 in Montana
 - [ ] No visible tile seams or missing dots
-- [ ] Initial map load does NOT fetch the full PMTiles file (should be Range requests only)
+- [ ] Tile endpoints return 200 with non-zero body for populated areas,
+      204 for empty tiles
 - [ ] Panning around Montana feels responsive
 - [ ] Outside Montana there are no dots (expected, the file only covers MT)
-- [ ] Network cost per page view is reasonable (check R2 ops in CF dashboard after a day of use)
+- [ ] Network cost per page view is reasonable (check R2 ops + Worker
+      requests in CF dashboard after a day of use)
 
 ---
 
@@ -316,15 +348,21 @@ Expected: ~1–3 GB. Single-threaded-ish for ~1–4 hours.
 ```bash
 npx wrangler r2 object put gtfs-builder-tiles/us-2026.pmtiles \
   --file=tiles/us-2026.pmtiles \
+  --remote \
   --content-type=application/vnd.pmtiles \
   --cache-control="public, max-age=31536000, immutable"
 ```
 
-Then flip `DemandDotsLayer.tsx` URL from `mt-2026.pmtiles` to `us-2026.pmtiles`. Deploy.
+Then change the `ARCHIVE` constant in `src/components/map/DemandDotsLayer.tsx`
+from `mt-2026` to `us-2026`. Commit, push, CI deploys.
 
 ### Cost at nationwide scale
 - R2 storage: ~3 GB × $0.015 = **~$0.05/mo**
-- R2 Class B ops: $0.36/M. Say 10k visits/mo × 30 tiles avg = 300k ops/mo = **~$0.11/mo**
+- R2 Class B ops (reads): $0.36/M. Say 10k visits/mo × 30 tiles avg =
+  300k ops/mo = **~$0.11/mo**. Each tile is one Range read of the PMTiles
+  file, which the pmtiles client chunks efficiently.
+- Worker requests: Workers Paid plan is $0.30/M after 10M included, so
+  at 300k/mo: **$0**. At 10M/mo: **~$0**.
 - Egress: **$0** (R2)
 - **Rough total: under $1/month at 10k visits/mo**. At 100k: still under $5.
 
@@ -373,15 +411,16 @@ cat tiles/ldjson/*.ldjson | tippecanoe \
   --drop-densest-as-needed --extend-zooms-if-still-dropping \
   --base-zoom=12 --read-parallel --force
 
-# 6. Upload
+# 6. Upload (--remote is required; --local writes to simulated storage)
 npx wrangler r2 object put gtfs-builder-tiles/us-${YEAR}.pmtiles \
   --file=tiles/us-${YEAR}.pmtiles \
+  --remote \
   --content-type=application/vnd.pmtiles \
   --cache-control="public, max-age=31536000, immutable"
 
-# 7. Update client
-#    Edit src/components/map/DemandDotsLayer.tsx → us-${OLD}.pmtiles → us-${YEAR}.pmtiles
-#    Commit, push, CI auto-deploys
+# 7. Update client — change the ARCHIVE constant in
+#    src/components/map/DemandDotsLayer.tsx to the new filename prefix.
+#    Commit, push, CI auto-deploys.
 
 # 8. Verify
 #    - Load https://www.gtfsbuilder.net/, toggle demand layer on

@@ -11,11 +11,10 @@ import { DrawingIndicator } from './DrawingIndicator';
 import { StopPopup } from './StopPopup';
 import { RoutePopup } from './RoutePopup';
 import { CoverageLayer } from './CoverageLayer';
-import { DensityHeatmap } from './DensityHeatmap';
 import { FlexLayer } from '../flex/FlexLayer';
 import { DemandDotsLayer } from './DemandDotsLayer';
 import { MapLayerControls } from './MapLayerControls';
-import type { MapStyleId, HeatmapMetric } from './MapLayerControls';
+import type { MapStyleId } from './MapLayerControls';
 import { generateId } from '../../services/idGenerator';
 import { snapToRoad } from '../../services/snapToRoad';
 import { simplifyShapePoints } from '../../services/simplifyShape';
@@ -55,7 +54,6 @@ export function MapView() {
   const [isSnapping, setIsSnapping] = useState(false);
   // Map layer controls
   const [mapStyleId, setMapStyleId] = useState<MapStyleId>('light');
-  const [heatmapMetric, setHeatmapMetric] = useState<HeatmapMetric>('off');
   const [showDemandDots, setShowDemandDots] = useState(false);
   // Cursor: pointer when hovering over a clickable feature in select mode
   const [hoveringFeature, setHoveringFeature] = useState(false);
@@ -653,7 +651,6 @@ export function MapView() {
           onCreate={handleDrawCreate}
           onUpdate={handleDrawUpdate}
         />
-        <DensityHeatmap visible={heatmapMetric !== 'off'} metric={heatmapMetric === 'off' ? 'population' : heatmapMetric} />
         <DemandDotsLayer visible={showDemandDots} />
         <CoverageLayer />
         <FlexLayer />
@@ -680,8 +677,6 @@ export function MapView() {
       <MapLayerControls
         mapStyle={mapStyleId}
         onMapStyleChange={setMapStyleId}
-        heatmapMetric={heatmapMetric}
-        onHeatmapMetricChange={setHeatmapMetric}
         showDemandDots={showDemandDots}
         onShowDemandDotsChange={setShowDemandDots}
       />

@@ -1,14 +1,10 @@
 import { useState } from 'react';
-import { useStore } from '../../store';
 
 export type MapStyleId = 'light' | 'satellite';
-export type HeatmapMetric = 'off' | 'population' | 'workers' | 'households';
 
 interface MapLayerControlsProps {
   mapStyle: MapStyleId;
   onMapStyleChange: (style: MapStyleId) => void;
-  heatmapMetric: HeatmapMetric;
-  onHeatmapMetricChange: (metric: HeatmapMetric) => void;
   showDemandDots: boolean;
   onShowDemandDotsChange: (show: boolean) => void;
 }
@@ -16,14 +12,10 @@ interface MapLayerControlsProps {
 export function MapLayerControls({
   mapStyle,
   onMapStyleChange,
-  heatmapMetric,
-  onHeatmapMetricChange,
   showDemandDots,
   onShowDemandDotsChange,
 }: MapLayerControlsProps) {
   const [open, setOpen] = useState(false);
-  const coverageData = useStore((s) => s.coverageData);
-  const hasCensusData = !!coverageData?.blockGroups?.length;
 
   return (
     <div className="absolute top-3 left-3 z-10">
@@ -59,36 +51,8 @@ export function MapLayerControls({
             </button>
           </div>
 
-          {/* Density heatmap */}
-          <div className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5">
-            Density Heatmap
-          </div>
-          {hasCensusData ? (
-            <div className="flex flex-col gap-1">
-              {([
-                ['off', 'Off'],
-                ['population', 'Population'],
-                ['workers', 'Workers'],
-                ['households', 'Households'],
-              ] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => onHeatmapMetricChange(key)}
-                  className={`px-2 py-1.5 rounded-md text-[11px] font-semibold text-left transition-colors
-                    ${heatmapMetric === key ? 'bg-coral-light text-coral' : 'bg-cream text-warm-gray hover:bg-sand'}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[11px] text-warm-gray">
-              Run <strong className="text-dark-brown">Coverage Analysis</strong> first to load census data for the heatmap.
-            </p>
-          )}
-
           {/* Demand dots */}
-          <div className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5 mt-3">
+          <div className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5">
             Transit Demand
           </div>
           <label className="flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] font-semibold cursor-pointer hover:bg-cream transition-colors">

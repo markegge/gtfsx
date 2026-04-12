@@ -35,11 +35,13 @@ import requests
 from shapely.geometry import Point, mapping
 
 CENSUS_API_BASE = "https://api.census.gov/data"
-ACS_YEAR = 2023
+ACS_YEAR = 2024  # latest 5-year release = 2020-2024 (Dec 2025)
 ACS_DATASET = f"{CENSUS_API_BASE}/{ACS_YEAR}/acs/acs5"
-TIGER_YEAR = 2023
+TIGER_YEAR = 2025
 LODES_BASE = "https://lehd.ces.census.gov/data/lodes/LODES8"
-LODES_YEAR = 2021
+# LODES WAC: probe downwards from this year until a file exists. LODES lags
+# ACS/TIGER by ~2 years so the actual data year used will usually be older.
+LODES_PROBE_START = 2024
 
 CACHE_DIR = Path("cache")
 
@@ -137,11 +139,11 @@ def _compute_acs_derived(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def fetch_block_group_data_county(state_fips: str, county_fips: str) -> pd.DataFrame:
-    cache_file = cache_path(f"acs_bg_{state_fips}_{county_fips}.csv")
+    cache_file = cache_path(f"acs{ACS_YEAR}_bg_{state_fips}_{county_fips}.csv")
     if cache_file.exists():
         print(f"  Using cached ACS block group data: {cache_file}")
         return pd.read_csv(cache_file, dtype={"GEOID": str})
-    print(f"  Fetching ACS block group data (county {state_fips}{county_fips})...")
+    print(f"  Fetching ACS {ACS_YEAR} 5-yr block group data (county {state_fips}{county_fips})...")
     df = _census_api_get(
         ACS_DATASET, ACS_VARS,
         {"for": "block group:*", "in": f"state:{state_fips} county:{county_fips}"},
@@ -155,11 +157,11 @@ def fetch_block_group_data_county(state_fips: str, county_fips: str) -> pd.DataF
 
 def fetch_block_group_data_state(state_fips: str) -> pd.DataFrame:
     """Fetch ACS block group data for an entire state in one API call."""
-    cache_file = cache_path(f"acs_bg_state_{state_fips}.csv")
+    cache_file = cache_path(f"acs{ACS_YEAR}_bg_state_{state_fips}.csv")
     if cache_file.exists():
         print(f"  Using cached ACS block group data: {cache_file}")
         return pd.read_csv(cache_file, dtype={"GEOID": str})
-    print(f"  Fetching ACS block group data (state {state_fips})...")
+    print(f"  Fetching ACS {ACS_YEAR} 5-yr block group data (state {state_fips})...")
     # ACS requires county:* alongside block group:* in the state-wide query
     df = _census_api_get(
         ACS_DATASET, ACS_VARS,
@@ -175,28 +177,38 @@ def fetch_block_group_data_state(state_fips: str) -> pd.DataFrame:
 # ─── LODES WAC (block-level jobs) ─────────────────────────────────────────────
 
 def fetch_lodes_wac_state(state_fips: str) -> pd.DataFrame:
-    """Download LODES WAC for a whole state, return block-level job counts."""
+    """Download LODES WAC for a whole state, probing for the newest available year.
+
+    Returns block-level job counts. Cache filename includes the detected year
+    so a future regen can tell at a glance what vintage the cached data is.
+    """
     abbr = FIPS_TO_ABBR.get(state_fips, state_fips)
-    cache_file = cache_path(f"lodes_wac_state_{state_fips}.csv")
-    if cache_file.exists():
-        print(f"  Using cached LODES data: {cache_file}")
+    # Check existing cache (any year) before hitting the network
+    existing = sorted(CACHE_DIR.glob(f"lodes_wac_state_{state_fips}_*.csv"),
+                      reverse=True) if CACHE_DIR.exists() else []
+    if existing:
+        cache_file = existing[0]
+        year = cache_file.stem.rsplit("_", 1)[-1]
+        print(f"  Using cached LODES {year}: {cache_file}")
         return pd.read_csv(cache_file, dtype={"w_geocode": str})
-    print(f"  Downloading LODES WAC for {abbr.upper()} ({LODES_YEAR})...")
-    year = LODES_YEAR
-    while year >= 2018:
+
+    for year in range(LODES_PROBE_START, 2017, -1):
         url = f"{LODES_BASE}/{abbr}/wac/{abbr}_wac_S000_JT00_{year}.csv.gz"
         resp = requests.get(url, stream=True)
         if resp.status_code == 200:
+            print(f"  Downloaded LODES WAC {abbr.upper()} {year}")
             break
-        year -= 1
-    resp.raise_for_status()
+    else:
+        raise RuntimeError(f"No LODES WAC file found for {abbr.upper()} in any year")
+
     tmp = tempfile.NamedTemporaryFile(suffix=".csv.gz", delete=False)
     tmp.write(resp.content); tmp.close()
     df = pd.read_csv(tmp.name, dtype={"w_geocode": str})
     os.unlink(tmp.name)
     result = df[["w_geocode", "C000"]].rename(columns={"C000": "total_jobs"})
+    cache_file = cache_path(f"lodes_wac_state_{state_fips}_{year}.csv")
     result.to_csv(cache_file, index=False)
-    print(f"  Cached LODES data: {len(result)} blocks, {result['total_jobs'].sum():,} total jobs")
+    print(f"  Cached LODES {year}: {len(result)} blocks, {result['total_jobs'].sum():,} jobs")
     return result
 
 
@@ -209,11 +221,13 @@ def fetch_lodes_wac_county(state_fips: str, county_fips: str) -> pd.DataFrame:
 # ─── TIGER block geometries ───────────────────────────────────────────────────
 
 def fetch_block_geometries_state(state_fips: str) -> gpd.GeoDataFrame:
-    cache_file = cache_path(f"blocks_state_{state_fips}.gpkg")
+    """Download TIGER TABBLOCK20 for a state; keep POP20 + HOUSING20 for
+    apportionment weighting (far more accurate than land area)."""
+    cache_file = cache_path(f"blocks_state_{state_fips}_tiger{TIGER_YEAR}.gpkg")
     if cache_file.exists():
         print(f"  Using cached block geometries: {cache_file}")
         return gpd.read_file(cache_file)
-    print(f"  Downloading TIGER/Line state block geometries ({state_fips})...")
+    print(f"  Downloading TIGER/Line {TIGER_YEAR} state block geometries ({state_fips})...")
     url = (
         f"https://www2.census.gov/geo/tiger/TIGER{TIGER_YEAR}/TABBLOCK20/"
         f"tl_{TIGER_YEAR}_{state_fips}_tabblock20.zip"
@@ -225,8 +239,10 @@ def fetch_block_geometries_state(state_fips: str) -> gpd.GeoDataFrame:
     gdf = gpd.read_file(f"zip://{tmp.name}")
     os.unlink(tmp.name)
     gdf = gdf[gdf["STATEFP20"] == state_fips]
-    gdf = gdf[["GEOID20", "ALAND20", "geometry"]].rename(columns={"GEOID20": "GEOID_BLOCK"})
-    gdf["ALAND20"] = pd.to_numeric(gdf["ALAND20"], errors="coerce").fillna(0)
+    keep = ["GEOID20", "POP20", "HOUSING20", "ALAND20", "geometry"]
+    gdf = gdf[keep].rename(columns={"GEOID20": "GEOID_BLOCK"})
+    for col in ("POP20", "HOUSING20", "ALAND20"):
+        gdf[col] = pd.to_numeric(gdf[col], errors="coerce").fillna(0)
     gdf.to_file(cache_file, driver="GPKG")
     print(f"  Cached block geometries: {len(gdf)} blocks")
     return gdf
@@ -253,20 +269,39 @@ def apportion_bg_to_blocks(
     bg_other: int,
     bg_index: dict[str, pd.DataFrame],
 ) -> list[tuple[str, int, int]]:
+    """Distribute block group counts across its constituent blocks.
+
+    Weight preference: POP20 (actual 2020 decennial population per block) →
+    HOUSING20 (housing unit count) → ALAND20 (land area, last resort).
+    Using population instead of land area is a huge accuracy win in rural
+    areas, where a single empty 500 km² block otherwise absorbs half the
+    block group's residents.
+    """
     bg_blocks = bg_index.get(bg_geoid)
     if bg_blocks is None or len(bg_blocks) == 0:
         return []
-    total_area = bg_blocks["ALAND20"].sum()
-    results: list[tuple[str, int, int]] = []
-    if total_area <= 0:
-        n = len(bg_blocks)
-        for geoid in bg_blocks["GEOID_BLOCK"]:
-            results.append((geoid, max(0, round(bg_high / n)), max(0, round(bg_other / n))))
-        return results
-    for geoid, aland in zip(bg_blocks["GEOID_BLOCK"], bg_blocks["ALAND20"]):
-        frac = aland / total_area
-        results.append((geoid, max(0, round(bg_high * frac)), max(0, round(bg_other * frac))))
-    return results
+
+    for weight_col in ("POP20", "HOUSING20", "ALAND20"):
+        if weight_col not in bg_blocks.columns:
+            continue
+        total = bg_blocks[weight_col].sum()
+        if total > 0:
+            results: list[tuple[str, int, int]] = []
+            for geoid, w in zip(bg_blocks["GEOID_BLOCK"], bg_blocks[weight_col]):
+                frac = w / total
+                results.append((
+                    geoid,
+                    max(0, round(bg_high * frac)),
+                    max(0, round(bg_other * frac)),
+                ))
+            return results
+
+    # Nothing usable — split evenly
+    n = len(bg_blocks)
+    return [
+        (geoid, max(0, round(bg_high / n)), max(0, round(bg_other / n)))
+        for geoid in bg_blocks["GEOID_BLOCK"]
+    ]
 
 
 def random_points_in_polygon(polygon, n: int, rng: np.random.Generator) -> list[Point]:

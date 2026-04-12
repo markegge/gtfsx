@@ -67,19 +67,19 @@ export function MapLayerControls({
           {showDemandDots && (
             <div className="flex flex-col gap-0.5 mt-1 px-2">
               <div className="flex items-center gap-1.5 text-[10px]">
-                <span className="w-2 h-2 rounded-full bg-green-500" />
-                <span className="text-warm-gray">High propensity</span>
+                <span className="w-2 h-2 rounded-full" style={{ background: '#2563eb' }} />
+                <span className="text-warm-gray">High transit propensity</span>
               </div>
               <div className="flex items-center gap-1.5 text-[10px]">
-                <span className="w-2 h-2 rounded-full bg-gray-400" />
+                <span className="w-2 h-2 rounded-full" style={{ background: '#9ca3af' }} />
                 <span className="text-warm-gray">Other adults</span>
               </div>
               <div className="flex items-center gap-1.5 text-[10px]">
-                <span className="w-2 h-2 rounded-full bg-orange-500" />
+                <span className="w-2 h-2 rounded-full" style={{ background: '#f97316' }} />
                 <span className="text-warm-gray">Jobs</span>
               </div>
               <p className="text-[9px] text-warm-gray/70 mt-1 leading-snug">
-                Population: ACS 5-yr (renters, zero-vehicle HH, age 18–24). Jobs: LEHD LODES 8. 1 dot = 5 people or jobs. Montana only for now.
+                1 dot = 5 people or jobs. High propensity = renters, zero-vehicle HH, or age 18–24 (deduplicated). Based on ACS 2020–2024 5-yr + LEHD LODES 8 (2023) + 2020 Census blocks (TIGER 2025). Montana only for now.
               </p>
             </div>
           )}

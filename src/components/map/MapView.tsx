@@ -443,6 +443,17 @@ export function MapView() {
 
       if (drawRef.current) drawRef.current.deleteAll();
 
+      const finishDrawing = () => {
+        const st = useStore.getState();
+        st.setMapMode('select');
+        st.setDrawingRouteId(null);
+        // Open the Route Shapes editor for the route we just drew on, so the
+        // user can rename, tweak color, edit the shape, etc. right away.
+        st.setSidebarSection('routes');
+        st.selectRoute(currentDrawingRouteId);
+        st.setEditingRouteId(currentDrawingRouteId);
+      };
+
       if (currentSnapToRoad) {
         setIsSnapping(true);
         snapToRoad(rawCoords)
@@ -454,13 +465,11 @@ export function MapView() {
           })
           .finally(() => {
             setIsSnapping(false);
-            useStore.getState().setMapMode('select');
-            useStore.getState().setDrawingRouteId(null);
+            finishDrawing();
           });
       } else {
         createShapeFromCoords(rawCoords);
-        useStore.getState().setMapMode('select');
-        useStore.getState().setDrawingRouteId(null);
+        finishDrawing();
       }
     }
   }, []);
@@ -567,6 +576,7 @@ export function MapView() {
       });
 
       currentState.selectStop(stopId);
+      currentState.setSidebarSection('stops');
       lastPlacedStopRef.current = stopId;
       return;
     }

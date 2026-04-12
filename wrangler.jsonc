@@ -1,22 +1,31 @@
 {
-  // GTFS Builder — deployed as static assets on Cloudflare's unified
-  // Workers-with-Static-Assets platform. There's no Worker code — this is a
-  // pure Vite SPA. The `dist/` directory is what `npm run build` produces
-  // and what Cloudflare serves from the edge.
+  // GTFS Builder — deployed as static assets + a tile-serving Worker on
+  // Cloudflare's Workers-with-Static-Assets platform.
   //
-  // Custom domains (apex + www) are managed directly by the Workers runtime
-  // via the `custom_domain: true` route flag — Cloudflare auto-creates the
-  // DNS records on the gtfsbuilder.net zone as part of `wrangler deploy`.
+  // - Static SPA assets live in `dist/` and are served first.
+  // - Anything that doesn't match a static asset falls through to the Worker
+  //   in src/worker/index.ts, which handles `/_demand-tiles/...` paths by
+  //   streaming vector tiles out of the R2 PMTiles archive. All other
+  //   non-asset paths are forwarded back to the static asset binding so the
+  //   SPA fallback still works.
+  //
+  // - Custom domains (apex + www) are bound via the routes block. Cloudflare
+  //   auto-creates the DNS records on the gtfsbuilder.net zone.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "gtfs-builder",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-04-12",
   "assets": {
     "directory": "./dist",
-    // SPA fallback — route all unknown paths to index.html so client-side
-    // routing works. (Not strictly needed today since the app uses hash
-    // routing, but harmless and future-proof.)
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   },
+  "r2_buckets": [
+    {
+      "binding": "TILES",
+      "bucket_name": "gtfs-builder-tiles"
+    }
+  ],
   "routes": [
     { "pattern": "gtfsbuilder.net", "custom_domain": true },
     { "pattern": "www.gtfsbuilder.net", "custom_domain": true }

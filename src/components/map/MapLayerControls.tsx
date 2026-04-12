@@ -114,12 +114,8 @@ export function MapLayerControls({
                 <span className="w-2 h-2 rounded-full bg-orange-500" />
                 <span className="text-warm-gray">Jobs</span>
               </div>
-              <div className="flex items-center gap-1.5 text-[10px]">
-                <span className="w-2 h-2 rounded-full bg-blue-500" />
-                <span className="text-warm-gray">New housing (multi)</span>
-              </div>
               <p className="text-[9px] text-warm-gray/70 mt-1 leading-snug">
-                Population: ACS 2023 5-yr (renters, zero-vehicle HH, age 18-24). Jobs: LEHD LODES 8. Housing: Gallatin County building permits. 1 dot = 5 people/jobs or 4 housing units.
+                Population: ACS 5-yr (renters, zero-vehicle HH, age 18–24). Jobs: LEHD LODES 8. 1 dot = 5 people or jobs. Montana only for now.
               </p>
             </div>
           )}

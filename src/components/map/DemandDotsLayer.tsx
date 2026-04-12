@@ -1,20 +1,8 @@
 import { Source, Layer } from 'react-map-gl/mapbox';
 import type { LayerProps } from 'react-map-gl/mapbox';
-import mapboxgl from 'mapbox-gl';
-import { Protocol } from 'pmtiles';
 
-const TILES_URL = 'pmtiles://https://tiles.gtfsbuilder.net/mt-2026.pmtiles';
-
-// Register the pmtiles:// protocol with Mapbox GL once, at module load.
-// Re-adding is a no-op after the first call but we guard anyway.
-const mbx = mapboxgl as unknown as {
-  addProtocol: (name: string, handler: unknown) => void;
-  __pmtilesRegistered?: boolean;
-};
-if (!mbx.__pmtilesRegistered) {
-  mbx.addProtocol('pmtiles', new Protocol().tile);
-  mbx.__pmtilesRegistered = true;
-}
+const ARCHIVE = 'mt-2026';
+const TILE_URL = `${window.location.origin}/_demand-tiles/${ARCHIVE}/{z}/{x}/{y}.pbf`;
 
 interface Props {
   visible: boolean;
@@ -54,7 +42,13 @@ const layerStyle: LayerProps = {
 export function DemandDotsLayer({ visible }: Props) {
   if (!visible) return null;
   return (
-    <Source id="demand-dots" type="vector" url={TILES_URL}>
+    <Source
+      id="demand-dots"
+      type="vector"
+      tiles={[TILE_URL]}
+      minzoom={6}
+      maxzoom={15}
+    >
       <Layer {...layerStyle} beforeId="stop-circles-outer" />
     </Source>
   );

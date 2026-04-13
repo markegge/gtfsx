@@ -2,6 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { importGtfsZip, loadImportIntoStore, mergeImportIntoStore } from '../../services/gtfsImport';
 import { useStore } from '../../store';
 import type { Route } from '../../types/gtfs';
+import { CatalogSearch, type CatalogFeed } from './CatalogSearch';
+
+type ImportSource = 'upload' | 'catalog';
 
 type ImportData = Awaited<ReturnType<typeof importGtfsZip>>;
 type ImportMode = 'replace' | 'merge';
@@ -11,6 +14,7 @@ interface ImportDialogProps {
 }
 
 export function ImportDialog({ onClose }: ImportDialogProps) {
+  const [source, setSource] = useState<ImportSource>('upload');
   const [dragging, setDragging] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +72,18 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
   const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) parseFile(file);
+  }, [parseFile]);
+
+  const handleCatalogSelect = useCallback(async (feed: CatalogFeed, fileNameStem: string) => {
+    const url = feed.latest_dataset?.hosted_url;
+    if (!url) throw new Error('Feed has no dataset URL.');
+    const proxied = `${window.location.origin}/_import/proxy?url=${encodeURIComponent(url)}`;
+    setError(null);
+    const r = await fetch(proxied);
+    if (!r.ok) throw new Error(`Download failed: ${r.status} ${await r.text()}`);
+    const blob = await r.blob();
+    const file = new File([blob], `${fileNameStem}.zip`, { type: 'application/zip' });
+    await parseFile(file);
   }, [parseFile]);
 
   const toggleRoute = (routeId: string) => {
@@ -268,37 +284,66 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
     );
   }
 
-  // ── Step 1: Drop zone ──────────────────────────────────────────────────────
+  // ── Step 1: Drop zone OR catalog search ────────────────────────────────────
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-4">Import GTFS Feed</h3>
+      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-heading font-bold text-lg text-dark-brown mb-3">Import GTFS Feed</h3>
+
+        {/* Source switcher */}
+        <div className="flex gap-1 p-1 bg-cream rounded-lg mb-4">
+          <button
+            onClick={() => setSource('upload')}
+            className={`flex-1 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors
+              ${source === 'upload' ? 'bg-white text-dark-brown shadow-sm' : 'text-warm-gray hover:text-dark-brown'}`}
+          >
+            Upload File
+          </button>
+          <button
+            onClick={() => setSource('catalog')}
+            className={`flex-1 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors
+              ${source === 'catalog' ? 'bg-white text-dark-brown shadow-sm' : 'text-warm-gray hover:text-dark-brown'}`}
+          >
+            Search Catalog
+          </button>
+        </div>
+
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-700">
             {error}
           </div>
         )}
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={handleDrop}
-          className={`border-3 border-dashed rounded-2xl p-12 text-center transition-colors cursor-pointer
-            ${dragging ? 'border-coral bg-coral-light' : 'border-sand bg-cream hover:border-coral hover:bg-coral-light'}`}
-        >
-          {parsing ? (
-            <p className="text-warm-gray">Parsing…</p>
+
+        {source === 'upload' ? (
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={handleDrop}
+            className={`border-3 border-dashed rounded-2xl p-12 text-center transition-colors cursor-pointer
+              ${dragging ? 'border-coral bg-coral-light' : 'border-sand bg-cream hover:border-coral hover:bg-coral-light'}`}
+          >
+            {parsing ? (
+              <p className="text-warm-gray">Parsing…</p>
+            ) : (
+              <>
+                <div className="text-5xl mb-4">🚌</div>
+                <p className="font-heading font-bold text-dark-brown mb-2">Drop your GTFS feed here</p>
+                <p className="text-warm-gray text-sm mb-4">Upload a .zip file to start editing</p>
+                <label className="inline-flex items-center gap-2 px-4 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm cursor-pointer hover:bg-[#d4603a] transition-colors">
+                  Browse Files
+                  <input type="file" accept=".zip" className="hidden" onChange={handleFileInput} />
+                </label>
+              </>
+            )}
+          </div>
+        ) : (
+          parsing ? (
+            <div className="border border-sand rounded-lg p-12 text-center text-warm-gray">Parsing feed…</div>
           ) : (
-            <>
-              <div className="text-5xl mb-4">🚌</div>
-              <p className="font-heading font-bold text-dark-brown mb-2">Drop your GTFS feed here</p>
-              <p className="text-warm-gray text-sm mb-4">Upload a .zip file to start editing</p>
-              <label className="inline-flex items-center gap-2 px-4 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm cursor-pointer hover:bg-[#d4603a] transition-colors">
-                Browse Files
-                <input type="file" accept=".zip" className="hidden" onChange={handleFileInput} />
-              </label>
-            </>
-          )}
-        </div>
+            <CatalogSearch onSelect={handleCatalogSelect} />
+          )
+        )}
+
         <div className="flex justify-between mt-4">
           <button onClick={onClose} className="px-4 py-2 text-sm text-warm-gray hover:text-dark-brown">
             Cancel

@@ -1,7 +1,7 @@
 import { Source, Layer } from 'react-map-gl/mapbox';
 import type { LayerProps } from 'react-map-gl/mapbox';
 
-const ARCHIVE = 'us-2026';
+const ARCHIVE = 'us-2026b';
 const TILE_URL = `${window.location.origin}/_demand-tiles/${ARCHIVE}/{z}/{x}/{y}.pbf`;
 
 interface Props {

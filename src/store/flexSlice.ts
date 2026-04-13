@@ -42,6 +42,19 @@ export interface FlexZone {
   /** Optional drop-off window (HH:MM:SS); often the same as pickup. */
   dropOffWindowStart?: string;
   dropOffWindowEnd?: string;
+  /**
+   * Days of week the service runs. Used at export time to materialize a
+   * calendar.txt entry + flex trip. If undefined, defaults to all 7 days.
+   */
+  daysOfWeek?: {
+    mon: boolean; tue: boolean; wed: boolean; thu: boolean;
+    fri: boolean; sat: boolean; sun: boolean;
+  };
+  /**
+   * Optional route_id from routes.txt. If unset, the export step
+   * auto-creates a route per flex zone.
+   */
+  routeId?: string;
   /** Optional fare reference — fare_id from fare_attributes.txt. */
   fareId?: string;
 }

@@ -11,9 +11,17 @@ const BOOKING_TYPES: { value: 0 | 1 | 2; label: string; hint: string }[] = [
   { value: 2, label: 'Prior day', hint: 'Booking closes day(s) before service' },
 ];
 
+const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+type DayKey = typeof DAY_KEYS[number];
+const DAY_LABELS: Record<DayKey, string> = {
+  mon: 'M', tue: 'T', wed: 'W', thu: 'Th', fri: 'F', sat: 'Sa', sun: 'Su',
+};
+const DEFAULT_DAYS = { mon: true, tue: true, wed: true, thu: true, fri: true, sat: true, sun: true };
+
 export function FlexZoneDetails({ zone }: Props) {
-  const { updateFlexZone, updateFlexZoneBooking, fareAttributes } = useStore();
+  const { updateFlexZone, updateFlexZoneBooking, fareAttributes, routes } = useStore();
   const b: Partial<BookingRule> = zone.bookingRule ?? { bookingType: 1 };
+  const days = zone.daysOfWeek ?? DEFAULT_DAYS;
 
   const setField = <K extends keyof FlexZone>(k: K, v: FlexZone[K]) =>
     updateFlexZone(zone.id, { [k]: v } as Partial<FlexZone>);
@@ -21,14 +29,18 @@ export function FlexZoneDetails({ zone }: Props) {
   const setBooking = <K extends keyof BookingRule>(k: K, v: BookingRule[K]) =>
     updateFlexZoneBooking(zone.id, { [k]: v });
 
+  const toggleDay = (k: DayKey) => {
+    setField('daysOfWeek', { ...days, [k]: !days[k] });
+  };
+
   return (
     <div className="px-3 pb-3 pt-1 space-y-3 bg-purple-50/30 border-l-2 border-purple-200">
-      {/* Service window */}
+      {/* Service window + days */}
       <div>
         <div className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5">
-          Service Window
+          Service Schedule
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 mb-2">
           <div>
             <label className="block text-[10px] text-warm-gray mb-0.5">Pickup start</label>
             <input
@@ -50,6 +62,24 @@ export function FlexZoneDetails({ zone }: Props) {
             />
           </div>
         </div>
+        <label className="block text-[10px] text-warm-gray mb-1">Days of week</label>
+        <div className="flex gap-1">
+          {DAY_KEYS.map((k) => (
+            <button
+              key={k}
+              onClick={() => toggleDay(k)}
+              className={`flex-1 px-1 py-1 rounded text-[11px] font-semibold transition-colors
+                ${days[k]
+                  ? 'bg-purple text-white'
+                  : 'bg-white text-warm-gray border border-sand hover:border-purple'}`}
+            >
+              {DAY_LABELS[k]}
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] text-warm-gray/80 mt-1">
+          Used to create the calendar entry + flex trip on export.
+        </p>
       </div>
 
       {/* Booking type */}
@@ -159,6 +189,29 @@ export function FlexZoneDetails({ zone }: Props) {
             className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple resize-none"
           />
         </div>
+      </div>
+
+      {/* Route assignment */}
+      <div>
+        <div className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5">
+          Route
+        </div>
+        <select
+          value={zone.routeId || ''}
+          onChange={(e) => setField('routeId', e.target.value || undefined)}
+          className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
+        >
+          <option value="">— Auto-create flex route on export —</option>
+          {routes.map((r) => (
+            <option key={r.route_id} value={r.route_id}>
+              {[r.route_short_name, r.route_long_name].filter(Boolean).join(' — ') || r.route_id}
+            </option>
+          ))}
+        </select>
+        <p className="text-[10px] text-warm-gray/80 mt-1">
+          The flex trip needs a route_id. Pick an existing route or leave
+          blank — we'll synthesize one from the zone name on export.
+        </p>
       </div>
 
       {/* Fare assignment */}

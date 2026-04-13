@@ -16,9 +16,11 @@ const layerStyle: LayerProps = {
   paint: {
     'circle-radius': [
       'interpolate', ['linear'], ['zoom'],
-      8, 0.4,
-      11, 0.8,
-      13, 1.25,
+      8, 0.5,
+      9, 0.9,
+      10, 1.1,
+      11, 1.3,
+      13, 1.5,
       15, 2,
     ],
     // Blue + orange + gray is the canonical colorblind-safe trio
@@ -33,9 +35,11 @@ const layerStyle: LayerProps = {
     ],
     'circle-opacity': [
       'interpolate', ['linear'], ['zoom'],
-      8, 0.35,
-      11, 0.55,
-      13, 0.7,
+      8, 0.4,
+      9, 0.65,
+      10, 0.75,
+      11, 0.8,
+      13, 0.8,
       15, 0.85,
     ],
     'circle-stroke-width': 0,

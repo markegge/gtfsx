@@ -14,6 +14,7 @@ import { CoverageLayer } from './CoverageLayer';
 import { FlexLayer } from '../flex/FlexLayer';
 import { DemandDotsLayer } from './DemandDotsLayer';
 import { MapLayerControls } from './MapLayerControls';
+import { ZoomIndicator } from './ZoomIndicator';
 import type { MapStyleId } from './MapLayerControls';
 import { generateId } from '../../services/idGenerator';
 import { snapToRoad } from '../../services/snapToRoad';
@@ -656,6 +657,7 @@ export function MapView() {
         interactiveLayerIds={mapMode === 'edit_shape' || mapMode === 'edit_flex_zone' || mapMode === 'draw_flex_zone' ? [] : ['stop-circles', 'route-lines']}
       >
         <NavigationControl position="bottom-right" />
+        <ZoomIndicator />
         <DrawControl
           drawRef={drawRef}
           onCreate={handleDrawCreate}

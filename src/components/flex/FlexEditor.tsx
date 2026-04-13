@@ -4,6 +4,7 @@ import { featureCollection, multiLineString } from '@turf/helpers';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import type { FlexZone } from '../../store/flexSlice';
+import { FlexZoneDetails } from './FlexZoneDetails';
 
 const DEFAULT_FLEX_BUFFER_MILES = 0.75;
 
@@ -54,6 +55,7 @@ export function FlexEditor() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bufferInput, setBufferInput] = useState<string>(String(DEFAULT_FLEX_BUFFER_MILES));
+  const [expandedZoneId, setExpandedZoneId] = useState<string | null>(null);
 
   const busRoutes = routes.filter((r) => r.route_type !== 0 && !hiddenRouteIds.includes(r.route_id));
 
@@ -219,46 +221,67 @@ export function FlexEditor() {
           <p className="text-[11px] font-semibold text-dark-brown uppercase tracking-wide">
             Service Areas ({flexZones.length})
           </p>
-          {flexZones.map((zone) => (
-            <div
-              key={zone.id}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors
-                ${editingFlexZoneId === zone.id
-                  ? 'bg-purple-50 border-purple-300'
-                  : 'bg-cream border-sand'
-                }`}
-            >
-              <span
-                className="w-3 h-3 rounded-sm shrink-0 border border-purple-300"
-                style={{ backgroundColor: 'rgba(124,58,237,0.2)' }}
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-dark-brown truncate">{zone.name}</p>
-                <p className="text-[11px] text-warm-gray">
-                  {zone.geojson.features.length} polygon{zone.geojson.features.length !== 1 ? 's' : ''}
-                  {zone.bufferMiles > 0 ? ` · ${zone.bufferMiles} mi buffer` : ' · hand-drawn'}
-                </p>
-              </div>
-              {!isEditing && !isDrawing && (
-                <div className="flex gap-1 shrink-0">
-                  <button
-                    onClick={() => handleEditZone(zone)}
-                    className="px-2 py-1 text-[11px] font-semibold text-warm-gray hover:text-purple hover:bg-purple-50 rounded transition-colors"
-                    title="Edit zone shape"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => removeFlexZone(zone.id)}
-                    className="px-1.5 py-1 text-[11px] text-warm-gray hover:text-red-500 transition-colors rounded"
-                    title="Remove zone"
-                  >
-                    ×
-                  </button>
+          {flexZones.map((zone) => {
+            const expanded = expandedZoneId === zone.id;
+            const hasBooking = !!zone.bookingRule;
+            return (
+              <div
+                key={zone.id}
+                className={`rounded-lg border transition-colors
+                  ${editingFlexZoneId === zone.id
+                    ? 'bg-purple-50 border-purple-300'
+                    : 'bg-cream border-sand'
+                  }`}
+              >
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <span
+                    className="w-3 h-3 rounded-sm shrink-0 border border-purple-300"
+                    style={{ backgroundColor: 'rgba(124,58,237,0.2)' }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-dark-brown truncate">{zone.name}</p>
+                    <p className="text-[11px] text-warm-gray">
+                      {zone.geojson.features.length} polygon{zone.geojson.features.length !== 1 ? 's' : ''}
+                      {zone.bufferMiles > 0 ? ` · ${zone.bufferMiles} mi buffer` : ' · hand-drawn'}
+                      {hasBooking && ' · booking set'}
+                      {zone.fareId && ` · fare ${zone.fareId}`}
+                    </p>
+                  </div>
+                  {!isEditing && !isDrawing && (
+                    <div className="flex gap-1 shrink-0">
+                      <button
+                        onClick={() => setExpandedZoneId(expanded ? null : zone.id)}
+                        className={`px-2 py-1 text-[11px] font-semibold rounded transition-colors
+                          ${expanded
+                            ? 'bg-purple-100 text-purple'
+                            : 'text-warm-gray hover:text-purple hover:bg-purple-50'}`}
+                        title="Booking rules, windows, fare"
+                      >
+                        Details {expanded ? '▾' : '▸'}
+                      </button>
+                      <button
+                        onClick={() => handleEditZone(zone)}
+                        className="px-2 py-1 text-[11px] font-semibold text-warm-gray hover:text-purple hover:bg-purple-50 rounded transition-colors"
+                        title="Edit zone shape"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => removeFlexZone(zone.id)}
+                        className="px-1.5 py-1 text-[11px] text-warm-gray hover:text-red-500 transition-colors rounded"
+                        title="Remove zone"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
+                {expanded && !isEditing && !isDrawing && (
+                  <FlexZoneDetails zone={zone} />
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : (
         !isDrawing && !isEditing && (
@@ -272,7 +295,8 @@ export function FlexEditor() {
 
       <div className="border-t border-sand pt-3">
         <p className="text-[10px] text-warm-gray">
-          Exported as <code className="px-1 bg-sand rounded">locations.geojson</code> per the GTFS-Flex spec.
+          Exported as <code className="px-1 bg-sand rounded">locations.geojson</code> +{' '}
+          <code className="px-1 bg-sand rounded">booking_rules.txt</code> per the GTFS-Flex spec.
         </p>
       </div>
     </div>

@@ -140,19 +140,54 @@ export async function exportGtfsZip(): Promise<Blob> {
     zip.file('feed_info.txt', toCSV([stripUIFields(state.feedInfo)]));
   }
 
-  // locations.geojson (GTFS-Flex)
+  // locations.geojson + booking_rules.txt (GTFS-Flex)
   if (state.flexZones.length > 0) {
-    const allFeatures = state.flexZones.flatMap((zone) =>
-      zone.geojson.features.map((f, i) => ({
+    const allFeatures = state.flexZones.flatMap((zone) => {
+      const bookingId = zone.bookingRule ? `${zone.id}-booking` : undefined;
+      return zone.geojson.features.map((f, i) => ({
         ...f,
         properties: {
           stop_id: `${zone.id}-${i}`,
           stop_name: zone.name,
           location_type: 4,
+          ...(bookingId ? {
+            pickup_booking_rule_id: bookingId,
+            drop_off_booking_rule_id: bookingId,
+          } : {}),
+          ...(zone.pickupWindowStart ? { start_pickup_drop_off_window: zone.pickupWindowStart } : {}),
+          ...(zone.pickupWindowEnd ? { end_pickup_drop_off_window: zone.pickupWindowEnd } : {}),
         },
-      })),
-    );
+      }));
+    });
     zip.file('locations.geojson', JSON.stringify({ type: 'FeatureCollection', features: allFeatures }, null, 2));
+
+    const bookingRows = state.flexZones
+      .filter((z) => z.bookingRule)
+      .map((z) => {
+        const b = z.bookingRule!;
+        return {
+          booking_rule_id: `${z.id}-booking`,
+          booking_type: b.bookingType,
+          prior_notice_duration_min: b.priorNoticeDurationMin,
+          prior_notice_duration_max: b.priorNoticeDurationMax,
+          prior_notice_last_day: b.priorNoticeLastDay,
+          prior_notice_last_time: b.priorNoticeLastTime,
+          prior_notice_start_day: b.priorNoticeStartDay,
+          prior_notice_start_time: b.priorNoticeStartTime,
+          message: b.message,
+          pickup_message: b.pickupMessage,
+          drop_off_message: b.dropOffMessage,
+          phone_number: b.phoneNumber,
+          info_url: b.infoUrl,
+          booking_url: b.bookingUrl,
+        };
+      })
+      .map((row) => Object.fromEntries(
+        Object.entries(row).filter(([, v]) => v !== undefined && v !== ''),
+      ));
+    if (bookingRows.length > 0) {
+      zip.file('booking_rules.txt', toCSV(bookingRows));
+    }
   }
 
   return await zip.generateAsync({ type: 'blob' });

@@ -17,16 +17,12 @@ class R2Source implements Source {
   }
 }
 
-// Cache the PMTiles instance per archive to avoid re-reading the header on every tile request.
-const archiveCache = new Map<string, PMTiles>();
-
 function getArchive(env: Env, archive: string): PMTiles {
-  let p = archiveCache.get(archive);
-  if (!p) {
-    p = new PMTiles(new R2Source(env.TILES, `${archive}.pmtiles`));
-    archiveCache.set(archive, p);
-  }
-  return p;
+  // Don't cache across requests — if a cold isolate's first fetch failed
+  // (eg because the R2 object wasn't uploaded yet), a cached failed
+  // instance could serve stale errors. The pmtiles library's own directory
+  // caching keeps per-request reads cheap enough.
+  return new PMTiles(new R2Source(env.TILES, `${archive}.pmtiles`));
 }
 
 const TILE_RE = /^\/_demand-tiles\/([a-z0-9_-]+)\/(\d+)\/(\d+)\/(\d+)\.pbf$/i;

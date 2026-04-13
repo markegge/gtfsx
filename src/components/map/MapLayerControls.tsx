@@ -79,7 +79,7 @@ export function MapLayerControls({
                 <span className="text-warm-gray">Jobs</span>
               </div>
               <p className="text-[9px] text-warm-gray/70 mt-1 leading-snug">
-                1 dot = 5 people or jobs. High propensity = renters, zero-vehicle HH, or age 18–24 (deduplicated). Based on ACS 2020–2024 5-yr + LEHD LODES 8 (2023) + 2020 Census blocks (TIGER 2025). Montana only for now.
+                1 dot = 5 people or jobs. High propensity = renters, zero-vehicle HH, or age 18–24 (deduplicated). Based on ACS 2020–2024 5-yr + LEHD LODES 8 (2023) + 2020 Census blocks (TIGER 2025). Nationwide coverage; AK and PR show population only (no LODES published).
               </p>
             </div>
           )}

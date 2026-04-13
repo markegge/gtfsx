@@ -24,7 +24,9 @@ Usage:
 import argparse
 import json
 import os
+import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Iterator
 
@@ -109,8 +111,11 @@ def _census_api_get(dataset_url: str, get_vars: list[str], geo: dict) -> pd.Data
 
 
 def _compute_acs_derived(df: pd.DataFrame) -> pd.DataFrame:
+    # Census API returns negative sentinel codes (-666666666, -999999999, etc.)
+    # for suppressed / unavailable values. Treat any negative as missing (0).
     for col in ACS_VARS:
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+        vals = pd.to_numeric(df[col], errors="coerce").fillna(0)
+        df[col] = vals.where(vals >= 0, 0)
     df["total_pop"] = df["B01001_001E"]
     df["pop_18_24"] = (
         df["B01001_007E"] + df["B01001_008E"] + df["B01001_009E"] + df["B01001_010E"]
@@ -124,7 +129,8 @@ def _compute_acs_derived(df: pd.DataFrame) -> pd.DataFrame:
         0,
     ).astype(int)
     df["zero_veh_hh"] = df["B25044_003E"] + df["B25044_010E"]
-    df["avg_hh_size"] = df["B25010_001E"].replace(0, 2.5)
+    # B25010_001E is a ratio; if missing or zero, fall back to 2.5 (US avg).
+    df["avg_hh_size"] = df["B25010_001E"].where(df["B25010_001E"] > 0, 2.5)
     df["zero_veh_pop"] = (df["zero_veh_hh"] * df["avg_hh_size"]).round().astype(int)
 
     # High-propensity = (renter + zero-veh + 18-24), scaled down 0.6 for overlap
@@ -199,7 +205,14 @@ def fetch_lodes_wac_state(state_fips: str) -> pd.DataFrame:
             print(f"  Downloaded LODES WAC {abbr.upper()} {year}")
             break
     else:
-        raise RuntimeError(f"No LODES WAC file found for {abbr.upper()} in any year")
+        # AK and PR don't publish LODES WAC. Return empty so the jobs layer
+        # is just absent for these; population dots still work.
+        print(f"  No LODES WAC for {abbr.upper()} — continuing with no jobs data")
+        empty = pd.DataFrame({"w_geocode": pd.Series(dtype=str),
+                              "total_jobs": pd.Series(dtype=int)})
+        cache_file = cache_path(f"lodes_wac_state_{state_fips}_EMPTY.csv")
+        empty.to_csv(cache_file, index=False)
+        return empty
 
     tmp = tempfile.NamedTemporaryFile(suffix=".csv.gz", delete=False)
     tmp.write(resp.content); tmp.close()
@@ -305,23 +318,31 @@ def apportion_bg_to_blocks(
 
 
 def random_points_in_polygon(polygon, n: int, rng: np.random.Generator) -> list[Point]:
+    """Rejection-sample n points inside polygon, with a hard attempt cap.
+
+    For very elongated / low-acceptance polygons we'd otherwise loop forever,
+    so we cap attempts at max(5000, n * 10). Any shortfall just means fewer
+    dots for that block — at map scale a block with 30 dots looks the same
+    as 28, and unbounded retries blocked the nationwide build on CA.
+    """
     if n <= 0 or polygon.is_empty:
         return []
     points: list[Point] = []
     minx, miny, maxx, maxy = polygon.bounds
-    max_attempts = n * 20
+    max_attempts = max(5000, n * 10)
     attempts = 0
+    contains = polygon.contains
     while len(points) < n and attempts < max_attempts:
-        batch_size = min((n - len(points)) * 3, 10000)
+        batch_size = min((n - len(points)) * 4, 5000)
         xs = rng.uniform(minx, maxx, batch_size)
         ys = rng.uniform(miny, maxy, batch_size)
+        attempts += batch_size
         for x, y in zip(xs, ys):
             pt = Point(x, y)
-            if polygon.contains(pt):
+            if contains(pt):
                 points.append(pt)
                 if len(points) >= n:
                     break
-        attempts += batch_size
     return points[:n]
 
 
@@ -334,9 +355,21 @@ def iter_dot_features(
 ) -> Iterator[dict]:
     """Yield GeoJSON Feature dicts one at a time; does not build a full list."""
     rng = np.random.default_rng(42)
-    for _, block in blocks_gdf.iterrows():
-        geoid = block["GEOID_BLOCK"]
-        geom = block["geometry"]
+    # itertuples is ~10x faster than iterrows on large GeoDataFrames. We
+    # pass the columns explicitly so the tuple field names are predictable.
+    total_blocks = len(blocks_gdf)
+    t0 = time.time()
+    for i, block in enumerate(
+        blocks_gdf[["GEOID_BLOCK", "geometry"]].itertuples(index=False, name="Block")
+    ):
+        if i and i % 10000 == 0:
+            elapsed = time.time() - t0
+            rate = i / elapsed
+            eta = (total_blocks - i) / rate if rate > 0 else 0
+            print(f"    block {i:,}/{total_blocks:,} ({i*100/total_blocks:.1f}%)"
+                  f"  rate={rate:.0f}/s  eta={eta:.0f}s", flush=True)
+        geoid = block.GEOID_BLOCK
+        geom = block.geometry
         if geom is None or geom.is_empty:
             continue
         high, other = block_pop.get(geoid, (0, 0))
@@ -459,4 +492,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # Always unbuffered so progress prints reach the terminal / log tail.
+    sys.stdout.reconfigure(line_buffering=True)
     main()

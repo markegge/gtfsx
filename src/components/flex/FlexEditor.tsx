@@ -5,7 +5,7 @@ import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import type { FlexZone } from '../../store/flexSlice';
 
-const FLEX_BUFFER_MILES = 0.75;
+const DEFAULT_FLEX_BUFFER_MILES = 0.75;
 
 let zoneCounter = 1;
 
@@ -14,6 +14,7 @@ function generateServiceArea(
   routes: ReturnType<typeof useStore.getState>['routes'],
   trips: ReturnType<typeof useStore.getState>['trips'],
   hiddenRouteIds: string[],
+  bufferMiles: number,
 ): GeoJSON.FeatureCollection | null {
   const hiddenSet = new Set(hiddenRouteIds);
 
@@ -38,7 +39,7 @@ function generateServiceArea(
   // automatically dissolved — produces a Polygon for connected routes
   // or a MultiPolygon for disconnected service areas.
   const ml = multiLineString(lineCoords);
-  const buffered = buffer(ml, FLEX_BUFFER_MILES, { units: 'miles' });
+  const buffered = buffer(ml, bufferMiles, { units: 'miles' });
   if (!buffered) return null;
 
   return featureCollection([buffered]) as GeoJSON.FeatureCollection;
@@ -52,6 +53,7 @@ export function FlexEditor() {
   } = useStore();
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bufferInput, setBufferInput] = useState<string>(String(DEFAULT_FLEX_BUFFER_MILES));
 
   const busRoutes = routes.filter((r) => r.route_type !== 0 && !hiddenRouteIds.includes(r.route_id));
 
@@ -62,11 +64,18 @@ export function FlexEditor() {
     return route && route.route_type !== 0 && !hiddenRouteIds.includes(route.route_id);
   });
 
+  const bufferMiles = Number(bufferInput);
+  const bufferValid = Number.isFinite(bufferMiles) && bufferMiles > 0 && bufferMiles <= 25;
+
   const handleGenerate = useCallback(() => {
     setError(null);
+    if (!bufferValid) {
+      setError('Buffer must be between 0 and 25 miles.');
+      return;
+    }
     setGenerating(true);
     try {
-      const geojson = generateServiceArea(shapes, routes, trips, hiddenRouteIds);
+      const geojson = generateServiceArea(shapes, routes, trips, hiddenRouteIds, bufferMiles);
       if (!geojson || geojson.features.length === 0) {
         setError('No visible bus route shapes found. Draw routes on the map first.');
         return;
@@ -74,7 +83,7 @@ export function FlexEditor() {
       addFlexZone({
         id: `flex-zone-${Date.now()}`,
         name: `Service Area ${zoneCounter++}`,
-        bufferMiles: FLEX_BUFFER_MILES,
+        bufferMiles,
         geojson,
       });
     } catch (e: any) {
@@ -82,7 +91,7 @@ export function FlexEditor() {
     } finally {
       setGenerating(false);
     }
-  }, [shapes, routes, trips, hiddenRouteIds, addFlexZone]);
+  }, [shapes, routes, trips, hiddenRouteIds, addFlexZone, bufferMiles, bufferValid]);
 
   const handleDrawZone = () => {
     setMapMode('draw_flex_zone');
@@ -170,17 +179,32 @@ export function FlexEditor() {
           <div className="bg-cream border border-sand rounded-lg p-3 space-y-2">
             <p className="text-xs font-semibold text-dark-brown">Auto-generate from fixed routes</p>
             <p className="text-[11px] text-warm-gray">
-              ¾-mile buffer around all visible bus routes
+              Buffer around all visible bus routes
               ({busRoutes.length} route{busRoutes.length !== 1 ? 's' : ''}).
               Light rail / tram excluded.
             </p>
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] text-dark-brown font-semibold whitespace-nowrap">
+                Buffer:
+              </label>
+              <input
+                type="number"
+                min="0.1"
+                max="25"
+                step="0.25"
+                value={bufferInput}
+                onChange={(e) => setBufferInput(e.target.value)}
+                className="w-20 px-2 py-1 border border-sand rounded text-xs text-dark-brown bg-white focus:outline-none focus:border-teal"
+              />
+              <span className="text-[11px] text-warm-gray">miles</span>
+            </div>
             {error && <p className="text-[11px] text-red-600">{error}</p>}
             <button
               onClick={handleGenerate}
-              disabled={generating || !hasShapes}
+              disabled={generating || !hasShapes || !bufferValid}
               className="w-full px-3 py-2 bg-teal text-white rounded-lg text-xs font-heading font-bold hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {generating ? 'Generating…' : 'Generate ¾ mi Buffer'}
+              {generating ? 'Generating…' : `Generate ${bufferValid ? bufferMiles : '?'} mi Buffer`}
             </button>
             {!hasShapes && (
               <p className="text-[11px] text-warm-gray">Draw route shapes on the map to enable.</p>

@@ -146,6 +146,8 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
         {/* File summary */}
         {(() => {
           const hasFlex = state.flexZones.length > 0;
+          const exportableFlex = state.flexZones.filter((z) => z.pickupWindowStart && z.pickupWindowEnd);
+          const skippedFlex = state.flexZones.filter((z) => !(z.pickupWindowStart && z.pickupWindowEnd));
           const hasFlexBooking = state.flexZones.some((z) => z.bookingRule);
           const hasDirections = state.routes.some(
             (r) => r._direction_0_name || r._direction_1_name,
@@ -154,8 +156,8 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
             ['agency.txt', state.agencies.length > 0, `${state.agencies.length} agency${state.agencies.length !== 1 ? 'ies' : ''}`],
             ['routes.txt', state.routes.length > 0, `${state.routes.length} routes`],
             ['stops.txt', state.stops.length > 0, `${state.stops.length} stops`],
-            ['trips.txt', state.trips.length > 0 || hasFlex, `${state.trips.length + (hasFlex ? state.flexZones.filter((z) => z.pickupWindowStart && z.pickupWindowEnd).length : 0)} trips`],
-            ['stop_times.txt', state.stopTimes.length > 0 || hasFlex],
+            ['trips.txt', state.trips.length > 0 || exportableFlex.length > 0, `${state.trips.length + exportableFlex.length} trips`],
+            ['stop_times.txt', state.stopTimes.length > 0 || exportableFlex.length > 0],
             ['calendar.txt', state.calendars.length > 0, `${state.calendars.length} service${state.calendars.length !== 1 ? 's' : ''}`],
             ['shapes.txt', state.shapes.length > 0, `${state.shapes.length} shape${state.shapes.length !== 1 ? 's' : ''}`],
             ['calendar_dates.txt', state.calendarDates.length > 0],
@@ -167,15 +169,31 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
             ['booking_rules.txt', hasFlexBooking],
           ];
           return (
-            <div className="flex flex-col gap-1 mb-4 text-sm">
-              {files.filter(([, hasData]) => hasData).map(([name, , detail]) => (
-                <div key={name} className="flex items-center gap-2 px-3 py-1.5 bg-cream rounded">
-                  <span className="text-teal">✓</span>
-                  <span>{name}</span>
-                  {detail && <span className="ml-auto text-warm-gray text-xs">{detail}</span>}
+            <>
+              <div className="flex flex-col gap-1 mb-2 text-sm">
+                {files.filter(([, hasData]) => hasData).map(([name, , detail]) => (
+                  <div key={name} className="flex items-center gap-2 px-3 py-1.5 bg-cream rounded">
+                    <span className="text-teal">✓</span>
+                    <span>{name}</span>
+                    {detail && <span className="ml-auto text-warm-gray text-xs">{detail}</span>}
+                  </div>
+                ))}
+              </div>
+              {skippedFlex.length > 0 && (
+                <div className="bg-gold-light border border-gold rounded-lg p-3 mb-4 text-sm">
+                  <p className="font-semibold text-amber-800 mb-1">
+                    {skippedFlex.length} flex zone{skippedFlex.length !== 1 ? 's' : ''} will be skipped
+                  </p>
+                  <p className="text-xs text-amber-700 mb-1">
+                    These have no pickup window set, so they can't produce a stop_times row. Open each zone's Details panel to add a start + end time.
+                  </p>
+                  <ul className="text-xs text-amber-700 list-disc pl-5">
+                    {skippedFlex.slice(0, 5).map((z) => (<li key={z.id}>{z.name}</li>))}
+                    {skippedFlex.length > 5 && <li>…and {skippedFlex.length - 5} more</li>}
+                  </ul>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           );
         })()}
 

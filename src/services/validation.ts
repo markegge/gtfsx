@@ -113,5 +113,65 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     }
   }
 
+  // Flex zone checks — catch the silent-drop cases that otherwise leave a
+  // user's zone missing from the exported feed with no explanation.
+  const timeOk = (s?: string) => !s || /^\d{1,2}:\d{2}:\d{2}$/.test(s);
+  for (const zone of state.flexZones) {
+    const hasWindow = zone.pickupWindowStart && zone.pickupWindowEnd;
+    if (!hasWindow) {
+      messages.push(msg(
+        'warning',
+        `Flex zone "${zone.name}" has no pickup window — it will NOT be exported as a trip.`,
+        'flex_zone', zone.id,
+      ));
+    }
+    if (!timeOk(zone.pickupWindowStart)) {
+      messages.push(msg(
+        'error',
+        `Flex zone "${zone.name}" pickup window start "${zone.pickupWindowStart}" must be HH:MM:SS`,
+        'flex_zone', zone.id,
+      ));
+    }
+    if (!timeOk(zone.pickupWindowEnd)) {
+      messages.push(msg(
+        'error',
+        `Flex zone "${zone.name}" pickup window end "${zone.pickupWindowEnd}" must be HH:MM:SS`,
+        'flex_zone', zone.id,
+      ));
+    }
+    if (
+      zone.pickupWindowStart && zone.pickupWindowEnd &&
+      timeOk(zone.pickupWindowStart) && timeOk(zone.pickupWindowEnd) &&
+      zone.pickupWindowStart > zone.pickupWindowEnd
+    ) {
+      messages.push(msg(
+        'error',
+        `Flex zone "${zone.name}" pickup window end is before start`,
+        'flex_zone', zone.id,
+      ));
+    }
+    if (hasWindow && state.calendars.length === 0) {
+      messages.push(msg(
+        'error',
+        `Flex zone "${zone.name}" needs a service pattern (calendar) to produce a trip — define one in the Calendars tab.`,
+        'flex_zone', zone.id,
+      ));
+    }
+    if (hasWindow && zone.serviceId && !serviceIdSet.has(zone.serviceId)) {
+      messages.push(msg(
+        'error',
+        `Flex zone "${zone.name}" references service_id "${zone.serviceId}" which no longer exists.`,
+        'flex_zone', zone.id,
+      ));
+    }
+    if (!zone.bookingRule) {
+      messages.push(msg(
+        'warning',
+        `Flex zone "${zone.name}" has no booking rule — riders won't know how to request service.`,
+        'flex_zone', zone.id,
+      ));
+    }
+  }
+
   return messages;
 }

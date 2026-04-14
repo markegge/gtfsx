@@ -29,8 +29,15 @@ function describeServicePattern(c: {
 }
 
 export function FlexZoneDetails({ zone }: Props) {
-  const { updateFlexZone, updateFlexZoneBooking, fareAttributes, calendars, stops, setSidebarSection } = useStore();
+  const { updateFlexZone, updateFlexZoneBooking, fareAttributes, calendars, calendarDates, stops, setSidebarSection } = useStore();
   const isGroupZone = Array.isArray(zone.stopIds);
+
+  // A service_id may be defined in calendar.txt, calendar_dates.txt, or both.
+  // Surface everything so the user can attach a zone to a dates-only service.
+  const calendarIdSet = new Set(calendars.map((c) => c.service_id));
+  const datesOnlyServiceIds = Array.from(
+    new Set(calendarDates.map((d) => d.service_id)),
+  ).filter((id) => !calendarIdSet.has(id));
   const b: Partial<BookingRule> = zone.bookingRule ?? { bookingType: 1 };
 
   const setField = <K extends keyof FlexZone>(k: K, v: FlexZone[K]) =>
@@ -130,7 +137,7 @@ export function FlexZoneDetails({ zone }: Props) {
           </div>
         </div>
         <label className="block text-[10px] text-warm-gray mb-1">Service pattern</label>
-        {calendars.length > 0 ? (
+        {(calendars.length > 0 || datesOnlyServiceIds.length > 0) ? (
           <>
             <select
               value={zone.serviceId || ''}
@@ -138,14 +145,26 @@ export function FlexZoneDetails({ zone }: Props) {
               className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
             >
               <option value="">— Pick a service pattern —</option>
-              {calendars.map((c) => (
-                <option key={c.service_id} value={c.service_id}>
-                  {(c._description ? c._description + ' · ' : '') + c.service_id + ' — ' + describeServicePattern(c)}
-                </option>
-              ))}
+              {calendars.map((c) => {
+                const exceptionCount = calendarDates.filter((d) => d.service_id === c.service_id).length;
+                return (
+                  <option key={c.service_id} value={c.service_id}>
+                    {(c._description ? c._description + ' · ' : '') + c.service_id + ' — ' + describeServicePattern(c)}
+                    {exceptionCount > 0 ? ` (+${exceptionCount} exceptions)` : ''}
+                  </option>
+                );
+              })}
+              {datesOnlyServiceIds.map((sid) => {
+                const dates = calendarDates.filter((d) => d.service_id === sid);
+                return (
+                  <option key={sid} value={sid}>
+                    {sid} — {dates.length} exception{dates.length !== 1 ? 's' : ''} only (calendar_dates)
+                  </option>
+                );
+              })}
             </select>
             <p className="text-[10px] text-warm-gray/80 mt-1">
-              The flex trip on export uses this service_id. Manage patterns in the Calendars tab.
+              The flex trip on export uses this service_id. calendar_dates exceptions apply automatically. Manage patterns in the Calendars tab.
             </p>
           </>
         ) : (
@@ -270,6 +289,144 @@ export function FlexZoneDetails({ zone }: Props) {
           />
         </div>
       </div>
+
+      {/* Additional service windows */}
+      <details>
+        <summary className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5 cursor-pointer select-none">
+          Additional Service Windows ({zone.additionalWindows?.length ?? 0})
+        </summary>
+        <div className="pl-2 mt-2 space-y-2">
+          <p className="text-[11px] text-warm-gray/80">
+            Each extra window becomes its own flex trip (e.g. morning + evening shuttles with different hours or service patterns).
+          </p>
+          {(zone.additionalWindows ?? []).map((w, i) => (
+            <div key={i} className="bg-white border border-sand rounded p-2 space-y-1.5">
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="text" placeholder="Start HH:MM:SS"
+                  value={w.pickupWindowStart}
+                  onChange={(e) => {
+                    const next = [...(zone.additionalWindows ?? [])];
+                    next[i] = { ...next[i], pickupWindowStart: e.target.value };
+                    setField('additionalWindows', next);
+                  }}
+                  className="px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
+                />
+                <input
+                  type="text" placeholder="End HH:MM:SS"
+                  value={w.pickupWindowEnd}
+                  onChange={(e) => {
+                    const next = [...(zone.additionalWindows ?? [])];
+                    next[i] = { ...next[i], pickupWindowEnd: e.target.value };
+                    setField('additionalWindows', next);
+                  }}
+                  className="px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
+                />
+              </div>
+              <div className="flex gap-2 items-center">
+                <select
+                  value={w.serviceId}
+                  onChange={(e) => {
+                    const next = [...(zone.additionalWindows ?? [])];
+                    next[i] = { ...next[i], serviceId: e.target.value };
+                    setField('additionalWindows', next);
+                  }}
+                  className="flex-1 px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
+                >
+                  <option value="">— Service pattern —</option>
+                  {calendars.map((c) => (
+                    <option key={c.service_id} value={c.service_id}>
+                      {(c._description ? c._description + ' · ' : '') + c.service_id}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = (zone.additionalWindows ?? []).filter((_, j) => j !== i);
+                    setField('additionalWindows', next.length > 0 ? next : undefined);
+                  }}
+                  className="px-2 py-1 text-[11px] text-warm-gray hover:text-red-500"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              const next = [
+                ...(zone.additionalWindows ?? []),
+                { serviceId: zone.serviceId || calendars[0]?.service_id || '', pickupWindowStart: '', pickupWindowEnd: '' },
+              ];
+              setField('additionalWindows', next);
+            }}
+            disabled={calendars.length === 0}
+            className="w-full px-2 py-1.5 border border-purple text-purple rounded text-[11px] font-semibold hover:bg-purple-50 transition-colors disabled:opacity-40"
+          >
+            + Add another window
+          </button>
+        </div>
+      </details>
+
+      {/* Travel-time estimation (advanced) */}
+      <details>
+        <summary className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5 cursor-pointer select-none">
+          Travel-time estimation (advanced)
+        </summary>
+        <div className="pl-2 mt-2 space-y-1.5 text-[11px]">
+          <p className="text-warm-gray/80">
+            Let trip planners estimate ETA for on-demand legs. Leave blank if unsure.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] text-warm-gray mb-0.5">Mean duration factor</label>
+              <input
+                type="number" step="0.01" min="0"
+                value={zone.meanDurationFactor ?? ''}
+                onChange={(e) => setField('meanDurationFactor',
+                  e.target.value === '' ? undefined : Number(e.target.value))}
+                placeholder="e.g. 1.0"
+                className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-warm-gray mb-0.5">Mean duration offset (s)</label>
+              <input
+                type="number" step="1"
+                value={zone.meanDurationOffset ?? ''}
+                onChange={(e) => setField('meanDurationOffset',
+                  e.target.value === '' ? undefined : Number(e.target.value))}
+                placeholder="e.g. 300"
+                className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-warm-gray mb-0.5">Safe duration factor</label>
+              <input
+                type="number" step="0.01" min="0"
+                value={zone.safeDurationFactor ?? ''}
+                onChange={(e) => setField('safeDurationFactor',
+                  e.target.value === '' ? undefined : Number(e.target.value))}
+                placeholder="e.g. 1.5"
+                className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-warm-gray mb-0.5">Safe duration offset (s)</label>
+              <input
+                type="number" step="1"
+                value={zone.safeDurationOffset ?? ''}
+                onChange={(e) => setField('safeDurationOffset',
+                  e.target.value === '' ? undefined : Number(e.target.value))}
+                placeholder="e.g. 600"
+                className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
+              />
+            </div>
+          </div>
+        </div>
+      </details>
 
       {/* Fare assignment */}
       <div>

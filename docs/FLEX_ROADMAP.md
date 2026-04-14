@@ -59,33 +59,34 @@ pursue. Keep it current when a gap ships. Spec references assume the
 - `src/services/validation.ts` — warns on zones missing a pickup window; errors on malformed HH:MM:SS, on end-before-start, on referencing a missing service_id, and on needing a calendar when none exists; warns on zones with no booking rule.
 - `src/components/import-export/ExportDialog.tsx` — file summary now shows only exportable flex zones in the "trips" / "stop_times" counts, and surfaces an amber panel listing zones that will be skipped for missing windows.
 
-#### 4. 🟡 Per-trip service windows
+#### 4. ✅ Per-trip service windows
 
 **Spec:** `start_pickup_drop_off_window` / `end_pickup_drop_off_window` are on each stop_times row, so one zone can carry multiple trips with different windows (e.g. morning + evening shuttles).
-**Current behaviour:** windows live on the zone, so a zone has a single window. Workaround: create two zones with identical geometry.
-**Scope:** refactor `materializeFlex` to allow multiple window entries per zone, UI to author them.
-**Effort:** 3–4 days.
+**Shipped** as:
+- `FlexZone.additionalWindows: { serviceId, pickupWindowStart, pickupWindowEnd }[]` — primary window stays on the zone; each extra entry materializes to its own flex trip (`-trip-2`, `-trip-3`, …) with its own service_id.
+- `src/services/gtfsExport.ts::materializeFlex` — loops over the windows list and emits one trip + one stop_times row per window, re-using the zone's booking rule + duration fields.
+- `src/services/gtfsImport.ts` — after the first flex stop_times row per zone (primary window), subsequent matching rows become additional windows so a real feed's morning/evening split round-trips.
+- `src/components/flex/FlexZoneDetails.tsx` — "Additional Service Windows" collapsible with per-window start/end + service-pattern picker, Add / Remove buttons.
 
-#### 5. 🔲 mean_duration_factor, mean_duration_offset, safe_duration_factor, safe_duration_offset
+#### 5. ✅ mean_duration_factor, mean_duration_offset, safe_duration_factor, safe_duration_offset
 
 **Spec:** optional fields on stop_times.txt for trip-planner travel-time estimation on flex legs.
-**Why it matters:** consumer apps (Transit, Google Maps) need these to surface ETA ranges. Brown County ships them; we drop them on re-export.
-**Scope:** extend FlexZone or StopTime model with these four fields, UI in the zone Details panel, export/import.
-**Effort:** ~1 day.
+**Shipped** as:
+- `FlexZone.{meanDurationFactor, meanDurationOffset, safeDurationFactor, safeDurationOffset}` (optional numbers).
+- Export emits the four fields on the flex stop_times row when set; import reads them off the primary flex row.
+- UI: "Travel-time estimation (advanced)" collapsible in `FlexZoneDetails.tsx` with four numeric inputs + helper text.
 
-#### 6. 🟡 calendar_dates-based per-zone exceptions
+#### 6. ✅ calendar_dates-based per-zone exceptions
 
-**Spec:** a zone's service_id can reference `calendar_dates.txt` exceptions for holidays or one-off variations.
-**Current behaviour:** zones link to one `calendar.txt` pattern; no per-zone surface for exceptions. Exceptions defined in the Calendars tab apply globally.
-**Scope:** UI to pick/attach calendar_dates exceptions per zone; ensure the exception service_id round-trips.
-**Effort:** 1–2 days.
+**Spec:** a zone's service_id can reference `calendar_dates.txt` exceptions for holidays or one-off variations, and some services exist *only* in calendar_dates (no regular weekly pattern).
+**Shipped** as:
+- `FlexZoneDetails.tsx` service-pattern picker now lists every calendar.txt entry with an "(+N exceptions)" suffix when calendar_dates has matching rows, AND any service_id that appears only in calendar_dates as "— N exceptions only (calendar_dates)". A zone can reference either kind.
+- Export already round-trips calendar_dates at the feed level, so once the zone references a service_id the exceptions apply automatically.
 
-#### 7. 🔲 Synthesized flex route: configurable route_type
+#### 7. ✅ Synthesized flex route: configurable route_type
 
-**Spec:** route_type can be 3 (Bus), 715 (Demand and Response Bus Service), or 1551 (Shared Taxi Service) among others.
-**Current behaviour:** auto-created flex routes always get route_type = 3. Fine for most cases but loses intent for taxi-style services.
-**Scope:** dropdown on the Route editor already supports all standard types; extend ROUTE_TYPES constant to include 715 and 1551.
-**Effort:** < 1 hour.
+**Spec:** route_type can be 3 (Bus), 715 (Demand and Response Bus Service), 1551 (Shared Taxi Service) among others.
+**Shipped** as: `src/utils/constants.ts::ROUTE_TYPES` extended with 715, 1551, and 1564. The Route editor's Route Type dropdown picks them up automatically, so a user can change a flex route from "Bus" to "Demand and Response Bus Service" without any other changes.
 
 ## Spec-compliance risks to revisit
 

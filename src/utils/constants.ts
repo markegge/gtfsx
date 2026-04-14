@@ -9,6 +9,12 @@ export const ROUTE_TYPES: Record<number, string> = {
   7: 'Funicular',
   11: 'Trolleybus',
   12: 'Monorail',
+  // Extended GTFS route_types (hierarchical vehicle types). These are
+  // recognized by most modern consumers and validators; useful for
+  // GTFS-Flex on-demand services.
+  715: 'Demand and Response Bus Service',
+  1551: 'Shared Taxi Service',
+  1564: 'Bus Service',  // generic bus under extended hierarchy
 };
 
 export const WHEELCHAIR_BOARDING: Record<number, string> = {

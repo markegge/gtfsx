@@ -70,6 +70,27 @@ export interface FlexZone {
   routeId?: string;
   /** Optional fare reference — fare_id from fare_attributes.txt. */
   fareId?: string;
+  /**
+   * GTFS-Flex stop_times travel-time estimators used by trip planners to
+   * give ETA ranges for on-demand legs. Factors are dimensionless
+   * multipliers; offsets are seconds.
+   */
+  meanDurationFactor?: number;
+  meanDurationOffset?: number;
+  safeDurationFactor?: number;
+  safeDurationOffset?: number;
+  /**
+   * Additional service windows beyond the primary one. Each entry
+   * materializes to its own flex trip (distinct trip_id, own service_id,
+   * own stop_times row referencing the same location/group). Useful when
+   * a zone runs e.g. both a morning and an evening shuttle with different
+   * hours and different service patterns.
+   */
+  additionalWindows?: Array<{
+    serviceId: string;
+    pickupWindowStart: string;
+    pickupWindowEnd: string;
+  }>;
 }
 
 export interface FlexSlice {

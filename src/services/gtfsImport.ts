@@ -406,6 +406,7 @@ export async function importGtfsZip(file: File): Promise<{
       }
     }
 
+    const numOrU = (v: any) => (v === '' || v == null ? undefined : Number(v));
     flexZones.push({
       // Mirror our own export's naming so a round-trip is stable.
       id: groupId.replace(/-group$/, ''),
@@ -418,6 +419,10 @@ export async function importGtfsZip(file: File): Promise<{
       pickupWindowEnd: pickupEnd || undefined,
       serviceId,
       routeId,
+      meanDurationFactor: numOrU(flexRow?.mean_duration_factor),
+      meanDurationOffset: numOrU(flexRow?.mean_duration_offset),
+      safeDurationFactor: numOrU(flexRow?.safe_duration_factor),
+      safeDurationOffset: numOrU(flexRow?.safe_duration_offset),
     });
   }
   if (locationsText) {
@@ -438,11 +443,14 @@ export async function importGtfsZip(file: File): Promise<{
         const first = features[0];
         const props = (first.properties || {}) as Record<string, any>;
 
-        // Collect this zone's location_ids and find any flex stop_times row
-        // that references one of them — that's where the per-trip booking
-        // rule + window lives in GTFS-Flex v2 feeds.
+        // Collect this zone's location_ids and all flex stop_times rows
+        // that reference any of them. The first row sets the primary
+        // window; subsequent rows become additionalWindows entries so a
+        // zone with morning + evening shuttles round-trips faithfully.
         const myLocIds = new Set(features.map((f) => locationIdOf(f)));
-        const flexRow = flexStopTimeRows.find((r) => myLocIds.has(String(r.location_id)));
+        const myFlexRows = flexStopTimeRows.filter((r) => myLocIds.has(String(r.location_id)));
+        const flexRow = myFlexRows[0];
+        const extraRows = myFlexRows.slice(1);
 
         const bookingId =
           flexRow?.pickup_booking_rule_id ||
@@ -467,6 +475,15 @@ export async function importGtfsZip(file: File): Promise<{
           }
         }
 
+        const numOrU = (v: any) => (v === '' || v == null ? undefined : Number(v));
+        const additionalWindows = extraRows.map((r) => {
+          const t = trips.find((t) => t.trip_id === String(r.trip_id));
+          return {
+            serviceId: t?.service_id || serviceId || '',
+            pickupWindowStart: String(r.start_pickup_drop_off_window || ''),
+            pickupWindowEnd: String(r.end_pickup_drop_off_window || ''),
+          };
+        }).filter((w) => w.pickupWindowStart && w.pickupWindowEnd && w.serviceId);
         flexZones.push({
           id: zoneId,
           name: props.stop_name || props.name || zoneId,
@@ -477,6 +494,11 @@ export async function importGtfsZip(file: File): Promise<{
           pickupWindowEnd: pickupEnd || undefined,
           serviceId,
           routeId,
+          meanDurationFactor: numOrU(flexRow?.mean_duration_factor),
+          meanDurationOffset: numOrU(flexRow?.mean_duration_offset),
+          safeDurationFactor: numOrU(flexRow?.safe_duration_factor),
+          safeDurationOffset: numOrU(flexRow?.safe_duration_offset),
+          additionalWindows: additionalWindows.length > 0 ? additionalWindows : undefined,
         });
       }
     } catch (e) {

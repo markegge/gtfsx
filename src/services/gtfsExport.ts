@@ -77,20 +77,38 @@ function materializeFlex(state: ReturnType<typeof useStore.getState>): FlexMater
       }
     }
 
-    const tripId = `${zone.id}-trip`;
-    out.trips.push({
-      trip_id: tripId,
-      route_id: routeId,
-      service_id: serviceId,
-      direction_id: 0,
-      trip_headsign: zone.name,
-    });
-
     const bookingId = zone.bookingRule ? `${zone.id}-booking` : undefined;
     const isGroupZone = Array.isArray(zone.stopIds) && zone.stopIds.length > 0;
 
+    // Build the list of (service_id, window) pairs. The primary pair is
+    // the zone's top-level serviceId + pickup window; any additionalWindows
+    // entries materialize into their own trips + stop_times rows.
+    type Window = { serviceId: string; start: string; end: string; suffix: string };
+    const windows: Window[] = [
+      {
+        serviceId,
+        start: zone.pickupWindowStart as string,
+        end: zone.pickupWindowEnd as string,
+        suffix: '-trip',
+      },
+    ];
+    if (zone.additionalWindows) {
+      zone.additionalWindows.forEach((w, i) => {
+        if (!w.pickupWindowStart || !w.pickupWindowEnd) return;
+        const addlSvc = knownServiceIds.has(w.serviceId) ? w.serviceId : serviceId;
+        windows.push({
+          serviceId: addlSvc,
+          start: w.pickupWindowStart,
+          end: w.pickupWindowEnd,
+          suffix: `-trip-${i + 2}`,
+        });
+      });
+    }
+
+    // Emit location_groups / location_group_stops once per zone (not per window)
+    let groupId: string | undefined;
     if (isGroupZone) {
-      const groupId = `${zone.id}-group`;
+      groupId = `${zone.id}-group`;
       out.locationGroups.push({
         location_group_id: groupId,
         location_group_name: zone.name,
@@ -101,34 +119,36 @@ function materializeFlex(state: ReturnType<typeof useStore.getState>): FlexMater
           stop_id: stopId,
         });
       }
-      out.flexStopTimes.push({
+    }
+
+    // Now one trip + one stop_times row per window.
+    for (const w of windows) {
+      const tripId = `${zone.id}${w.suffix}`;
+      out.trips.push({
         trip_id: tripId,
-        stop_sequence: 1,
-        location_group_id: groupId,
-        start_pickup_drop_off_window: zone.pickupWindowStart,
-        end_pickup_drop_off_window: zone.pickupWindowEnd,
-        pickup_type: 2,
-        drop_off_type: 2,
-        ...(bookingId ? {
-          pickup_booking_rule_id: bookingId,
-          drop_off_booking_rule_id: bookingId,
-        } : {}),
+        route_id: routeId,
+        service_id: w.serviceId,
+        direction_id: 0,
+        trip_headsign: zone.name,
       });
-    } else {
-      // Polygon-area flex: one stop_times row per zone, referencing
-      // the first polygon feature's location_id.
       out.flexStopTimes.push({
         trip_id: tripId,
         stop_sequence: 1,
-        location_id: `${zone.id}-0`,
-        start_pickup_drop_off_window: zone.pickupWindowStart,
-        end_pickup_drop_off_window: zone.pickupWindowEnd,
+        ...(isGroupZone
+          ? { location_group_id: groupId }
+          : { location_id: `${zone.id}-0` }),
+        start_pickup_drop_off_window: w.start,
+        end_pickup_drop_off_window: w.end,
         pickup_type: 2,
         drop_off_type: 2,
         ...(bookingId ? {
           pickup_booking_rule_id: bookingId,
           drop_off_booking_rule_id: bookingId,
         } : {}),
+        ...(zone.meanDurationFactor != null ? { mean_duration_factor: zone.meanDurationFactor } : {}),
+        ...(zone.meanDurationOffset != null ? { mean_duration_offset: zone.meanDurationOffset } : {}),
+        ...(zone.safeDurationFactor != null ? { safe_duration_factor: zone.safeDurationFactor } : {}),
+        ...(zone.safeDurationOffset != null ? { safe_duration_offset: zone.safeDurationOffset } : {}),
       });
     }
 

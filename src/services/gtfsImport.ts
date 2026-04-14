@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import Papa from 'papaparse';
 import { useStore } from '../store';
 import type { Agency, Calendar, CalendarDate, Route, Shape, ShapePoint, Stop, Trip, StopTime, FeedInfo, RouteStop, FareAttribute, FareRule } from '../types/gtfs';
+import type { FlexZone, BookingRule } from '../store/flexSlice';
 
 function parseCSV<T>(text: string): T[] {
   const result = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: false });
@@ -26,6 +27,7 @@ export async function importGtfsZip(file: File): Promise<{
   routeStops: RouteStop[];
   fareAttributes: FareAttribute[];
   fareRules: FareRule[];
+  flexZones: FlexZone[];
   warnings: string[];
 }> {
   const zip = await JSZip.loadAsync(file);
@@ -171,22 +173,32 @@ export async function importGtfsZip(file: File): Promise<{
       }))
     : [];
 
-  // Stop times
+  // Stop times. A flex stop_time has a location_id instead of a stop_id;
+  // we split those out so they can feed back into FlexZone metadata (and
+  // don't pollute the fixed-route stop_times table).
   const stopTimesText = await readFile('stop_times.txt');
-  const stopTimes: StopTime[] = stopTimesText
-    ? parseCSV<any>(stopTimesText).map((row) => ({
-        trip_id: String(row.trip_id),
-        arrival_time: row.arrival_time || '',
-        departure_time: row.departure_time || '',
-        stop_id: String(row.stop_id),
-        stop_sequence: num(row.stop_sequence),
-        stop_headsign: row.stop_headsign || undefined,
-        pickup_type: row.pickup_type !== undefined ? num(row.pickup_type) : undefined,
-        drop_off_type: row.drop_off_type !== undefined ? num(row.drop_off_type) : undefined,
-        shape_dist_traveled: row.shape_dist_traveled ? num(row.shape_dist_traveled) : undefined,
-        timepoint: row.timepoint !== undefined ? (num(row.timepoint) as 0 | 1) : undefined,
-      }))
-    : [];
+  const stopTimesAll = stopTimesText ? parseCSV<any>(stopTimesText) : [];
+  const flexStopTimeRows: any[] = [];
+  const stopTimes: StopTime[] = [];
+  for (const row of stopTimesAll) {
+    if (row.location_id && !row.stop_id) {
+      flexStopTimeRows.push(row);
+      continue;
+    }
+    stopTimes.push({
+      trip_id: String(row.trip_id),
+      arrival_time: row.arrival_time || '',
+      departure_time: row.departure_time || '',
+      stop_id: String(row.stop_id),
+      stop_sequence: num(row.stop_sequence),
+      stop_headsign: row.stop_headsign || undefined,
+      pickup_type: row.pickup_type !== undefined ? num(row.pickup_type) : undefined,
+      drop_off_type: row.drop_off_type !== undefined ? num(row.drop_off_type) : undefined,
+      shape_dist_traveled: row.shape_dist_traveled ? num(row.shape_dist_traveled) : undefined,
+      timepoint: row.timepoint !== undefined ? (num(row.timepoint) as 0 | 1) : undefined,
+    });
+  }
+  const flexTripIds = new Set<string>(flexStopTimeRows.map((r) => String(r.trip_id)));
 
   // Feed info
   const feedInfoText = await readFile('feed_info.txt');
@@ -286,7 +298,126 @@ export async function importGtfsZip(file: File): Promise<{
     }
   }
 
-  return { agencies, calendars, calendarDates, routes, shapes, stops, trips, stopTimes, feedInfo, routeStops, fareAttributes, fareRules, warnings };
+  // ─── GTFS-Flex: locations.geojson + booking_rules.txt ────────────────────
+
+  /**
+   * Key a flex location_id back to a zone_id. The export writes features
+   * as `${zoneId}-${featureIndex}` (single-digit in practice), so stripping
+   * a trailing `-0..9` recovers the zone id.
+   */
+  const zoneIdFromLocationId = (loc: string): string => loc.replace(/-\d+$/, '');
+
+  // booking_rules.txt → id → BookingRule
+  const bookingRulesText = await readFile('booking_rules.txt');
+  const bookingRuleMap = new Map<string, BookingRule>();
+  if (bookingRulesText) {
+    for (const row of parseCSV<any>(bookingRulesText)) {
+      const id = String(row.booking_rule_id || '');
+      if (!id) continue;
+      bookingRuleMap.set(id, {
+        bookingType: (num(row.booking_type) as 0 | 1 | 2),
+        priorNoticeDurationMin: row.prior_notice_duration_min ? num(row.prior_notice_duration_min) : undefined,
+        priorNoticeDurationMax: row.prior_notice_duration_max ? num(row.prior_notice_duration_max) : undefined,
+        priorNoticeLastDay: row.prior_notice_last_day ? num(row.prior_notice_last_day) : undefined,
+        priorNoticeLastTime: row.prior_notice_last_time || undefined,
+        priorNoticeStartDay: row.prior_notice_start_day ? num(row.prior_notice_start_day) : undefined,
+        priorNoticeStartTime: row.prior_notice_start_time || undefined,
+        message: row.message || undefined,
+        pickupMessage: row.pickup_message || undefined,
+        dropOffMessage: row.drop_off_message || undefined,
+        phoneNumber: row.phone_number || undefined,
+        infoUrl: row.info_url || undefined,
+        bookingUrl: row.booking_url || undefined,
+      });
+    }
+  }
+
+  // locations.geojson → FlexZone[]
+  const locationsText = await readFile('locations.geojson');
+  const flexZones: FlexZone[] = [];
+  if (locationsText) {
+    try {
+      const geo = JSON.parse(locationsText) as GeoJSON.FeatureCollection;
+      // Group features by zone id (location_id prefix before the -N suffix)
+      const byZone = new Map<string, GeoJSON.Feature[]>();
+      for (const f of geo.features || []) {
+        const locId = String(f.properties?.stop_id || f.properties?.id || '');
+        if (!locId) continue;
+        const zoneId = zoneIdFromLocationId(locId);
+        const list = byZone.get(zoneId) || [];
+        list.push(f);
+        byZone.set(zoneId, list);
+      }
+      // Build one FlexZone per group.
+      for (const [zoneId, features] of byZone) {
+        const first = features[0];
+        const props = (first.properties || {}) as Record<string, any>;
+        const bookingId = props.pickup_booking_rule_id || props.drop_off_booking_rule_id;
+        const bookingRule = bookingId ? bookingRuleMap.get(String(bookingId)) : undefined;
+
+        // Find pickup/drop-off windows from the flex stop_times rows
+        // referencing any of this zone's location_ids.
+        const myLocIds = new Set(features.map((f) => String(f.properties?.stop_id || '')));
+        const flexRow = flexStopTimeRows.find((r) => myLocIds.has(String(r.location_id)));
+        const pickupStart = flexRow?.start_pickup_drop_off_window || props.start_pickup_drop_off_window;
+        const pickupEnd = flexRow?.end_pickup_drop_off_window || props.end_pickup_drop_off_window;
+
+        // Figure out this zone's trip and route (via stop_times.trip_id →
+        // trips.route_id) and its service_id — so re-export preserves the
+        // same route association and service pattern.
+        let routeId: string | undefined;
+        let serviceId: string | undefined;
+        if (flexRow) {
+          const trip = trips.find((t) => t.trip_id === String(flexRow.trip_id));
+          if (trip) {
+            routeId = trip.route_id;
+            serviceId = trip.service_id;
+          }
+        }
+
+        flexZones.push({
+          id: zoneId,
+          name: props.stop_name || zoneId,
+          bufferMiles: 0,
+          geojson: { type: 'FeatureCollection', features },
+          bookingRule,
+          pickupWindowStart: pickupStart || undefined,
+          pickupWindowEnd: pickupEnd || undefined,
+          serviceId,
+          routeId,
+        });
+      }
+    } catch (e) {
+      warnings.push(`Could not parse locations.geojson: ${(e as Error).message}`);
+    }
+  }
+
+  // Strip the synthetic flex trips from trips[] so re-exporting doesn't
+  // create a duplicate (materializeFlex regenerates them from the zones).
+  const flexZoneRouteIds = new Set(flexZones.map((z) => z.routeId).filter(Boolean) as string[]);
+  const tripsWithoutFlex = trips.filter((t) => !flexTripIds.has(t.trip_id));
+  // Remove routes that ONLY existed to carry flex trips. If a route lost all
+  // of its trips AND belongs to a flex zone, drop it — the zone re-creates
+  // it on the next export.
+  const routesWithoutFlex = routes.filter((r) => {
+    if (!flexZoneRouteIds.has(r.route_id)) return true;
+    const remainingTrips = tripsWithoutFlex.filter((t) => t.route_id === r.route_id);
+    return remainingTrips.length > 0;
+  });
+  // Re-point flex zones that lost their route to the kept route (if any).
+  for (const zone of flexZones) {
+    if (zone.routeId && !routesWithoutFlex.some((r) => r.route_id === zone.routeId)) {
+      zone.routeId = undefined;
+    }
+  }
+
+  return {
+    agencies, calendars, calendarDates,
+    routes: routesWithoutFlex, shapes, stops,
+    trips: tripsWithoutFlex, stopTimes, feedInfo,
+    routeStops, fareAttributes, fareRules,
+    flexZones, warnings,
+  };
 }
 
 function describeService(...days: number[]): string {
@@ -313,6 +444,7 @@ export function loadImportIntoStore(data: Awaited<ReturnType<typeof importGtfsZi
   store.setRouteStops(data.routeStops);
   store.setFareAttributes(data.fareAttributes);
   store.setFareRules(data.fareRules);
+  store.setFlexZones(data.flexZones);
 }
 
 /**

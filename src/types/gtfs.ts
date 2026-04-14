@@ -39,6 +39,14 @@ export interface Route {
   route_url?: string;
   route_color: string;      // 6-char hex without #
   route_text_color: string;  // 6-char hex without #
+  /**
+   * GTFS-Flex: default for continuous boarding along the route.
+   * 0=allowed, 1=none (default), 2=phone agency, 3=coordinate with driver.
+   * Overridden per-stop_time where continuous_pickup / continuous_drop_off
+   * is set on the stop_times row.
+   */
+  continuous_pickup?: 0 | 1 | 2 | 3;
+  continuous_drop_off?: 0 | 1 | 2 | 3;
   _cost_per_revenue_hour?: number;  // UI-only
   _vehicles_required?: number;      // UI-only
   _direction_0_name?: string;       // UI-only, default "Outbound"
@@ -95,6 +103,13 @@ export interface StopTime {
   drop_off_type?: number;
   shape_dist_traveled?: number;
   timepoint?: 0 | 1;
+  /**
+   * GTFS-Flex: continuous boarding between this stop and the next.
+   * 0=allowed, 1=none, 2=phone agency, 3=coordinate with driver.
+   * Overrides the route-level default when set.
+   */
+  continuous_pickup?: 0 | 1 | 2 | 3;
+  continuous_drop_off?: 0 | 1 | 2 | 3;
 }
 
 export interface FeedInfo {

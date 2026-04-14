@@ -114,6 +114,10 @@ export async function importGtfsZip(file: File): Promise<{
         route_url: row.route_url,
         route_color: (row.route_color || '888888').replace('#', ''),
         route_text_color: (row.route_text_color || 'FFFFFF').replace('#', ''),
+        continuous_pickup: row.continuous_pickup !== undefined && row.continuous_pickup !== ''
+          ? (num(row.continuous_pickup) as 0 | 1 | 2 | 3) : undefined,
+        continuous_drop_off: row.continuous_drop_off !== undefined && row.continuous_drop_off !== ''
+          ? (num(row.continuous_drop_off) as 0 | 1 | 2 | 3) : undefined,
       }))
     : [];
 
@@ -199,6 +203,10 @@ export async function importGtfsZip(file: File): Promise<{
       drop_off_type: row.drop_off_type !== undefined ? num(row.drop_off_type) : undefined,
       shape_dist_traveled: row.shape_dist_traveled ? num(row.shape_dist_traveled) : undefined,
       timepoint: row.timepoint !== undefined ? (num(row.timepoint) as 0 | 1) : undefined,
+      continuous_pickup: row.continuous_pickup !== undefined && row.continuous_pickup !== ''
+        ? (num(row.continuous_pickup) as 0 | 1 | 2 | 3) : undefined,
+      continuous_drop_off: row.continuous_drop_off !== undefined && row.continuous_drop_off !== ''
+        ? (num(row.continuous_drop_off) as 0 | 1 | 2 | 3) : undefined,
     });
   }
   const flexTripIds = new Set<string>(flexStopTimeRows.map((r) => String(r.trip_id)));

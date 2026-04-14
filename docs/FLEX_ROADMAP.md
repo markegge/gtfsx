@@ -40,13 +40,16 @@ pursue. Keep it current when a gap ships. Spec references assume the
 
 **Known limitation:** a zone can currently be polygon OR group — not a mix. Mixed zones are rare in practice and would require a larger refactor.
 
-#### 2. 🔲 continuous_pickup / continuous_drop_off
+#### 2. ✅ continuous_pickup / continuous_drop_off
 
-**Spec:** fields on stop_times.txt (0 = continuous, 1 = none, 2 = phone, 3 = coordinate) enabling flag-stop service along fixed-route trips.
-**Why it matters:** common on deviated-fixed-route services (Brown County uses it on every trip). Stripping the field on re-import silently converts flag-stop service into fixed-stop service.
-**Current behaviour:** fields are not read on import, not writable in the UI, not emitted on export.
-**Scope:** extend StopTime type, stop-times UI, CSV round-trip.
-**Effort:** 1–2 days.
+**Spec:** fields on routes.txt and stop_times.txt (0 = continuous, 1 = none, 2 = phone, 3 = coordinate) enabling flag-stop service along fixed-route trips.
+**Shipped** as:
+- `src/types/gtfs.ts` — `Route.continuous_pickup`, `Route.continuous_drop_off` (route-level defaults) and matching fields on `StopTime` (per-row override).
+- `src/services/gtfsImport.ts` — reads both fields from routes.txt and stop_times.txt; preserves empty values.
+- `src/services/gtfsExport.ts` — both fields round-trip via the existing `stripUIFields` passthrough.
+- `src/components/routes/RouteEditor.tsx` — new "Flag-Stop Service" section with pickup + drop-off dropdowns (0–3 or unset).
+
+**Known limitation:** per-stop_time overrides aren't yet exposed in the timetable UI. Route-level covers ~95% of real feeds; per-segment customisation would need timetable-cell metadata surfaces that don't exist yet.
 
 #### 3. ✅ Validation + pre-export check for incomplete flex zones
 

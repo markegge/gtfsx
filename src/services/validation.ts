@@ -53,11 +53,18 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     messages.push(msg('warning', 'No routes defined'));
   } else {
     const routesWithTrips = new Set(state.trips.map((t) => t.route_id));
+    // Routes that will receive a materialized trip from a flex zone at
+    // export time (zone must have a pickup window to generate a trip).
+    const routesWithFlexTrips = new Set(
+      state.flexZones
+        .filter((z) => z.routeId && z.pickupWindowStart && z.pickupWindowEnd)
+        .map((z) => z.routeId as string),
+    );
     for (const r of state.routes) {
       if (!r.route_short_name && !r.route_long_name) {
         messages.push(msg('error', `Route "${r.route_id}" needs either a short name or long name`, 'route', r.route_id));
       }
-      if (!routesWithTrips.has(r.route_id)) {
+      if (!routesWithTrips.has(r.route_id) && !routesWithFlexTrips.has(r.route_id)) {
         messages.push(msg('warning', `Route "${r.route_short_name || r.route_id}" has no trips`, 'route', r.route_id));
       }
     }

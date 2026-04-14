@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import buffer from '@turf/buffer';
 import { featureCollection, multiLineString } from '@turf/helpers';
 import { useStore } from '../../store';
@@ -57,6 +57,16 @@ export function FlexEditor() {
   const [error, setError] = useState<string | null>(null);
   const [bufferInput, setBufferInput] = useState<string>(String(DEFAULT_FLEX_BUFFER_MILES));
   const [expandedZoneId, setExpandedZoneId] = useState<string | null>(null);
+
+  // Let external triggers (e.g. the Flex zone map popup) expand a specific
+  // zone's Details panel on mount.
+  useEffect(() => {
+    const pending = (window as any).__flexZoneExpand;
+    if (pending && flexZones.some((z) => z.id === pending)) {
+      setExpandedZoneId(pending);
+      delete (window as any).__flexZoneExpand;
+    }
+  }, [flexZones]);
 
   const busRoutes = routes.filter((r) => r.route_type !== 0 && !hiddenRouteIds.includes(r.route_id));
 

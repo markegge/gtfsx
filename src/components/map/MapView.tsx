@@ -10,6 +10,7 @@ import { MapToolbar } from './MapToolbar';
 import { DrawingIndicator } from './DrawingIndicator';
 import { StopPopup } from './StopPopup';
 import { RoutePopup } from './RoutePopup';
+import { FlexZonePopup } from './FlexZonePopup';
 import { CoverageLayer } from './CoverageLayer';
 import { FlexLayer } from '../flex/FlexLayer';
 import { DemandDotsLayer } from './DemandDotsLayer';
@@ -40,6 +41,7 @@ export function MapView() {
   const [popupRouteId, setPopupRouteId] = useState<string | null>(null);
   const [popupLngLat, setPopupLngLat] = useState<{ lng: number; lat: number } | null>(null);
   const [popupDirectionId, setPopupDirectionId] = useState<0 | 1>(0);
+  const [popupFlexZoneId, setPopupFlexZoneId] = useState<string | null>(null);
 
   // Track the last stop placed (for ESC undo)
   const lastPlacedStopRef = useRef<string | null>(null);
@@ -603,6 +605,7 @@ export function MapView() {
         currentState.selectStop(sid);
         setPopupStopId(sid);
         setPopupRouteId(null);
+        setPopupFlexZoneId(null);
         currentState.setSidebarSection('stops');
         return;
       }
@@ -615,13 +618,24 @@ export function MapView() {
         setPopupRouteId(rid);
         setPopupDirectionId(typeof did === 'number' ? did as 0 | 1 : 0);
         setPopupStopId(null);
+        setPopupFlexZoneId(null);
         setPopupLngLat({ lng: e.lngLat.lng, lat: e.lngLat.lat });
         currentState.setSidebarSection('routes');
         return;
       }
 
+      const flexFeature = e.features?.find((f: any) => f.layer?.id === 'flex-zone-fill');
+      if (flexFeature) {
+        setPopupFlexZoneId(flexFeature.properties.zoneId);
+        setPopupStopId(null);
+        setPopupRouteId(null);
+        setPopupLngLat({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+        return;
+      }
+
       setPopupStopId(null);
       setPopupRouteId(null);
+      setPopupFlexZoneId(null);
     }
   }, []);
 
@@ -667,7 +681,7 @@ export function MapView() {
         onClick={handleMapClick}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        interactiveLayerIds={mapMode === 'edit_shape' || mapMode === 'edit_flex_zone' || mapMode === 'draw_flex_zone' ? [] : ['stop-circles', 'route-lines']}
+        interactiveLayerIds={mapMode === 'edit_shape' || mapMode === 'edit_flex_zone' || mapMode === 'draw_flex_zone' ? [] : ['stop-circles', 'route-lines', 'flex-zone-fill']}
       >
         <NavigationControl position="bottom-right" />
         <DrawControl
@@ -694,6 +708,14 @@ export function MapView() {
             directionId={popupDirectionId}
             lngLat={popupLngLat}
             onClose={() => setPopupRouteId(null)}
+          />
+        )}
+
+        {popupFlexZoneId && popupLngLat && (
+          <FlexZonePopup
+            zoneId={popupFlexZoneId}
+            lngLat={popupLngLat}
+            onClose={() => setPopupFlexZoneId(null)}
           />
         )}
       </Map>

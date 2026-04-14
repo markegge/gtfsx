@@ -29,7 +29,7 @@ function describeServicePattern(c: {
 }
 
 export function FlexZoneDetails({ zone }: Props) {
-  const { updateFlexZone, updateFlexZoneBooking, fareAttributes, routes, calendars, setSidebarSection } = useStore();
+  const { updateFlexZone, updateFlexZoneBooking, fareAttributes, calendars, setSidebarSection } = useStore();
   const b: Partial<BookingRule> = zone.bookingRule ?? { bookingType: 1 };
 
   const setField = <K extends keyof FlexZone>(k: K, v: FlexZone[K]) =>
@@ -207,29 +207,6 @@ export function FlexZoneDetails({ zone }: Props) {
             className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple resize-none"
           />
         </div>
-      </div>
-
-      {/* Route assignment */}
-      <div>
-        <div className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5">
-          Route
-        </div>
-        <select
-          value={zone.routeId || ''}
-          onChange={(e) => setField('routeId', e.target.value || undefined)}
-          className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
-        >
-          <option value="">— Auto-create flex route on export —</option>
-          {routes.map((r) => (
-            <option key={r.route_id} value={r.route_id}>
-              {[r.route_short_name, r.route_long_name].filter(Boolean).join(' — ') || r.route_id}
-            </option>
-          ))}
-        </select>
-        <p className="text-[10px] text-warm-gray/80 mt-1">
-          The flex trip needs a route_id. Pick an existing route or leave
-          blank — we'll synthesize one from the zone name on export.
-        </p>
       </div>
 
       {/* Fare assignment */}

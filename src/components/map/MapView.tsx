@@ -14,6 +14,7 @@ import { CoverageLayer } from './CoverageLayer';
 import { FlexLayer } from '../flex/FlexLayer';
 import { DemandDotsLayer } from './DemandDotsLayer';
 import { MapLayerControls } from './MapLayerControls';
+import { createFlexZoneWithRoute } from '../flex/flexHelpers';
 import type { MapStyleId } from './MapLayerControls';
 import { generateId } from '../../services/idGenerator';
 import { snapToRoad } from '../../services/snapToRoad';
@@ -394,11 +395,11 @@ export function MapView() {
 
     const currentState = useStore.getState();
 
-    // Flex zone drawn — save as new zone
+    // Flex zone drawn — save as new zone + paired route
     if (currentState.mapMode === 'draw_flex_zone' && feature.geometry.type === 'Polygon') {
       const geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [feature] };
       const zoneNum = currentState.flexZones.length + 1;
-      currentState.addFlexZone({
+      createFlexZoneWithRoute({
         id: `flex-zone-${Date.now()}`,
         name: `Zone ${zoneNum}`,
         bufferMiles: 0,

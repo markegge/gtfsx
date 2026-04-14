@@ -5,6 +5,7 @@ import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import type { FlexZone } from '../../store/flexSlice';
 import { FlexZoneDetails } from './FlexZoneDetails';
+import { createFlexZoneWithRoute } from './flexHelpers';
 
 const DEFAULT_FLEX_BUFFER_MILES = 0.75;
 
@@ -49,7 +50,7 @@ function generateServiceArea(
 export function FlexEditor() {
   const {
     shapes, routes, trips, hiddenRouteIds,
-    flexZones, addFlexZone, removeFlexZone,
+    flexZones, removeFlexZone,
     mapMode, setMapMode, editingFlexZoneId, setEditingFlexZoneId,
   } = useStore();
   const [generating, setGenerating] = useState(false);
@@ -82,7 +83,7 @@ export function FlexEditor() {
         setError('No visible bus route shapes found. Draw routes on the map first.');
         return;
       }
-      addFlexZone({
+      createFlexZoneWithRoute({
         id: `flex-zone-${Date.now()}`,
         name: `Service Area ${zoneCounter++}`,
         bufferMiles,
@@ -93,7 +94,7 @@ export function FlexEditor() {
     } finally {
       setGenerating(false);
     }
-  }, [shapes, routes, trips, hiddenRouteIds, addFlexZone, bufferMiles, bufferValid]);
+  }, [shapes, routes, trips, hiddenRouteIds, bufferMiles, bufferValid]);
 
   const handleDrawZone = () => {
     setMapMode('draw_flex_zone');

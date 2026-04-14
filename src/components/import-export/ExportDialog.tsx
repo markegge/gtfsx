@@ -144,25 +144,40 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
         )}
 
         {/* File summary */}
-        <div className="flex flex-col gap-1 mb-4 text-sm">
-          {[
-            ['agency.txt', state.agencies.length > 0],
+        {(() => {
+          const hasFlex = state.flexZones.length > 0;
+          const hasFlexBooking = state.flexZones.some((z) => z.bookingRule);
+          const hasDirections = state.routes.some(
+            (r) => r._direction_0_name || r._direction_1_name,
+          );
+          const files: [string, boolean, string?][] = [
+            ['agency.txt', state.agencies.length > 0, `${state.agencies.length} agency${state.agencies.length !== 1 ? 'ies' : ''}`],
             ['routes.txt', state.routes.length > 0, `${state.routes.length} routes`],
             ['stops.txt', state.stops.length > 0, `${state.stops.length} stops`],
-            ['trips.txt', state.trips.length > 0, `${state.trips.length} trips`],
-            ['stop_times.txt', state.stopTimes.length > 0],
-            ['calendar.txt', state.calendars.length > 0],
-            ['shapes.txt', state.shapes.length > 0],
+            ['trips.txt', state.trips.length > 0 || hasFlex, `${state.trips.length + (hasFlex ? state.flexZones.filter((z) => z.pickupWindowStart && z.pickupWindowEnd).length : 0)} trips`],
+            ['stop_times.txt', state.stopTimes.length > 0 || hasFlex],
+            ['calendar.txt', state.calendars.length > 0, `${state.calendars.length} service${state.calendars.length !== 1 ? 's' : ''}`],
+            ['shapes.txt', state.shapes.length > 0, `${state.shapes.length} shape${state.shapes.length !== 1 ? 's' : ''}`],
             ['calendar_dates.txt', state.calendarDates.length > 0],
+            ['directions.txt', hasDirections],
+            ['fare_attributes.txt', state.fareAttributes.length > 0, `${state.fareAttributes.length} fare${state.fareAttributes.length !== 1 ? 's' : ''}`],
+            ['fare_rules.txt', state.fareRules.length > 0],
             ['feed_info.txt', !!state.feedInfo],
-          ].filter(([, hasData]) => hasData).map(([name, , detail]) => (
-            <div key={name as string} className="flex items-center gap-2 px-3 py-1.5 bg-cream rounded">
-              <span className="text-teal">✓</span>
-              <span>{name}</span>
-              {detail && <span className="ml-auto text-warm-gray text-xs">{detail}</span>}
+            ['locations.geojson', hasFlex, `${state.flexZones.length} zone${state.flexZones.length !== 1 ? 's' : ''}`],
+            ['booking_rules.txt', hasFlexBooking],
+          ];
+          return (
+            <div className="flex flex-col gap-1 mb-4 text-sm">
+              {files.filter(([, hasData]) => hasData).map(([name, , detail]) => (
+                <div key={name} className="flex items-center gap-2 px-3 py-1.5 bg-cream rounded">
+                  <span className="text-teal">✓</span>
+                  <span>{name}</span>
+                  {detail && <span className="ml-auto text-warm-gray text-xs">{detail}</span>}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          );
+        })()}
 
         <div className="flex gap-2">
           <button

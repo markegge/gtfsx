@@ -301,9 +301,21 @@ export async function importGtfsZip(file: File): Promise<{
   // ─── GTFS-Flex: locations.geojson + booking_rules.txt ────────────────────
 
   /**
-   * Key a flex location_id back to a zone_id. The export writes features
-   * as `${zoneId}-${featureIndex}` (single-digit in practice), so stripping
-   * a trailing `-0..9` recovers the zone id.
+   * Extract a flex location_id from a GeoJSON feature. Our own exporter
+   * writes it as `properties.stop_id`; standard GTFS-Flex v2 feeds use
+   * the top-level `id` field and often leave properties empty.
+   */
+  const locationIdOf = (f: GeoJSON.Feature): string => {
+    const p = (f.properties || {}) as Record<string, any>;
+    return String(p.stop_id || p.id || (f as any).id || '');
+  };
+
+  /**
+   * Key a flex location_id back to a zone_id. Our own exporter writes
+   * multiple features for a multi-polygon zone as `${zoneId}-0`,
+   * `${zoneId}-1`, …, so stripping a trailing `-N` recovers the zone id
+   * for re-import. Flex v2 feeds with unique ids per feature (e.g.
+   * `area_708`) just map 1:1 — each polygon becomes its own zone.
    */
   const zoneIdFromLocationId = (loc: string): string => loc.replace(/-\d+$/, '');
 
@@ -341,7 +353,7 @@ export async function importGtfsZip(file: File): Promise<{
       // Group features by zone id (location_id prefix before the -N suffix)
       const byZone = new Map<string, GeoJSON.Feature[]>();
       for (const f of geo.features || []) {
-        const locId = String(f.properties?.stop_id || f.properties?.id || '');
+        const locId = locationIdOf(f);
         if (!locId) continue;
         const zoneId = zoneIdFromLocationId(locId);
         const list = byZone.get(zoneId) || [];
@@ -352,13 +364,20 @@ export async function importGtfsZip(file: File): Promise<{
       for (const [zoneId, features] of byZone) {
         const first = features[0];
         const props = (first.properties || {}) as Record<string, any>;
-        const bookingId = props.pickup_booking_rule_id || props.drop_off_booking_rule_id;
+
+        // Collect this zone's location_ids and find any flex stop_times row
+        // that references one of them — that's where the per-trip booking
+        // rule + window lives in GTFS-Flex v2 feeds.
+        const myLocIds = new Set(features.map((f) => locationIdOf(f)));
+        const flexRow = flexStopTimeRows.find((r) => myLocIds.has(String(r.location_id)));
+
+        const bookingId =
+          flexRow?.pickup_booking_rule_id ||
+          flexRow?.drop_off_booking_rule_id ||
+          props.pickup_booking_rule_id ||
+          props.drop_off_booking_rule_id;
         const bookingRule = bookingId ? bookingRuleMap.get(String(bookingId)) : undefined;
 
-        // Find pickup/drop-off windows from the flex stop_times rows
-        // referencing any of this zone's location_ids.
-        const myLocIds = new Set(features.map((f) => String(f.properties?.stop_id || '')));
-        const flexRow = flexStopTimeRows.find((r) => myLocIds.has(String(r.location_id)));
         const pickupStart = flexRow?.start_pickup_drop_off_window || props.start_pickup_drop_off_window;
         const pickupEnd = flexRow?.end_pickup_drop_off_window || props.end_pickup_drop_off_window;
 
@@ -377,7 +396,7 @@ export async function importGtfsZip(file: File): Promise<{
 
         flexZones.push({
           id: zoneId,
-          name: props.stop_name || zoneId,
+          name: props.stop_name || props.name || zoneId,
           bufferMiles: 0,
           geojson: { type: 'FeatureCollection', features },
           bookingRule,

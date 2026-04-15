@@ -90,12 +90,41 @@ const ALLOWED_SEARCH_PARAMS = new Set([
 
 async function handleSearch(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  const upstream = new URL('https://api.mobilitydatabase.org/v1/gtfs_feeds');
+
+  // Build the base set of query params shared across each upstream request.
+  const baseParams = new URLSearchParams();
   for (const [k, v] of url.searchParams) {
-    if (ALLOWED_SEARCH_PARAMS.has(k)) upstream.searchParams.set(k, v);
+    if (ALLOWED_SEARCH_PARAMS.has(k) && k !== 'provider') baseParams.set(k, v);
   }
-  if (!upstream.searchParams.has('limit')) upstream.searchParams.set('limit', '50');
-  if (!upstream.searchParams.has('status')) upstream.searchParams.set('status', 'active');
+  if (!baseParams.has('limit')) baseParams.set('limit', '50');
+  if (!baseParams.has('status')) baseParams.set('status', 'active');
+
+  // If the user typed a term into the "provider" field, also search it as a
+  // municipality — Mobility DB's `provider` only matches the agency name, so
+  // searching "Bozeman" would otherwise miss "Streamline" (provider) even
+  // though that feed's municipality is Bozeman. We fire both queries in
+  // parallel and union the results by feed id.
+  const providerTerm = (url.searchParams.get('provider') || '').trim();
+  const upstreams: URL[] = [];
+  if (providerTerm) {
+    const byProvider = new URL('https://api.mobilitydatabase.org/v1/gtfs_feeds');
+    baseParams.forEach((v, k) => byProvider.searchParams.set(k, v));
+    byProvider.searchParams.set('provider', providerTerm);
+    upstreams.push(byProvider);
+
+    // Only add a municipality lookup if the caller didn't pin an explicit
+    // municipality — otherwise we'd broaden the filter unintentionally.
+    if (!baseParams.has('municipality')) {
+      const byMunicipality = new URL('https://api.mobilitydatabase.org/v1/gtfs_feeds');
+      baseParams.forEach((v, k) => byMunicipality.searchParams.set(k, v));
+      byMunicipality.searchParams.set('municipality', providerTerm);
+      upstreams.push(byMunicipality);
+    }
+  } else {
+    const single = new URL('https://api.mobilitydatabase.org/v1/gtfs_feeds');
+    baseParams.forEach((v, k) => single.searchParams.set(k, v));
+    upstreams.push(single);
+  }
 
   let token: string;
   try {
@@ -106,16 +135,30 @@ async function handleSearch(request: Request, env: Env): Promise<Response> {
       headers: { 'Access-Control-Allow-Origin': '*' },
     });
   }
-  const r = await fetch(upstream.toString(), {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-  });
-  if (!r.ok) {
-    return new Response(`Mobility DB ${r.status}: ${await r.text()}`, {
+  const authHeaders = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
+  const responses = await Promise.all(
+    upstreams.map((u) => fetch(u.toString(), { headers: authHeaders })),
+  );
+  const failed = responses.find((r) => !r.ok);
+  if (failed) {
+    return new Response(`Mobility DB ${failed.status}: ${await failed.text()}`, {
       status: 502,
       headers: { 'Access-Control-Allow-Origin': '*' },
     });
   }
-  const feeds = (await r.json()) as any[];
+  const feedArrays = (await Promise.all(responses.map((r) => r.json()))) as any[][];
+  // Union by id — provider-matched feeds come first so they keep priority in
+  // the default sort order.
+  const seen = new Set<string>();
+  const feeds: any[] = [];
+  for (const arr of feedArrays) {
+    if (!Array.isArray(arr)) continue;
+    for (const f of arr) {
+      if (seen.has(f.id)) continue;
+      seen.add(f.id);
+      feeds.push(f);
+    }
+  }
   // Trim to fields the client actually uses, to keep the response small.
   const trimmed = (Array.isArray(feeds) ? feeds : []).map((f) => ({
     id: f.id,

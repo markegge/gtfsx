@@ -115,7 +115,7 @@ export function CatalogSearch({ onSelect }: Props) {
           autoFocus
           value={provider}
           onChange={(e) => setProvider(e.target.value)}
-          placeholder="Provider name (e.g. Streamline, SFMTA, MARTA)"
+          placeholder="Agency or city (e.g. Streamline, Bozeman, SFMTA)"
           className="px-3 py-2 border-2 border-sand rounded-lg text-sm bg-white focus:outline-none focus:border-coral"
         />
         <div className="flex gap-2">

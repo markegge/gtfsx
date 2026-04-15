@@ -70,6 +70,21 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
     routes: number; stops: number; trips: number;
   } | null>(null);
 
+  /** Wholesale replace the current project with the imported feed. Matches
+   * the first-time-import flow: clear all existing state, load the new feed,
+   * rename the project, pan/zoom the map to the new routes, and surface the
+   * success screen. */
+  const doReplaceImport = useCallback((data: ImportData, name: string) => {
+    loadImportIntoStore(data);
+    useStore.getState().setProjectName(name);
+    fitMapToImport(data);
+    setImportedCounts({
+      routes: data.routes.length,
+      stops: data.stops.length,
+      trips: data.trips.length,
+    });
+  }, []);
+
   const parseFile = useCallback(async (file: File) => {
     setParsing(true);
     setError(null);
@@ -79,14 +94,7 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
       setImportWarnings(data.warnings);
       // If the project is empty, skip the options screen and import immediately
       if (useStore.getState().routes.length === 0) {
-        loadImportIntoStore(data);
-        useStore.getState().setProjectName(name);
-        fitMapToImport(data);
-        setImportedCounts({
-          routes: data.routes.length,
-          stops: data.stops.length,
-          trips: data.trips.length,
-        });
+        doReplaceImport(data, name);
         return;
       }
       setParsedData(data);
@@ -98,7 +106,7 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
     } finally {
       setParsing(false);
     }
-  }, []);
+  }, [doReplaceImport]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -137,14 +145,7 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
     if (!parsedData) return;
 
     if (mode === 'replace') {
-      loadImportIntoStore(parsedData);
-      useStore.getState().setProjectName(fileName);
-      fitMapToImport(parsedData);
-      setImportedCounts({
-        routes: parsedData.routes.length,
-        stops: parsedData.stops.length,
-        trips: parsedData.trips.length,
-      });
+      doReplaceImport(parsedData, fileName);
     } else {
       if (selectedRouteIds.size === 0) return;
       mergeImportIntoStore(parsedData, selectedRouteIds);
@@ -241,14 +242,8 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
             <button
               onClick={() => {
                 if (!parsedData) return;
-                loadImportIntoStore(parsedData);
-                useStore.getState().setProjectName(fileName);
                 setMode('replace');
-                setImportedCounts({
-                  routes: parsedData.routes.length,
-                  stops: parsedData.stops.length,
-                  trips: parsedData.trips.length,
-                });
+                doReplaceImport(parsedData, fileName);
               }}
               className="flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors bg-white text-warm-gray border-sand hover:border-coral hover:text-dark-brown"
             >

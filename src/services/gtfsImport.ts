@@ -546,6 +546,31 @@ function describeService(...days: number[]): string {
 
 export function loadImportIntoStore(data: Awaited<ReturnType<typeof importGtfsZip>>) {
   const store = useStore.getState();
+  // Reset UI selection / editing / visibility state so stale references to
+  // routes/stops/shapes from the previous project don't linger across a
+  // "Replace project" import. Map mode returns to 'select' and any in-flight
+  // drawing or editing is cancelled. This makes a replace-import behave
+  // identically to loading a feed into a fresh project.
+  store.selectRoute(null);
+  store.selectStop(null);
+  store.selectTrip(null);
+  store.setDrawingRouteId(null);
+  store.setEditingRouteId(null);
+  store.setEditingShapeId(null);
+  store.setEditingFlexZoneId(null);
+  store.setMapMode('select');
+  // Drop any hidden-route / hidden-shape lists — the ids belong to routes
+  // and shapes that no longer exist.
+  useStore.setState((s) => {
+    s.hiddenRouteIds = [];
+    s.hiddenShapeIds = [];
+  });
+  // Clear derived analytics so the Coverage / Validation panels don't
+  // display stale numbers from the previous feed.
+  store.setValidationMessages([]);
+  store.setCoverageData(null);
+  store.setCoverageError(null);
+
   store.setAgencies(data.agencies);
   store.setCalendars(data.calendars);
   store.setCalendarDates(data.calendarDates);

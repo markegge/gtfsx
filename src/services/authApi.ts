@@ -15,6 +15,7 @@ export type ApiErrorCode =
   | 'unauthenticated'
   | 'invalid_credentials'
   | 'email_unverified'
+  | 'email_send_failed'
   | 'forbidden'
   | 'not_found'
   | 'conflict'
@@ -29,12 +30,15 @@ export type ApiErrorCode =
 export class ApiError extends Error {
   code: ApiErrorCode;
   status: number;
+  /** Extra fields from the server's error payload (e.g. `email` on email_unverified). */
+  extra: Record<string, unknown>;
 
-  constructor(code: ApiErrorCode, message: string, status: number) {
+  constructor(code: ApiErrorCode, message: string, status: number, extra: Record<string, unknown> = {}) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
+    this.extra = extra;
   }
 }
 
@@ -72,18 +76,21 @@ async function request<T = unknown>(
   if (!res.ok) {
     let code: ApiErrorCode = 'unknown';
     let message = res.statusText || 'Request failed';
+    let extra: Record<string, unknown> = {};
     if (isJson) {
       try {
         const data = await res.json();
         if (data && typeof data === 'object') {
-          if (typeof data.error === 'string') code = data.error as ApiErrorCode;
-          if (typeof data.message === 'string') message = data.message;
+          const { error, message: msg, ...rest } = data as Record<string, unknown>;
+          if (typeof error === 'string') code = error as ApiErrorCode;
+          if (typeof msg === 'string') message = msg;
+          extra = rest;
         }
       } catch {
         // ignore
       }
     }
-    throw new ApiError(code, message, res.status);
+    throw new ApiError(code, message, res.status, extra);
   }
 
   if (isJson) {
@@ -144,6 +151,6 @@ export function deleteAccount(input: { password?: string }): Promise<void> {
   return request('/api/me', { method: 'DELETE', body: input });
 }
 
-export function resendVerification(): Promise<void> {
-  return request('/auth/verify-resend', { method: 'POST' });
+export function resendVerification(input: { email: string }): Promise<void> {
+  return request('/auth/verify-resend', { method: 'POST', body: input });
 }

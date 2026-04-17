@@ -192,4 +192,76 @@ describe('auth /signup + /verify', () => {
     // extractToken sanity-check
     expect(extractToken('/foo?token=abc123')).toBe('abc123');
   });
+
+  it('signup returns 502 email_send_failed when Resend send fails', async () => {
+    capture.simulateSendFailure(401, '{"error":"unauthorized"}');
+    const client = makeClient();
+    const res = await client.post('/auth/signup', {
+      email: 'sendfail@example.com',
+      displayName: 'SendFail',
+      password: 'correct-horse-battery',
+    });
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body.error).toBe('email_send_failed');
+    expect(body.message).toMatch(/contact the administrator/i);
+  });
+});
+
+describe('auth /verify-resend (public)', () => {
+  let capture: EmailCapture;
+
+  beforeEach(async () => {
+    await applyMigrations();
+    await resetDb();
+    capture = setupEmailCapture();
+  });
+
+  afterEach(() => {
+    capture.restore();
+  });
+
+  it('sends a fresh verify link for a pending_verification user', async () => {
+    // Seed a pending user directly (skip signup's own email send).
+    await dbRun(
+      `INSERT INTO user (id, email, display_name, status, staff, created_at, updated_at)
+       VALUES ('01J000000000000000000RESEND', 'resend@example.com', 'R', 'pending_verification', 0, ?, ?)`,
+      Date.now(),
+      Date.now(),
+    );
+
+    const client = makeClient();
+    const res = await client.post('/auth/verify-resend', { email: 'resend@example.com' });
+    expect(res.status).toBe(204);
+    expect(capture.emails).toHaveLength(1);
+    const link = capture.linkFor('resend@example.com');
+    expect(link).toMatch(/\/auth\/verify\?token=/);
+  });
+
+  it('silently 204s for an already-active user (no enumeration, no email sent)', async () => {
+    await dbRun(
+      `INSERT INTO user (id, email, display_name, status, staff, created_at, updated_at)
+       VALUES ('01J000000000000000000ACTIVE', 'active@example.com', 'A', 'active', 0, ?, ?)`,
+      Date.now(),
+      Date.now(),
+    );
+    const client = makeClient();
+    const res = await client.post('/auth/verify-resend', { email: 'active@example.com' });
+    expect(res.status).toBe(204);
+    expect(capture.emails).toHaveLength(0);
+  });
+
+  it('silently 204s for an unknown email', async () => {
+    const client = makeClient();
+    const res = await client.post('/auth/verify-resend', { email: 'nobody@example.com' });
+    expect(res.status).toBe(204);
+    expect(capture.emails).toHaveLength(0);
+  });
+
+  it('does NOT require auth (public endpoint)', async () => {
+    const client = makeClient();
+    // No session cookie. Should still accept the request (returns 204 even for unknown).
+    const res = await client.post('/auth/verify-resend', { email: 'anyone@example.com' });
+    expect(res.status).toBe(204);
+  });
 });

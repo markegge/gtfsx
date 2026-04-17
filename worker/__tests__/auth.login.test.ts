@@ -100,7 +100,7 @@ describe('auth /login', () => {
     expect(ratio).toBeLessThan(3);
   });
 
-  it('login as a pending_verification user succeeds but returns that status', async () => {
+  it('pending_verification login is blocked with email_unverified + echoed email', async () => {
     const user = await seedUser({
       email: 'pending@example.com',
       password: 'correct-horse-battery',
@@ -109,8 +109,11 @@ describe('auth /login', () => {
 
     const client = makeClient();
     const res = await client.post('/auth/login', { email: user.email, password: user.password });
-    const body = await client.json<{ user: { status: string } }>(res);
-    expect(body.user.status).toBe('pending_verification');
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string; email?: string };
+    expect(body.error).toBe('email_unverified');
+    expect(body.email).toBe(user.email);
+    expect(client.cookie).toBeNull();
   });
 
   it('disabled user login returns 403 forbidden', async () => {

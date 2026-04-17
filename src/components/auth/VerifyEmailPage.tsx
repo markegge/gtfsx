@@ -15,10 +15,14 @@ export function VerifyEmailPage() {
   const [resendError, setResendError] = useState<string | null>(null);
 
   const handleResend = async () => {
+    if (!currentUser) {
+      setResendError('Sign in or sign up first, then request a new verification email.');
+      return;
+    }
     setResending(true);
     setResendError(null);
     try {
-      await resendVerification();
+      await resendVerification({ email: currentUser.email });
       setResent(true);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Could not send email';

@@ -4,6 +4,8 @@ import { ulid } from 'ulidx';
 import type { AppContext, AuthedUser } from '../env';
 import {
   conflict,
+  emailSendFailed,
+  emailUnverified,
   forbidden,
   invalidCredentials,
   validationFailed,
@@ -148,7 +150,20 @@ authRouter.post('/signup', async (c) => {
 
     const token = await createAuthToken(c.env, { kind: 'verify_email', userId });
     const link = `${c.env.APP_ORIGIN}/auth/verify?token=${token}`;
-    await sendVerifyEmail(c.env, body.email, link);
+    try {
+      await sendVerifyEmail(c.env, body.email, link);
+    } catch (err) {
+      console.error('[signup] verify email send failed', err);
+      await logAudit(c.env, {
+        actorUserId: userId,
+        subjectType: 'user',
+        subjectId: userId,
+        action: 'user.signup.email_failed',
+        metadata: { error: err instanceof Error ? err.message : String(err) },
+        ip,
+      });
+      throw emailSendFailed();
+    }
 
     await logAudit(c.env, {
       actorUserId: userId,
@@ -200,16 +215,26 @@ authRouter.get('/verify', async (c) => {
 });
 
 // ─── Resend verification email ─────────────────────────────────────────────
-authRouter.post('/verify-resend', requireAuth, async (c) => {
-  const user = c.var.user!;
-  if (user.status === 'active') throw conflict('Email already verified');
+// Public (no auth) so a user blocked at login by email_unverified can still
+// request a fresh link. Always returns 204 — no enumeration.
+authRouter.post('/verify-resend', async (c) => {
+  const body = await parseJson(c, emailOnlySchema);
+  const ip = clientIp(c.req.raw);
+  await rateLimit(c.env, { key: `auth:verify-resend:ip:${ip}`, limit: 5, windowSec: 3600 });
+  await rateLimit(c.env, { key: `auth:verify-resend:email:${body.email}`, limit: 3, windowSec: 3600 });
 
-  await rateLimit(c.env, { key: `auth:verify-resend:user:${user.id}`, limit: 3, windowSec: 3600 });
-
-  await invalidateAuthTokensForUser(c.env, user.id, 'verify_email');
-  const token = await createAuthToken(c.env, { kind: 'verify_email', userId: user.id });
-  const link = `${c.env.APP_ORIGIN}/auth/verify?token=${token}`;
-  await sendVerifyEmail(c.env, user.email, link);
+  const user = await findUserByEmail(c.env, body.email);
+  if (user && user.status === 'pending_verification') {
+    await invalidateAuthTokensForUser(c.env, user.id, 'verify_email');
+    const token = await createAuthToken(c.env, { kind: 'verify_email', userId: user.id });
+    const link = `${c.env.APP_ORIGIN}/auth/verify?token=${token}`;
+    try {
+      await sendVerifyEmail(c.env, user.email, link);
+    } catch (err) {
+      console.error('[verify-resend] send failed', err);
+      throw emailSendFailed();
+    }
+  }
 
   return c.body(null, 204);
 });
@@ -241,6 +266,11 @@ authRouter.post('/login', async (c) => {
 
   if (user.status === 'deleted_soft' || user.status === 'disabled') {
     throw forbidden('Account unavailable');
+  }
+
+  if (user.status === 'pending_verification') {
+    // Block login but echo the email so the frontend can offer "resend verification email".
+    throw emailUnverified({ email: user.email });
   }
 
   const session = await createSession(c.env, {

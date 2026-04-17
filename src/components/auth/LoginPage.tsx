@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FormField } from '../ui/FormField';
 import { AuthLayout } from './AuthLayout';
 import { AuthButton } from './AuthButton';
-import { login, requestMagicLink, ApiError } from '../../services/authApi';
+import { login, requestMagicLink, resendVerification, ApiError } from '../../services/authApi';
 import { useStore } from '../../store';
 
 type Tab = 'password' | 'magic';
@@ -24,6 +24,11 @@ export function LoginPage() {
   const [magicError, setMagicError] = useState<string | null>(null);
   const [magicSent, setMagicSent] = useState(false);
 
+  // Set when login is blocked because the account hasn't verified its email —
+  // we offer a one-click resend tied to the attempted email.
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | { error: string }>('idle');
+
   const [loading, setLoading] = useState(false);
 
   const magicLinkInvalid = searchParams.get('error') === 'magic_link_invalid';
@@ -36,6 +41,8 @@ export function LoginPage() {
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
+    setUnverifiedEmail(null);
+    setResendState('idle');
     setLoading(true);
     try {
       const { user } = await login({ email: email.trim(), password });
@@ -43,10 +50,27 @@ export function LoginPage() {
       const next = searchParams.get('next');
       navigate(next && next.startsWith('/') ? next : '/');
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Sign-in failed';
-      setPasswordError(msg);
+      if (err instanceof ApiError && err.code === 'email_unverified') {
+        const echoed = typeof err.extra.email === 'string' ? err.extra.email : email.trim();
+        setUnverifiedEmail(echoed);
+      } else {
+        const msg = err instanceof ApiError ? err.message : 'Sign-in failed';
+        setPasswordError(msg);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!unverifiedEmail) return;
+    setResendState('sending');
+    try {
+      await resendVerification({ email: unverifiedEmail });
+      setResendState('sent');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Could not send verification email';
+      setResendState({ error: msg });
     }
   };
 
@@ -112,6 +136,36 @@ export function LoginPage() {
 
       {tab === 'password' ? (
         <form onSubmit={handlePasswordLogin}>
+          {unverifiedEmail && (
+            <div className="mb-4 px-3 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm">
+              <p className="font-semibold mb-1">Email not verified</p>
+              <p className="mb-3">
+                Please verify <span className="font-mono">{unverifiedEmail}</span> before signing in.
+                If you can't find the confirmation email, we can send a new one.
+              </p>
+              {resendState === 'sent' ? (
+                <div className="px-2 py-1.5 rounded-md bg-teal-light text-teal text-xs">
+                  Sent — check your inbox for a link from gtfsbuilder.net.
+                </div>
+              ) : (
+                <>
+                  {typeof resendState === 'object' && 'error' in resendState && (
+                    <div className="mb-2 px-2 py-1.5 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
+                      {resendState.error}
+                    </div>
+                  )}
+                  <AuthButton
+                    type="button"
+                    variant="secondary"
+                    onClick={handleResendVerification}
+                    disabled={resendState === 'sending'}
+                  >
+                    {resendState === 'sending' ? 'Sending…' : 'Send a new verification email'}
+                  </AuthButton>
+                </>
+              )}
+            </div>
+          )}
           <FormField
             label="Email"
             type="email"

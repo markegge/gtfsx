@@ -13,12 +13,13 @@ export type ErrorCode =
   | 'quota_exceeded'
   | 'invalid_credentials'
   | 'email_unverified'
+  | 'email_send_failed'
   | 'token_invalid'
   | 'token_expired'
   | 'internal';
 
 export class ApiError extends HTTPException {
-  constructor(status: 400 | 401 | 403 | 404 | 409 | 410 | 413 | 422 | 429 | 500, code: ErrorCode, message: string, extra?: Record<string, unknown>) {
+  constructor(status: 400 | 401 | 403 | 404 | 409 | 410 | 413 | 422 | 429 | 500 | 502, code: ErrorCode, message: string, extra?: Record<string, unknown>) {
     super(status, {
       res: new Response(JSON.stringify({ error: code, message, ...extra }), {
         status,
@@ -36,6 +37,9 @@ export const validationFailed = (msg: string, extra?: Record<string, unknown>) =
 export const rateLimited = (msg = 'Too many requests') => new ApiError(429, 'rate_limited', msg);
 export const quotaExceeded = (msg: string, extra?: Record<string, unknown>) => new ApiError(409, 'quota_exceeded', msg, extra);
 export const invalidCredentials = () => new ApiError(401, 'invalid_credentials', 'Email or password is incorrect');
-export const emailUnverified = () => new ApiError(403, 'email_unverified', 'Please verify your email address');
+export const emailUnverified = (extra?: Record<string, unknown>) =>
+  new ApiError(403, 'email_unverified', 'Please verify your email address before signing in', extra);
+export const emailSendFailed = () =>
+  new ApiError(502, 'email_send_failed', 'Verification email send failed. Please contact the administrator.');
 export const tokenInvalid = () => new ApiError(400, 'token_invalid', 'Invalid or unknown token');
 export const tokenExpired = () => new ApiError(400, 'token_expired', 'This link has expired — please request a new one');

@@ -118,18 +118,34 @@ export interface CapturedEmail {
 
 export interface EmailCapture {
   emails: CapturedEmail[];
+  /** When set, Resend calls return this response status + body instead of success. */
+  failWith?: { status: number; body?: string };
   /** Pull the token param out of the first captured email for a given to address (or overall). */
   tokenFor(to?: string): string | null;
+  linkFor(to?: string): string | null;
+  simulateSendFailure(status?: number, body?: string): void;
   restore(): void;
 }
 
 export function setupEmailCapture(): EmailCapture {
   const emails: CapturedEmail[] = [];
+  const self: EmailCapture = {
+    emails,
+    tokenFor: () => null,
+    linkFor: () => null,
+    simulateSendFailure(status = 401, body = '{"error":"unauthorized"}') {
+      self.failWith = { status, body };
+    },
+    restore: () => spy.mockRestore(),
+  };
   const original = globalThis.fetch;
   const spy: MockInstance = vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       if (url.startsWith('https://api.resend.com/emails')) {
+        if (self.failWith) {
+          return new Response(self.failWith.body ?? '', { status: self.failWith.status });
+        }
         const bodyStr = typeof init?.body === 'string' ? init.body : '';
         try {
           const parsed = JSON.parse(bodyStr) as CapturedEmail;
@@ -149,22 +165,17 @@ export function setupEmailCapture(): EmailCapture {
     },
   );
 
-  return {
-    emails,
-    tokenFor(to) {
-      const match = to ? emails.find((e) => e.to === to) : emails[emails.length - 1];
-      if (!match) return null;
-      return extractToken(match.text) ?? extractToken(match.html);
-    },
-    linkFor(to?: string): string | null {
-      const match = to ? emails.find((e) => e.to === to) : emails[emails.length - 1];
-      if (!match) return null;
-      return extractLink(match.text) ?? extractLink(match.html);
-    },
-    restore() {
-      spy.mockRestore();
-    },
+  self.tokenFor = (to?: string) => {
+    const match = to ? emails.find((e) => e.to === to) : emails[emails.length - 1];
+    if (!match) return null;
+    return extractToken(match.text) ?? extractToken(match.html);
   };
+  self.linkFor = (to?: string) => {
+    const match = to ? emails.find((e) => e.to === to) : emails[emails.length - 1];
+    if (!match) return null;
+    return extractLink(match.text) ?? extractLink(match.html);
+  };
+  return self;
 }
 
 export function extractToken(s: string): string | null {

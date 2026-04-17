@@ -57,10 +57,18 @@ function dummyHash(): Promise<string> {
 }
 
 // Fixed minimum latency on signup paths to avoid leaking existence via response-time skew.
+// The delay must settle even when `work()` throws — otherwise the conflict path returns
+// faster than the success path and the email-taken check becomes observable.
 async function withMinDelay<T>(ms: number, work: () => Promise<T>): Promise<T> {
-  const delay = new Promise<void>((res) => setTimeout(res, ms));
-  const [, result] = await Promise.all([delay, work()]);
-  return result;
+  const start = Date.now();
+  try {
+    return await work();
+  } finally {
+    const remaining = ms - (Date.now() - start);
+    if (remaining > 0) {
+      await new Promise<void>((res) => setTimeout(res, remaining));
+    }
+  }
 }
 
 interface UserRow {

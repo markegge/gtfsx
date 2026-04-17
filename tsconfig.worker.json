@@ -9,5 +9,6 @@
     "types": ["@cloudflare/workers-types"],
     "lib": ["ES2022"]
   },
-  "include": ["worker/**/*"]
+  "include": ["worker/**/*"],
+  "exclude": ["worker/__tests__/**/*"]
 }

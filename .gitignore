@@ -14,6 +14,10 @@ dist-ssr
 .env
 streamline_test.zip
 
+# Wrangler local state
+.wrangler/
+*.tsbuildinfo
+
 # demand-dots build artifacts
 demand-dots/cache/
 demand-dots/.venv/

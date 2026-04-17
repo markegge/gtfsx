@@ -1,20 +1,23 @@
 {
-  // GTFS Builder — deployed as static assets + a tile-serving Worker on
-  // Cloudflare's Workers-with-Static-Assets platform.
+  // GTFS Builder — deployed as static assets + a Worker on Cloudflare's
+  // Workers-with-Static-Assets platform.
   //
   // - Static SPA assets live in `dist/` and are served first.
-  // - Anything that doesn't match a static asset falls through to the Worker
-  //   in src/worker/index.ts, which handles `/_demand-tiles/...` paths by
-  //   streaming vector tiles out of the R2 PMTiles archive. All other
-  //   non-asset paths are forwarded back to the static asset binding so the
-  //   SPA fallback still works.
+  // - Non-asset paths fall through to the Worker (worker/index.ts), which
+  //   handles:
+  //     /_demand-tiles/...          — PMTiles out of R2 (TILES)
+  //     /_import/search, /_import/proxy — Mobility DB catalog + ZIP proxy
+  //     /auth/*, /api/*              — backend auth + feed management (D1 + R2 FEEDS)
+  //     feeds.gtfsbuilder.net/*      — public published feed distribution
+  //   The SPA fallback catches anything else.
   //
-  // - Custom domains (apex + www) are bound via the routes block. Cloudflare
-  //   auto-creates the DNS records on the gtfsbuilder.net zone.
+  // Run `scripts/setup-backend.sh` (or follow docs/DEPLOY_BACKEND.md) to
+  // provision D1, KV, and the R2 feeds bucket, then paste the IDs below.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "gtfs-builder",
   "main": "worker/index.ts",
   "compatibility_date": "2026-04-12",
+  "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
@@ -24,10 +27,41 @@
     {
       "binding": "TILES",
       "bucket_name": "gtfs-builder-tiles"
+    },
+    {
+      "binding": "FEEDS",
+      "bucket_name": "gtfs-builder-feeds"
     }
   ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "gtfs-builder",
+      // Paste the database_id printed by `wrangler d1 create gtfs-builder`
+      "database_id": "REPLACE_WITH_D1_ID",
+      "migrations_dir": "worker/migrations"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      // Paste the id printed by `wrangler kv:namespace create KV`
+      "id": "REPLACE_WITH_KV_ID"
+    }
+  ],
+  "vars": {
+    "AUTH_EMAIL_FROM": "GTFS Builder <noreply@gtfsbuilder.net>",
+    "APP_ORIGIN": "https://www.gtfsbuilder.net",
+    "FEEDS_ORIGIN": "https://feeds.gtfsbuilder.net",
+    "BACKEND_ENABLED": "true",
+    "HARD_LIMITS": "false"
+    // Secrets (set via `wrangler secret put`):
+    //   RESEND_API_KEY
+    //   MOBILITY_DATABASE_REFRESH_TOKEN  (already set)
+  },
   "routes": [
     { "pattern": "gtfsbuilder.net", "custom_domain": true },
-    { "pattern": "www.gtfsbuilder.net", "custom_domain": true }
+    { "pattern": "www.gtfsbuilder.net", "custom_domain": true },
+    { "pattern": "feeds.gtfsbuilder.net", "custom_domain": true }
   ]
 }

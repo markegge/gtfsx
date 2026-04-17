@@ -1,12 +1,19 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import * as Popover from '@radix-ui/react-popover';
 import { useStore } from '../../store';
 import { ImportDialog } from '../import-export/ImportDialog';
 import { ExportDialog } from '../import-export/ExportDialog';
 import { HelpDialog } from '../help/HelpDialog';
 import { db } from '../../db/dexie';
+import { logout as apiLogout } from '../../services/authApi';
+import { backendEnabled } from '../../utils/featureFlags';
 
 export function TopBar() {
   const { projectName, setProjectName, lastSavedAt, isDirty } = useStore();
+  const currentUser = useStore((s) => s.currentUser);
+  const clearAuth = useStore((s) => s.clearAuth);
+  const navigate = useNavigate();
   const [showImport, setShowImport] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -102,6 +109,67 @@ export function TopBar() {
         >
           Export GTFS
         </button>
+
+        {backendEnabled && currentUser ? (
+          <Popover.Root>
+            <Popover.Trigger asChild>
+              <button
+                className="w-9 h-9 rounded-full bg-coral text-white font-heading font-bold text-sm flex items-center justify-center hover:bg-[#d4603a] transition-colors"
+                title={currentUser.email}
+                aria-label="Account menu"
+              >
+                {initialsFromName(currentUser.displayName || currentUser.email)}
+              </button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                align="end"
+                sideOffset={8}
+                className="bg-white rounded-xl shadow-lg border border-sand p-2 w-56 z-50"
+              >
+                <div className="px-3 py-2 border-b border-sand mb-1">
+                  <div className="text-sm font-semibold text-dark-brown truncate">
+                    {currentUser.displayName}
+                  </div>
+                  <div className="text-xs text-warm-gray truncate">{currentUser.email}</div>
+                </div>
+                <button
+                  onClick={() => navigate('/feeds')}
+                  className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
+                >
+                  My Feeds
+                </button>
+                <button
+                  onClick={() => navigate('/account')}
+                  className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
+                >
+                  Account settings
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await apiLogout();
+                    } catch {
+                      // ignore — still clear local state
+                    }
+                    clearAuth();
+                    navigate('/');
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
+                >
+                  Sign out
+                </button>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+        ) : backendEnabled ? (
+          <button
+            onClick={() => navigate('/login')}
+            className="px-4 py-2 rounded-lg font-heading font-bold text-sm bg-sand text-brown hover:bg-coral-light hover:text-coral transition-colors"
+          >
+            Sign in
+          </button>
+        ) : null}
       </div>
 
       {showImport && <ImportDialog onClose={() => setShowImport(false)} />}
@@ -141,4 +209,16 @@ export function TopBar() {
       )}
     </>
   );
+}
+
+function initialsFromName(nameOrEmail: string): string {
+  const src = (nameOrEmail || '').trim();
+  if (!src) return '?';
+  if (src.includes('@')) {
+    return src[0]!.toUpperCase();
+  }
+  const parts = src.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
 }

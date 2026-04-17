@@ -1,0 +1,339 @@
+import { ApiError, type ApiErrorCode } from './authApi';
+
+export interface ProjectSummary {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  ownerType: string;
+  ownerId: string;
+  workingStateVersion: number;
+  workingStateSize: number | null;
+  workingStateUpdatedAt: number | null;
+  archivedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+  versionCount?: number;
+  lastVersionCreatedAt?: number | null;
+}
+
+export interface ProjectQuota {
+  projects: { used: number; limit: number };
+  warning: string | null;
+}
+
+export interface ProjectVersion {
+  id: string;
+  label: string | null;
+  createdAt: number;
+  createdByUserId?: string | null;
+  zipSize?: number;
+  validationErrors: number;
+  validationWarnings: number;
+  summary: VersionSummary | null;
+}
+
+export interface VersionSummary {
+  routeCount?: number;
+  stopCount?: number;
+  tripCount?: number;
+  serviceDayCount?: number;
+  feedStartDate?: string | null;
+  feedEndDate?: string | null;
+  revenueHoursWeekly?: number;
+  [key: string]: unknown;
+}
+
+export interface ProjectDetail extends ProjectSummary {
+  versions: ProjectVersion[];
+}
+
+export interface ListProjectsResponse {
+  projects: ProjectSummary[];
+  quota: ProjectQuota;
+}
+
+export class ConflictError extends ApiError {
+  currentVersion: number;
+  constructor(message: string, currentVersion: number) {
+    super('conflict', message, 409);
+    this.name = 'ConflictError';
+    this.currentVersion = currentVersion;
+  }
+}
+
+const BASE_HEADERS = { 'X-GB-Client': 'web' };
+
+async function parseErrorResponse(res: Response): Promise<ApiError> {
+  let code: ApiErrorCode = 'unknown';
+  let message = res.statusText || 'Request failed';
+  let extra: Record<string, unknown> = {};
+  const contentType = res.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    try {
+      const data = await res.json();
+      if (data && typeof data === 'object') {
+        if (typeof data.error === 'string') code = data.error as ApiErrorCode;
+        if (typeof data.message === 'string') message = data.message;
+        extra = data as Record<string, unknown>;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  if (res.status === 409 && typeof extra.currentVersion === 'number') {
+    return new ConflictError(message, extra.currentVersion);
+  }
+  return new ApiError(code, message, res.status);
+}
+
+async function requestJson<T>(
+  path: string,
+  init: { method?: string; body?: unknown } = {},
+): Promise<T> {
+  const { method = 'GET', body } = init;
+  const headers: Record<string, string> = { ...BASE_HEADERS };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method,
+      headers,
+      credentials: 'include',
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (e) {
+    throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
+  }
+
+  if (!res.ok) throw await parseErrorResponse(res);
+  if (res.status === 204) return undefined as T;
+
+  const contentType = res.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    return (await res.json()) as T;
+  }
+  return undefined as T;
+}
+
+export function listProjects(includeArchived = false): Promise<ListProjectsResponse> {
+  const q = includeArchived ? '?include_archived=1' : '';
+  return requestJson<ListProjectsResponse>(`/api/projects${q}`);
+}
+
+export function createProject(input: {
+  name: string;
+  description?: string;
+  slug?: string;
+}): Promise<ProjectSummary> {
+  return requestJson<ProjectSummary>('/api/projects', { method: 'POST', body: input });
+}
+
+export function getProject(id: string): Promise<ProjectDetail> {
+  return requestJson<ProjectDetail>(`/api/projects/${encodeURIComponent(id)}`);
+}
+
+export function patchProject(
+  id: string,
+  input: { name?: string; description?: string | null; slug?: string; archivedAt?: null | 'now' },
+): Promise<ProjectSummary> {
+  return requestJson<ProjectSummary>(`/api/projects/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: input,
+  });
+}
+
+export function deleteProject(id: string): Promise<void> {
+  return requestJson<void>(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+async function gzipString(input: string): Promise<Blob> {
+  const stream = new Blob([input], { type: 'application/json' })
+    .stream()
+    .pipeThrough(new CompressionStream('gzip'));
+  return new Response(stream).blob();
+}
+
+export async function fetchWorkingState(
+  projectId: string,
+): Promise<{ snapshot: Record<string, unknown> | null; version: number }> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/working-state`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { ...BASE_HEADERS },
+    });
+  } catch (e) {
+    throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
+  }
+
+  if (res.status === 404) {
+    // "No working state yet" — treat as empty; need current version via getProject.
+    const detail = await getProject(projectId);
+    return { snapshot: null, version: detail.workingStateVersion };
+  }
+  if (!res.ok) throw await parseErrorResponse(res);
+
+  const versionHeader = res.headers.get('X-Working-State-Version');
+  const version = versionHeader ? parseInt(versionHeader, 10) : 0;
+  const text = await res.text();
+  const snapshot = text ? (JSON.parse(text) as Record<string, unknown>) : null;
+  return { snapshot, version: Number.isFinite(version) ? version : 0 };
+}
+
+export async function saveWorkingState(
+  projectId: string,
+  snapshot: Record<string, unknown>,
+  ifMatchVersion: number,
+): Promise<{ workingStateVersion: number }> {
+  const json = JSON.stringify(snapshot);
+  const body = await gzipString(json);
+
+  let res: Response;
+  try {
+    res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/working-state`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: {
+        ...BASE_HEADERS,
+        'Content-Type': 'application/json',
+        'Content-Encoding': 'gzip',
+        'If-Match': String(ifMatchVersion),
+      },
+      body,
+    });
+  } catch (e) {
+    throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
+  }
+
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as { workingStateVersion: number };
+}
+
+export async function saveVersion(
+  projectId: string,
+  input: {
+    label?: string;
+    summary: VersionSummary;
+    validationErrors: number;
+    validationWarnings: number;
+    snapshot: Record<string, unknown>;
+  },
+): Promise<{ version: ProjectVersion }> {
+  const gz = await gzipString(JSON.stringify(input.snapshot));
+  const file = new File([gz], 'state.json.gz', { type: 'application/json' });
+  const meta = {
+    label: input.label,
+    summary: input.summary,
+    validationErrors: input.validationErrors,
+    validationWarnings: input.validationWarnings,
+  };
+
+  const form = new FormData();
+  form.append('state', file);
+  form.append('meta', JSON.stringify(meta));
+
+  let res: Response;
+  try {
+    res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/versions`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { ...BASE_HEADERS },
+      body: form,
+    });
+  } catch (e) {
+    throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
+  }
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as { version: ProjectVersion };
+}
+
+export function listVersions(projectId: string): Promise<{ versions: ProjectVersion[] }> {
+  return requestJson<{ versions: ProjectVersion[] }>(
+    `/api/projects/${encodeURIComponent(projectId)}/versions`,
+  );
+}
+
+export async function fetchVersionState(
+  projectId: string,
+  versionId: string,
+): Promise<Record<string, unknown>> {
+  let res: Response;
+  try {
+    res = await fetch(
+      `/api/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/state`,
+      {
+        method: 'GET',
+        credentials: 'include',
+        headers: { ...BASE_HEADERS },
+      },
+    );
+  } catch (e) {
+    throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
+  }
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as Record<string, unknown>;
+}
+
+export function restoreVersion(
+  projectId: string,
+  versionId: string,
+): Promise<{ workingStateVersion: number }> {
+  return requestJson<{ workingStateVersion: number }>(
+    `/api/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/restore`,
+    { method: 'POST' },
+  );
+}
+
+export function deleteVersion(projectId: string, versionId: string): Promise<void> {
+  return requestJson<void>(
+    `/api/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}`,
+    { method: 'DELETE' },
+  );
+}
+
+export interface ImportProjectItem {
+  slug?: string;
+  name: string;
+  description?: string;
+  snapshot: Record<string, unknown>;
+}
+
+export interface ImportResult {
+  imported: ProjectSummary[];
+  skipped: { name: string; reason: string }[];
+}
+
+async function snapshotToBase64Gzip(snapshot: Record<string, unknown>): Promise<{ base64: string; size: number }> {
+  const gz = await gzipString(JSON.stringify(snapshot));
+  const buf = await gz.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  // Build base64 in chunks to avoid call-stack overflow for large blobs.
+  let binary = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK)) as number[]);
+  }
+  return { base64: btoa(binary), size: bytes.byteLength };
+}
+
+export async function importProjects(items: ImportProjectItem[]): Promise<ImportResult> {
+  const projects = await Promise.all(
+    items.map(async (item) => {
+      const { base64, size } = await snapshotToBase64Gzip(item.snapshot);
+      return {
+        slug: item.slug,
+        name: item.name,
+        description: item.description,
+        workingState: base64,
+        workingStateSize: size,
+      };
+    }),
+  );
+  return requestJson<ImportResult>('/api/projects/import', {
+    method: 'POST',
+    body: { projects },
+  });
+}

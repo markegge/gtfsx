@@ -5,6 +5,7 @@ import { TimetableGrid } from '../timetable/TimetableGrid';
 import { StopDepartures } from '../timetable/StopDepartures';
 import { ServiceSummary } from '../timetable/ServiceSummary';
 import { ValidationPanel } from '../validation/ValidationPanel';
+import { VersionHistoryPanel } from '../versions/VersionHistoryPanel';
 
 const MIN_HEIGHT = 120;
 const MAX_HEIGHT_FRACTION = 0.75; // max 75% of viewport
@@ -15,6 +16,7 @@ function getDefaultHeight() {
 
 export function BottomPanel() {
   const { bottomPanelOpen, bottomPanelTab, setBottomPanelTab, toggleBottomPanel } = useStore();
+  const activeServerProjectId = useStore((s) => s.activeServerProjectId);
   const [panelHeight, setPanelHeight] = useState(getDefaultHeight);
   const [isDraggingState, setIsDraggingState] = useState(false);
   const isDragging = useRef(false);
@@ -79,12 +81,17 @@ export function BottomPanel() {
         onClick={() => toggleBottomPanel()}
       >
         <span className="text-xs text-warm-gray">{bottomPanelOpen ? '▼' : '▲'}</span>
-        {(['timetable', 'stops', 'service-summary', 'validation'] as const).map((tab) => {
+        {(
+          activeServerProjectId
+            ? (['timetable', 'stops', 'service-summary', 'validation', 'versions'] as const)
+            : (['timetable', 'stops', 'service-summary', 'validation'] as const)
+        ).map((tab) => {
           const labels: Record<string, string> = {
             timetable: 'Timetable',
             stops: 'Stops',
             'service-summary': 'Service Summary',
             validation: 'Validation',
+            versions: 'Versions',
           };
           return (
             <button
@@ -129,6 +136,7 @@ export function BottomPanel() {
           {bottomPanelTab === 'stops' && <StopDepartures />}
           {bottomPanelTab === 'service-summary' && <ServiceSummary />}
           {bottomPanelTab === 'validation' && <ValidationPanel />}
+          {bottomPanelTab === 'versions' && activeServerProjectId && <VersionHistoryPanel />}
         </div>
       )}
 

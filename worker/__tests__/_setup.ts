@@ -156,6 +156,11 @@ export function setupEmailCapture(): EmailCapture {
       if (!match) return null;
       return extractToken(match.text) ?? extractToken(match.html);
     },
+    linkFor(to?: string): string | null {
+      const match = to ? emails.find((e) => e.to === to) : emails[emails.length - 1];
+      if (!match) return null;
+      return extractLink(match.text) ?? extractLink(match.html);
+    },
     restore() {
       spy.mockRestore();
     },
@@ -165,6 +170,11 @@ export function setupEmailCapture(): EmailCapture {
 export function extractToken(s: string): string | null {
   const m = s.match(/[?&]token=([A-Za-z0-9_\-]+)/);
   return m ? m[1] : null;
+}
+
+export function extractLink(s: string): string | null {
+  const m = s.match(/https?:\/\/[^\s"<]+\?token=[A-Za-z0-9_\-]+/);
+  return m ? m[0] : null;
 }
 
 // ─── DB helpers ─────────────────────────────────────────────────────────────

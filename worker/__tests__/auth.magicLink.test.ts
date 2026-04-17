@@ -36,7 +36,9 @@ describe('auth /magic-link', () => {
     const token = capture.tokenFor(user.email);
     expect(token).toBeTruthy();
 
-    const consume = await client.get(`/auth/magic-link/consume?token=${token}`);
+    const link = capture.linkFor(user.email);
+    expect(link).toBeTruthy();
+    const consume = await client.get(new URL(link!).pathname + new URL(link!).search);
     expect(consume.status).toBe(302);
     expect(locationPath(consume)).toBe('/');
     expect(locationQuery(consume, 'welcome')).toBe('1');

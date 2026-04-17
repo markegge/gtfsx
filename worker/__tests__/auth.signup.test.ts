@@ -47,8 +47,12 @@ describe('auth /signup + /verify', () => {
     );
     expect(preRow?.status).toBe('pending_verification');
 
-    // GET /auth/verify?token=… — redirects to /?welcome=1 with Set-Cookie.
-    const verify = await client.get(`/auth/verify?token=${token}`);
+    // Follow the actual link from the email — catches any mismatch between the
+    // URL the Worker emails and the endpoint that actually consumes the token.
+    const link = capture.linkFor('alice@example.com');
+    expect(link).toBeTruthy();
+    const linkPath = new URL(link!).pathname + new URL(link!).search;
+    const verify = await client.get(linkPath);
     expect(verify.status).toBe(302);
     expect(locationPath(verify)).toBe('/');
     expect(locationQuery(verify, 'welcome')).toBe('1');

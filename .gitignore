@@ -16,6 +16,7 @@ streamline_test.zip
 
 # Wrangler local state
 .wrangler/
+.dev.vars
 *.tsbuildinfo
 
 # demand-dots build artifacts

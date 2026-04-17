@@ -147,7 +147,7 @@ authRouter.post('/signup', async (c) => {
       .run();
 
     const token = await createAuthToken(c.env, { kind: 'verify_email', userId });
-    const link = `${c.env.APP_ORIGIN}/verify-email?token=${token}`;
+    const link = `${c.env.APP_ORIGIN}/auth/verify?token=${token}`;
     await sendVerifyEmail(c.env, body.email, link);
 
     await logAudit(c.env, {
@@ -208,7 +208,7 @@ authRouter.post('/verify-resend', requireAuth, async (c) => {
 
   await invalidateAuthTokensForUser(c.env, user.id, 'verify_email');
   const token = await createAuthToken(c.env, { kind: 'verify_email', userId: user.id });
-  const link = `${c.env.APP_ORIGIN}/verify-email?token=${token}`;
+  const link = `${c.env.APP_ORIGIN}/auth/verify?token=${token}`;
   await sendVerifyEmail(c.env, user.email, link);
 
   return c.body(null, 204);
@@ -272,7 +272,7 @@ authRouter.post('/magic-link/request', async (c) => {
   const user = await findUserByEmail(c.env, body.email);
   if (user && user.status !== 'deleted_soft') {
     const token = await createAuthToken(c.env, { kind: 'magic_link', userId: user.id });
-    const link = `${c.env.APP_ORIGIN}/magic-link?token=${token}`;
+    const link = `${c.env.APP_ORIGIN}/auth/magic-link/consume?token=${token}`;
     await sendMagicLink(c.env, user.email, link);
     await logAudit(c.env, {
       actorUserId: user.id,

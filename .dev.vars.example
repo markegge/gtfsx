@@ -1,0 +1,20 @@
+# Copy this to `.dev.vars` and fill in values. Wrangler loads `.dev.vars`
+# during `wrangler dev` only; it's not uploaded on `wrangler deploy` and it
+# overrides the `vars` block in wrangler.jsonc locally.
+#
+# .dev.vars is gitignored (matches `*.local`-style patterns? No — add
+# explicitly to .gitignore if your repo doesn't already cover it).
+
+# Point emailed links at the local Vite dev server, not production.
+APP_ORIGIN=http://127.0.0.1:5173
+FEEDS_ORIGIN=http://127.0.0.1:5173
+AUTH_EMAIL_FROM=GTFS Builder Dev <dev@example.com>
+
+# Real Resend API key — reuse the one from bozeman-pod/.env if you have one,
+# or create a test key at resend.com. Without a working key, signup/
+# magic-link/password-reset will fail on the email-send step.
+RESEND_API_KEY=re_your_dev_key_here
+
+# For the catalog-search Worker. If you're not using /_import/search locally,
+# any string works.
+MOBILITY_DATABASE_REFRESH_TOKEN=unused-locally

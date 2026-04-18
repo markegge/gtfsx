@@ -54,9 +54,11 @@ describe('auth /signup + /verify', () => {
     const linkPath = new URL(link!).pathname + new URL(link!).search;
     const verify = await client.get(linkPath);
     expect(verify.status).toBe(302);
-    expect(locationPath(verify)).toBe('/');
-    expect(locationQuery(verify, 'welcome')).toBe('1');
-    expect(client.cookie).toMatch(/^gb_session=/);
+    // Verify redirects to the login page with a success flag; we deliberately
+    // don't auto-create a session (avoids Safari/http Secure-cookie flakiness).
+    expect(locationPath(verify)).toBe('/login');
+    expect(locationQuery(verify, 'verified')).toBe('1');
+    expect(client.cookie).toBeNull();
 
     // DB shows active user.
     const postRow = await dbGet<{ status: string }>(
@@ -65,7 +67,13 @@ describe('auth /signup + /verify', () => {
     );
     expect(postRow?.status).toBe('active');
 
-    // /api/me works with the session cookie.
+    // Now the user can sign in with their password.
+    const login = await client.post('/auth/login', {
+      email: 'alice@example.com',
+      password: 'correct-horse-battery',
+    });
+    expect(login.status).toBe(200);
+    expect(client.cookie).toMatch(/^gb_session=/);
     const meRes = await client.get('/api/me');
     const me = await client.json<{ user: { email: string; status: string } }>(meRes);
     expect(me.user.email).toBe('alice@example.com');
@@ -172,7 +180,7 @@ describe('auth /signup + /verify', () => {
 
     const first = await client.get(`/auth/verify?token=${token}`);
     expect(first.status).toBe(302);
-    expect(locationQuery(first, 'welcome')).toBe('1');
+    expect(locationQuery(first, 'verified')).toBe('1');
 
     // Reusing a fresh client so we're not sending the session cookie — the
     // redirect target should still be the invalid path.

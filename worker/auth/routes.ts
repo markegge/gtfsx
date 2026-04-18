@@ -178,6 +178,11 @@ authRouter.post('/signup', async (c) => {
 });
 
 // ─── Verify email ──────────────────────────────────────────────────────────
+// Activates the account and redirects to the login page with a success flag.
+// We deliberately do NOT auto-create a session here: setting a cookie on a
+// cross-origin-ish 302 (especially on http://localhost in Safari, or through
+// a Vite proxy in dev) is unreliable, and a silent half-logged-in state is
+// more confusing than asking the user to sign in once after verifying.
 authRouter.get('/verify', async (c) => {
   const token = c.req.query('token');
   const invalidRedirect = () => c.redirect(`${c.env.APP_ORIGIN}/verify-email?status=invalid`, 302);
@@ -196,13 +201,6 @@ authRouter.get('/verify', async (c) => {
     .run();
   await consumeAuthToken(c.env, resolved.tokenHash);
 
-  const session = await createSession(c.env, {
-    userId: resolved.userId,
-    ip: clientIp(c.req.raw),
-    userAgent: c.req.header('User-Agent') ?? null,
-  });
-  c.header('Set-Cookie', sessionCookie(session.token, session.expiresAt));
-
   await logAudit(c.env, {
     actorUserId: resolved.userId,
     subjectType: 'user',
@@ -211,7 +209,7 @@ authRouter.get('/verify', async (c) => {
     ip: clientIp(c.req.raw),
   });
 
-  return c.redirect(`${c.env.APP_ORIGIN}/?welcome=1`, 302);
+  return c.redirect(`${c.env.APP_ORIGIN}/login?verified=1`, 302);
 });
 
 // ─── Resend verification email ─────────────────────────────────────────────

@@ -33,6 +33,7 @@ export function LoginPage() {
 
   const magicLinkInvalid = searchParams.get('error') === 'magic_link_invalid';
   const resetSuccess = searchParams.get('reset') === '1';
+  const verifiedSuccess = searchParams.get('verified') === '1';
 
   useEffect(() => {
     if (searchParams.get('tab') === 'magic') setTab('magic');
@@ -110,6 +111,11 @@ export function LoginPage() {
       {resetSuccess && (
         <div className="mb-4 px-3 py-2 rounded-lg bg-teal-light text-teal text-sm">
           Password updated — sign in with your new password.
+        </div>
+      )}
+      {verifiedSuccess && (
+        <div className="mb-4 px-3 py-2 rounded-lg bg-teal-light text-teal text-sm">
+          Email verified successfully — sign in to finish setting up your account.
         </div>
       )}
 

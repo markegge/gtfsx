@@ -67,7 +67,15 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     if (idx === -1) state.hiddenShapeIds.push(shapeId);
     else state.hiddenShapeIds.splice(idx, 1);
   }),
-  setSidebarSection: (section) => set((state) => { state.sidebarSection = section; }),
+  setSidebarSection: (section) => set((state) => {
+    state.sidebarSection = section;
+    // "Place Stops on Map" and "Move Stop" only make sense while the Stops
+    // panel is active — auto-exit when the user navigates away so the map
+    // doesn't keep capturing clicks for a mode whose UI is no longer visible.
+    if (section !== 'stops' && (state.mapMode === 'place_stop' || state.mapMode === 'move_stop')) {
+      state.mapMode = 'select';
+    }
+  }),
   setBottomPanelOpen: (open) => set((state) => { state.bottomPanelOpen = open; }),
   toggleBottomPanel: () => set((state) => { state.bottomPanelOpen = !state.bottomPanelOpen; }),
   setBottomPanelTab: (tab) => set((state) => { state.bottomPanelTab = tab; }),

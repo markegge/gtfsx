@@ -151,8 +151,16 @@ export function TimetableGrid() {
 
       if (nextTripIdx >= 0 && nextTripIdx < totalTrips) {
         const key = cellKey(nextTripIdx, nextStopIdx);
-        const el = cellRefs.current.get(key);
-        if (el) el.focus();
+        // Defer focus until after the commit-triggered re-render completes.
+        // If the commit renames a `_new` trip, the row's key changes and React
+        // unmounts it — focusing the old element synchronously is a no-op.
+        // Two rAFs is the reliable way to land after React's effect phase.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const el = cellRefs.current.get(key);
+            if (el) el.focus();
+          });
+        });
       }
     }
   }, [orderedStops.length, routeTrips.length]);

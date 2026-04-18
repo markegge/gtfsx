@@ -30,6 +30,16 @@ export const requireAuth: MiddlewareHandler<AppContext> = async (c, next) => {
   await next();
 };
 
+// Require an authenticated, active user with the staff flag set. Returns
+// 404 (not 403) to avoid advertising the admin surface to non-staff users.
+export const requireStaff: MiddlewareHandler<AppContext> = async (c, next) => {
+  const user = c.var.user;
+  if (!user || user.status !== 'active' || !user.staff) {
+    return c.json({ error: 'not_found', message: 'Not found' }, 404);
+  }
+  await next();
+};
+
 // CSRF defense for cookie-auth APIs: require a custom header that forms
 // can't set cross-origin. Combined with SameSite=Lax this blocks CSRF.
 // Applied to all /api/* and /auth/* POST/PUT/PATCH/DELETE routes.

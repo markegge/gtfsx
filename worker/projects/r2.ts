@@ -12,6 +12,14 @@ export function versionZipKey(projectId: string, versionId: string): string {
   return `projects/${projectId}/versions/${versionId}/gtfs.zip`;
 }
 
+export function publicationZipKey(projectId: string, versionId: string): string {
+  return `publications/${projectId}/${versionId}/gtfs.zip`;
+}
+
+export function draftZipKey(projectId: string, tokenHash: string): string {
+  return `draft-links/${projectId}/${tokenHash}.zip`;
+}
+
 export function projectPrefix(projectId: string): string {
   return `projects/${projectId}/`;
 }

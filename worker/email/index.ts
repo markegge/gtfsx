@@ -85,3 +85,37 @@ export async function sendPasswordReset(env: Env, to: string, link: string): Pro
     text: `Reset your GTFS Builder password: ${link}\n\nThis link expires in 1 hour.`,
   });
 }
+
+export async function sendInvitationEmail(
+  env: Env,
+  to: string,
+  inviterName: string,
+  orgName: string,
+  role: string,
+  link: string,
+): Promise<void> {
+  const safeInviter = escapeHtml(inviterName);
+  const safeOrg = escapeHtml(orgName);
+  const safeRole = escapeHtml(role);
+  await send(env, {
+    to,
+    subject: `You're invited to ${orgName} on GTFS Builder`,
+    html: wrap(`
+      <p><strong>${safeInviter}</strong> has invited you to join the <strong>${safeOrg}</strong> organization on GTFS Builder as a <strong>${safeRole}</strong>.</p>
+      <p>Click the link below to accept the invitation. If you don't already have a GTFS Builder account you'll be asked to sign up with this email address first.</p>
+      <p><a href="${link}" style="display: inline-block; background: #8a5a3b; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none;">Accept invitation</a></p>
+      <p style="color: #666; font-size: 13px;">Or paste this URL into your browser: <br /><code>${link}</code></p>
+      <p style="color: #666; font-size: 13px;">This link expires in 7 days. If you weren't expecting this, you can ignore this email.</p>
+    `),
+    text: `${inviterName} has invited you to join ${orgName} on GTFS Builder as a ${role}.\n\nAccept the invitation: ${link}\n\nThis link expires in 7 days.`,
+  });
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}

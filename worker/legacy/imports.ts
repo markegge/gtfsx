@@ -1,28 +1,7 @@
 import type { Env } from '../env';
+import { getMobilityDbAccessToken } from '../distribution/mobility';
 
 // ─── Mobility Database catalog search ──────────────────────────────────────────
-
-let cachedMdToken: { value: string; expiresAt: number } | null = null;
-
-async function getMobilityDbAccessToken(env: Env): Promise<string> {
-  if (cachedMdToken && Date.now() < cachedMdToken.expiresAt - 60_000) {
-    return cachedMdToken.value;
-  }
-  const r = await fetch('https://api.mobilitydatabase.org/v1/tokens', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: env.MOBILITY_DATABASE_REFRESH_TOKEN }),
-  });
-  if (!r.ok) {
-    throw new Error(`Mobility DB token exchange failed: ${r.status} ${await r.text()}`);
-  }
-  const j = (await r.json()) as { access_token: string; expires_in?: number };
-  cachedMdToken = {
-    value: j.access_token,
-    expiresAt: Date.now() + (j.expires_in ?? 3600) * 1000,
-  };
-  return cachedMdToken.value;
-}
 
 const ALLOWED_SEARCH_PARAMS = new Set([
   'provider', 'producer_url', 'country_code', 'subdivision_name',

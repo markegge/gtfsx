@@ -4,6 +4,7 @@ import { ulid } from 'ulidx';
 import type { AppContext } from './env';
 import { requireAuth } from './auth/middleware';
 import {
+  ApiError,
   conflict,
   forbidden,
   invalidCredentials,
@@ -21,6 +22,8 @@ import {
 } from './auth/tokens';
 import { sendVerifyEmail } from './email';
 import { projectsRouter } from './projects/routes';
+import { computeUserUsage } from './me/usage';
+import { buildUserExport, EXPORT_RATE_KEY_PREFIX, EXPORT_RATE_WINDOW_SEC } from './me/export';
 
 const emailSchema = z.string().trim().toLowerCase().email();
 const passwordSchema = z.string().min(10).max(256);
@@ -63,8 +66,9 @@ async function parseJson<T extends z.ZodTypeAny>(c: { req: { json: () => Promise
 
 export const apiRouter = new Hono<AppContext>();
 
-apiRouter.get('/me', requireAuth, (c) => {
+apiRouter.get('/me', requireAuth, async (c) => {
   const user = c.var.user!;
+  const usage = await computeUserUsage(c.env, user.id);
   return c.json({
     user: {
       id: user.id,
@@ -73,8 +77,14 @@ apiRouter.get('/me', requireAuth, (c) => {
       status: user.status,
       staff: user.staff,
     },
-    usage: null,
+    usage: { user: usage },
   });
+});
+
+apiRouter.get('/me/usage', requireAuth, async (c) => {
+  const user = c.var.user!;
+  const userUsage = await computeUserUsage(c.env, user.id);
+  return c.json({ user: userUsage });
 });
 
 apiRouter.patch('/me', requireAuth, async (c) => {
@@ -271,5 +281,117 @@ apiRouter.delete('/me', requireAuth, async (c) => {
   return c.body(null, 204);
 });
 
+// ─── Audit log — events visible to the current user ────────────────────────
+//
+// Visibility rule: events where
+//   (a) the user IS the subject (subject_type='user' AND subject_id=user.id),
+//   (b) the user is the actor (actor_user_id=user.id),
+//   (c) the event is about a project the user owns (subject_type='project'
+//       joined to feed_project.owner_type='user' AND owner_id=user.id).
+// Paginated by ULID id: pass `before=<last_id_seen>` for the next page.
+apiRouter.get('/me/audit', requireAuth, async (c) => {
+  const user = c.var.user!;
+  const limitRaw = c.req.query('limit');
+  const before = c.req.query('before');
+  let limit = limitRaw ? parseInt(limitRaw, 10) : 50;
+  if (!Number.isFinite(limit) || limit <= 0) limit = 50;
+  if (limit > 200) limit = 200;
+
+  const binds: unknown[] = [user.id, user.id, user.id];
+  let beforeClause = '';
+  if (before) {
+    beforeClause = ' AND e.id < ?';
+    binds.push(before);
+  }
+  binds.push(limit);
+
+  const stmt = `
+    SELECT e.id, e.actor_user_id, e.subject_type, e.subject_id, e.action,
+           e.metadata_json, e.created_at
+      FROM audit_event e
+      LEFT JOIN feed_project p ON e.subject_type = 'project' AND p.id = e.subject_id
+     WHERE (
+             (e.subject_type = 'user' AND e.subject_id = ?)
+          OR e.actor_user_id = ?
+          OR (e.subject_type = 'project' AND p.owner_type = 'user' AND p.owner_id = ?)
+           )
+       ${beforeClause}
+     ORDER BY e.id DESC
+     LIMIT ?
+  `;
+
+  const result = await c.env.DB.prepare(stmt)
+    .bind(...binds)
+    .all<{
+      id: string;
+      actor_user_id: string | null;
+      subject_type: string;
+      subject_id: string | null;
+      action: string;
+      metadata_json: string | null;
+      created_at: number;
+    }>();
+
+  const events = (result.results ?? []).map((r) => ({
+    id: r.id,
+    actorUserId: r.actor_user_id,
+    subjectType: r.subject_type,
+    subjectId: r.subject_id,
+    action: r.action,
+    metadataJson: r.metadata_json,
+    createdAt: r.created_at,
+  }));
+
+  return c.json({ events });
+});
+
+// Per-user data export — ZIP with profile.json, audit.json, and every
+// personally-owned project's blobs. Rate-limited to 1/24h per user.
+apiRouter.get('/me/export', requireAuth, async (c) => {
+  const user = c.var.user!;
+  const rateKey = `${EXPORT_RATE_KEY_PREFIX}${user.id}`;
+  const existing = await c.env.KV.get(rateKey);
+  if (existing) {
+    throw new ApiError(
+      429,
+      'rate_limited',
+      'Data export limit: 1 per 24 hours. Try again later.',
+    );
+  }
+
+  const { body, filename } = await buildUserExport(c.env, user);
+
+  // Mark the window as used BEFORE streaming back — even if the client drops
+  // the connection, we should still count it to prevent hammering.
+  await c.env.KV.put(rateKey, String(Date.now()), { expirationTtl: EXPORT_RATE_WINDOW_SEC });
+
+  await logAudit(c.env, {
+    actorUserId: user.id,
+    subjectType: 'user',
+    subjectId: user.id,
+    action: 'user.data_export',
+    ip: clientIp(c.req.raw),
+  });
+
+  return new Response(body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Cache-Control': 'private, no-store',
+    },
+  });
+});
+
 apiRouter.route('/projects', projectsRouter);
-// Phase 4 agent will mount: apiRouter.route('/orgs', orgsRouter).
+
+// ─── SUBROUTER MOUNTS ──────────────────────────────────────────────────────
+// /api/me is inline above (auth-adjacent, small). Everything else is in a
+// feature module — add new routers here.
+import { orgsRouter } from './orgs/routes';
+import { adminRouter } from './admin/routes';
+apiRouter.route('/orgs', orgsRouter);
+apiRouter.route('/admin', adminRouter);
+// Publication and distribution endpoints hang off the projects router
+// (/api/projects/:id/publish, /catalog-submissions, etc.) so project-ownership
+// checks stay co-located with their endpoints. See worker/projects/routes.ts.

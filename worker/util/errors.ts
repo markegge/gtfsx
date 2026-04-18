@@ -16,6 +16,8 @@ export type ErrorCode =
   | 'email_send_failed'
   | 'token_invalid'
   | 'token_expired'
+  | 'rt_breakage'
+  | 'bad_gateway'
   | 'internal';
 
 export class ApiError extends HTTPException {
@@ -43,3 +45,7 @@ export const emailSendFailed = () =>
   new ApiError(502, 'email_send_failed', 'Verification email send failed. Please contact the administrator.');
 export const tokenInvalid = () => new ApiError(400, 'token_invalid', 'Invalid or unknown token');
 export const tokenExpired = () => new ApiError(400, 'token_expired', 'This link has expired — please request a new one');
+export const rtBreakage = (extra?: Record<string, unknown>) =>
+  new ApiError(409, 'rt_breakage', 'Publishing this version will break your GTFS-Realtime feed', extra);
+export const badGateway = (msg = 'Upstream service error', extra?: Record<string, unknown>) =>
+  new ApiError(502, 'bad_gateway', msg, extra);

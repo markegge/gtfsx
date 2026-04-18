@@ -70,5 +70,10 @@
     { "pattern": "gtfsbuilder.net", "custom_domain": true },
     { "pattern": "www.gtfsbuilder.net", "custom_domain": true },
     { "pattern": "feeds.gtfsbuilder.net", "custom_domain": true }
-  ]
+  ],
+  // Scheduled Worker invocations. See worker/cron/index.ts.
+  // 03:00 UTC daily: account-deletion reaper + weekly metrics rollup.
+  "triggers": {
+    "crons": ["0 3 * * *"]
+  }
 }

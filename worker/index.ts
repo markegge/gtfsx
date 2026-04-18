@@ -5,6 +5,7 @@ import { handleSearch, handleProxy } from './legacy/imports';
 import { sessionMiddleware, requireClientHeader } from './auth/middleware';
 import { authRouter } from './auth/routes';
 import { apiRouter } from './api';
+import { feedsHandler } from './publication/feeds';
 
 const app = new Hono<AppContext>();
 
@@ -55,6 +56,18 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
+    // Public feed distribution lives on feeds.gtfsbuilder.net (and, for local
+    // dev, any hostname that starts with `feeds.`). Never auth-aware; no
+    // cookies. Handled by a dedicated module.
+    if (url.hostname === 'feeds.gtfsbuilder.net' || url.hostname.startsWith('feeds.')) {
+      try {
+        return await feedsHandler(request, env, ctx);
+      } catch (err) {
+        console.error('[feeds] unhandled error', err);
+        return new Response('Internal error', { status: 500 });
+      }
+    }
+
     // Tile serving sits outside Hono because it's perf-sensitive and uses a
     // regex path match. Handle it before entering the router.
     const tileMatch = url.pathname.match(TILE_RE);
@@ -78,5 +91,11 @@ export default {
 
     // Everything else: static assets (SPA fallback handled by the binding).
     return env.ASSETS.fetch(request);
+  },
+
+  // Scheduled worker invocations (Cron Triggers). See worker/cron/index.ts.
+  async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    const { runScheduled } = await import('./cron');
+    await runScheduled(event, env, ctx);
   },
 };

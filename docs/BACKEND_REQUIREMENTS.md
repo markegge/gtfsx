@@ -8,7 +8,7 @@ Today GTFS Builder is a pure browser app: everything lives in IndexedDB, and the
 2. **Feed management** — server-side storage of feed projects so users can work across devices, recover from data loss, and organize multiple feeds.
 3. **Feed publication** — publish a feed to a stable public URL, share unlisted draft URLs for review, and optionally register the canonical URL with public GTFS catalogs.
 
-This is a **feature-set doc**, not an implementation plan. §11 captures the decisions made during review — refer there for the rationale behind anything that looks under-specified above.
+This is a **feature-set doc**, not an implementation plan. §12 captures the decisions made during review — refer there for the rationale behind anything that looks under-specified above.
 
 **Commercial model:** This product is intended to be licensed to the **Rural Transit Assistance Program (RTAP)**, which will provide free access to its member agencies. Every user gets the same quota (see BE-52), enforced as hard limits. No in-app billing in v1.
 
@@ -262,7 +262,65 @@ Public feed URLs (no auth):
 
 ---
 
-## 10. Out of Scope
+## 10. Admin Panel (operator console)
+
+A small internal console for the operators (us). **Primary purpose:** see how many orgs and users have been created, and handle the handful of support cases that can't wait for a `wrangler d1 execute` round-trip. Scoped tight on purpose — this is not a full IAM product. Ships post-launch (v1.1) once we have a few real operator needs to anchor the design.
+
+### 10.1 Access control
+- **BE-200**: Gated by `user.staff = 1` (already in the schema; set manually via `wrangler d1 execute` for now, bootstrapping the first admin that way).
+- **BE-201**: Route tree: `www.gtfsbuilder.net/admin/*`. Returns 404 for non-staff users to avoid advertising the surface.
+- **BE-202**: Every admin action writes an `audit_event` with `actor_user_id = staff.user.id` and a distinguishing `action` prefix (`admin.disable_user`, `admin.impersonate`, etc.). A user viewing their own audit log sees the staff action on their account — by design, for transparency.
+
+### 10.2 Dashboard (the month-one use case)
+One landing page. No chart library — simple SVG sparklines or a plain table are enough at this scale.
+
+- **BE-210**: Counters at the top:
+  - Total users (broken down: active / pending_verification / disabled / deleted_soft).
+  - Total organizations.
+  - Total projects (by owner_type: user-owned vs org-owned).
+  - Total feed versions created.
+  - Total canonical publications live (once Phase 3 lands).
+- **BE-211**: Signups this week / this month / all-time.
+- **BE-212**: Active-user proxy: distinct `session.user_id` with `last_used_at` in the trailing 24h / 7d / 30d.
+- **BE-213**: Trailing-8-week trend for new users + new projects as a small inline SVG sparkline or a 2-column table.
+
+### 10.3 Users
+- **BE-220**: Paginated table: email, display name, status, `created_at`, last session timestamp, owned-project count. Default sort: newest first.
+- **BE-221**: Filter by status (dropdown) and email substring (text).
+- **BE-222**: Row-level actions:
+  - **Disable / re-enable** — flips `user.status` between `active` ↔ `disabled`. Disabled users can't log in (existing check in auth routes).
+  - **Resend verification** — reuses the existing `/auth/verify-resend` internals to email a fresh link.
+  - **Impersonate** — creates a short-lived session for the target user with a distinguishing server-side flag. The editor renders a persistent red banner: "You are viewing as `<user.email>` — [Exit impersonation]." Exiting drops the impersonated session and restores the staff user's original session. Both enter and exit are audited on the target user's timeline (visible to the user).
+
+### 10.4 Organizations
+- **BE-230**: Paginated table: slug, name, member count, project count, `created_at`.
+- **BE-231**: Row view: members with roles, projects owned.
+- **BE-232**: Add / remove members, change roles — rarely used, but saves database surgery when an org owner locks themselves out.
+
+### 10.5 Audit log
+- **BE-240**: Global filterable view: actor user, subject type + id, action name, date range. Paginated, 50 per page, newest first.
+- **BE-241**: CSV export for the current filter.
+
+### 10.6 Explicitly not in v1.1
+- Global full-text search across users/projects (D1 isn't optimized for it — wait until needed).
+- Bulk operations (do via SQL until it hurts three times).
+- Billing or subscription management (RTAP licensing is flat — no billing surface).
+- Abuse review queues / content moderation.
+- Rate-limit override controls.
+- Publishing a user's feed on their behalf.
+
+### 10.7 Implementation notes
+- Frontend: new route tree under `src/components/admin/`, loaded only when `currentUser.staff === true`. Otherwise the route renders 404.
+- Backend: new `/api/admin/*` routes with `requireStaff` middleware (extends `requireAuth`: also requires `user.staff`). Returns 404 (not 403) for non-staff to avoid surface enumeration.
+- Uses the existing D1 schema — no new tables. Aggregate queries for counters.
+- No new dependencies.
+
+### 10.8 Effort estimate
+1–2 days for dashboard + user list + disable/enable/impersonate. Audit log view and org management follow as we hit real support needs.
+
+---
+
+## 11. Out of Scope
 
 - Real-time collaborative editing (multi-cursor).
 - GTFS-Realtime feed generation or hosting (we coordinate with existing RT feeds only — see §6.5).
@@ -273,7 +331,7 @@ Public feed URLs (no auth):
 
 ---
 
-## 11. Decisions (resolved during review)
+## 12. Decisions (resolved during review)
 
 | # | Question | Decision |
 |---|---|---|

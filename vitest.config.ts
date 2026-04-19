@@ -22,7 +22,11 @@ export default defineConfig(async () => {
           // wrangler.jsonc so the tests don't depend on prod config.
           bindings: {
             APP_ORIGIN: 'http://127.0.0.1',
-            FEEDS_ORIGIN: 'http://127.0.0.1',
+            // Must differ from APP_ORIGIN's hostname — the Worker routes
+            // `feedsHost === url.hostname` requests through feedsHandler,
+            // which returns 405 for non-GET. The `_feeds.local` namespace
+            // makes it explicit that these are test-only bindings.
+            FEEDS_ORIGIN: 'http://feeds.test.local',
             BACKEND_ENABLED: 'true',
             HARD_LIMITS: 'false',
             AUTH_EMAIL_FROM: 'test@example.com',

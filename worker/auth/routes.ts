@@ -122,8 +122,8 @@ authRouter.get('/ping', (c) => c.json({ ok: true }));
 authRouter.post('/signup', async (c) => {
   const body = await parseJson(c, signupSchema);
   const ip = clientIp(c.req.raw);
-  await rateLimit(c.env, { key: `auth:signup:ip:${ip}`, limit: 5, windowSec: 3600 });
-  await rateLimit(c.env, { key: `auth:signup:email:${body.email}`, limit: 3, windowSec: 3600 });
+  await rateLimit(c.env, { key: `auth:signup:ip:${ip}`, limit: 10, windowSec: 3600 });
+  await rateLimit(c.env, { key: `auth:signup:email:${body.email}`, limit: 6, windowSec: 3600 });
 
   await withMinDelay(200, async () => {
     const existing = await findUserByEmail(c.env, body.email);
@@ -218,8 +218,8 @@ authRouter.get('/verify', async (c) => {
 authRouter.post('/verify-resend', async (c) => {
   const body = await parseJson(c, emailOnlySchema);
   const ip = clientIp(c.req.raw);
-  await rateLimit(c.env, { key: `auth:verify-resend:ip:${ip}`, limit: 5, windowSec: 3600 });
-  await rateLimit(c.env, { key: `auth:verify-resend:email:${body.email}`, limit: 3, windowSec: 3600 });
+  await rateLimit(c.env, { key: `auth:verify-resend:ip:${ip}`, limit: 10, windowSec: 3600 });
+  await rateLimit(c.env, { key: `auth:verify-resend:email:${body.email}`, limit: 6, windowSec: 3600 });
 
   const user = await findUserByEmail(c.env, body.email);
   if (user && user.status === 'pending_verification') {
@@ -241,8 +241,8 @@ authRouter.post('/verify-resend', async (c) => {
 authRouter.post('/login', async (c) => {
   const body = await parseJson(c, loginSchema);
   const ip = clientIp(c.req.raw);
-  await rateLimit(c.env, { key: `auth:login:ip:${ip}`, limit: 10, windowSec: 600 });
-  await rateLimit(c.env, { key: `auth:login:email:${body.email}`, limit: 5, windowSec: 600 });
+  await rateLimit(c.env, { key: `auth:login:ip:${ip}`, limit: 20, windowSec: 600 });
+  await rateLimit(c.env, { key: `auth:login:email:${body.email}`, limit: 10, windowSec: 600 });
 
   const user = await findUserByEmail(c.env, body.email);
   const credential = user
@@ -294,8 +294,8 @@ authRouter.post('/login', async (c) => {
 authRouter.post('/magic-link/request', async (c) => {
   const body = await parseJson(c, emailOnlySchema);
   const ip = clientIp(c.req.raw);
-  await rateLimit(c.env, { key: `auth:magic:ip:${ip}`, limit: 3, windowSec: 600 });
-  await rateLimit(c.env, { key: `auth:magic:email:${body.email}`, limit: 2, windowSec: 600 });
+  await rateLimit(c.env, { key: `auth:magic:ip:${ip}`, limit: 6, windowSec: 600 });
+  await rateLimit(c.env, { key: `auth:magic:email:${body.email}`, limit: 4, windowSec: 600 });
 
   const user = await findUserByEmail(c.env, body.email);
   if (user && user.status !== 'deleted_soft') {
@@ -366,8 +366,8 @@ authRouter.get('/magic-link/consume', async (c) => {
 authRouter.post('/password-reset/request', async (c) => {
   const body = await parseJson(c, emailOnlySchema);
   const ip = clientIp(c.req.raw);
-  await rateLimit(c.env, { key: `auth:pwreset:ip:${ip}`, limit: 3, windowSec: 600 });
-  await rateLimit(c.env, { key: `auth:pwreset:email:${body.email}`, limit: 2, windowSec: 600 });
+  await rateLimit(c.env, { key: `auth:pwreset:ip:${ip}`, limit: 6, windowSec: 600 });
+  await rateLimit(c.env, { key: `auth:pwreset:email:${body.email}`, limit: 4, windowSec: 600 });
 
   const user = await findUserByEmail(c.env, body.email);
   if (user && user.status !== 'deleted_soft') {

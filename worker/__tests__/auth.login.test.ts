@@ -88,11 +88,12 @@ describe('auth /login', () => {
 
     // Both must go through verifyPassword against either the real hash or the
     // cached dummy hash. Because dummyHash is lazily generated ONCE, the first
-    // call in a worker isolate computes a fresh PBKDF2 hash (~100ms). Rather
-    // than assert ±40% we assert both are within a reasonable window that
-    // matches password-verify timings.
-    expect(tWrong).toBeGreaterThan(50);
-    expect(tUnknown).toBeGreaterThan(50);
+    // call in a worker isolate computes a fresh PBKDF2 hash. At 100k
+    // iterations (workerd's ceiling) a single verify is ~15-30ms in
+    // miniflare, so the floor here is generous but not load-bearing — the
+    // ratio check below is what actually proves no timing side-channel.
+    expect(tWrong).toBeGreaterThan(10);
+    expect(tUnknown).toBeGreaterThan(10);
     const ratio = Math.max(tWrong, tUnknown) / Math.max(1, Math.min(tWrong, tUnknown));
     // NOTE: on the first "unknown" call dummyHash() is computed, so there's
     // an inherent first-call penalty; a 3x cap is generous but still proves

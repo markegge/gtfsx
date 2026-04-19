@@ -1,4 +1,6 @@
-// Rate limiting: 11th login attempt from the same simulated IP returns 429.
+// Rate limiting: repeated login attempts from the same simulated IP hit 429
+// before the loop's upper bound (limits were doubled from the initial spec
+// — per-IP 20/10min, per-email 10/10min).
 
 import { beforeEach, afterEach, describe, expect, it } from 'vitest';
 import { makeClient } from './_client';
@@ -24,18 +26,17 @@ describe('rate limiting', () => {
   });
 
   it(
-    '11th login from the same CF-Connecting-IP within the 10-min window → 429',
+    'repeated logins from the same CF-Connecting-IP within the window → 429',
     async () => {
-      // Seed multiple users so we don't trip the per-email limit (5/window)
-      // before the per-IP limit (10/window). We use the same seeded user for
-      // all attempts; the per-email RL will trigger first (5/window), but the
-      // first 429 is what we want to observe.
+      // Per-email is currently 10/10min, per-IP is 20/10min — the per-email
+      // counter trips first when all attempts target one email. Loop past
+      // both limits and assert the first 429 arrives before the end.
       const user = await seedUser({ email: 'rate-limit@example.com' });
       const client = makeClient();
       const attackerIp = '203.0.113.7';
 
       let first429: number | null = null;
-      for (let i = 0; i < 12; i += 1) {
+      for (let i = 0; i < 22; i += 1) {
         const res = await client.post(
           '/auth/login',
           { email: user.email, password: 'wrong-password' },
@@ -46,12 +47,10 @@ describe('rate limiting', () => {
           break;
         }
       }
-      // With limit=5/email OR limit=10/IP, the first 429 should arrive
-      // before the 12th attempt.
       expect(first429).not.toBeNull();
-      expect(first429).toBeLessThan(12);
+      expect(first429).toBeLessThan(22);
     },
-    20000,
+    30000,
   );
 
   it(
@@ -61,8 +60,8 @@ describe('rate limiting', () => {
       const userB = await seedUser({ email: 'ip-b@example.com' });
       const client = makeClient();
 
-      // Burn the IP+email limit on one IP using userA.
-      for (let i = 0; i < 6; i += 1) {
+      // Burn the IP+email limit on one IP using userA (11 > per-email 10/10min).
+      for (let i = 0; i < 11; i += 1) {
         await client.post(
           '/auth/login',
           { email: userA.email, password: 'wrong-password' },

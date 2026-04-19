@@ -56,10 +56,15 @@ function bytesToHex(bytes: Uint8Array): string {
 // ─── Password hashing (PBKDF2-HMAC-SHA256) ────────────────────────────────────
 //
 // Native Web Crypto. Format: `pbkdf2$<iterations>$<salt_b64url>$<hash_b64url>`.
-// OWASP 2023 guidance: PBKDF2-SHA256 ≥ 600,000 iterations is acceptable when
-// argon2id is not available. Workers' Web Crypto takes ~80-150ms at this count.
-
-const PBKDF2_ITERATIONS = 600_000;
+//
+// The iteration count is capped by workerd (Cloudflare Workers' runtime) at
+// 100,000. Above that, `crypto.subtle.deriveBits` throws NotSupportedError
+// in production — even though miniflare (local dev + tests) accepts higher
+// values. 100,000 matches NIST SP 800-63B's minimum for PBKDF2-SHA256 and is
+// below OWASP's recommended 600,000; revisit if we can swap in a WASM argon2id
+// bundle or if workerd lifts the cap. `verifyPassword` reads the iteration
+// count from the stored hash, so we can migrate hashes forward in place.
+const PBKDF2_ITERATIONS = 100_000;
 const PBKDF2_HASH_BITS = 256;
 const PBKDF2_SALT_BYTES = 16;
 

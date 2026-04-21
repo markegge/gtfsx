@@ -42,9 +42,32 @@ export function runValidation(state: AppStore): ValidationMessage[] {
   if (state.calendars.length === 0) {
     messages.push(msg('error', 'At least one service pattern (calendar) is required'));
   } else {
+    // GTFS end_date is YYYYMMDD (inclusive). Compare as an integer to today's
+    // YYYYMMDD so timezone drift never flips the boundary.
+    const now = new Date();
+    const todayYYYYMMDD =
+      now.getFullYear() * 10000 +
+      (now.getMonth() + 1) * 100 +
+      now.getDate();
     for (const c of state.calendars) {
       if (!c.start_date) messages.push(msg('error', `Calendar "${c.service_id}" is missing start_date`, 'calendar', c.service_id));
-      if (!c.end_date) messages.push(msg('error', `Calendar "${c.service_id}" is missing end_date`, 'calendar', c.service_id));
+      if (!c.end_date) {
+        messages.push(msg('error', `Calendar "${c.service_id}" is missing end_date`, 'calendar', c.service_id));
+        continue;
+      }
+      const endInt = Number(c.end_date);
+      if (Number.isFinite(endInt) && endInt < todayYYYYMMDD) {
+        const label = c._description || c.service_id;
+        const pretty = c.end_date.length === 8
+          ? `${c.end_date.slice(0, 4)}-${c.end_date.slice(4, 6)}-${c.end_date.slice(6, 8)}`
+          : c.end_date;
+        messages.push(msg(
+          'warning',
+          `Service pattern "${label}" is expired — end_date ${pretty} is in the past. Extend it before publishing or consumers will see no service on this pattern.`,
+          'calendar',
+          c.service_id,
+        ));
+      }
     }
   }
 

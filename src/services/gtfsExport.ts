@@ -1,7 +1,22 @@
 import JSZip from 'jszip';
 import Papa from 'papaparse';
+import length from '@turf/length';
+import { lineString } from '@turf/helpers';
 import { useStore } from '../store';
-import type { Calendar, Route, Trip } from '../types/gtfs';
+import type { Calendar, Route, ShapePoint, Trip } from '../types/gtfs';
+
+/** Mirror of shapeSlice.recalcShapeDistances used as a last-resort safety
+ *  net when a shape arrives at the exporter without real distances. Returns
+ *  a new array; does NOT mutate the store. */
+function fillShapeDistancesExport(points: ShapePoint[]): ShapePoint[] {
+  const out = points.map((p) => ({ ...p }));
+  const coords = out.map((p) => [p.shape_pt_lon, p.shape_pt_lat] as [number, number]);
+  out[0].shape_dist_traveled = 0;
+  for (let i = 1; i < out.length; i++) {
+    out[i].shape_dist_traveled = length(lineString(coords.slice(0, i + 1)), { units: 'meters' });
+  }
+  return out;
+}
 
 function toCSV(data: Record<string, any>[]): string {
   if (data.length === 0) return '';
@@ -230,37 +245,33 @@ export async function exportGtfsZip(): Promise<Blob> {
     zip.file('trips.txt', toCSV([...fixedTrips, ...flex.trips.map(stripUIFields)]));
   }
 
-  // stop_times.txt — blank arrival on first stop, blank departure on last stop per trip
+  // stop_times.txt
+  //
+  // Per the GTFS spec both `arrival_time` and `departure_time` are REQUIRED
+  // on the first and last stop of every trip — a previous version of this
+  // exporter deliberately blanked them (inverted the spec requirement), which
+  // produced MobilityData `missing_trip_edge` + `stop_time_with_only_arrival_
+  // or_departure_time` errors on every exported feed. Export the store's
+  // values verbatim; the editor guarantees both fields are populated when the
+  // user types a time because `setStopTime` writes both sides.
   if (state.stopTimes.length > 0 || flex.flexStopTimes.length > 0) {
-    // Build first/last stop_sequence per trip
-    const tripFirstLast = new Map<string, { first: number; last: number }>();
-    for (const st of state.stopTimes) {
-      const entry = tripFirstLast.get(st.trip_id);
-      if (!entry) {
-        tripFirstLast.set(st.trip_id, { first: st.stop_sequence, last: st.stop_sequence });
-      } else {
-        if (st.stop_sequence < entry.first) entry.first = st.stop_sequence;
-        if (st.stop_sequence > entry.last) entry.last = st.stop_sequence;
-      }
-    }
-
-    const fixedRows = state.stopTimes.map((st) => {
-      const clean = stripUIFields(st);
-      const fl = tripFirstLast.get(st.trip_id);
-      if (fl) {
-        if (st.stop_sequence === fl.first) clean.arrival_time = '';
-        if (st.stop_sequence === fl.last) clean.departure_time = '';
-      }
-      return clean;
-    });
+    const fixedRows = state.stopTimes.map((st) => stripUIFields(st));
     zip.file('stop_times.txt', toCSV([...fixedRows, ...flex.flexStopTimes]));
   }
 
-  // shapes.txt
+  // shapes.txt. Safety net: if any shape still has all-zero shape_dist_traveled
+  // (e.g. a code path missed calling recalcShapeDistances), recompute it here
+  // before writing so we never emit a shape with duplicate cumulative
+  // distances across distinct lat/lon points.
   if (state.shapes.length > 0) {
     const shapeRows: Record<string, any>[] = [];
     for (const shape of state.shapes) {
-      for (const pt of shape.points) {
+      let pts = shape.points;
+      const hasRealDistances = pts.some((p) => p.shape_dist_traveled !== 0);
+      if (!hasRealDistances && pts.length >= 2) {
+        pts = fillShapeDistancesExport(pts);
+      }
+      for (const pt of pts) {
         shapeRows.push({
           shape_id: shape.shape_id,
           shape_pt_lat: pt.shape_pt_lat,

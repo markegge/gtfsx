@@ -46,19 +46,14 @@
     {
       "binding": "DB",
       "database_name": "gtfs-builder",
-      // Placeholder — `wrangler dev --local` uses this as a local directory key only.
-      // Before deploying to prod: run `wrangler d1 create gtfs-builder` and paste the
-      // real database_id here.
-      "database_id": "00000000-0000-0000-0000-000000000001",
+      "database_id": "cfb27d4e-6ba8-488e-95f9-674cc0560cbe",
       "migrations_dir": "worker/migrations"
     }
   ],
   "kv_namespaces": [
     {
       "binding": "KV",
-      // Placeholder — `wrangler dev --local` uses this as a directory key only.
-      // Before deploy: `wrangler kv namespace create KV` and paste the real id here.
-      "id": "000000000000000000000000000000aa"
+      "id": "da2476e5027346988e380474fa6deef5"
     }
   ],
   "vars": {

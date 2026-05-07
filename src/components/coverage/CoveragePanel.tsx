@@ -110,7 +110,7 @@ export function CoveragePanel() {
   if (stops.length === 0) {
     return (
       <EmptyState
-        icon="\u25CE"
+        icon="🚏"
         title="No Stops Yet"
         description="Add stops to your routes before analyzing demographic coverage."
       />

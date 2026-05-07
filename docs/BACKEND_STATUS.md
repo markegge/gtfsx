@@ -1,6 +1,6 @@
 # Backend Implementation Status
 
-**As of 2026-04-20.** This document is the "where we are now" snapshot. Companion to:
+**As of 2026-05-07.** This document is the "where we are now" snapshot. Companion to:
 
 - `BACKEND_REQUIREMENTS.md` — the feature spec (what we're building).
 - `BACKEND_IMPLEMENTATION_PLAN.md` — the phased plan (how we're building it).
@@ -12,10 +12,11 @@ If you're picking this up cold, read the TL;DR, then §"How to resume" before to
 
 ## 0. TL;DR
 
-- **Branch**: `backend-phases-1-2` (17 commits ahead of `main`, pushed). PR open but not merged: https://github.com/markegge/gtfs_builder/pull/new/backend-phases-1-2
+- **Branch**: `backend-phases-1-2` (24 commits ahead of `main`, pushed). PR open but not merged: https://github.com/markegge/gtfs_builder/pull/new/backend-phases-1-2
 - **All six phases + the admin panel are code-complete.** 181/181 Vitest integration tests pass (serial runs; parallel has a pre-existing workerd flake).
 - **Staging is deployed and live.** Editor at https://staging.gtfsbuilder.net/, public feeds at https://staging-feeds.gtfsbuilder.net/`<slug>`/gtfs.zip. First admin (`mark@eateggs.com`) is provisioned.
-- **Production is NOT deployed.** Prod D1/KV/R2 haven't been created. `wrangler.jsonc` still has placeholder IDs in the top-level (prod) block.
+- **Production is deployed and live as of 2026-05-07.** Editor at https://www.gtfsbuilder.net/, public feeds at https://feeds.gtfsbuilder.net/`<slug>`/gtfs.zip. First admin (`mark@eateggs.com`) is provisioned. No published feeds yet.
+- Phase 1–6 in production additionally includes: explicit Save button (replaces silent autosave), Save-As dialog with workspace picker, beforeunload guard on unsaved changes. See `docs/EMBEDS_REQUIREMENTS.md` for the not-yet-built Phase 7 (embeddable maps & schedules).
 - Three technical follow-ups flagged in code + docs (see §5). Of those, **NF-40a (argon2id)** should land before RTAP broad distribution.
 
 ---
@@ -128,11 +129,18 @@ If you're picking this up cold, read the TL;DR, then §"How to resume" before to
 - First admin bootstrapped: `mark@eateggs.com` (staff=1, active).
 - Redeploy with `wrangler deploy --env staging` from the project root after `npm run build`.
 
-### Production — NOT DEPLOYED
-- `wrangler.jsonc` top-level block has placeholder D1 id `00000000-0000-0000-0000-000000000001` and placeholder KV id. Nothing has been provisioned on Cloudflare for prod.
-- DNS for `gtfsbuilder.net` / `www.gtfsbuilder.net` / `feeds.gtfsbuilder.net` is already on Cloudflare (used by the existing static SPA) — adding the Worker routes will swap the static deploy over.
-- Secrets: `RESEND_API_KEY` not set for prod yet (staging uses its own copy); `MOBILITY_DATABASE_REFRESH_TOKEN` is already set on the current prod Worker from the pre-backend world.
-- Going-live checklist is at the end of `DEPLOY_BACKEND.md` (§7 smoke-test).
+### Production — LIVE (as of 2026-05-07)
+- Worker: `gtfs-builder` (Cloudflare account: `mark@eateggs.com`). Latest version `4715fe36-2b1b-4990-8685-7a72224c81fa`.
+- Custom domains: `gtfsbuilder.net`, `www.gtfsbuilder.net`, `feeds.gtfsbuilder.net`. All three Worker routes are bound; DNS resolves; SSL cert provisioned.
+- D1: `gtfs-builder` (id `cfb27d4e-6ba8-488e-95f9-674cc0560cbe`). All three migrations applied; DB started empty (no staging data carried over).
+- KV: id `da2476e5027346988e380474fa6deef5`.
+- R2: `gtfs-builder-feeds` (separate from staging's `gtfs-builder-feeds-staging`).
+- Secrets set: `RESEND_API_KEY`, `MOBILITY_DATABASE_REFRESH_TOKEN`.
+- Cron registered: `0 3 * * *` (daily 03:00 UTC).
+- First admin bootstrapped: `mark@eateggs.com` (staff=1, active).
+- Resend sender for prod: `noreply@gtfsbuilder.net` (verified). Staging uses `staging@gtfsbuilder.net`.
+- Redeploy with `wrangler deploy --env=""` (empty `--env` flag explicitly targets the top-level prod block; without it wrangler warns about ambiguity since multiple environments are defined).
+- **Token gotcha for redeploys**: `CLOUDFLARE_API_TOKEN` (in `~/proj/.env`) needs **Workers KV Storage : Edit** + **Zone : Workers Routes : Edit** for the `gtfsbuilder.net` zone. The OAuth token from `wrangler login` was missing R2 write at first deploy — falling back to the API token + adding those scopes worked. If a future deploy fails with `code: 10023 (kv bindings require kv write perms)` or `code: 10000 (Authentication error)` on `/zones/.../workers/routes`, re-check the API token scopes at https://dash.cloudflare.com/profile/api-tokens.
 
 ---
 
@@ -260,6 +268,12 @@ In reverse order (newest first):
 
 | SHA | What |
 |---|---|
+| `aa4ab97` | Wrangler: real prod D1 + KV ids for first production deploy |
+| `f98ea7e` | Coverage: use bus-stop emoji for empty-state icon |
+| `70be28e` | Editor: explicit Save button + Save-As + beforeunload guard |
+| `cc6f0cb` | Docs: scope Phase 7 — embeddable maps & schedules |
+| `91a7da7` | Worker: decompress working-state + version-state in worker, not via Content-Encoding header |
+| `a8cf88b` | Docs: BACKEND_STATUS — resumable snapshot of where we are now |
 | `a15d1dc` | Signup: idempotent retry for pending_verification + rollback on email failure |
 | `d2f9e1c` | Relax auth rate limits 2× + reset-rate-limits script |
 | `c14f998` | Docs: reflect PBKDF2-100k reality + NF-40a argon2id follow-up |
@@ -286,11 +300,11 @@ In reverse order (newest first):
 
 Ordered roughly by when-it-needs-to-happen.
 
-### Pre-prod-deploy
+### Just-shipped follow-ups
 
-1. **Provision prod resources and cut over DNS** — `wrangler d1 create gtfs-builder`, `wrangler kv namespace create KV`, `wrangler r2 bucket create gtfs-builder-feeds`, paste IDs into `wrangler.jsonc` top-level block, set `RESEND_API_KEY` secret (prod domain must be verified in Resend first), `wrangler deploy`, walk the §7 smoke-test checklist in `DEPLOY_BACKEND.md`.
-2. **Merge** `backend-phases-1-2` → `main` via PR.
-3. **Flip `VITE_BACKEND_ENABLED=true`** in CI/GitHub Pages secrets (or in `.env` on the deploy path). Without this the frontend hides all auth + /feeds routes.
+1. **Merge** `backend-phases-1-2` → `main` via PR. The branch is what's deployed in production; merging just synchronizes the canonical history and makes future PRs target `main` again.
+2. **Verify the Save flow on prod** end-to-end: anonymous edit → Save → Save-As dialog → `/feeds/<slug>` → edit → Save → reload-and-confirm. Already tested on staging + via direct DB-token auth in dev; do one organic walkthrough on prod when you have a free minute.
+3. **Phase 7 (embeddable maps & schedules)** — scoped in `docs/EMBEDS_REQUIREMENTS.md` but not implemented. Sub-phases 7a–7f layer on top of the live publication infrastructure; doesn't block anything.
 
 ### Pre-broad-rollout (before RTAP distribution)
 
@@ -331,8 +345,21 @@ Open http://localhost:5173. To sign in without configuring Resend: `npx tsx scri
 - Run SQL: `source ~/proj/.env && npx wrangler d1 execute gtfs-builder-staging --remote --env staging --command "SELECT …"`
 - Reset rate limits if you hit the counters during testing: `scripts/reset-rate-limits.sh staging`
 
-### If you want to deploy prod
-Follow `DEPLOY_BACKEND.md`. The commands are unchanged; just drop the `--env staging` flag and use the top-level (prod) block in `wrangler.jsonc`. Before running, replace the two placeholder IDs (D1 + KV) in the prod block with the real values from `wrangler d1 create gtfs-builder` / `wrangler kv namespace create KV`.
+### If you want to redeploy prod
+Production is already provisioned. After committing changes:
+```
+npm run build
+source ~/proj/.env  # exports CLOUDFLARE_API_TOKEN
+npx wrangler deploy --env=""
+```
+The empty `--env=""` is required to dismiss wrangler's "ambiguous environment" warning — it explicitly targets the top-level (prod) block. Without it, wrangler falls back to top-level by default but emits the warning each time.
+
+### If you want to poke at prod
+- Editor: https://www.gtfsbuilder.net/
+- Feeds: https://feeds.gtfsbuilder.net/`<slug>`/gtfs.zip
+- Admin console (as mark@eateggs.com): /admin
+- Tail: `npx wrangler tail gtfs-builder` (note: NO `--env` flag — the tail command takes the Worker name directly).
+- Run SQL: `unset CLOUDFLARE_API_TOKEN; npx wrangler d1 execute gtfs-builder --remote --command "SELECT …"` (the OAuth token has D1 write; the API token may not depending on which scopes you've left enabled).
 
 ### If you're debugging a production issue
 1. `wrangler tail <worker-name>` first. JSON format (`--format json`) is easier to grep.

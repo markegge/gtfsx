@@ -283,6 +283,20 @@ All IDs are ULIDs (lexicographically sortable, URL-safe). Token values are store
 
 ---
 
+## 8a. Phase 7 — Embeddable Maps & Schedules (post-launch)
+
+Hosted agency mini-site at `feeds.gtfsbuilder.net/<slug>/` plus embeddable iframes and web components, both backed by the same canonical published feed. **Scoped separately** in `EMBEDS_REQUIREMENTS.md`. Does not block the Phase 3 public launch — phases 7a–7f layer on top of an already-published feed.
+
+Sub-phases (from `EMBEDS_REQUIREMENTS.md` §12):
+- 7a Mini-site MVP (3–4 wk)
+- 7b Iframe embeds (1–2 wk)
+- 7c Web components / `widgets.js` (2–3 wk)
+- 7d Branding + localization + alerts (2 wk)
+- 7e Headless API + structured data (1–2 wk)
+- 7f *(stretch)* GTFS-RT integration
+
+---
+
 ## 9. Rough Effort (solo developer)
 
 Assumes continuous focus; reality is probably 1.5–2× these numbers given mixed priorities.

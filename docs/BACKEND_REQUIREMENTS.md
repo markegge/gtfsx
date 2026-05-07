@@ -329,6 +329,7 @@ One landing page. No chart library — simple SVG sparklines or a plain table ar
 - Custom domains for published feeds (§5.3).
 - Feed diffs / visual compare between versions. *(Per-version summary stats — BE-46 — give you "what changed" at a glance without building full diffs.)*
 - Public "directory" of feeds hosted on the site (would require moderation).
+- **Rider-facing rendering of the published feed** (agency mini-site, embeddable route maps and schedule tables). Scoped separately as Phase 7 — see [`EMBEDS_REQUIREMENTS.md`](./EMBEDS_REQUIREMENTS.md). Layered on top of Phase 3 publication; doesn't block launch.
 
 ---
 

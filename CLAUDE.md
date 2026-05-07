@@ -13,6 +13,7 @@
 - Feature spec: `docs/BACKEND_REQUIREMENTS.md`
 - Implementation plan: `docs/BACKEND_IMPLEMENTATION_PLAN.md`
 - Deploy runbook: `docs/DEPLOY_BACKEND.md`
+- Embeddable maps & schedules (Phase 7, post-launch): `docs/EMBEDS_REQUIREMENTS.md`
 - Cloudflare Worker (same `wrangler.jsonc` as the SPA): `worker/` — Hono router composing `auth/`, `projects/`, `email/`, `util/`, with legacy tile/catalog handlers in `worker/legacy/`.
 - D1 migrations: `worker/migrations/*.sql` (run via `wrangler d1 migrations apply`).
 - Frontend gates on `VITE_BACKEND_ENABLED` — when false, auth and /feeds routes render a placeholder and the editor stays anonymous/local-only.

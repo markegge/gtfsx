@@ -155,6 +155,8 @@ export function renderMap(data: MapData, mapboxToken: string | undefined) {
       });
       map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
       map.on('load', () => {
+        const container = document.getElementById('gtfs-embed-map');
+        if (container) container.classList.add('loaded');
         if (lines.features.length > 0) {
           map.addSource('lines', { type: 'geojson', data: lines });
           map.addLayer({
@@ -209,7 +211,9 @@ export function renderMap(data: MapData, mapboxToken: string | undefined) {
   `;
 
   return html`
-    <div id="gtfs-embed-map" class="map" aria-label="Route map"></div>
+    <div id="gtfs-embed-map" class="map" aria-label="Route map">
+      <div class="map-skeleton" aria-hidden="true"></div>
+    </div>
     <script>
       ${raw(initScript)}
     </script>

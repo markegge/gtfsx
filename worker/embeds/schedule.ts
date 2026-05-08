@@ -119,6 +119,7 @@ export function renderScheduleTables(
   }
   const stopsById = new Map<string, Stop>(state.stops.map((s) => [s.stop_id, s]));
 
+  const showDirectionHeader = tables.length > 1;
   const parts = tables.map((table) => {
     const stopRows = table.stopOrder.map((stopId) => {
       const stop = stopsById.get(stopId);
@@ -147,9 +148,10 @@ export function renderScheduleTables(
       return html`<th scope="col" class="trip-head">${formatGtfsTime(headerTime)}</th>`;
     });
 
+    const directionLabel = sanitizeDirectionLabel(table.directionName);
     return html`
       <section class="direction">
-        <h3>${table.directionName}</h3>
+        ${showDirectionHeader && directionLabel ? html`<h3>${directionLabel}</h3>` : ''}
         <div class="schedule-scroll">
           <table class="schedule">
             <thead>
@@ -166,6 +168,18 @@ export function renderScheduleTables(
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Strip user-set direction names that don't help in this view. "(Loop)"
+ * is a common editor convention that makes sense as a route description
+ * but is redundant here; we'd rather hide the heading than show it.
+ */
+function sanitizeDirectionLabel(label: string): string | null {
+  const trimmed = label.trim();
+  if (!trimmed) return null;
+  if (/^\(\s*loop\s*\)$/i.test(trimmed)) return null;
+  return trimmed;
+}
 
 function parseGtfsTimeToMinutes(t: string): number {
   // "HH:MM:SS" or "H:MM:SS"; HH may be ≥24 for overnight trips.

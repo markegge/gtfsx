@@ -3,6 +3,8 @@ import type { Env } from '../env';
 import { loadEmbedFeed } from './loader';
 import { embedHeaders, renderLayout } from './layout';
 import { buildSystemMapData, renderMap } from './map';
+import { renderExpiryWarning } from './route';
+import { todayInTimezone } from './services';
 
 export async function renderSystemMapEmbed(
   request: Request,
@@ -20,9 +22,13 @@ export async function renderSystemMapEmbed(
     return new Response(null, { status: 304, headers });
   }
 
+  const url = new URL(request.url);
   const agency = feed.state.agencies[0];
   const data = buildSystemMapData(feed.state);
   const map = renderMap(data, env.MAPBOX_TOKEN);
+  const tz = agency?.agency_timezone;
+  const today = todayInTimezone(tz);
+  const expiryWarning = renderExpiryWarning(feed.state.feedInfo?.feed_end_date, today);
 
   const routeLinks = feed.state.routes
     .slice()
@@ -37,20 +43,25 @@ export async function renderSystemMapEmbed(
       const short = r.route_short_name || r.route_id;
       const long = r.route_long_name || '';
       return html`
-        <a href="/embed/route/${encodeURIComponent(r.route_id)}">
+        <a href="/${encodeURIComponent(slug)}/embed/route/${encodeURIComponent(r.route_id)}">
           <span class="route-badge" style="background: ${color}; color: ${text};">${short}</span>
-          <span>${long}</span>
+          <span class="name">${long}</span>
         </a>
       `;
     });
 
+  const agencyName = agency?.agency_name ?? feed.projectName;
+  const titleText = `${agencyName} — System Map`;
+  const description = `Interactive system map for ${agencyName}. ${feed.state.routes.length} routes, ${feed.state.stops.length} stops.`;
+
   const body = html`
     <header class="embed-header">
       <div>
-        <h1>${agency?.agency_name ?? feed.projectName}</h1>
-        <div class="effective">System map — ${feed.state.routes.length} routes, ${feed.state.stops.length} stops</div>
+        <h1>${agencyName}</h1>
+        <div class="effective">System map · ${feed.state.routes.length} routes · ${feed.state.stops.length} stops</div>
       </div>
     </header>
+    ${expiryWarning}
     ${map}
     <h3>Routes</h3>
     <div class="route-list">${routeLinks}</div>
@@ -60,7 +71,12 @@ export async function renderSystemMapEmbed(
   `;
 
   const html5 = await renderLayout({
-    title: `${agency?.agency_name ?? feed.projectName} — System Map`,
+    title: titleText,
+    social: {
+      title: titleText,
+      description,
+      url: url.toString(),
+    },
     body: await body,
   });
 

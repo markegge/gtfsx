@@ -22,6 +22,17 @@ const STYLES = `
     gap: 12px;
     margin-bottom: 12px;
   }
+  header.embed-header h1 {
+    font-size: 18px;
+    margin: 0;
+    font-weight: 700;
+    color: #2a1a0e;
+  }
+  header.embed-header .effective {
+    font-size: 12px;
+    color: #6b6b6b;
+    margin-top: 2px;
+  }
   .route-badge {
     display: inline-block;
     min-width: 36px;
@@ -30,23 +41,84 @@ const STYLES = `
     border-radius: 6px;
     font-weight: 700;
     font-size: 14px;
+    line-height: 1.4;
   }
-  h1 { font-size: 18px; margin: 0; font-weight: 700; }
-  h3 { font-size: 14px; margin: 16px 0 8px; font-weight: 600; }
-  .effective {
-    font-size: 12px;
-    color: #6b6b6b;
-    margin-top: 2px;
+  h3 { font-size: 14px; margin: 18px 0 8px; font-weight: 600; color: #2a1a0e; }
+
+  /* Today banner — "Today is Friday · Weekday schedule" */
+  .today-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #fef6e9;
+    border: 1px solid #f0e0c0;
+    color: #5a4525;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 12px;
   }
+  .today-banner .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #2c8a5b;
+    flex-shrink: 0;
+  }
+  .today-banner.muted .dot { background: #b88a4a; }
+  .today-banner strong { font-weight: 600; }
+  .today-banner .sep { color: #b88a4a; }
+
+  /* Expiry warning — yellow when ≤14 days, red when expired */
+  .expiry-warning {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .expiry-warning.warn {
+    background: #fef3c7;
+    border: 1px solid #f0d28a;
+    color: #78350f;
+  }
+  .expiry-warning.expired {
+    background: #fee2e2;
+    border: 1px solid #fca5a5;
+    color: #991b1b;
+  }
+
+  /* Map */
   .map {
+    position: relative;
     width: 100%;
     height: 360px;
     border-radius: 8px;
     overflow: hidden;
     border: 1px solid #e8d8c0;
     margin-bottom: 16px;
-    background: #f0e6d4;
+    background: #f0e6d4
+      linear-gradient(135deg, transparent 49%, rgba(255,255,255,0.4) 49%, rgba(255,255,255,0.4) 51%, transparent 51%);
+    background-size: 24px 24px;
   }
+  .map .map-skeleton {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: #6b6b6b;
+    font-size: 13px;
+    pointer-events: none;
+    transition: opacity 200ms ease;
+  }
+  .map .map-skeleton::after {
+    content: 'Loading map…';
+    background: rgba(255,255,255,0.85);
+    padding: 6px 12px;
+    border-radius: 999px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .map.loaded .map-skeleton { opacity: 0; }
   .map-fallback {
     width: 100%;
     height: 200px;
@@ -57,6 +129,8 @@ const STYLES = `
     border-radius: 8px;
     margin-bottom: 16px;
   }
+
+  /* Service-day tabs */
   .service-tabs {
     display: flex;
     gap: 4px;
@@ -72,17 +146,22 @@ const STYLES = `
     font-weight: 500;
     border-bottom: 2px solid transparent;
     margin-bottom: -1px;
+    transition: color 120ms;
   }
+  .service-tabs a:hover { color: #b04d2a; }
   .service-tabs a.active {
     border-bottom-color: #e8734a;
     color: #b04d2a;
     font-weight: 700;
   }
+
+  /* Schedule table */
   .schedule-scroll {
     overflow-x: auto;
     border: 1px solid #e8d8c0;
     border-radius: 6px;
     background: #fff;
+    -webkit-overflow-scrolling: touch;
   }
   table.schedule {
     border-collapse: collapse;
@@ -106,7 +185,7 @@ const STYLES = `
     font-weight: 600;
     color: #6b6b6b;
   }
-  table.schedule .corner { background: #fff8f0; left: 0; position: sticky; z-index: 2; }
+  table.schedule .corner { background: #fff8f0; left: 0; position: sticky; z-index: 2; text-align: left; }
   table.schedule .stop-name {
     text-align: left;
     font-weight: 500;
@@ -117,12 +196,15 @@ const STYLES = `
     z-index: 1;
     border-right: 2px solid #e8d8c0;
     min-width: 160px;
+    max-width: 240px;
+    white-space: normal;
+    line-height: 1.3;
   }
   table.schedule .skip { color: #c0a890; }
   .empty {
     color: #6b6b6b;
     font-style: italic;
-    padding: 16px;
+    padding: 24px 16px;
     text-align: center;
   }
   footer.embed-footer {
@@ -149,15 +231,34 @@ const STYLES = `
     border: 1px solid #e8d8c0;
     border-radius: 6px;
     font-size: 13px;
+    transition: background 120ms;
   }
   .route-list a:hover { background: #fff8f0; }
+  .route-list a .name { font-weight: 500; line-height: 1.3; }
+
+  @media (max-width: 600px) {
+    .embed-root { padding: 12px; }
+    .map { height: 220px; }
+    table.schedule .stop-name { min-width: 120px; max-width: 160px; font-size: 11px; }
+    table.schedule th, table.schedule td { padding: 5px 8px; font-size: 11px; }
+    header.embed-header h1 { font-size: 16px; }
+  }
 `;
+
+export interface SocialMeta {
+  title: string;
+  description: string;
+  // Optional canonical URL for OG meta.
+  url?: string;
+}
 
 export function renderLayout(opts: {
   title: string;
+  social?: SocialMeta;
   bodyClass?: string;
   body: ReturnType<typeof html>;
 }) {
+  const social = opts.social;
   return html`<!doctype html>
 <html lang="en">
 <head>
@@ -165,6 +266,17 @@ export function renderLayout(opts: {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex" />
   <title>${opts.title}</title>
+  ${social
+    ? html`
+        <meta property="og:title" content="${social.title}" />
+        <meta property="og:description" content="${social.description}" />
+        <meta property="og:type" content="website" />
+        ${social.url ? html`<meta property="og:url" content="${social.url}" />` : ''}
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content="${social.title}" />
+        <meta name="twitter:description" content="${social.description}" />
+      `
+    : ''}
   <style>${raw(STYLES)}</style>
   ${mapboxAssetTags()}
 </head>

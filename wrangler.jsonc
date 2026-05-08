@@ -60,7 +60,10 @@
     "AUTH_EMAIL_FROM": "GTFS Builder <noreply@gtfsbuilder.net>",
     "APP_ORIGIN": "https://www.gtfsbuilder.net",
     "FEEDS_ORIGIN": "https://feeds.gtfsbuilder.net",
-    "BACKEND_ENABLED": "true",
+    // Kill switch — disabled 2026-05-08 after premature launch. Flip to "true"
+    // and rebuild with `VITE_BACKEND_ENABLED=true` to re-enable. Existing user
+    // accounts and feed projects in D1/R2 are preserved while disabled.
+    "BACKEND_ENABLED": "false",
     "HARD_LIMITS": "false"
     // Secrets (set via `wrangler secret put`):
     //   RESEND_API_KEY

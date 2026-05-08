@@ -15,7 +15,7 @@ If you're picking this up cold, read the TL;DR, then §"How to resume" before to
 - **Branch**: `backend-phases-1-2` (24 commits ahead of `main`, pushed). PR open but not merged: https://github.com/markegge/gtfs_builder/pull/new/backend-phases-1-2
 - **All six phases + the admin panel are code-complete.** 181/181 Vitest integration tests pass (serial runs; parallel has a pre-existing workerd flake).
 - **Staging is deployed and live.** Editor at https://staging.gtfsbuilder.net/, public feeds at https://staging-feeds.gtfsbuilder.net/`<slug>`/gtfs.zip. First admin (`mark@eateggs.com`) is provisioned.
-- **Production is deployed and live as of 2026-05-07.** Editor at https://www.gtfsbuilder.net/, public feeds at https://feeds.gtfsbuilder.net/`<slug>`/gtfs.zip. First admin (`mark@eateggs.com`) is provisioned. No published feeds yet.
+- **Production is DISABLED as of 2026-05-08** (was deployed 2026-05-07; rolled back the next day after a premature launch — 4 user accounts had been created including 2 strangers). Editor at https://www.gtfsbuilder.net/ now shows the anonymous IndexedDB-only flow with no auth or save UI. Existing accounts and any feed data stay intact in prod D1/R2 — re-enable by flipping `BACKEND_ENABLED=true` in `wrangler.jsonc` top-level and rebuilding with `VITE_BACKEND_ENABLED=true`.
 - Phase 1–6 in production additionally includes: explicit Save button (replaces silent autosave), Save-As dialog with workspace picker, beforeunload guard on unsaved changes. See `docs/EMBEDS_REQUIREMENTS.md` for the not-yet-built Phase 7 (embeddable maps & schedules).
 - Three technical follow-ups flagged in code + docs (see §5). Of those, **NF-40a (argon2id)** should land before RTAP broad distribution.
 
@@ -129,8 +129,17 @@ If you're picking this up cold, read the TL;DR, then §"How to resume" before to
 - First admin bootstrapped: `mark@eateggs.com` (staff=1, active).
 - Redeploy with `wrangler deploy --env staging` from the project root after `npm run build`.
 
-### Production — LIVE (as of 2026-05-07)
-- Worker: `gtfs-builder` (Cloudflare account: `mark@eateggs.com`). Latest version `4715fe36-2b1b-4990-8685-7a72224c81fa`.
+### Production — DISABLED (as of 2026-05-08)
+**Worker is still deployed** (the kill switch is two flags, not a takedown):
+- Worker `BACKEND_ENABLED=false` in `wrangler.jsonc` top-level vars.
+- Frontend rebuilt with `VITE_BACKEND_ENABLED=false` (bundle hash `index-Ck0xro-E.js`); auth + save + /feeds routes render `BackendDisabledPage`.
+- Worker `/auth/*` and `/api/*` endpoints are still reachable at the network level (the Worker code does not currently consult `BACKEND_ENABLED`); existing session cookies still authenticate. Hardening this is a follow-up — not exploitable today since the UI doesn't surface signup or any data action.
+- All D1 + R2 data preserved: 4 user accounts (`mark@eateggs.com` staff=1, plus 3 others including 2 strangers from the brief launch window), 0 projects, 0 published feeds.
+- To re-enable: revert `BACKEND_ENABLED` to `"true"` in wrangler.jsonc, rebuild with `VITE_BACKEND_ENABLED=true npm run build`, then `wrangler deploy --env=""`.
+
+Provisioning details below remain accurate (resources unchanged):
+
+- Worker: `gtfs-builder` (Cloudflare account: `mark@eateggs.com`). Latest version `79003f4b-7f9a-4c4f-8a98-56873f646085` (kill-switch deploy).
 - Custom domains: `gtfsbuilder.net`, `www.gtfsbuilder.net`, `feeds.gtfsbuilder.net`. All three Worker routes are bound; DNS resolves; SSL cert provisioned.
 - D1: `gtfs-builder` (id `cfb27d4e-6ba8-488e-95f9-674cc0560cbe`). All three migrations applied; DB started empty (no staging data carried over).
 - KV: id `da2476e5027346988e380474fa6deef5`.

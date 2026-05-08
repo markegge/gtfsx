@@ -14,6 +14,7 @@ interface VersionRow {
 
 interface ProjectRow {
   name: string;
+  brand_primary_color: string | null;
 }
 
 /**
@@ -38,7 +39,7 @@ export async function loadEmbedFeed(env: Env, slug: string): Promise<LoadedEmbed
     env.DB.prepare(`SELECT state_r2_key FROM feed_version WHERE id = ?`)
       .bind(pub.version_id)
       .first<VersionRow>(),
-    env.DB.prepare(`SELECT name FROM feed_project WHERE id = ?`)
+    env.DB.prepare(`SELECT name, brand_primary_color FROM feed_project WHERE id = ?`)
       .bind(pub.project_id)
       .first<ProjectRow>(),
   ]);
@@ -77,6 +78,7 @@ export async function loadEmbedFeed(env: Env, slug: string): Promise<LoadedEmbed
     versionId: pub.version_id,
     publishedAt: pub.published_at,
     projectName: project.name,
+    brandPrimaryColor: project.brand_primary_color,
     state,
   };
 }

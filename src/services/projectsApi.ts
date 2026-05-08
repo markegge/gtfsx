@@ -15,6 +15,8 @@ export interface ProjectSummary {
   updatedAt: number;
   versionCount?: number;
   lastVersionCreatedAt?: number | null;
+  /** 6-char hex without leading "#"; null = use default coral. */
+  brandPrimaryColor?: string | null;
 }
 
 export interface ProjectQuota {
@@ -137,7 +139,13 @@ export function getProject(id: string): Promise<ProjectDetail> {
 
 export function patchProject(
   id: string,
-  input: { name?: string; description?: string | null; slug?: string; archivedAt?: null | 'now' },
+  input: {
+    name?: string;
+    description?: string | null;
+    slug?: string;
+    archivedAt?: null | 'now';
+    brandPrimaryColor?: string | null;
+  },
 ): Promise<ProjectSummary> {
   return requestJson<ProjectSummary>(`/api/projects/${encodeURIComponent(id)}`, {
     method: 'PATCH',

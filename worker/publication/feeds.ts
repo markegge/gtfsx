@@ -19,6 +19,8 @@ import { getFeedBlob } from '../projects/r2';
 import { ungzip } from './ungzip';
 import { renderRouteEmbed } from '../embeds/route';
 import { renderSystemMapEmbed } from '../embeds/systemMap';
+import { renderStopEmbed } from '../embeds/stop';
+import { renderLandingPage } from '../embeds/landing';
 
 interface PublicationRow {
   project_id: string;
@@ -109,7 +111,9 @@ const CANONICAL_RE = /^\/([a-z0-9][a-z0-9-]*)\/gtfs\.zip$/;
 const FEED_INFO_RE = /^\/([a-z0-9][a-z0-9-]*)\/feed_info\.json$/;
 const DRAFT_RE = /^\/([a-z0-9][a-z0-9-]*)\/draft\/([A-Za-z0-9_\-]+)\.zip$/;
 const EMBED_ROUTE_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/route\/([^/?#]+)\/?$/;
+const EMBED_STOP_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/stop\/([^/?#]+)\/?$/;
 const EMBED_SYSMAP_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/system-map\/?$/;
+const LANDING_RE = /^\/([a-z0-9][a-z0-9-]*)\/?$/;
 
 export async function feedsHandler(
   request: Request,
@@ -147,9 +151,19 @@ export async function feedsHandler(
   if (embedRoute) {
     return renderRouteEmbed(request, env, embedRoute[1], decodeURIComponent(embedRoute[2]));
   }
+  const embedStop = url.pathname.match(EMBED_STOP_RE);
+  if (embedStop) {
+    return renderStopEmbed(request, env, embedStop[1], decodeURIComponent(embedStop[2]));
+  }
   const embedSystem = url.pathname.match(EMBED_SYSMAP_RE);
   if (embedSystem) {
     return renderSystemMapEmbed(request, env, embedSystem[1]);
+  }
+  // Landing page — must come last so the more-specific embed/zip/draft
+  // patterns match first. Excludes reserved subpaths.
+  const landing = url.pathname.match(LANDING_RE);
+  if (landing) {
+    return renderLandingPage(request, env, landing[1]);
   }
 
   return notFound();

@@ -53,6 +53,7 @@ interface ProjectRow {
   deleted_at: number | null;
   created_at: number;
   updated_at: number;
+  brand_primary_color: string | null;
 }
 
 interface VersionRow {
@@ -100,6 +101,7 @@ function shapeProject(row: ProjectRow) {
     archivedAt: row.archived_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    brandPrimaryColor: row.brand_primary_color,
   };
 }
 
@@ -159,7 +161,7 @@ async function requireOwnedProject(
   const row = await env.DB.prepare(
     `SELECT id, slug, name, description, owner_type, owner_id,
             working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
-            archived_at, deleted_at, created_at, updated_at
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color
        FROM feed_project WHERE id = ?`,
   )
     .bind(projectId)
@@ -223,6 +225,8 @@ const patchSchema = z.object({
   description: z.string().max(2000).nullable().optional(),
   slug: z.string().optional(),
   archivedAt: z.union([z.null(), z.literal('now')]).optional(),
+  // 6-char hex without leading "#", or null to clear.
+  brandPrimaryColor: z.union([z.string().regex(/^[0-9a-fA-F]{6}$/), z.null()]).optional(),
 });
 
 const importItemSchema = z.object({
@@ -299,7 +303,7 @@ projectsRouter.post('/', async (c) => {
   const row = await c.env.DB.prepare(
     `SELECT id, slug, name, description, owner_type, owner_id,
             working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
-            archived_at, deleted_at, created_at, updated_at
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color
        FROM feed_project WHERE id = ?`,
   )
     .bind(id)
@@ -341,7 +345,7 @@ projectsRouter.get('/', async (c) => {
   const rows = await c.env.DB.prepare(
     `SELECT p.id, p.slug, p.name, p.description, p.owner_type, p.owner_id,
             p.working_state_r2_key, p.working_state_version, p.working_state_size, p.working_state_updated_at,
-            p.archived_at, p.deleted_at, p.created_at, p.updated_at,
+            p.archived_at, p.deleted_at, p.created_at, p.updated_at, p.brand_primary_color,
             (SELECT COUNT(*) FROM feed_version v WHERE v.project_id = p.id) AS version_count,
             (SELECT MAX(v.created_at) FROM feed_version v WHERE v.project_id = p.id) AS last_version_created_at
        FROM feed_project p
@@ -408,6 +412,10 @@ projectsRouter.patch('/:id', async (c) => {
     updates.push('description = ?');
     binds.push(body.description);
   }
+  if (body.brandPrimaryColor !== undefined) {
+    updates.push('brand_primary_color = ?');
+    binds.push(body.brandPrimaryColor === null ? null : body.brandPrimaryColor.toLowerCase());
+  }
   if (body.slug !== undefined && body.slug !== current.slug) {
     if (!isValidSlug(body.slug)) {
       throw validationFailed('Invalid slug');
@@ -458,7 +466,7 @@ projectsRouter.patch('/:id', async (c) => {
   const updated = await c.env.DB.prepare(
     `SELECT id, slug, name, description, owner_type, owner_id,
             working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
-            archived_at, deleted_at, created_at, updated_at
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color
        FROM feed_project WHERE id = ?`,
   )
     .bind(current.id)

@@ -13,14 +13,15 @@ interface MapData {
   type: 'route' | 'system';
   // Route shapes (line geometries) keyed by shape_id, with a colour each.
   shapes: { id: string; coords: [number, number][]; color: string }[];
-  // Stops to draw as dots.
-  stops: { id: string; name: string; lat: number; lon: number }[];
+  // Stops to draw as dots. `url` (when set) makes the popup name a link
+  // to the stop page.
+  stops: { id: string; name: string; lat: number; lon: number; url?: string }[];
 }
 
 /**
  * Build the GeoJSON data for one route (its shapes + stops served).
  */
-export function buildRouteMapData(route: Route, state: FeedState): MapData {
+export function buildRouteMapData(route: Route, state: FeedState, slug?: string): MapData {
   const tripsForRoute = state.trips.filter((t) => t.route_id === route.route_id);
   const shapeIds = new Set<string>();
   for (const t of tripsForRoute) if (t.shape_id) shapeIds.add(t.shape_id);
@@ -41,7 +42,13 @@ export function buildRouteMapData(route: Route, state: FeedState): MapData {
 
   const stops = state.stops
     .filter((s) => stopIdsServed.has(s.stop_id))
-    .map((s) => ({ id: s.stop_id, name: s.stop_name, lat: s.stop_lat, lon: s.stop_lon }))
+    .map((s) => ({
+      id: s.stop_id,
+      name: s.stop_name,
+      lat: s.stop_lat,
+      lon: s.stop_lon,
+      url: slug ? `/${encodeURIComponent(slug)}/embed/stop/${encodeURIComponent(s.stop_id)}` : undefined,
+    }))
     .filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lon));
 
   return { type: 'route', shapes, stops };
@@ -50,7 +57,7 @@ export function buildRouteMapData(route: Route, state: FeedState): MapData {
 /**
  * Build the GeoJSON data for the whole system (all routes + all stops).
  */
-export function buildSystemMapData(state: FeedState): MapData {
+export function buildSystemMapData(state: FeedState, slug?: string): MapData {
   // Per-route trip → shape id, so we can colour each shape with its
   // route_color.
   const shapeColor = new Map<string, string>();
@@ -72,7 +79,13 @@ export function buildSystemMapData(state: FeedState): MapData {
 
   const stops = state.stops
     .filter((s) => Number.isFinite(s.stop_lat) && Number.isFinite(s.stop_lon))
-    .map((s) => ({ id: s.stop_id, name: s.stop_name, lat: s.stop_lat, lon: s.stop_lon }));
+    .map((s) => ({
+      id: s.stop_id,
+      name: s.stop_name,
+      lat: s.stop_lat,
+      lon: s.stop_lon,
+      url: slug ? `/${encodeURIComponent(slug)}/embed/stop/${encodeURIComponent(s.stop_id)}` : undefined,
+    }));
 
   return { type: 'system', shapes, stops };
 }
@@ -135,7 +148,7 @@ export function renderMap(data: MapData, mapboxToken: string | undefined) {
     type: 'FeatureCollection',
     features: data.stops.map((s) => ({
       type: 'Feature',
-      properties: { name: s.name },
+      properties: { name: s.name, url: s.url ?? null },
       geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
     })),
   };
@@ -198,7 +211,14 @@ export function renderMap(data: MapData, mapboxToken: string | undefined) {
           map.on('click', 'stops-circle', (e) => {
             const f = e.features && e.features[0];
             if (!f) return;
-            new mapboxgl.Popup().setLngLat(f.geometry.coordinates).setText(f.properties.name).addTo(map);
+            const name = String(f.properties.name || '').replace(/[<>&"]/g, (c) =>
+              c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '&' ? '&amp;' : '&quot;',
+            );
+            const url = f.properties.url;
+            const html = url
+              ? '<a href="' + url + '" style="color:#b04d2a;font-weight:600;text-decoration:none;">' + name + ' &rsaquo;</a>'
+              : name;
+            new mapboxgl.Popup().setLngLat(f.geometry.coordinates).setHTML(html).addTo(map);
           });
           map.on('mouseenter', 'stops-circle', () => { map.getCanvas().style.cursor = 'pointer'; });
           map.on('mouseleave', 'stops-circle', () => { map.getCanvas().style.cursor = ''; });

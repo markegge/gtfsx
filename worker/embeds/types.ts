@@ -111,5 +111,7 @@ export interface LoadedEmbedFeed {
   versionId: string;
   publishedAt: number;
   projectName: string;
+  // 6-char hex (no leading #) or null. Drives the embed accent CSS var.
+  brandPrimaryColor: string | null;
   state: FeedState;
 }

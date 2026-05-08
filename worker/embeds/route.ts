@@ -51,7 +51,7 @@ export async function renderRouteEmbed(
   if (requestedTab) selected = profiles.find((p) => p.id === requestedTab) ?? null;
   if (!selected) selected = defaultProfile;
 
-  const mapData = buildRouteMapData(route, feed.state);
+  const mapData = buildRouteMapData(route, feed.state, slug);
   const map = renderMap(mapData, env.MAPBOX_TOKEN);
 
   const tabs = profiles.map((p) => {
@@ -115,6 +115,7 @@ export async function renderRouteEmbed(
       description,
       url: url.toString(),
     },
+    brandColor: feed.brandPrimaryColor,
     body: await body,
   });
 

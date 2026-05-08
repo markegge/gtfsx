@@ -162,4 +162,58 @@ describe('embed routes', () => {
     const res = await SELF.fetch('http://feeds.example.com/no-such-slug/embed/system-map');
     expect(res.status).toBe(404);
   });
+
+  it('GET /<slug>/embed/stop/<id> renders the per-stop departures page', async () => {
+    const client = await loggedInClient('emb4@example.com');
+    const { slug } = await createPublishedProject(client, 'EmbedStop');
+    const res = await SELF.fetch(`http://feeds.example.com/${slug}/embed/stop/s1`);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('Main &amp; 1st');
+    expect(body).toContain('Departures today');
+    expect(body).toContain('Routes that serve this stop');
+    expect(body).toContain('8:00a');
+  });
+
+  it('GET /<slug>/ renders the mini-site landing page (indexable)', async () => {
+    const client = await loggedInClient('emb5@example.com');
+    const { slug } = await createPublishedProject(client, 'EmbedLanding');
+    const res = await SELF.fetch(`http://feeds.example.com/${slug}`);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('Embed Agency');
+    // Landing page should NOT be noindex.
+    expect(body).not.toContain('name="robots" content="noindex"');
+    expect(res.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'none'");
+  });
+
+  it('PATCH /api/projects/:id supports brandPrimaryColor and the embed picks it up', async () => {
+    const client = await loggedInClient('emb6@example.com');
+    const proj = await client.json<{ id: string; slug: string }>(
+      await client.post('/api/projects', { name: 'Brand' }),
+    );
+    // Set a brand color.
+    const updated = await client.json<{ brandPrimaryColor: string | null }>(
+      await client.patch(`/api/projects/${proj.id}`, { brandPrimaryColor: 'a32d5e' }),
+    );
+    expect(updated.brandPrimaryColor).toBe('a32d5e');
+
+    // Publish so the embed has something to render.
+    const stateBuf = await gzip(JSON.stringify(makeFeedState()));
+    const versionForm = new FormData();
+    versionForm.append('state', new Blob([stateBuf], { type: 'application/json' }), 'state.json.gz');
+    versionForm.append('meta', JSON.stringify({ summary: {}, validationErrors: 0, validationWarnings: 0 }));
+    const version = await client.json<{ version: { id: string } }>(
+      await client.post(`/api/projects/${proj.id}/versions`, undefined, { body: versionForm }),
+    );
+    const publishForm = new FormData();
+    publishForm.append('meta', JSON.stringify({ versionId: version.version.id }));
+    publishForm.append('zip', new Blob([new Uint8Array([1, 2, 3])], { type: 'application/zip' }), 'gtfs.zip');
+    await client.post(`/api/projects/${proj.id}/publish`, undefined, { body: publishForm });
+
+    const res = await SELF.fetch(`http://feeds.example.com/${proj.slug}/embed/system-map`);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('--brand: #a32d5e');
+  });
 });

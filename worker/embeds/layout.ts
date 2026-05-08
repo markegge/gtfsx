@@ -4,6 +4,10 @@ import { mapboxAssetTags } from './map';
 const STYLES = `
   *, *::before, *::after { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
+  :root {
+    --brand: #e8734a;        /* default coral; overridden inline by brand_primary_color */
+    --brand-deep: #b04d2a;
+  }
   body {
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     color: #1a1a1a;
@@ -148,10 +152,10 @@ const STYLES = `
     margin-bottom: -1px;
     transition: color 120ms;
   }
-  .service-tabs a:hover { color: #b04d2a; }
+  .service-tabs a:hover { color: var(--brand-deep); }
   .service-tabs a.active {
-    border-bottom-color: #e8734a;
-    color: #b04d2a;
+    border-bottom-color: var(--brand);
+    color: var(--brand-deep);
     font-weight: 700;
   }
 
@@ -236,6 +240,54 @@ const STYLES = `
   .route-list a:hover { background: #fff8f0; }
   .route-list a .name { font-weight: 500; line-height: 1.3; }
 
+  /* Per-stop page departures list */
+  .departures {
+    list-style: none;
+    margin: 0; padding: 0;
+    border: 1px solid #e8d8c0;
+    border-radius: 6px;
+    background: #fff;
+    overflow: hidden;
+  }
+  .departures li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #f0e6d4;
+  }
+  .departures li:last-child { border-bottom: none; }
+  .dep-time {
+    flex-shrink: 0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #1a1a1a;
+    min-width: 64px;
+  }
+  .dep-route {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: #1a1a1a;
+    flex: 1;
+  }
+  .dep-route:hover .dep-headsign { color: var(--brand-deep); }
+  .dep-headsign { font-weight: 500; }
+
+  /* Mini-site landing — slightly more spacious */
+  body.landing .embed-root { padding: 24px; max-width: 1100px; }
+  body.landing .embed-header h1 { font-size: 24px; }
+  body.landing .map { height: 480px; }
+  body.landing .landing-footnote {
+    font-size: 12px; color: #6b6b6b; margin-top: 12px;
+  }
+  @media (max-width: 600px) {
+    body.landing .embed-root { padding: 16px; }
+    body.landing .map { height: 280px; }
+    body.landing .embed-header h1 { font-size: 20px; }
+  }
+
   @media (max-width: 600px) {
     .embed-root { padding: 12px; }
     .map { height: 220px; }
@@ -257,14 +309,24 @@ export function renderLayout(opts: {
   social?: SocialMeta;
   bodyClass?: string;
   body: ReturnType<typeof html>;
+  // True for embed iframes (don't outrank the host page); false for the
+  // canonical mini-site landing page where SEO is desired.
+  noindex?: boolean;
+  // 6-char hex without leading "#". When set, overrides the default
+  // coral via inline CSS variables.
+  brandColor?: string | null;
 }) {
   const social = opts.social;
+  const noindex = opts.noindex !== false;
+  const brandStyle = opts.brandColor && /^[0-9a-fA-F]{6}$/.test(opts.brandColor)
+    ? `<style>:root { --brand: #${opts.brandColor}; --brand-deep: #${darkenHex(opts.brandColor)}; }</style>`
+    : '';
   return html`<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="robots" content="noindex" />
+  ${noindex ? html`<meta name="robots" content="noindex" />` : ''}
   <title>${opts.title}</title>
   ${social
     ? html`
@@ -278,12 +340,28 @@ export function renderLayout(opts: {
       `
     : ''}
   <style>${raw(STYLES)}</style>
+  ${raw(brandStyle)}
   ${mapboxAssetTags()}
 </head>
 <body class="${opts.bodyClass ?? ''}">
   <div class="embed-root">${opts.body}</div>
 </body>
 </html>`;
+}
+
+/**
+ * Multiply each RGB channel by 0.7 to produce a "deep" variant of the
+ * brand color for hover/active states. Input is 6-char hex with no
+ * leading "#"; output matches that shape.
+ */
+function darkenHex(hex: string): string {
+  const m = /^([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/.exec(hex);
+  if (!m) return hex;
+  const adj = (h: string) => {
+    const n = parseInt(h, 16);
+    return Math.max(0, Math.min(255, Math.round(n * 0.7))).toString(16).padStart(2, '0');
+  };
+  return `${adj(m[1])}${adj(m[2])}${adj(m[3])}`;
 }
 
 export function embedHeaders(versionId: string, publishedAt: number): Headers {

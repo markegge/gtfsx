@@ -24,7 +24,7 @@ export async function renderSystemMapEmbed(
 
   const url = new URL(request.url);
   const agency = feed.state.agencies[0];
-  const data = buildSystemMapData(feed.state);
+  const data = buildSystemMapData(feed.state, slug);
   const map = renderMap(data, env.MAPBOX_TOKEN);
   const tz = agency?.agency_timezone;
   const today = todayInTimezone(tz);
@@ -77,6 +77,7 @@ export async function renderSystemMapEmbed(
       description,
       url: url.toString(),
     },
+    brandColor: feed.brandPrimaryColor,
     body: await body,
   });
 

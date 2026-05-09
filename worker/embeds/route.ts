@@ -89,6 +89,9 @@ export async function renderRouteEmbed(
 
   const body = html`
     <header class="embed-header">
+      ${feed.brandLogoUrl
+        ? html`<img class="brand-logo" src="${feed.brandLogoUrl}" alt="${agency?.agency_name ?? feed.projectName} logo" />`
+        : ''}
       <span class="route-badge" style="background: ${routeColor}; color: ${routeTextColor};">${shortName}</span>
       <div>
         <h1>${longName || shortName}</h1>

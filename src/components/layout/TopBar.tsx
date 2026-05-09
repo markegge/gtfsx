@@ -271,6 +271,19 @@ export function TopBar() {
                 >
                   Account settings
                 </button>
+                {activeWorkspace.type === 'org' &&
+                  (() => {
+                    const activeOrg = userOrgs.find((o) => o.id === activeWorkspace.orgId);
+                    if (!activeOrg) return null;
+                    return (
+                      <button
+                        onClick={() => navigate(`/orgs/${encodeURIComponent(activeOrg.slug)}`)}
+                        className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
+                      >
+                        Organization settings
+                      </button>
+                    );
+                  })()}
                 {currentUser.staff && (
                   <button
                     onClick={() => navigate('/admin')}

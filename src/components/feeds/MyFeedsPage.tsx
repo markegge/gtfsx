@@ -85,6 +85,15 @@ export function MyFeedsPage() {
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
   const [renameTarget, setRenameTarget] = useState<ProjectSummary | null>(null);
 
+  const activeWorkspace = useStore((s) => s.activeWorkspace);
+  const userOrgs = useStore((s) => s.userOrgs);
+  const scope =
+    activeWorkspace.type === 'org' ? `org:${activeWorkspace.orgId}` : 'personal';
+  const workspaceLabel =
+    activeWorkspace.type === 'org'
+      ? userOrgs.find((o) => o.id === activeWorkspace.orgId)?.name ?? 'Organization'
+      : 'My personal feeds';
+
   useEffect(() => {
     if (!authChecked) hydrateAuth();
   }, [authChecked, hydrateAuth]);
@@ -93,7 +102,7 @@ export function MyFeedsPage() {
     setLoading(true);
     setListError(null);
     try {
-      const res = await listProjects(includeArchived);
+      const res = await listProjects({ includeArchived, scope });
       setFeedsProjects(res.projects, res.quota.warning);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Could not load feeds';
@@ -101,7 +110,7 @@ export function MyFeedsPage() {
     } finally {
       setLoading(false);
     }
-  }, [includeArchived, setFeedsProjects]);
+  }, [includeArchived, scope, setFeedsProjects]);
 
   useEffect(() => {
     if (!authChecked) return;
@@ -192,9 +201,13 @@ export function MyFeedsPage() {
       <main className="max-w-5xl mx-auto px-6 py-8">
         <div className="flex items-start justify-between mb-6">
           <div>
-            <h1 className="font-heading font-extrabold text-3xl text-dark-brown">My Feeds</h1>
+            <h1 className="font-heading font-extrabold text-3xl text-dark-brown">
+              {workspaceLabel}
+            </h1>
             <p className="text-sm text-warm-gray mt-1">
-              Feeds saved to your account. They sync across devices.
+              {activeWorkspace.type === 'org'
+                ? 'Feeds owned by this organization. Switch workspace via the account menu.'
+                : 'Feeds saved to your account. They sync across devices.'}
             </p>
           </div>
           <AuthButton onClick={() => setShowCreate(true)}>+ Create feed</AuthButton>
@@ -439,15 +452,21 @@ function CreateFeedDialog({
   const [description, setDescription] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const activeWorkspace = useStore((s) => s.activeWorkspace);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
+      const owner: { type: 'user' } | { type: 'org'; id: string } =
+        activeWorkspace.type === 'org'
+          ? { type: 'org', id: activeWorkspace.orgId }
+          : { type: 'user' };
       const p = await createProject({
         name: name.trim(),
         description: description.trim() || undefined,
+        owner,
       });
       onCreated(p);
     } catch (err) {

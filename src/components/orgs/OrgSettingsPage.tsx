@@ -9,16 +9,20 @@ import { ApiError } from '../../services/authApi';
 import {
   createInvitation,
   deleteOrg,
+  deleteOrgLogo,
   getOrg,
   listInvitations,
+  orgLogoUrl,
   patchOrg,
   removeMember,
   rescindInvitation,
   roleAtLeast,
   transferOwnership,
   updateMemberRole,
+  uploadOrgLogo,
   type InviteRole,
   type OrgDetail,
+  type OrgInfo,
   type OrgInvitation,
   type OrgMember,
   type OrgRole,
@@ -342,6 +346,14 @@ export function OrgSettingsPage() {
             {actionError}
           </div>
         )}
+
+        <BrandingSection
+          org={org}
+          canEdit={isAdmin}
+          onUpdated={(updated) => {
+            setDetail((prev) => (prev ? { ...prev, organization: updated } : prev));
+          }}
+        />
 
         <section className="bg-white border border-sand rounded-2xl p-6 mb-5">
           <div className="flex items-center justify-between mb-4">
@@ -890,5 +902,108 @@ function ConfirmDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+function BrandingSection({
+  org,
+  canEdit,
+  onUpdated,
+}: {
+  org: OrgInfo;
+  canEdit: boolean;
+  onUpdated: (org: OrgInfo) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const logoUrl = orgLogoUrl(org.id, org.brandLogoUpdatedAt);
+
+  const handleFile = async (file: File | null) => {
+    if (!file) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await uploadOrgLogo(org.id, file);
+      onUpdated(res.organization);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Upload failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await deleteOrgLogo(org.id);
+      onUpdated(res.organization);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Remove failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="bg-white border border-sand rounded-2xl p-6 mb-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-heading font-bold text-lg text-dark-brown">Branding</h2>
+      </div>
+      <p className="text-sm text-warm-gray mb-4">
+        Upload a logo to display on your org's published feed pages (the landing page,
+        per-route widgets, per-stop widgets). PNG, JPEG, WebP, or SVG. Max 1 MB.
+      </p>
+      <div className="flex items-center gap-4">
+        <div className="w-32 h-16 border border-sand rounded-md bg-cream grid place-items-center overflow-hidden">
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt="Current logo"
+              className="max-w-full max-h-full object-contain"
+            />
+          ) : (
+            <span className="text-xs text-warm-gray">No logo</span>
+          )}
+        </div>
+        {canEdit ? (
+          <div className="flex flex-col gap-2">
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <span className="px-3 py-1.5 rounded-lg bg-coral text-white font-heading font-bold text-xs hover:bg-[#d4603a] transition-colors disabled:opacity-50">
+                {busy ? 'Uploading…' : logoUrl ? 'Replace logo' : 'Upload logo'}
+              </span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                disabled={busy}
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  e.target.value = ''; // allow re-uploading the same file later
+                  handleFile(f);
+                }}
+              />
+            </label>
+            {logoUrl && (
+              <button
+                type="button"
+                onClick={handleRemove}
+                disabled={busy}
+                className="text-xs text-warm-gray hover:text-red-600 underline self-start disabled:opacity-50"
+              >
+                Remove logo
+              </button>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-warm-gray italic">Admins or owners can change the logo.</p>
+        )}
+      </div>
+      {error && (
+        <div className="mt-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm">
+          {error}
+        </div>
+      )}
+    </section>
   );
 }

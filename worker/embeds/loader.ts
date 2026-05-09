@@ -15,6 +15,13 @@ interface VersionRow {
 interface ProjectRow {
   name: string;
   brand_primary_color: string | null;
+  owner_type: string;
+  owner_id: string;
+}
+
+interface OrgLogoRow {
+  brand_logo_r2_key: string | null;
+  brand_logo_updated_at: number | null;
 }
 
 /**
@@ -39,12 +46,28 @@ export async function loadEmbedFeed(env: Env, slug: string): Promise<LoadedEmbed
     env.DB.prepare(`SELECT state_r2_key FROM feed_version WHERE id = ?`)
       .bind(pub.version_id)
       .first<VersionRow>(),
-    env.DB.prepare(`SELECT name, brand_primary_color FROM feed_project WHERE id = ?`)
+    env.DB.prepare(
+      `SELECT name, brand_primary_color, owner_type, owner_id FROM feed_project WHERE id = ?`,
+    )
       .bind(pub.project_id)
       .first<ProjectRow>(),
   ]);
 
   if (!version || !project) return null;
+
+  let brandLogoUrl: string | null = null;
+  if (project.owner_type === 'org') {
+    const orgLogo = await env.DB.prepare(
+      `SELECT brand_logo_r2_key, brand_logo_updated_at FROM organization WHERE id = ? AND deleted_at IS NULL`,
+    )
+      .bind(project.owner_id)
+      .first<OrgLogoRow>();
+    if (orgLogo?.brand_logo_r2_key) {
+      const origin = env.FEEDS_ORIGIN.replace(/\/$/, '');
+      const v = orgLogo.brand_logo_updated_at ? `?v=${orgLogo.brand_logo_updated_at}` : '';
+      brandLogoUrl = `${origin}/_/orgs/${project.owner_id}/logo${v}`;
+    }
+  }
 
   const blob = await getFeedBlob(env, version.state_r2_key);
   if (!blob) return null;
@@ -79,6 +102,7 @@ export async function loadEmbedFeed(env: Env, slug: string): Promise<LoadedEmbed
     publishedAt: pub.published_at,
     projectName: project.name,
     brandPrimaryColor: project.brand_primary_color,
+    brandLogoUrl,
     state,
   };
 }

@@ -113,5 +113,8 @@ export interface LoadedEmbedFeed {
   projectName: string;
   // 6-char hex (no leading #) or null. Drives the embed accent CSS var.
   brandPrimaryColor: string | null;
+  // Public URL for the owning org's brand logo (resolves on FEEDS_ORIGIN).
+  // Null when the project is user-owned or the org has no logo.
+  brandLogoUrl: string | null;
   state: FeedState;
 }

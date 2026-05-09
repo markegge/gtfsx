@@ -113,6 +113,7 @@ const DRAFT_RE = /^\/([a-z0-9][a-z0-9-]*)\/draft\/([A-Za-z0-9_\-]+)\.zip$/;
 const EMBED_ROUTE_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/route\/([^/?#]+)\/?$/;
 const EMBED_STOP_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/stop\/([^/?#]+)\/?$/;
 const EMBED_SYSMAP_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/system-map\/?$/;
+const ORG_LOGO_RE = /^\/_\/orgs\/([A-Z0-9]+)\/logo\/?$/i;
 const LANDING_RE = /^\/([a-z0-9][a-z0-9-]*)\/?$/;
 
 export async function feedsHandler(
@@ -159,6 +160,10 @@ export async function feedsHandler(
   if (embedSystem) {
     return renderSystemMapEmbed(request, env, embedSystem[1]);
   }
+  const orgLogo = url.pathname.match(ORG_LOGO_RE);
+  if (orgLogo) {
+    return serveOrgLogo(request, env, orgLogo[1]);
+  }
   // Landing page — must come last so the more-specific embed/zip/draft
   // patterns match first. Excludes reserved subpaths.
   const landing = url.pathname.match(LANDING_RE);
@@ -167,6 +172,44 @@ export async function feedsHandler(
   }
 
   return notFound();
+}
+
+// ─── Org brand logo (public read) ───────────────────────────────────────────
+
+async function serveOrgLogo(request: Request, env: Env, orgId: string): Promise<Response> {
+  const row = await env.DB.prepare(
+    `SELECT brand_logo_r2_key, brand_logo_content_type, brand_logo_updated_at
+       FROM organization WHERE id = ? AND deleted_at IS NULL`,
+  )
+    .bind(orgId)
+    .first<{
+      brand_logo_r2_key: string | null;
+      brand_logo_content_type: string | null;
+      brand_logo_updated_at: number | null;
+    }>();
+  if (!row || !row.brand_logo_r2_key) return notFound('Logo not set.');
+
+  const etag = `"${row.brand_logo_updated_at ?? 0}"`;
+  if (etagMatches(request.headers.get('If-None-Match'), etag)) {
+    return new Response(null, {
+      status: 304,
+      headers: { ETag: etag, 'Cache-Control': 'public, max-age=300, s-maxage=86400' },
+    });
+  }
+
+  const obj = await env.FEEDS.get(row.brand_logo_r2_key);
+  if (!obj) return notFound('Logo missing.');
+
+  return new Response(obj.body, {
+    status: 200,
+    headers: {
+      'Content-Type': row.brand_logo_content_type ?? 'application/octet-stream',
+      ETag: etag,
+      'Last-Modified': httpDate(row.brand_logo_updated_at ?? Date.now()),
+      'Cache-Control': 'public, max-age=300, s-maxage=86400',
+      'Access-Control-Allow-Origin': '*',
+    },
+  });
 }
 
 // ─── Canonical ZIP ─────────────────────────────────────────────────────────────

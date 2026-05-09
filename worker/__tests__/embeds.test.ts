@@ -187,6 +187,65 @@ describe('embed routes', () => {
     expect(res.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'none'");
   });
 
+  it('Org logo upload + public read + embed render round-trip', async () => {
+    const client = await loggedInClient('emb-logo@example.com');
+    // Create an org and a project owned by it.
+    const orgRes = await client.json<{ organization: { id: string; slug: string } }>(
+      await client.post('/api/orgs', { slug: 'logo-org', name: 'Logo Org' }),
+    );
+    const proj = await client.json<{ id: string; slug: string }>(
+      await client.post('/api/projects', {
+        name: 'LogoEmbed',
+        owner: { type: 'org', id: orgRes.organization.id },
+      }),
+    );
+
+    // Upload a tiny PNG.
+    const png = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+      // IHDR (1x1)
+      0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+      0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde,
+      // IDAT
+      0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54,
+      0x08, 0x99, 0x63, 0x60, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0xe2, 0x21, 0xbc, 0x33,
+      // IEND
+      0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ]);
+    const form = new FormData();
+    form.append('file', new Blob([png], { type: 'image/png' }), 'logo.png');
+    const upload = await client.post(`/api/orgs/${orgRes.organization.id}/logo`, undefined, { body: form });
+    expect(upload.status).toBe(200);
+    const uploadJson = await upload.json() as { organization: { brandLogoUpdatedAt: number } };
+    expect(uploadJson.organization.brandLogoUpdatedAt).toBeGreaterThan(0);
+
+    // Public read endpoint serves the bytes.
+    const logoRes = await SELF.fetch(`http://feeds.example.com/_/orgs/${orgRes.organization.id}/logo`);
+    expect(logoRes.status).toBe(200);
+    expect(logoRes.headers.get('Content-Type')).toBe('image/png');
+    expect(logoRes.headers.get('Access-Control-Allow-Origin')).toBe('*');
+
+    // Publish so the embed has data, then verify the embed HTML embeds the logo.
+    const stateBuf = await gzip(JSON.stringify(makeFeedState()));
+    const versionForm = new FormData();
+    versionForm.append('state', new Blob([stateBuf], { type: 'application/json' }), 'state.json.gz');
+    versionForm.append('meta', JSON.stringify({ summary: {}, validationErrors: 0, validationWarnings: 0 }));
+    const version = await client.json<{ version: { id: string } }>(
+      await client.post(`/api/projects/${proj.id}/versions`, undefined, { body: versionForm }),
+    );
+    const publishForm = new FormData();
+    publishForm.append('meta', JSON.stringify({ versionId: version.version.id }));
+    publishForm.append('zip', new Blob([new Uint8Array([1, 2, 3])], { type: 'application/zip' }), 'gtfs.zip');
+    await client.post(`/api/projects/${proj.id}/publish`, undefined, { body: publishForm });
+
+    const landingRes = await SELF.fetch(`http://feeds.example.com/${proj.slug}`);
+    expect(landingRes.status).toBe(200);
+    const landingHtml = await landingRes.text();
+    expect(landingHtml).toContain(`/_/orgs/${orgRes.organization.id}/logo`);
+    expect(landingHtml).toContain('class="brand-logo"');
+  });
+
   it('PATCH /api/projects/:id supports brandPrimaryColor and the embed picks it up', async () => {
     const client = await loggedInClient('emb6@example.com');
     const proj = await client.json<{ id: string; slug: string }>(

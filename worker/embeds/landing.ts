@@ -95,6 +95,9 @@ export async function renderLandingPage(
 
   const body = html`
     <header class="embed-header landing-header">
+      ${feed.brandLogoUrl
+        ? html`<img class="brand-logo" src="${feed.brandLogoUrl}" alt="${agencyName} logo" />`
+        : ''}
       <div>
         <h1>${agencyName}</h1>
         <div class="effective">

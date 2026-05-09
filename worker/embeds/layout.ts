@@ -275,6 +275,16 @@ const STYLES = `
   .dep-route:hover .dep-headsign { color: var(--brand-deep); }
   .dep-headsign { font-weight: 500; }
 
+  /* Brand logo (org-owned feeds) */
+  .brand-logo {
+    height: 40px;
+    width: auto;
+    max-width: 200px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  body.landing .brand-logo { height: 56px; max-width: 280px; }
+
   /* Mini-site landing — slightly more spacious */
   body.landing .embed-root { padding: 24px; max-width: 1100px; }
   body.landing .embed-header h1 { font-size: 24px; }
@@ -286,6 +296,8 @@ const STYLES = `
     body.landing .embed-root { padding: 16px; }
     body.landing .map { height: 280px; }
     body.landing .embed-header h1 { font-size: 20px; }
+    .brand-logo { height: 32px; max-width: 140px; }
+    body.landing .brand-logo { height: 44px; max-width: 200px; }
   }
 
   @media (max-width: 600px) {

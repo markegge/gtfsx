@@ -18,6 +18,8 @@ export interface OrgInfo {
   slug: string;
   name: string;
   createdAt: number;
+  /** Timestamp of the latest logo upload, or null when no logo is set. */
+  brandLogoUpdatedAt?: number | null;
 }
 
 export interface OrgMember {
@@ -198,6 +200,54 @@ export function transferOwnership(
     method: 'POST',
     body: input,
   });
+}
+
+export async function uploadOrgLogo(orgId: string, file: File): Promise<{ organization: OrgInfo }> {
+  const form = new FormData();
+  form.append('file', file);
+  let res: Response;
+  try {
+    res = await fetch(`/api/orgs/${encodeURIComponent(orgId)}/logo`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { ...BASE_HEADERS },
+      body: form,
+    });
+  } catch (e) {
+    throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
+  }
+  if (!res.ok) {
+    let message = 'Logo upload failed';
+    let code: ApiErrorCode = 'unknown';
+    try {
+      const data = await res.json() as { error?: string; message?: string };
+      if (data?.message) message = data.message;
+      if (data?.error) code = data.error as ApiErrorCode;
+    } catch { /* ignore */ }
+    throw new ApiError(code, message, res.status);
+  }
+  return res.json() as Promise<{ organization: OrgInfo }>;
+}
+
+export function deleteOrgLogo(orgId: string): Promise<{ organization: OrgInfo }> {
+  return request<{ organization: OrgInfo }>(`/api/orgs/${encodeURIComponent(orgId)}/logo`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * Public URL for an org's brand logo, served from the FEEDS origin so
+ * embed iframes can load it cross-origin without CORS issues. Returns
+ * null when the org has no logo.
+ */
+export function orgLogoUrl(orgId: string, brandLogoUpdatedAt: number | null | undefined): string | null {
+  if (!brandLogoUpdatedAt) return null;
+  const feedsOrigin =
+    (import.meta.env.VITE_FEEDS_ORIGIN as string | undefined) ||
+    (typeof window !== 'undefined' && window.location.hostname.startsWith('staging.')
+      ? 'https://staging-feeds.gtfsbuilder.net'
+      : 'https://feeds.gtfsbuilder.net');
+  return `${feedsOrigin}/_/orgs/${encodeURIComponent(orgId)}/logo?v=${brandLogoUpdatedAt}`;
 }
 
 export const ROLE_RANK: Record<OrgRole, number> = {

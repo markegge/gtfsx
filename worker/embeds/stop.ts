@@ -141,6 +141,9 @@ export async function renderStopEmbed(
 
   const body = html`
     <header class="embed-header">
+      ${feed.brandLogoUrl
+        ? html`<img class="brand-logo" src="${feed.brandLogoUrl}" alt="${agencyName} logo" />`
+        : ''}
       <div>
         <h1>${stop.stop_name}</h1>
         <div class="effective">

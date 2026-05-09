@@ -42,6 +42,9 @@ interface OrgRow {
   name: string;
   created_at: number;
   deleted_at: number | null;
+  brand_logo_r2_key: string | null;
+  brand_logo_content_type: string | null;
+  brand_logo_updated_at: number | null;
 }
 
 interface OrgMembershipRow {
@@ -72,7 +75,9 @@ async function parseJson<T extends z.ZodTypeAny>(
 
 async function fetchOrg(env: Env, orgId: string): Promise<OrgRow | null> {
   const row = await env.DB.prepare(
-    `SELECT id, slug, name, created_at, deleted_at FROM organization WHERE id = ?`,
+    `SELECT id, slug, name, created_at, deleted_at,
+            brand_logo_r2_key, brand_logo_content_type, brand_logo_updated_at
+       FROM organization WHERE id = ?`,
   )
     .bind(orgId)
     .first<OrgRow>();
@@ -118,11 +123,15 @@ export async function requireOrgRole(
 }
 
 function shapeOrg(row: OrgRow) {
+  // The actual logo bytes are served publicly from FEEDS_ORIGIN at
+  // `/_/orgs/<id>/logo`. Frontend composes the URL from this timestamp
+  // (used as a cache-buster query param) plus the FEEDS_ORIGIN var.
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
     createdAt: row.created_at,
+    brandLogoUpdatedAt: row.brand_logo_r2_key ? row.brand_logo_updated_at : null,
   };
 }
 
@@ -233,7 +242,16 @@ orgsRouter.post('/', async (c) => {
   return c.json(
     {
       organization: {
-        ...shapeOrg({ id, slug: body.slug, name: body.name, created_at: now, deleted_at: null }),
+        ...shapeOrg({
+          id,
+          slug: body.slug,
+          name: body.name,
+          created_at: now,
+          deleted_at: null,
+          brand_logo_r2_key: null,
+          brand_logo_content_type: null,
+          brand_logo_updated_at: null,
+        }),
         role: 'owner' as OrgRole,
       },
     },
@@ -497,6 +515,103 @@ orgsRouter.patch('/:id', async (c) => {
     ip: clientIp(c.req.raw),
   });
   return c.json({ organization: fresh ? shapeOrg(fresh) : shapeOrg(org) });
+});
+
+// ─── POST /api/orgs/:id/logo — upload brand logo ───────────────────────────
+
+const LOGO_MAX_BYTES = 1_000_000; // 1 MB
+const ALLOWED_LOGO_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/svg+xml',
+]);
+
+function logoR2Key(orgId: string): string {
+  return `orgs/${orgId}/logo`;
+}
+
+orgsRouter.post('/:id/logo', async (c) => {
+  const user = c.var.user!;
+  const id = c.req.param('id');
+  // Admins + owners can manage branding.
+  await requireOrgRole(c.env, user, id, 'admin');
+
+  const form = await c.req.formData().catch(() => null);
+  if (!form) throw validationFailed('multipart/form-data body required');
+  const file: unknown = form.get('file');
+  // Workers treats uploaded files as Blob; the type lib may not have File
+  // available globally, so accept either.
+  if (
+    !file ||
+    typeof file !== 'object' ||
+    typeof (file as Blob).arrayBuffer !== 'function' ||
+    typeof (file as Blob).size !== 'number'
+  ) {
+    throw validationFailed('file field required');
+  }
+  const blob = file as Blob;
+  const contentType = blob.type || 'application/octet-stream';
+  if (!ALLOWED_LOGO_TYPES.has(contentType)) {
+    throw validationFailed('Allowed logo types: PNG, JPEG, WebP, SVG');
+  }
+  if (blob.size > LOGO_MAX_BYTES) {
+    throw validationFailed(`Logo file too large (max ${Math.round(LOGO_MAX_BYTES / 1000)} KB)`);
+  }
+
+  const buf = await blob.arrayBuffer();
+  await c.env.FEEDS.put(logoR2Key(id), buf, {
+    httpMetadata: { contentType },
+  });
+
+  const now = Date.now();
+  await c.env.DB.prepare(
+    `UPDATE organization
+        SET brand_logo_r2_key = ?, brand_logo_content_type = ?, brand_logo_updated_at = ?
+      WHERE id = ?`,
+  )
+    .bind(logoR2Key(id), contentType, now, id)
+    .run();
+
+  await logAudit(c.env, {
+    actorUserId: user.id,
+    subjectType: 'org',
+    subjectId: id,
+    action: 'org.logo.upload',
+    metadata: { contentType, size: blob.size },
+    ip: clientIp(c.req.raw),
+  });
+
+  const fresh = await fetchOrg(c.env, id);
+  return c.json({ organization: fresh ? shapeOrg(fresh) : null });
+});
+
+// ─── DELETE /api/orgs/:id/logo — clear brand logo ──────────────────────────
+
+orgsRouter.delete('/:id/logo', async (c) => {
+  const user = c.var.user!;
+  const id = c.req.param('id');
+  await requireOrgRole(c.env, user, id, 'admin');
+
+  await c.env.FEEDS.delete(logoR2Key(id)).catch(() => {});
+  await c.env.DB.prepare(
+    `UPDATE organization
+        SET brand_logo_r2_key = NULL, brand_logo_content_type = NULL, brand_logo_updated_at = NULL
+      WHERE id = ?`,
+  )
+    .bind(id)
+    .run();
+
+  await logAudit(c.env, {
+    actorUserId: user.id,
+    subjectType: 'org',
+    subjectId: id,
+    action: 'org.logo.remove',
+    ip: clientIp(c.req.raw),
+  });
+
+  const fresh = await fetchOrg(c.env, id);
+  return c.json({ organization: fresh ? shapeOrg(fresh) : null });
 });
 
 // ─── DELETE /api/orgs/:id — soft-delete ─────────────────────────────────────

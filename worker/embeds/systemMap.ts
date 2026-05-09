@@ -56,6 +56,9 @@ export async function renderSystemMapEmbed(
 
   const body = html`
     <header class="embed-header">
+      ${feed.brandLogoUrl
+        ? html`<img class="brand-logo" src="${feed.brandLogoUrl}" alt="${agencyName} logo" />`
+        : ''}
       <div>
         <h1>${agencyName}</h1>
         <div class="effective">System map · ${feed.state.routes.length} routes · ${feed.state.stops.length} stops</div>

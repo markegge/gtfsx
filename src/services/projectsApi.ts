@@ -119,9 +119,14 @@ async function requestJson<T>(
   return undefined as T;
 }
 
-export function listProjects(includeArchived = false): Promise<ListProjectsResponse> {
-  const q = includeArchived ? '?include_archived=1' : '';
-  return requestJson<ListProjectsResponse>(`/api/projects${q}`);
+export function listProjects(
+  opts: { includeArchived?: boolean; scope?: string } = {},
+): Promise<ListProjectsResponse> {
+  const params = new URLSearchParams();
+  if (opts.includeArchived) params.set('include_archived', '1');
+  if (opts.scope && opts.scope !== 'personal') params.set('scope', opts.scope);
+  const q = params.toString();
+  return requestJson<ListProjectsResponse>(`/api/projects${q ? '?' + q : ''}`);
 }
 
 export function createProject(input: {

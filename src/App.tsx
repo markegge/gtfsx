@@ -28,6 +28,8 @@ import { AdminOrgsPage } from './components/admin/AdminOrgsPage';
 import { AdminOrgDetailPage } from './components/admin/AdminOrgDetailPage';
 import { AdminAuditPage } from './components/admin/AdminAuditPage';
 import { ImpersonationBanner } from './components/admin/ImpersonationBanner';
+import { OrgSettingsPage } from './components/orgs/OrgSettingsPage';
+import { AcceptInvitationPage } from './components/orgs/AcceptInvitationPage';
 import { RtBreakageDialog } from './components/distribution/RtBreakageDialog';
 import { backendEnabled } from './utils/featureFlags';
 
@@ -107,9 +109,19 @@ function ServerEditorRoute() {
       try {
         let proj = feedsProjects.find((p) => p.slug === slug);
         if (!proj) {
-          const res = await listProjects(true);
-          setFeedsProjects(res.projects, res.quota.warning);
-          proj = res.projects.find((p) => p.slug === slug);
+          // Slugs are unique per workspace, not globally — try the active
+          // workspace first, then fall back to personal so a direct URL
+          // hit (e.g. shared link) still resolves when the user lands in
+          // a workspace that doesn't own the slug.
+          const ws = useStore.getState().activeWorkspace;
+          const primaryScope = ws.type === 'org' ? `org:${ws.orgId}` : 'personal';
+          const tries = primaryScope === 'personal' ? ['personal'] : [primaryScope, 'personal'];
+          for (const scope of tries) {
+            const res = await listProjects({ includeArchived: true, scope });
+            setFeedsProjects(res.projects, res.quota.warning);
+            proj = res.projects.find((p) => p.slug === slug);
+            if (proj) break;
+          }
         }
         if (cancelled) return;
         if (!proj) {
@@ -238,6 +250,8 @@ function App() {
         <Route path="/feeds" element={<MyFeedsPage />} />
         <Route path="/feeds/:slug" element={<ServerEditorRoute />} />
         <Route path="/feeds/*" element={<Navigate to="/feeds" replace />} />
+        <Route path="/orgs/accept" element={<AcceptInvitationPage />} />
+        <Route path="/orgs/:slug" element={<OrgSettingsPage />} />
         <Route path="/admin" element={<AdminDashboardPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/users/:id" element={<AdminUserDetailPage />} />

@@ -397,9 +397,10 @@ Read these when you need the deep version of a particular surface:
 
 | Doc | Scope |
 |---|---|
+| [`WORKFLOW.md`](./WORKFLOW.md) | Day-to-day git + deployment cadence — branching, staging deploys, prod deploys, kill-switch flags, hotfixes. |
 | [`BACKEND_REQUIREMENTS.md`](./BACKEND_REQUIREMENTS.md) | Reference spec — data model, API surface, security/privacy NFRs, decisions appendix. Anchors `BE-*` and `NF-*` numbers. |
 | [`BACKEND_STATUS.md`](./BACKEND_STATUS.md) | "Where we are now" snapshot — env state, deploy gotchas, outstanding work. **Update this when you change deployed state.** |
-| [`DEPLOY_BACKEND.md`](./DEPLOY_BACKEND.md) | Provisioning runbook (D1 / KV / R2 / Resend / Turnstile / smoke-test). |
+| [`DEPLOY_BACKEND.md`](./DEPLOY_BACKEND.md) | First-time provisioning runbook (D1 / KV / R2 / Resend / Turnstile / smoke-test). |
 | [`EMBEDS_REQUIREMENTS.md`](./EMBEDS_REQUIREMENTS.md) | Embeds reference — research findings, architecture, what's shipped, what's queued, open questions. Anchors `EM-*` numbers. |
 | [`FLEX_ROADMAP.md`](./FLEX_ROADMAP.md) | GTFS-Flex coverage tracker — shipped / partial / open / deferred per spec field. |
 | [`demand-dots-nationwide-plan.md`](./demand-dots-nationwide-plan.md) | Build pipeline + decisions for the demand-dot tile archive. |

@@ -6,6 +6,7 @@
 
 ## Project
 - Requirements: `docs/REQUIREMENTS.md`
+- Git + deploy workflow: `docs/WORKFLOW.md`
 - Wireframes/mockups: `docs/wireframes.html`
 - Example GTFS feed: `streamline_gtfs_march_2026/`
 

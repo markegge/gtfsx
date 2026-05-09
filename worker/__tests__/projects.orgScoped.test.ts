@@ -220,4 +220,95 @@ describe('org-scoped projects', () => {
     expect(orgList.quota.projects.used).toBe(18);
     // Both counts below 20 — the warn threshold is 18, so we expect warning headers.
   });
+
+  it('POST /api/projects/:id/transfer moves a project between user and org', async () => {
+    const { client: owner, userId } = await loggedInClient('xfer1@example.com');
+    const orgId = await createOrg(owner, 'xfer-org', 'Xfer Org');
+
+    const proj = await owner.json<{ id: string; slug: string; ownerType: string; ownerId: string }>(
+      await owner.post('/api/projects', { name: 'PersonalToOrg' }),
+    );
+    expect(proj.ownerType).toBe('user');
+
+    // Personal → org.
+    const r1 = await owner.json<{
+      project: { ownerType: string; ownerId: string; slug: string };
+      slugChanged: boolean;
+      previousSlug: string;
+    }>(
+      await owner.post(`/api/projects/${proj.id}/transfer`, {
+        destination: { type: 'org', id: orgId },
+      }),
+    );
+    expect(r1.project.ownerType).toBe('org');
+    expect(r1.project.ownerId).toBe(orgId);
+    expect(r1.slugChanged).toBe(false);
+    expect(r1.previousSlug).toBe(proj.slug);
+
+    // Org → personal.
+    const r2 = await owner.json<{ project: { ownerType: string; ownerId: string } }>(
+      await owner.post(`/api/projects/${proj.id}/transfer`, {
+        destination: { type: 'user' },
+      }),
+    );
+    expect(r2.project.ownerType).toBe('user');
+    expect(r2.project.ownerId).toBe(userId);
+  });
+
+  it('transfer auto-suffixes the slug when it collides in the destination', async () => {
+    const { client: owner } = await loggedInClient('xfer2@example.com');
+    const orgId = await createOrg(owner, 'xfer-org-2', 'Xfer Org 2');
+
+    // Personal "FeedA" + org-owned "FeedA" share the same slug (different
+    // workspaces). When we move the personal one into the org, it should
+    // get suffixed.
+    const personal = await owner.json<{ id: string; slug: string }>(
+      await owner.post('/api/projects', { name: 'FeedA' }),
+    );
+    const orgFeed = await owner.json<{ id: string; slug: string }>(
+      await owner.post('/api/projects', { name: 'FeedA', owner: { type: 'org', id: orgId } }),
+    );
+    expect(personal.slug).toBe(orgFeed.slug); // same slug in different workspaces
+
+    const transfer = await owner.json<{
+      project: { slug: string };
+      slugChanged: boolean;
+      previousSlug: string;
+    }>(
+      await owner.post(`/api/projects/${personal.id}/transfer`, {
+        destination: { type: 'org', id: orgId },
+      }),
+    );
+    expect(transfer.slugChanged).toBe(true);
+    expect(transfer.previousSlug).toBe(personal.slug);
+    expect(transfer.project.slug).not.toBe(personal.slug);
+    expect(transfer.project.slug).toContain(personal.slug); // suffixed
+  });
+
+  it('transfer rejects when caller is only viewer in destination org', async () => {
+    const { client: owner } = await loggedInClient('xfer3@example.com');
+    const { client: viewer, userId: viewerId } = await loggedInClient('xfer3v@example.com');
+    const orgId = await createOrg(owner, 'xfer-org-3', 'Xfer Org 3');
+    await addMember(orgId, viewerId, 'viewer');
+
+    const proj = await viewer.json<{ id: string }>(
+      await viewer.post('/api/projects', { name: 'ViewerProj' }),
+    );
+
+    const res = await viewer.post(`/api/projects/${proj.id}/transfer`, {
+      destination: { type: 'org', id: orgId },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('transfer rejects when destination is the same workspace', async () => {
+    const { client: owner } = await loggedInClient('xfer4@example.com');
+    const proj = await owner.json<{ id: string }>(
+      await owner.post('/api/projects', { name: 'NoOpFeed' }),
+    );
+    const res = await owner.post(`/api/projects/${proj.id}/transfer`, {
+      destination: { type: 'user' },
+    });
+    expect(res.status).toBe(422);
+  });
 });

@@ -495,6 +495,99 @@ projectsRouter.delete('/:id', async (c) => {
   return c.body(null, 204);
 });
 
+// ─── POST /api/projects/:id/transfer — move between workspaces ─────────────
+
+const transferSchema = z.object({
+  destination: z.union([
+    z.object({ type: z.literal('user') }),
+    z.object({ type: z.literal('org'), id: z.string().min(1) }),
+  ]),
+});
+
+projectsRouter.post('/:id/transfer', async (c) => {
+  const user = c.var.user!;
+  const id = c.req.param('id');
+  const body = await parseJson(c, transferSchema);
+
+  // Source: must be admin+ on the current owner.
+  const { row: current } = await requireOwnedProject(c.env, user, id, 'admin');
+
+  // Resolve destination owner.
+  let destOwnerType: 'user' | 'org';
+  let destOwnerId: string;
+  if (body.destination.type === 'user') {
+    destOwnerType = 'user';
+    destOwnerId = user.id;
+  } else {
+    destOwnerType = 'org';
+    destOwnerId = body.destination.id;
+    const membership = await getOrgMembership(c.env, destOwnerId, user.id);
+    if (!membership) throw notFound('Destination organization not found');
+    if (!roleAtLeast(membership.role, 'editor')) {
+      throw forbidden('Editor role or higher required to transfer projects into this organization');
+    }
+  }
+
+  if (destOwnerType === current.owner_type && destOwnerId === current.owner_id) {
+    throw validationFailed('Project is already in that workspace');
+  }
+
+  // Quota check on the destination.
+  const usedAtDest = await countProjects(c.env, destOwnerType, destOwnerId);
+  enforceQuota(c.env, 'projects', usedAtDest, MAX_PROJECTS_PER_OWNER);
+
+  // Slug uniqueness in the destination.
+  const finalSlug = await uniqueSlug(c.env, destOwnerType, destOwnerId, current.slug);
+  const slugChanged = finalSlug !== current.slug;
+
+  const now = Date.now();
+  await c.env.DB.prepare(
+    `UPDATE feed_project
+        SET owner_type = ?, owner_id = ?, slug = ?, updated_at = ?
+      WHERE id = ?`,
+  )
+    .bind(destOwnerType, destOwnerId, finalSlug, now, current.id)
+    .run();
+
+  // Keep the canonical published URL pointed at this project even if the
+  // slug had to change because of a collision in the destination.
+  if (slugChanged) {
+    await c.env.DB.prepare(`UPDATE publication SET canonical_slug = ? WHERE project_id = ?`)
+      .bind(finalSlug, current.id)
+      .run();
+  }
+
+  await logAudit(c.env, {
+    actorUserId: user.id,
+    subjectType: 'project',
+    subjectId: current.id,
+    action: 'project.transfer',
+    metadata: {
+      from: { ownerType: current.owner_type, ownerId: current.owner_id },
+      to: { ownerType: destOwnerType, ownerId: destOwnerId },
+      slugChanged,
+      finalSlug,
+    },
+    ip: clientIp(c.req.raw),
+  });
+
+  const fresh = await c.env.DB.prepare(
+    `SELECT id, slug, name, description, owner_type, owner_id,
+            working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color
+       FROM feed_project WHERE id = ?`,
+  )
+    .bind(current.id)
+    .first<ProjectRow>();
+  if (!fresh) throw notFound('Project not found');
+
+  return c.json({
+    project: shapeProject(fresh),
+    slugChanged,
+    previousSlug: current.slug,
+  });
+});
+
 projectsRouter.get('/:id/working-state', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');

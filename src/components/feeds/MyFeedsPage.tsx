@@ -12,9 +12,12 @@ import {
   importProjects,
   listProjects,
   patchProject,
+  transferProject,
   type ProjectSummary,
+  type TransferResult,
 } from '../../services/projectsApi';
 import { ApiError } from '../../services/authApi';
+import { roleAtLeast } from '../../services/orgsApi';
 import { db } from '../../db/dexie';
 
 interface LocalProjectOption {
@@ -84,6 +87,8 @@ export function MyFeedsPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
   const [renameTarget, setRenameTarget] = useState<ProjectSummary | null>(null);
+  const [moveTarget, setMoveTarget] = useState<ProjectSummary | null>(null);
+  const [moveResult, setMoveResult] = useState<{ message: string } | null>(null);
 
   const activeWorkspace = useStore((s) => s.activeWorkspace);
   const userOrgs = useStore((s) => s.userOrgs);
@@ -279,6 +284,7 @@ export function MyFeedsPage() {
                 project={p}
                 onOpen={() => navigate(`/feeds/${encodeURIComponent(p.slug)}`)}
                 onRename={() => setRenameTarget(p)}
+                onMove={() => setMoveTarget(p)}
                 onArchiveToggle={async () => {
                   try {
                     const updated = await patchProject(p.id, {
@@ -320,6 +326,35 @@ export function MyFeedsPage() {
         />
       )}
 
+      {moveTarget && (
+        <MoveFeedDialog
+          project={moveTarget}
+          onClose={() => setMoveTarget(null)}
+          onMoved={(result) => {
+            // The project leaves the current workspace; drop it from the list.
+            removeFeedProject(moveTarget.id);
+            setMoveTarget(null);
+            const dest =
+              result.project.ownerType === 'user'
+                ? 'your personal feeds'
+                : userOrgs.find((o) => o.id === result.project.ownerId)?.name ?? 'organization';
+            const slugNote = result.slugChanged
+              ? ` Slug changed from "${result.previousSlug}" to "${result.project.slug}" to avoid a collision in the destination.`
+              : '';
+            setMoveResult({
+              message: `"${result.project.name}" was moved to ${dest}.${slugNote}`,
+            });
+            setTimeout(() => setMoveResult(null), 8000);
+          }}
+        />
+      )}
+
+      {moveResult && (
+        <div className="fixed bottom-6 right-6 max-w-md bg-teal text-white px-4 py-3 rounded-xl shadow-lg z-50 text-sm">
+          {moveResult.message}
+        </div>
+      )}
+
       {deleteTarget && (
         <ConfirmDialog
           title="Delete feed?"
@@ -348,12 +383,14 @@ function FeedCard({
   project,
   onOpen,
   onRename,
+  onMove,
   onArchiveToggle,
   onDelete,
 }: {
   project: ProjectSummary;
   onOpen: () => void;
   onRename: () => void;
+  onMove: () => void;
   onArchiveToggle: () => void;
   onDelete: () => void;
 }) {
@@ -403,6 +440,7 @@ function FeedCard({
           >
             <PopoverItem onSelect={onOpen}>Open</PopoverItem>
             <PopoverItem onSelect={onRename}>Rename</PopoverItem>
+            <PopoverItem onSelect={onMove}>Move to…</PopoverItem>
             <PopoverItem onSelect={onArchiveToggle}>
               {archived ? 'Unarchive' : 'Archive'}
             </PopoverItem>
@@ -565,6 +603,113 @@ function RenameFeedDialog({
           </AuthButton>
           <AuthButton type="submit" disabled={busy || !name.trim() || !slug.trim()}>
             {busy ? 'Saving…' : 'Save'}
+          </AuthButton>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function MoveFeedDialog({
+  project,
+  onClose,
+  onMoved,
+}: {
+  project: ProjectSummary;
+  onClose: () => void;
+  onMoved: (result: TransferResult) => void;
+}) {
+  const userOrgs = useStore((s) => s.userOrgs);
+  // Destination options: personal (if not already there) + every org I'm
+  // editor+ in (excluding the current owner).
+  const options = useMemo(() => {
+    const opts: { value: string; label: string; type: 'user' | 'org'; orgId?: string }[] = [];
+    if (project.ownerType !== 'user') {
+      opts.push({ value: 'user', label: 'My personal feeds', type: 'user' });
+    }
+    for (const org of userOrgs) {
+      if (project.ownerType === 'org' && project.ownerId === org.id) continue;
+      if (!roleAtLeast(org.role, 'editor')) continue;
+      opts.push({ value: `org:${org.id}`, label: org.name, type: 'org', orgId: org.id });
+    }
+    return opts;
+  }, [userOrgs, project]);
+
+  const [value, setValue] = useState<string>(options[0]?.value ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!value) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const opt = options.find((o) => o.value === value);
+      if (!opt) throw new Error('Pick a destination');
+      const destination =
+        opt.type === 'user'
+          ? ({ type: 'user' } as const)
+          : ({ type: 'org', id: opt.orgId! } as const);
+      const result = await transferProject(project.id, destination);
+      onMoved(result);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Move failed';
+      setError(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-50">
+      <div className="absolute inset-0 bg-black/30" onClick={busy ? undefined : onClose} />
+      <form
+        onSubmit={submit}
+        className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-md mx-4"
+      >
+        <h3 className="font-heading font-bold text-lg text-dark-brown mb-1">Move feed</h3>
+        <p className="text-xs text-warm-gray mb-4">
+          Move <span className="font-semibold text-dark-brown">{project.name}</span> to a different
+          workspace. Versions, working state, and any active publication move with it.
+        </p>
+        {options.length === 0 ? (
+          <div className="px-3 py-2 mb-3 rounded-md bg-cream text-sm text-warm-gray">
+            No destinations available. Create an organization or join one as an editor to enable
+            this.
+          </div>
+        ) : (
+          <>
+            <label className="block text-xs font-semibold text-dark-brown mb-1">Destination</label>
+            <select
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              disabled={busy}
+              className="w-full mb-4 px-3 py-2 rounded-lg border border-sand focus:border-coral focus:outline-none text-sm bg-white"
+            >
+              {options.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-warm-gray mb-3">
+              If the slug <span className="font-mono">{project.slug}</span> is already in use in the
+              destination, a number will be appended.
+            </p>
+          </>
+        )}
+        {error && (
+          <div className="mb-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
+            {error}
+          </div>
+        )}
+        <div className="flex justify-end gap-2 mt-2">
+          <AuthButton type="button" variant="secondary" onClick={onClose} disabled={busy}>
+            Cancel
+          </AuthButton>
+          <AuthButton type="submit" disabled={busy || options.length === 0 || !value}>
+            {busy ? 'Moving…' : 'Move'}
           </AuthButton>
         </div>
       </form>

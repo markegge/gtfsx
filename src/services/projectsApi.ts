@@ -162,6 +162,22 @@ export function deleteProject(id: string): Promise<void> {
   return requestJson<void>(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
+export interface TransferResult {
+  project: ProjectSummary;
+  slugChanged: boolean;
+  previousSlug: string;
+}
+
+export function transferProject(
+  id: string,
+  destination: { type: 'user' } | { type: 'org'; id: string },
+): Promise<TransferResult> {
+  return requestJson<TransferResult>(`/api/projects/${encodeURIComponent(id)}/transfer`, {
+    method: 'POST',
+    body: { destination },
+  });
+}
+
 async function gzipString(input: string): Promise<Blob> {
   const stream = new Blob([input], { type: 'application/json' })
     .stream()

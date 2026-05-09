@@ -104,6 +104,9 @@ export function RouteEditor() {
   const [confirmDeleteShapeId, setConfirmDeleteShapeId] = useState<string | null>(null);
   const [showDeleteRouteConfirm, setShowDeleteRouteConfirm] = useState(false);
   const [dontWarnDelete, setDontWarnDelete] = useState(false);
+  // Default: also delete the stops that this route is the only user of.
+  // User can uncheck to keep them as orphaned stops in stops.txt.
+  const [deleteOrphanedStops, setDeleteOrphanedStops] = useState(true);
   const [simplifyShapeId, setSimplifyShapeId] = useState<string | null>(null);
   const [warnEditShapeId, setWarnEditShapeId] = useState<string | null>(null);
 
@@ -202,7 +205,7 @@ export function RouteEditor() {
     if (dontWarnDelete) {
       localStorage.setItem('gtfs-skip-route-delete-warning', 'true');
     }
-    removeRoute(route.route_id);
+    removeRoute(route.route_id, { deleteOrphanedStops });
     selectRoute(null);
     setEditingRouteId(null);
     setShowDeleteRouteConfirm(false);
@@ -733,27 +736,47 @@ export function RouteEditor() {
             <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
               Delete "{route.route_short_name || route.route_long_name}"?
             </h3>
-            <p className="text-sm text-warm-gray mb-3">
-              This will also delete:
-            </p>
-            <ul className="text-sm text-dark-brown mb-3 space-y-1">
-              {deleteInfo.tripCount > 0 && (
-                <li>• {deleteInfo.tripCount} trip{deleteInfo.tripCount !== 1 ? 's' : ''} and their stop times</li>
-              )}
-              {deleteInfo.uniqueStops.length > 0 && (
-                <li>
-                  • {deleteInfo.uniqueStops.length} stop{deleteInfo.uniqueStops.length !== 1 ? 's' : ''} not used by other routes:
-                  <div className="ml-3 mt-1 max-h-32 overflow-y-auto">
-                    {deleteInfo.uniqueStops.slice(0, 10).map((s) => (
-                      <div key={s.stop_id} className="text-xs text-warm-gray">{s.stop_name || s.stop_id}</div>
-                    ))}
-                    {deleteInfo.uniqueStops.length > 10 && (
-                      <div className="text-xs text-warm-gray italic">...and {deleteInfo.uniqueStops.length - 10} more</div>
-                    )}
-                  </div>
-                </li>
-              )}
-            </ul>
+            {deleteInfo.tripCount > 0 && (
+              <>
+                <p className="text-sm text-warm-gray mb-2">
+                  This will also delete:
+                </p>
+                <ul className="text-sm text-dark-brown mb-3 space-y-1">
+                  <li>• {deleteInfo.tripCount} trip{deleteInfo.tripCount !== 1 ? 's' : ''} and their stop times</li>
+                </ul>
+              </>
+            )}
+
+            {deleteInfo.uniqueStops.length > 0 && (
+              <div className="mb-4 p-3 rounded-lg bg-cream border border-sand">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={deleteOrphanedStops}
+                    onChange={(e) => setDeleteOrphanedStops(e.target.checked)}
+                    className="mt-0.5 rounded"
+                  />
+                  <span className="text-sm text-dark-brown">
+                    <span className="font-semibold">
+                      Also delete {deleteInfo.uniqueStops.length} orphaned stop{deleteInfo.uniqueStops.length !== 1 ? 's' : ''}
+                    </span>
+                    <span className="block text-xs text-warm-gray mt-0.5">
+                      {deleteOrphanedStops
+                        ? 'These stops are not used by any other route and will be removed.'
+                        : 'These stops will stay in stops.txt without a route — useful if you plan to reassign them.'}
+                    </span>
+                  </span>
+                </label>
+                <div className="ml-6 mt-2 max-h-24 overflow-y-auto">
+                  {deleteInfo.uniqueStops.slice(0, 10).map((s) => (
+                    <div key={s.stop_id} className="text-xs text-warm-gray">{s.stop_name || s.stop_id}</div>
+                  ))}
+                  {deleteInfo.uniqueStops.length > 10 && (
+                    <div className="text-xs text-warm-gray italic">…and {deleteInfo.uniqueStops.length - 10} more</div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <label className="flex items-center gap-2 text-xs text-warm-gray mb-4 cursor-pointer">
               <input

@@ -10,7 +10,7 @@ export interface RouteSlice {
   routeStops: RouteStop[];
   addRoute: (route: Route) => void;
   updateRoute: (route_id: string, updates: Partial<Route>) => void;
-  removeRoute: (route_id: string) => void;
+  removeRoute: (route_id: string, opts?: { deleteOrphanedStops?: boolean }) => void;
   setRoutes: (routes: Route[]) => void;
   addRouteStop: (rs: RouteStop) => void;
   removeRouteStop: (route_id: string, stop_id: string, direction_id: 0 | 1) => void;
@@ -26,14 +26,32 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
     const idx = state.routes.findIndex((r) => r.route_id === route_id);
     if (idx !== -1) Object.assign(state.routes[idx], updates);
   }),
-  removeRoute: (route_id) => set((state) => {
+  removeRoute: (route_id, opts) => set((state) => {
+    const deleteOrphanedStops = opts?.deleteOrphanedStops ?? true;
+
+    // Snapshot the routeStops BEFORE we remove this route's associations,
+    // so we can compute "unique to this route" against the original graph.
+    const fullState = get() as unknown as RouteSlice & TripSlice & ShapeSlice & FareSlice & StopSlice;
+    const thisRouteStopIds = new Set(
+      fullState.routeStops
+        .filter((rs) => rs.route_id === route_id)
+        .map((rs) => rs.stop_id)
+    );
+    const otherRouteStopIds = new Set(
+      fullState.routeStops
+        .filter((rs) => rs.route_id !== route_id)
+        .map((rs) => rs.stop_id)
+    );
+    const uniqueStopIds = new Set(
+      [...thisRouteStopIds].filter((sid) => !otherRouteStopIds.has(sid))
+    );
+
     // Remove the route itself
     state.routes = state.routes.filter((r) => r.route_id !== route_id);
     // Remove route-stop associations
     state.routeStops = state.routeStops.filter((rs) => rs.route_id !== route_id);
 
     // Cascade: remove trips for this route and their stop_times
-    const fullState = get() as unknown as RouteSlice & TripSlice & ShapeSlice & FareSlice;
     const tripIds = new Set(
       fullState.trips.filter((t) => t.route_id === route_id).map((t) => t.trip_id)
     );
@@ -64,23 +82,12 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
     // Remove fare rules for this route
     (state as any).fareRules = fullState.fareRules.filter((fr) => fr.route_id !== route_id);
 
-    // Remove stops that are unique to this route (not shared with other routes)
-    const fullWithStops = get() as unknown as RouteSlice & TripSlice & ShapeSlice & FareSlice & StopSlice;
-    const thisRouteStopIds = new Set(
-      fullWithStops.routeStops
-        .filter((rs) => rs.route_id === route_id)
-        .map((rs) => rs.stop_id)
-    );
-    const otherRouteStopIds = new Set(
-      fullWithStops.routeStops
-        .filter((rs) => rs.route_id !== route_id)
-        .map((rs) => rs.stop_id)
-    );
-    const uniqueStopIds = new Set(
-      [...thisRouteStopIds].filter((sid) => !otherRouteStopIds.has(sid))
-    );
-    if (uniqueStopIds.size > 0) {
-      (state as any).stops = fullWithStops.stops.filter((s) => !uniqueStopIds.has(s.stop_id));
+    // Optionally remove the stops that are now orphaned (not used by any
+    // other route). When `deleteOrphanedStops` is false, the stops stay
+    // in stops.txt as standalone points — useful for users planning to
+    // assign them to a different route.
+    if (deleteOrphanedStops && uniqueStopIds.size > 0) {
+      (state as any).stops = fullState.stops.filter((s) => !uniqueStopIds.has(s.stop_id));
     }
   }),
   setRoutes: (routes) => set((state) => { state.routes = routes; }),

@@ -1,8 +1,24 @@
 import JSZip from 'jszip';
 import Papa from 'papaparse';
+import length from '@turf/length';
+import { lineString } from '@turf/helpers';
 import { useStore } from '../store';
 import type { Agency, Calendar, CalendarDate, Route, Shape, ShapePoint, Stop, Trip, StopTime, FeedInfo, RouteStop, FareAttribute, FareRule } from '../types/gtfs';
 import type { FlexZone, BookingRule } from '../store/flexSlice';
+
+/** Populate shape_dist_traveled from the lat/lon geometry. Mirrors
+ *  shapeSlice.recalcShapeDistances so the import path doesn't need the
+ *  store mutator — we're still building the Shape array here. */
+function fillShapeDistances(points: ShapePoint[]): ShapePoint[] {
+  if (points.length < 2) return points;
+  const coords = points.map((p) => [p.shape_pt_lon, p.shape_pt_lat] as [number, number]);
+  points[0].shape_dist_traveled = 0;
+  for (let i = 1; i < points.length; i++) {
+    const subLine = lineString(coords.slice(0, i + 1));
+    points[i].shape_dist_traveled = length(subLine, { units: 'meters' });
+  }
+  return points;
+}
 
 function parseCSV<T>(text: string): T[] {
   const result = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: false });
@@ -137,10 +153,18 @@ export async function importGtfsZip(file: File): Promise<{
       });
     }
   }
-  const shapes: Shape[] = Array.from(shapesMap.entries()).map(([id, points]) => ({
-    shape_id: id,
-    points: points.sort((a, b) => a.shape_pt_sequence - b.shape_pt_sequence),
-  }));
+  // If the source feed omitted shape_dist_traveled (or provided all zeros),
+  // compute it from the geometry on import. Otherwise an export of the same
+  // feed emits 2013x `equal_shape_distance_diff_coordinates` validator errors
+  // because consecutive points share a zero cumulative distance.
+  const shapes: Shape[] = Array.from(shapesMap.entries()).map(([id, rawPoints]) => {
+    const points = rawPoints.sort((a, b) => a.shape_pt_sequence - b.shape_pt_sequence);
+    const hasRealDistances = points.some((p) => p.shape_dist_traveled !== 0);
+    return {
+      shape_id: id,
+      points: hasRealDistances ? points : fillShapeDistances(points),
+    };
+  });
 
   // Stops
   const stopsText = await readFile('stops.txt');

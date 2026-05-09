@@ -1,7 +1,22 @@
 import JSZip from 'jszip';
 import Papa from 'papaparse';
+import length from '@turf/length';
+import { lineString } from '@turf/helpers';
 import { useStore } from '../store';
-import type { Calendar, Route, Trip } from '../types/gtfs';
+import type { Calendar, Route, ShapePoint, Trip } from '../types/gtfs';
+
+/** Mirror of shapeSlice.recalcShapeDistances used as a last-resort safety
+ *  net when a shape arrives at the exporter without real distances. Returns
+ *  a new array; does NOT mutate the store. */
+function fillShapeDistancesExport(points: ShapePoint[]): ShapePoint[] {
+  const out = points.map((p) => ({ ...p }));
+  const coords = out.map((p) => [p.shape_pt_lon, p.shape_pt_lat] as [number, number]);
+  out[0].shape_dist_traveled = 0;
+  for (let i = 1; i < out.length; i++) {
+    out[i].shape_dist_traveled = length(lineString(coords.slice(0, i + 1)), { units: 'meters' });
+  }
+  return out;
+}
 
 function toCSV(data: Record<string, any>[]): string {
   if (data.length === 0) return '';
@@ -16,6 +31,39 @@ function stripUIFields(obj: Record<string, any>): Record<string, any> {
     }
   }
   return result;
+}
+
+/** Build the feed_info.txt row (returns null if we don't have enough info to
+ *  produce the three required fields). User-provided `state.feedInfo` always
+ *  wins; the three required slots — feed_publisher_name / feed_publisher_url /
+ *  feed_lang — fall back to the primary agency when unset. Optional fields
+ *  only appear when the user explicitly set them. Emitting this file clears
+ *  the validator's `missing_recommended_file` warning for feed_info.txt. */
+function buildFeedInfoRow(state: ReturnType<typeof useStore.getState>): Record<string, any> | null {
+  const primary = state.agencies[0];
+  const userInfo = state.feedInfo;
+
+  const publisher_name = userInfo?.feed_publisher_name || primary?.agency_name || '';
+  const publisher_url = userInfo?.feed_publisher_url || primary?.agency_url || '';
+  const lang = userInfo?.feed_lang
+    || primary?.agency_lang
+    || (typeof navigator !== 'undefined' ? navigator.language?.slice(0, 2) : undefined)
+    || 'en';
+
+  if (!publisher_name || !publisher_url) return null;
+
+  const row: Record<string, any> = {
+    feed_publisher_name: publisher_name,
+    feed_publisher_url: publisher_url,
+    feed_lang: lang,
+  };
+  if (userInfo?.default_lang) row.default_lang = userInfo.default_lang;
+  if (userInfo?.feed_start_date) row.feed_start_date = userInfo.feed_start_date;
+  if (userInfo?.feed_end_date) row.feed_end_date = userInfo.feed_end_date;
+  if (userInfo?.feed_version) row.feed_version = userInfo.feed_version;
+  if (userInfo?.feed_contact_email) row.feed_contact_email = userInfo.feed_contact_email;
+  if (userInfo?.feed_contact_url) row.feed_contact_url = userInfo.feed_contact_url;
+  return row;
 }
 
 interface FlexMaterialized {
@@ -228,37 +276,33 @@ export async function exportGtfsZip(): Promise<Blob> {
     zip.file('trips.txt', toCSV([...fixedTrips, ...flex.trips.map(stripUIFields)]));
   }
 
-  // stop_times.txt — blank arrival on first stop, blank departure on last stop per trip
+  // stop_times.txt
+  //
+  // Per the GTFS spec both `arrival_time` and `departure_time` are REQUIRED
+  // on the first and last stop of every trip — a previous version of this
+  // exporter deliberately blanked them (inverted the spec requirement), which
+  // produced MobilityData `missing_trip_edge` + `stop_time_with_only_arrival_
+  // or_departure_time` errors on every exported feed. Export the store's
+  // values verbatim; the editor guarantees both fields are populated when the
+  // user types a time because `setStopTime` writes both sides.
   if (state.stopTimes.length > 0 || flex.flexStopTimes.length > 0) {
-    // Build first/last stop_sequence per trip
-    const tripFirstLast = new Map<string, { first: number; last: number }>();
-    for (const st of state.stopTimes) {
-      const entry = tripFirstLast.get(st.trip_id);
-      if (!entry) {
-        tripFirstLast.set(st.trip_id, { first: st.stop_sequence, last: st.stop_sequence });
-      } else {
-        if (st.stop_sequence < entry.first) entry.first = st.stop_sequence;
-        if (st.stop_sequence > entry.last) entry.last = st.stop_sequence;
-      }
-    }
-
-    const fixedRows = state.stopTimes.map((st) => {
-      const clean = stripUIFields(st);
-      const fl = tripFirstLast.get(st.trip_id);
-      if (fl) {
-        if (st.stop_sequence === fl.first) clean.arrival_time = '';
-        if (st.stop_sequence === fl.last) clean.departure_time = '';
-      }
-      return clean;
-    });
+    const fixedRows = state.stopTimes.map((st) => stripUIFields(st));
     zip.file('stop_times.txt', toCSV([...fixedRows, ...flex.flexStopTimes]));
   }
 
-  // shapes.txt
+  // shapes.txt. Safety net: if any shape still has all-zero shape_dist_traveled
+  // (e.g. a code path missed calling recalcShapeDistances), recompute it here
+  // before writing so we never emit a shape with duplicate cumulative
+  // distances across distinct lat/lon points.
   if (state.shapes.length > 0) {
     const shapeRows: Record<string, any>[] = [];
     for (const shape of state.shapes) {
-      for (const pt of shape.points) {
+      let pts = shape.points;
+      const hasRealDistances = pts.some((p) => p.shape_dist_traveled !== 0);
+      if (!hasRealDistances && pts.length >= 2) {
+        pts = fillShapeDistancesExport(pts);
+      }
+      for (const pt of pts) {
         shapeRows.push({
           shape_id: shape.shape_id,
           shape_pt_lat: pt.shape_pt_lat,
@@ -282,9 +326,13 @@ export async function exportGtfsZip(): Promise<Blob> {
     zip.file('fare_rules.txt', toCSV(allFareRules));
   }
 
-  // feed_info.txt
-  if (state.feedInfo) {
-    zip.file('feed_info.txt', toCSV([stripUIFields(state.feedInfo)]));
+  // feed_info.txt — recommended per the GTFS spec (MobilityData's validator
+  // raises a `missing_recommended_file` warning when absent). When the user
+  // hasn't filled out feed info explicitly, synthesize the three required
+  // fields from the primary agency so every export carries a valid file.
+  const feedInfoRow = buildFeedInfoRow(state);
+  if (feedInfoRow) {
+    zip.file('feed_info.txt', toCSV([feedInfoRow]));
   }
 
   // location_groups.txt + location_group_stops.txt (GTFS-Flex, group-based)

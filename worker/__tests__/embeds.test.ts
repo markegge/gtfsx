@@ -63,14 +63,18 @@ function makeFeedState(): SnapshotState {
         { shape_pt_lat: 45.62, shape_pt_lon: -111.02, shape_pt_sequence: 2 },
       ] },
     ],
+    // Daily (so today's default service always has trips, regardless of
+    // weekday) + a separate Saturday-only calendar so the per-route page
+    // still demonstrates the multi-tab service selector.
     calendars: [
-      { service_id: 'WKDY', monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 0, sunday: 0, start_date: '20260101', end_date: '20261231' },
+      { service_id: 'DAILY', monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 1, sunday: 1, start_date: '20260101', end_date: '20261231' },
       { service_id: 'SAT', monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 1, sunday: 0, start_date: '20260101', end_date: '20261231' },
     ],
     calendarDates: [],
     trips: [
-      { trip_id: 't1', route_id: 'R1', service_id: 'WKDY', direction_id: 0, shape_id: 'sh1', trip_headsign: 'Downtown' },
-      { trip_id: 't2', route_id: 'R1', service_id: 'WKDY', direction_id: 0, shape_id: 'sh1', trip_headsign: 'Downtown' },
+      { trip_id: 't1', route_id: 'R1', service_id: 'DAILY', direction_id: 0, shape_id: 'sh1', trip_headsign: 'Downtown' },
+      { trip_id: 't2', route_id: 'R1', service_id: 'DAILY', direction_id: 0, shape_id: 'sh1', trip_headsign: 'Downtown' },
+      { trip_id: 't3', route_id: 'R1', service_id: 'SAT', direction_id: 0, shape_id: 'sh1', trip_headsign: 'Downtown' },
     ],
     stopTimes: [
       { trip_id: 't1', arrival_time: '08:00:00', departure_time: '08:00:00', stop_id: 's1', stop_sequence: 1 },
@@ -79,6 +83,11 @@ function makeFeedState(): SnapshotState {
       { trip_id: 't2', arrival_time: '08:30:00', departure_time: '08:30:00', stop_id: 's1', stop_sequence: 1 },
       { trip_id: 't2', arrival_time: '08:35:00', departure_time: '08:35:00', stop_id: 's2', stop_sequence: 2 },
       { trip_id: 't2', arrival_time: '08:40:00', departure_time: '08:40:00', stop_id: 's3', stop_sequence: 3 },
+      // SAT trip, mirrors t1's times so schedule assertions pass when today
+      // happens to be Saturday and the default profile picker lands on SAT.
+      { trip_id: 't3', arrival_time: '08:00:00', departure_time: '08:00:00', stop_id: 's1', stop_sequence: 1 },
+      { trip_id: 't3', arrival_time: '08:05:00', departure_time: '08:05:00', stop_id: 's2', stop_sequence: 2 },
+      { trip_id: 't3', arrival_time: '08:10:00', departure_time: '08:10:00', stop_id: 's3', stop_sequence: 3 },
     ],
   };
 }
@@ -143,11 +152,13 @@ describe('embed routes', () => {
     expect(html).toContain('Main &amp; 1st');
     expect(html).toContain('Main &amp; 2nd');
     expect(html).toContain('Main &amp; 3rd');
-    // Trip times appear (12-hour format).
+    // Trip times appear (12-hour format). 8:00a appears in both DAILY's
+    // t1 and SAT's t3, so this passes whichever profile is the default
+    // for today.
     expect(html).toContain('8:00a');
-    expect(html).toContain('8:30a');
+    expect(html).toContain('8:05a');
     // Service-day tab labels (multiple profiles → tabs visible).
-    expect(html).toContain('Weekday');
+    expect(html).toContain('Daily');
     expect(html).toContain('Saturday');
   });
 

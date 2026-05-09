@@ -42,9 +42,32 @@ export function runValidation(state: AppStore): ValidationMessage[] {
   if (state.calendars.length === 0) {
     messages.push(msg('error', 'At least one service pattern (calendar) is required'));
   } else {
+    // GTFS end_date is YYYYMMDD (inclusive). Compare as an integer to today's
+    // YYYYMMDD so timezone drift never flips the boundary.
+    const now = new Date();
+    const todayYYYYMMDD =
+      now.getFullYear() * 10000 +
+      (now.getMonth() + 1) * 100 +
+      now.getDate();
     for (const c of state.calendars) {
       if (!c.start_date) messages.push(msg('error', `Calendar "${c.service_id}" is missing start_date`, 'calendar', c.service_id));
-      if (!c.end_date) messages.push(msg('error', `Calendar "${c.service_id}" is missing end_date`, 'calendar', c.service_id));
+      if (!c.end_date) {
+        messages.push(msg('error', `Calendar "${c.service_id}" is missing end_date`, 'calendar', c.service_id));
+        continue;
+      }
+      const endInt = Number(c.end_date);
+      if (Number.isFinite(endInt) && endInt < todayYYYYMMDD) {
+        const label = c._description || c.service_id;
+        const pretty = c.end_date.length === 8
+          ? `${c.end_date.slice(0, 4)}-${c.end_date.slice(4, 6)}-${c.end_date.slice(6, 8)}`
+          : c.end_date;
+        messages.push(msg(
+          'warning',
+          `Service pattern "${label}" is expired — end_date ${pretty} is in the past. Extend it before publishing or consumers will see no service on this pattern.`,
+          'calendar',
+          c.service_id,
+        ));
+      }
     }
   }
 
@@ -92,6 +115,52 @@ export function runValidation(state: AppStore): ValidationMessage[] {
   // Bad stop references in stop_times
   for (const sid of badStopRefs) {
     messages.push(msg('error', `Stop time references non-existent stop "${sid}"`, 'stop_time'));
+  }
+
+  // First + last stop of every trip must have BOTH arrival_time AND
+  // departure_time per the GTFS spec. Intermediate stops may blank either.
+  // Catches regressions of the exporter bug that blanked those fields.
+  const tripFirstLast = new Map<string, { firstSeq: number; lastSeq: number }>();
+  for (const st of state.stopTimes) {
+    const fl = tripFirstLast.get(st.trip_id);
+    if (!fl) tripFirstLast.set(st.trip_id, { firstSeq: st.stop_sequence, lastSeq: st.stop_sequence });
+    else {
+      if (st.stop_sequence < fl.firstSeq) fl.firstSeq = st.stop_sequence;
+      if (st.stop_sequence > fl.lastSeq) fl.lastSeq = st.stop_sequence;
+    }
+  }
+  for (const st of state.stopTimes) {
+    const fl = tripFirstLast.get(st.trip_id);
+    if (!fl) continue;
+    const isFirst = st.stop_sequence === fl.firstSeq;
+    const isLast = st.stop_sequence === fl.lastSeq;
+    if ((isFirst || isLast) && (!st.arrival_time || !st.departure_time)) {
+      const which = isFirst ? 'first' : 'last';
+      messages.push(msg(
+        'error',
+        `${which[0].toUpperCase() + which.slice(1)} stop of trip "${st.trip_id}" is missing arrival_time or departure_time — both are required on trip endpoints`,
+        'trip',
+        st.trip_id,
+      ));
+    }
+  }
+
+  // Shapes must have real shape_dist_traveled values (not all-zero). Zero on
+  // a non-first point next to different lat/lon coordinates trips GTFS
+  // validators with `equal_shape_distance_diff_coordinates`. The exporter
+  // auto-fills as a safety net; surfacing the warning here so the user can
+  // see it in the validation panel before hitting Export.
+  for (const shape of state.shapes) {
+    if (shape.points.length < 2) continue;
+    const anyNonZero = shape.points.some((p) => p.shape_dist_traveled !== 0);
+    if (!anyNonZero) {
+      messages.push(msg(
+        'warning',
+        `Shape "${shape.shape_id}" has no shape_dist_traveled values — export will compute them from geometry.`,
+        'shape',
+        shape.shape_id,
+      ));
+    }
   }
 
   // Fare checks

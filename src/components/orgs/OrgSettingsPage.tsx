@@ -4,7 +4,8 @@ import { useStore } from '../../store';
 import { AuthLayout } from '../auth/AuthLayout';
 import { AuthButton } from '../auth/AuthButton';
 import { FormField } from '../ui/FormField';
-import { RoleBadge } from '../layout/TopBar';
+import { AppBrand } from '../layout/AppBrand';
+import { UserMenu, RoleBadge } from '../layout/UserMenu';
 import { ApiError } from '../../services/authApi';
 import {
   createInvitation,
@@ -299,17 +300,13 @@ export function OrgSettingsPage() {
 
   return (
     <div className="min-h-full bg-cream">
-      <header className="h-14 bg-white border-b border-sand flex items-center px-5 shrink-0">
-        <Link
-          to="/"
-          className="flex items-center gap-2 font-heading font-extrabold text-xl text-coral hover:opacity-80 transition-opacity"
-        >
-          GTFS Builder
-        </Link>
-        <div className="flex-1" />
-        <Link to="/feeds" className="text-sm text-warm-gray hover:text-coral transition-colors">
+      <header className="h-14 bg-white border-b border-sand flex items-center px-3 sm:px-5 gap-2 sm:gap-3 shrink-0">
+        <AppBrand mode="link" showTagline={false} />
+        <Link to="/feeds" className="text-sm text-warm-gray hover:text-coral transition-colors whitespace-nowrap ml-2">
           ← My Feeds
         </Link>
+        <div className="flex-1" />
+        <UserMenu />
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">

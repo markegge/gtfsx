@@ -88,14 +88,10 @@ export function TitleVIPanel() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="font-heading font-bold text-base text-dark-brown mb-1">Title VI Analysis</h2>
-        <p className="text-xs text-warm-gray">
-          Compare average transit service levels between minority and non-minority
-          block groups per FTA Circular 4702.1B. Minority classification uses the
-          regional average minority share as the threshold.
-        </p>
-      </div>
+      <p className="text-xs text-warm-gray">
+        Compares transit service levels between minority and non-minority block groups per
+        FTA Circular 4702.1B. Threshold is the regional average minority share.
+      </p>
 
       <button
         onClick={handleAnalyze}

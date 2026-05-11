@@ -2,7 +2,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useStore } from '../../store';
 import { NotFoundPage } from '../misc/NotFoundPage';
-import { logout as apiLogout } from '../../services/authApi';
+import { AppBrand } from '../layout/AppBrand';
+import { UserMenu } from '../layout/UserMenu';
 
 interface AdminLayoutProps {
   title?: string;
@@ -21,7 +22,6 @@ const NAV_ITEMS = [
 export function AdminLayout({ title, subtitle, children, headerExtra }: AdminLayoutProps) {
   const currentUser = useStore((s) => s.currentUser);
   const authChecked = useStore((s) => s.authChecked);
-  const clearAuth = useStore((s) => s.clearAuth);
   const navigate = useNavigate();
 
   if (!authChecked) {
@@ -38,51 +38,19 @@ export function AdminLayout({ title, subtitle, children, headerExtra }: AdminLay
 
   return (
     <div className="min-h-full bg-cream flex flex-col">
-      <header className="h-14 bg-white border-b border-sand flex items-center px-5 shrink-0 gap-4">
-        <button
-          onClick={() => navigate('/admin')}
-          className="flex items-center gap-2 font-heading font-extrabold text-xl text-coral hover:opacity-80 transition-opacity"
-          title="Admin console"
-        >
-          <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-            <rect width="32" height="32" rx="8" fill="#E8734A" />
-            <path
-              d="M6 24 C10 24, 10 8, 16 8 S22 24, 26 24"
-              stroke="#FFF8F0"
-              strokeWidth="2.5"
-              fill="none"
-              strokeLinecap="round"
-            />
-            <circle cx="8" cy="22" r="2.5" fill="#FFF8F0" />
-            <circle cx="16" cy="8" r="2.5" fill="#FFF8F0" />
-            <circle cx="24" cy="22" r="2.5" fill="#FFF8F0" />
-          </svg>
-          GTFS Builder
-        </button>
-        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-dark-brown text-white">
+      <header className="h-14 bg-white border-b border-sand flex items-center px-3 sm:px-5 shrink-0 gap-2 sm:gap-3">
+        <AppBrand mode="link" showTagline={false} />
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-dark-brown text-white whitespace-nowrap">
           Admin
         </span>
         <div className="flex-1" />
         <button
           onClick={() => navigate('/feeds')}
-          className="text-sm text-warm-gray hover:text-coral transition-colors"
+          className="text-sm text-warm-gray hover:text-coral transition-colors whitespace-nowrap"
         >
           Exit admin
         </button>
-        <button
-          onClick={async () => {
-            try {
-              await apiLogout();
-            } catch {
-              // ignore
-            }
-            clearAuth();
-            navigate('/');
-          }}
-          className="text-sm text-warm-gray hover:text-coral transition-colors"
-        >
-          Sign out
-        </button>
+        <UserMenu />
       </header>
 
       <div className="flex-1 flex">

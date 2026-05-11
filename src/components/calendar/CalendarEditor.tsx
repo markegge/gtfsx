@@ -159,8 +159,6 @@ export function CalendarEditor() {
 
   return (
     <div>
-      <h3 className="font-heading font-bold text-base text-dark-brown mb-3">Service Patterns</h3>
-
       {/* Pattern list */}
       <div className="flex flex-col gap-2 mb-3">
         {calendars.map((cal) => (

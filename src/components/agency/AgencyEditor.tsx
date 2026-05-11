@@ -2,6 +2,7 @@
 import { useStore } from '../../store';
 import { FormField } from '../ui/FormField';
 import { EmptyState } from '../ui/EmptyState';
+import { RailSubHeading, RailDivider } from '../ui/RailHeadings';
 import { generateId } from '../../services/idGenerator';
 import { US_TIMEZONES } from '../../utils/constants';
 
@@ -33,7 +34,6 @@ export function AgencyEditor() {
 
   return (
     <div>
-      <h3 className="font-heading font-bold text-base text-dark-brown mb-4">Agency</h3>
       <FormField
         label="Agency Name"
         value={agency.agency_name}
@@ -62,26 +62,28 @@ export function AgencyEditor() {
           ))}
         </select>
       </div>
-      <FormField
-        label="Phone"
-        value={agency.agency_phone || ''}
-        onChange={(v) => updateAgency(agency.agency_id, { agency_phone: v })}
-        placeholder="(555) 123-4567"
-      />
-      <FormField
-        label="Email"
-        value={agency.agency_email || ''}
-        onChange={(v) => updateAgency(agency.agency_id, { agency_email: v })}
-        placeholder="info@agency.com"
-      />
+      <div className="grid grid-cols-2 gap-3">
+        <FormField
+          label="Phone"
+          value={agency.agency_phone || ''}
+          onChange={(v) => updateAgency(agency.agency_id, { agency_phone: v })}
+          placeholder="(555) 123-4567"
+        />
+        <FormField
+          label="Email"
+          value={agency.agency_email || ''}
+          onChange={(v) => updateAgency(agency.agency_id, { agency_email: v })}
+          placeholder="info@agency.com"
+        />
+      </div>
       <FormField
         label="Language"
         value={agency.agency_lang || 'en-US'}
         onChange={(v) => updateAgency(agency.agency_id, { agency_lang: v })}
       />
 
-      <div className="h-px bg-sand my-4" />
-      <h3 className="font-heading font-bold text-base text-dark-brown mb-4">Feed Info</h3>
+      <RailDivider />
+      <RailSubHeading>Feed Info</RailSubHeading>
       <FormField
         label="Publisher Name"
         value={feedInfo?.feed_publisher_name || ''}

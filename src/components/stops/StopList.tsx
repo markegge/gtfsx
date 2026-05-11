@@ -167,25 +167,35 @@ export function StopList() {
 
   return (
     <div>
-      <h3 className="font-heading font-bold text-base text-dark-brown mb-2">Stops</h3>
-
       {/* Route selector */}
       <div className="mb-3">
         <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
           For Route
         </label>
-        <select
-          value={selectedRouteId || ''}
-          onChange={(e) => selectRoute(e.target.value || null)}
-          className="w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral"
-        >
-          <option value="">All stops</option>
-          {routes.map((r) => (
-            <option key={r.route_id} value={r.route_id}>
-              {r.route_short_name || r.route_long_name || r.route_id}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          {selectedRouteId && selectedRoute && (
+            <span
+              className="w-3.5 h-3.5 rounded shrink-0"
+              style={{ background: `#${selectedRoute.route_color}` }}
+              aria-hidden
+            />
+          )}
+          <select
+            value={selectedRouteId || ''}
+            onChange={(e) => selectRoute(e.target.value || null)}
+            className="flex-1 min-w-0 px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral"
+          >
+            <option value="">All stops</option>
+            {routes.map((r) => {
+              const name = r.route_short_name || r.route_long_name;
+              return (
+                <option key={r.route_id} value={r.route_id}>
+                  {name ? name : 'Untitled Route'}
+                </option>
+              );
+            })}
+          </select>
+        </div>
       </div>
 
       {/* Direction toggle */}

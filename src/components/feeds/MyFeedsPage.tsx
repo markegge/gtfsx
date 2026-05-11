@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import * as Popover from '@radix-ui/react-popover';
 import { useStore } from '../../store';
 import { AuthLayout } from '../auth/AuthLayout';
 import { AuthButton } from '../auth/AuthButton';
 import { FormField } from '../ui/FormField';
 import { Badge } from '../ui/Badge';
+import { AppBrand } from '../layout/AppBrand';
+import { UserMenu } from '../layout/UserMenu';
 import {
   createProject,
   deleteProject,
@@ -179,28 +181,10 @@ export function MyFeedsPage() {
 
   return (
     <div className="min-h-full bg-cream">
-      <header className="h-14 bg-white border-b border-sand flex items-center px-5 shrink-0">
-        <Link
-          to="/"
-          className="flex items-center gap-2 font-heading font-extrabold text-xl text-coral hover:opacity-80 transition-opacity"
-        >
-          <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-            <rect width="32" height="32" rx="8" fill="#E8734A" />
-            <path d="M6 24 C10 24, 10 8, 16 8 S22 24, 26 24" stroke="#FFF8F0" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-            <circle cx="8" cy="22" r="2.5" fill="#FFF8F0" />
-            <circle cx="16" cy="8" r="2.5" fill="#FFF8F0" />
-            <circle cx="24" cy="22" r="2.5" fill="#FFF8F0" />
-            <rect x="12" y="14" width="8" height="5" rx="1.5" fill="#FFF8F0" />
-          </svg>
-          GTFS Builder
-        </Link>
+      <header className="h-14 bg-white border-b border-sand flex items-center px-3 sm:px-5 gap-2 sm:gap-3 shrink-0">
+        <AppBrand mode="link" showTagline={false} />
         <div className="flex-1" />
-        <Link
-          to="/account"
-          className="text-sm text-warm-gray hover:text-coral transition-colors"
-        >
-          {currentUser.email}
-        </Link>
+        <UserMenu />
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8">

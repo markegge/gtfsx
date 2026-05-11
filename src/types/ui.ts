@@ -32,6 +32,8 @@ export type MapMode =
 
 export type StopPlacementMode = 'snap_to_route' | 'freehand';
 
+export type RouteDetailTab = 'details' | 'stops' | 'trips' | 'frequencies';
+
 export interface ValidationMessage {
   id: string;
   severity: 'error' | 'warning';

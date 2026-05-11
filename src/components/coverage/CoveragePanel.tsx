@@ -119,14 +119,9 @@ export function CoveragePanel() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="font-heading font-bold text-base text-dark-brown mb-1">
-          Demographic Coverage
-        </h2>
-        <p className="text-xs text-warm-gray">
-          Analyze population, households, and workers within walking distance of stops using US Census data.
-        </p>
-      </div>
+      <p className="text-xs text-warm-gray">
+        Population, households, and workers within walking distance of stops, from US Census data.
+      </p>
 
       <button
         onClick={handleAnalyze}

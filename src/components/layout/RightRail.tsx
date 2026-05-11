@@ -1,0 +1,302 @@
+import { useEffect } from 'react';
+import { useStore } from '../../store';
+import type { SidebarSection, RouteDetailTab } from '../../types/ui';
+import { AgencyEditor } from '../agency/AgencyEditor';
+import { CalendarEditor } from '../calendar/CalendarEditor';
+import { RouteList } from '../routes/RouteList';
+import { requestDeleteRoute } from '../routes/requestDeleteRoute';
+import { StopList } from '../stops/StopList';
+import { FaresEditor } from '../fares/FaresEditor';
+import { CostSummary } from '../costs/CostSummary';
+import { CoveragePanel } from '../coverage/CoveragePanel';
+import { TitleVIPanel } from '../titlevi/TitleVIPanel';
+import { TimetableSidebar } from '../timetable/TimetableSidebar';
+import { FlexEditor } from '../flex/FlexEditor';
+
+const RIGHT_RAIL_WIDTH = 460;
+
+const SECTION_TITLES: Record<SidebarSection, string> = {
+  agency: 'Agency',
+  calendar: 'Calendars',
+  routes: 'Routes',
+  stops: 'Stops',
+  fares: 'Fares',
+  timetable: 'Timetable',
+  flex: 'Flex Zones & Rules',
+  costs: 'Costs',
+  coverage: 'Coverage',
+  titlevi: 'Title VI',
+};
+
+const SECTION_GROUP: Record<SidebarSection, string | null> = {
+  agency: null,
+  fares: null,
+  calendar: null,
+  routes: 'Fixed Route Service',
+  stops: 'Fixed Route Service',
+  flex: 'GTFS-Flex',
+  costs: 'Analysis',
+  coverage: 'Analysis',
+  titlevi: 'Analysis',
+  timetable: null,
+};
+
+function PanelBody({ section }: { section: SidebarSection }) {
+  switch (section) {
+    case 'agency':
+      return <AgencyEditor />;
+    case 'calendar':
+      return <CalendarEditor />;
+    case 'routes':
+      return <RouteList />;
+    case 'stops':
+      return <StopList />;
+    case 'fares':
+      return <FaresEditor />;
+    case 'timetable':
+      return <TimetableSidebar />;
+    case 'flex':
+      return <FlexEditor />;
+    case 'costs':
+      return <CostSummary />;
+    case 'coverage':
+      return <CoveragePanel />;
+    case 'titlevi':
+      return <TitleVIPanel />;
+    default:
+      return null;
+  }
+}
+
+const ROUTE_TABS: { id: RouteDetailTab; label: string }[] = [
+  { id: 'details', label: 'Details' },
+  { id: 'stops', label: 'Stops' },
+  { id: 'trips', label: 'Trips' },
+  { id: 'frequencies', label: 'Frequencies' },
+];
+
+function RouteDetailHeader() {
+  const route = useStore((s) =>
+    s.routes.find((r) => r.route_id === s.editingRouteId),
+  );
+  const stopsCount = useStore((s) => {
+    const id = s.editingRouteId;
+    if (!id) return 0;
+    return new Set(
+      s.routeStops.filter((rs) => rs.route_id === id).map((rs) => rs.stop_id),
+    ).size;
+  });
+  const tripsCount = useStore((s) => {
+    const id = s.editingRouteId;
+    if (!id) return 0;
+    return s.trips.filter((t) => t.route_id === id).length;
+  });
+  const setEditingRouteId = useStore((s) => s.setEditingRouteId);
+  const setRightRailOpen = useStore((s) => s.setRightRailOpen);
+  const selectRoute = useStore((s) => s.selectRoute);
+  const duplicateRoute = useStore((s) => s.duplicateRoute);
+  const tab = useStore((s) => s.routeDetailTab);
+  const setRouteDetailTab = useStore((s) => s.setRouteDetailTab);
+
+  if (!route) return null;
+
+  const title =
+    route.route_short_name || route.route_long_name || 'Untitled Route';
+
+  const counts: Partial<Record<RouteDetailTab, number>> = {
+    stops: stopsCount,
+    trips: tripsCount,
+  };
+
+  const handleDuplicate = () => {
+    const newId = duplicateRoute(route.route_id);
+    if (newId) {
+      selectRoute(newId);
+      setEditingRouteId(newId);
+    }
+  };
+
+  return (
+    <div className="border-b border-sand bg-white shrink-0">
+      {/* Breadcrumb row */}
+      <div className="px-5 pt-3 flex items-center gap-2">
+        <div className="flex-1 min-w-0 text-[13px] text-warm-gray">
+          <button
+            onClick={() => setEditingRouteId(null)}
+            className="hover:text-coral transition-colors"
+          >
+            Routes
+          </button>
+          <span className="opacity-50 mx-1.5">›</span>
+          <span className="text-dark-brown font-semibold truncate">
+            {title}
+          </span>
+        </div>
+        <button
+          onClick={() => setRightRailOpen(false)}
+          className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
+          title="Close editor"
+        >
+          ✕
+        </button>
+      </div>
+      {/* Title row */}
+      <div className="px-5 pt-1 pb-3 flex items-center gap-3">
+        <div
+          className="w-5 h-5 rounded-md shrink-0"
+          style={{ background: `#${route.route_color}` }}
+        />
+        <h2 className="font-heading font-extrabold text-xl text-dark-brown leading-tight truncate flex-1 min-w-0">
+          {title}
+        </h2>
+        <button
+          onClick={handleDuplicate}
+          className="px-2 h-7 rounded-md text-[12px] font-heading font-semibold text-warm-gray hover:bg-cream hover:text-coral transition-colors"
+          title="Duplicate this route"
+        >
+          Duplicate
+        </button>
+        <button
+          onClick={() => requestDeleteRoute(route.route_id)}
+          className="px-2 h-7 rounded-md text-[12px] font-heading font-semibold text-warm-gray hover:bg-red-50 hover:text-red-600 transition-colors"
+          title="Delete this route"
+        >
+          Delete
+        </button>
+      </div>
+      {/* Tabs strip */}
+      <div className="px-3 flex items-end gap-1 -mb-px">
+        {ROUTE_TABS.map((t) => {
+          const active = tab === t.id;
+          const count = counts[t.id];
+          return (
+            <button
+              key={t.id}
+              onClick={() => setRouteDetailTab(t.id)}
+              className={`relative px-3 py-2 font-heading font-bold text-[13px] flex items-center gap-1.5 border-b-2 transition-colors ${
+                active
+                  ? 'text-coral border-coral'
+                  : 'text-warm-gray border-transparent hover:text-dark-brown'
+              }`}
+            >
+              <span>{t.label}</span>
+              {count != null && count > 0 && (
+                <span
+                  className={`text-[11px] font-bold tabular-nums ${
+                    active ? 'text-coral' : 'text-warm-gray'
+                  }`}
+                >
+                  {count.toLocaleString()}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function GenericHeader({ section }: { section: SidebarSection }) {
+  const setRightRailOpen = useStore((s) => s.setRightRailOpen);
+  const title = SECTION_TITLES[section] ?? 'Configuration';
+  const group = SECTION_GROUP[section];
+
+  return (
+    <div className="px-5 py-3.5 border-b border-sand bg-white flex items-start gap-3 shrink-0">
+      <div className="flex-1 min-w-0">
+        {group && (
+          <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-warm-gray mb-1">
+            {group}
+          </div>
+        )}
+        <h2 className="font-heading font-extrabold text-lg text-dark-brown leading-tight truncate">
+          {title}
+        </h2>
+      </div>
+      <button
+        onClick={() => setRightRailOpen(false)}
+        className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
+        title="Close editor"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+export function RightRail() {
+  const section = useStore((s) => s.sidebarSection);
+  const rightRailOpen = useStore((s) => s.rightRailOpen);
+  const editingRouteId = useStore((s) => s.editingRouteId);
+  const mapMode = useStore((s) => s.mapMode);
+
+  const isShapeEditing =
+    mapMode === 'draw_route' ||
+    mapMode === 'edit_shape' ||
+    mapMode === 'edit_vertices' ||
+    mapMode === 'draw_flex_zone' ||
+    mapMode === 'edit_flex_zone';
+
+  const showFullRail = !!section && rightRailOpen && !isShapeEditing;
+
+  const railSizeKey = `${showFullRail ? '1' : '0'}-${isShapeEditing ? '1' : '0'}`;
+  useEffect(() => {
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+  }, [railSizeKey]);
+
+  if (isShapeEditing) {
+    return (
+      <button
+        onClick={() => useStore.getState().setMapMode('select')}
+        className="shrink-0 w-9 bg-white border-l border-sand flex flex-col items-center justify-center hover:bg-cream transition-colors group"
+        title="Exit drawing & reopen editor"
+      >
+        <span className="text-warm-gray group-hover:text-coral text-lg font-bold leading-none">‹</span>
+        <span className="mt-1.5 text-[18px] leading-none">↩</span>
+      </button>
+    );
+  }
+
+  // No section selected → no rail at all (let the map breathe).
+  if (!section) {
+    return null;
+  }
+
+  // Section selected but rail closed: render the reopen strip so the user can
+  // snap back to the same section without re-clicking the left rail.
+  if (!rightRailOpen) {
+    const sectionTitle = SECTION_TITLES[section] ?? 'Editor';
+    return (
+      <button
+        onClick={() => useStore.getState().setRightRailOpen(true)}
+        className="shrink-0 w-9 bg-white border-l border-sand flex flex-col items-center justify-start pt-3 hover:bg-cream transition-colors group"
+        title={`Open ${sectionTitle} editor`}
+      >
+        <span className="text-warm-gray group-hover:text-coral text-base font-bold leading-none">‹</span>
+        <span
+          className="mt-2 text-[10px] font-bold uppercase tracking-[0.08em] text-warm-gray group-hover:text-coral whitespace-nowrap"
+          style={{ writingMode: 'vertical-rl' }}
+        >
+          {sectionTitle}
+        </span>
+      </button>
+    );
+  }
+
+  const inRouteDetail = section === 'routes' && !!editingRouteId;
+
+  return (
+    <aside
+      className="shrink-0 bg-white border-l border-sand flex flex-col overflow-hidden"
+      style={{ width: RIGHT_RAIL_WIDTH }}
+    >
+      {inRouteDetail ? <RouteDetailHeader /> : <GenericHeader section={section} />}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-5">
+          <PanelBody section={section} />
+        </div>
+      </div>
+    </aside>
+  );
+}

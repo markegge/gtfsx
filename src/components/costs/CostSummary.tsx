@@ -3,6 +3,7 @@ import { useStore } from '../../store';
 import { calculateRouteSpans, applyRouteCosts } from '../../services/costEstimation';
 import type { RouteStats } from '../../services/costEstimation';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
+import { RailSubHeading } from '../ui/RailHeadings';
 
 function formatCurrency(n: number): string {
   return '$' + Math.round(n).toLocaleString();
@@ -77,57 +78,51 @@ export function CostSummary() {
 
   return (
     <div>
-      <h3 className="font-heading font-bold text-base text-dark-brown mb-3">Cost Summary</h3>
-
-      {/* Assumptions */}
-      <div className="bg-cream rounded-lg p-3 mb-4">
-        <div className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-2">
-          Assumptions
-        </div>
-        <div className="mb-3">
-          <label className="block text-[11px] font-semibold text-warm-gray mb-1">
-            Cost per Revenue Hour
-          </label>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-dark-brown font-semibold">$</span>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={defaultCostPerHour}
-              onChange={(e) => setDefaultCostPerHour(Math.max(0, Number(e.target.value)))}
-              className="w-20 px-2 py-1.5 border-2 border-sand rounded-lg text-sm bg-white focus:outline-none focus:border-coral tabular-nums"
-            />
-            <span className="text-xs text-warm-gray">/ hour</span>
+      <RailSubHeading>Assumptions</RailSubHeading>
+      <div className="bg-cream rounded-lg p-4 mb-5">
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
+              Cost per Revenue Hour
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-dark-brown font-semibold">$</span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={defaultCostPerHour}
+                onChange={(e) => setDefaultCostPerHour(Math.max(0, Number(e.target.value)))}
+                className="flex-1 min-w-0 px-2 py-1.5 border-2 border-sand rounded-lg text-sm bg-white focus:outline-none focus:border-coral tabular-nums"
+              />
+              <span className="text-xs text-warm-gray whitespace-nowrap">/ hr</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
+              Deadhead Factor
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={3}
+                step={0.05}
+                value={deadheadFactor}
+                onChange={(e) => setDeadheadFactor(Math.max(1, Math.min(3, Number(e.target.value))))}
+                className="flex-1 min-w-0 px-2 py-1.5 border-2 border-sand rounded-lg text-sm bg-white focus:outline-none focus:border-coral tabular-nums"
+              />
+              <span className="text-xs text-warm-gray whitespace-nowrap">× rev hrs</span>
+            </div>
           </div>
         </div>
-        <div className="mb-2">
-          <label className="block text-[11px] font-semibold text-warm-gray mb-1">
-            Deadhead Factor
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min={1}
-              max={3}
-              step={0.05}
-              value={deadheadFactor}
-              onChange={(e) => setDeadheadFactor(Math.max(1, Math.min(3, Number(e.target.value))))}
-              className="w-20 px-2 py-1.5 border-2 border-sand rounded-lg text-sm bg-white focus:outline-none focus:border-coral tabular-nums"
-            />
-            <span className="text-xs text-warm-gray">× revenue hours</span>
-          </div>
-        </div>
-        <p className="text-[10px] text-warm-gray">
+        <p className="text-[11px] text-warm-gray leading-relaxed">
           Deadhead accounts for non-revenue time (deadheading, layovers, pull-out/pull-in). Total operating hours = revenue hours × {deadheadFactor}.
         </p>
       </div>
 
-      {/* System totals */}
-      <div className="bg-cream rounded-lg p-3 mb-4">
-        <div className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-2">
-          System Totals
-        </div>
+      <RailSubHeading>System Totals</RailSubHeading>
+      <div className="bg-cream rounded-lg p-4 mb-5">
         <div className="flex flex-col gap-1.5 text-sm">
           <StatRow label="Weekly Revenue Hours" value={systemStats.totalRevenueHoursWeekly.toFixed(1)} />
           <StatRow label="Weekly Total Hours" value={systemStats.totalHoursWeekly.toFixed(1)} sub={`× ${deadheadFactor}`} />
@@ -139,10 +134,7 @@ export function CostSummary() {
         </div>
       </div>
 
-      {/* Per-route breakdown */}
-      <div className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-2">
-        Per-Route Breakdown
-      </div>
+      <RailSubHeading count={routes.length}>Per-Route Breakdown</RailSubHeading>
 
       {routes.length === 0 ? (
         <p className="text-xs text-warm-gray">No routes created yet.</p>

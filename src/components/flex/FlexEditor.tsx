@@ -147,13 +147,6 @@ export function FlexEditor() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="font-heading font-bold text-base text-dark-brown mb-1">GTFS-Flex</h2>
-        <p className="text-xs text-warm-gray">
-          Define demand-responsive transit zones for dial-a-ride, microtransit, and deviated fixed-route services.
-        </p>
-      </div>
-
       {/* Zone editing active */}
       {isEditing && editingFlexZoneId && (
         <div className="bg-purple-50 border border-purple-300 rounded-lg p-3 space-y-2">

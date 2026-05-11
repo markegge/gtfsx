@@ -11,6 +11,7 @@ export interface RouteSlice {
   addRoute: (route: Route) => void;
   updateRoute: (route_id: string, updates: Partial<Route>) => void;
   removeRoute: (route_id: string, opts?: { deleteOrphanedStops?: boolean }) => void;
+  duplicateRoute: (route_id: string) => string | null;
   setRoutes: (routes: Route[]) => void;
   addRouteStop: (rs: RouteStop) => void;
   removeRouteStop: (route_id: string, stop_id: string, direction_id: 0 | 1) => void;
@@ -90,6 +91,81 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
       (state as any).stops = fullState.stops.filter((s) => !uniqueStopIds.has(s.stop_id));
     }
   }),
+  duplicateRoute: (route_id) => {
+    const fullState = get() as unknown as RouteSlice & TripSlice & ShapeSlice;
+    const original = fullState.routes.find((r) => r.route_id === route_id);
+    if (!original) return null;
+
+    const stamp = Date.now().toString(36);
+    const newRouteId = `${original.route_id}-copy-${stamp}`;
+
+    // Map old shape_id → new shape_id (one new shape per shape used by this route).
+    const shapeIdMap = new Map<string, string>();
+    const originalShapes = fullState.shapes.filter((s) =>
+      fullState.trips.some((t) => t.route_id === route_id && t.shape_id === s.shape_id),
+    );
+    for (const s of originalShapes) {
+      shapeIdMap.set(s.shape_id, `${s.shape_id}-copy-${stamp}`);
+    }
+
+    const tripIdMap = new Map<string, string>();
+    const originalTrips = fullState.trips.filter((t) => t.route_id === route_id);
+    for (const t of originalTrips) {
+      tripIdMap.set(t.trip_id, `${t.trip_id}-copy-${stamp}`);
+    }
+
+    set((state) => {
+      // Clone the route itself.
+      const newName = original.route_short_name
+        ? `${original.route_short_name} (copy)`
+        : original.route_short_name;
+      const newLongName = original.route_long_name
+        ? `${original.route_long_name} (copy)`
+        : original.route_long_name;
+      state.routes.push({
+        ...original,
+        route_id: newRouteId,
+        route_short_name: newName,
+        route_long_name: newLongName,
+      });
+
+      // Clone route_stops.
+      for (const rs of fullState.routeStops) {
+        if (rs.route_id !== route_id) continue;
+        state.routeStops.push({ ...rs, route_id: newRouteId });
+      }
+
+      // Clone shapes (only those exclusively used by this route's trips).
+      for (const s of originalShapes) {
+        const newShapeId = shapeIdMap.get(s.shape_id)!;
+        (state as any).shapes.push({
+          ...s,
+          shape_id: newShapeId,
+          points: s.points.map((p) => ({ ...p })),
+        });
+      }
+
+      // Clone trips and remap shape_id.
+      for (const t of originalTrips) {
+        (state as any).trips.push({
+          ...t,
+          trip_id: tripIdMap.get(t.trip_id)!,
+          route_id: newRouteId,
+          shape_id: t.shape_id ? shapeIdMap.get(t.shape_id) : undefined,
+        });
+      }
+
+      // Clone stop_times.
+      for (const st of fullState.stopTimes) {
+        if (!tripIdMap.has(st.trip_id)) continue;
+        (state as any).stopTimes.push({
+          ...st,
+          trip_id: tripIdMap.get(st.trip_id)!,
+        });
+      }
+    });
+    return newRouteId;
+  },
   setRoutes: (routes) => set((state) => { state.routes = routes; }),
   addRouteStop: (rs) => set((state) => { state.routeStops.push(rs); }),
   removeRouteStop: (route_id, stop_id, direction_id) => set((state) => {

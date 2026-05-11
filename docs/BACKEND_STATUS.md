@@ -1,6 +1,6 @@
 # Backend Status Snapshot
 
-**As of 2026-05-09.** Live operational picture of the backend and embeds. This is the doc you should re-read first when you come back after a break — and the doc you should update when you change deployed state.
+**As of 2026-05-11.** Live operational picture of the backend and embeds. This is the doc you should re-read first when you come back after a break — and the doc you should update when you change deployed state.
 
 The high-level overview is in [`REQUIREMENTS.md`](./REQUIREMENTS.md). The reference spec is in [`BACKEND_REQUIREMENTS.md`](./BACKEND_REQUIREMENTS.md). Provisioning instructions are in [`DEPLOY_BACKEND.md`](./DEPLOY_BACKEND.md). Embeds spec is in [`EMBEDS_REQUIREMENTS.md`](./EMBEDS_REQUIREMENTS.md).
 
@@ -8,9 +8,9 @@ The high-level overview is in [`REQUIREMENTS.md`](./REQUIREMENTS.md). The refere
 
 ## TL;DR
 
-- **Branch**: `staging-features` is the active integration branch; `main` is behind. The branch carries (in addition to the original `backend-phases-1-2` work): Turnstile signup gate, embeds (mini-site + per-route + per-stop + system map + demo agency page), per-org brand logo, per-project brand color, cross-workspace feed transfer, orphan-stop deletion choice on route delete, export-all-stops fidelity fix, and the requirements rewrite.
-- **Staging is live.** Editor at https://staging.gtfsbuilder.net. Public feeds + embeds at https://staging-feeds.gtfsbuilder.net. First admin (`mark@eateggs.com`) is staff. One published demo feed: `bozeman-demo`.
-- **Production is DISABLED.** The Worker is deployed to `gtfsbuilder.net`; the kill switch (`BACKEND_ENABLED=false` in `wrangler.jsonc` + `VITE_BACKEND_ENABLED=false` in the SPA bundle) was flipped on 2026-05-08 after a premature launch (4 user accounts had been created within 24 hours, including 2 strangers). Existing data is preserved; flip both flags to re-enable.
+- **Branch**: `main` is the source of truth. The most recent merge (2026-05-11) was the rail refactor on `exploration/right-rail-and-responsive-left` — replaces the legacy 300 px sidebar with a two-rail editor shell (responsive left nav 40–260 px + configuration right rail at 460 px), unifies the header across all pages via shared `AppBrand` + `UserMenu`, hoists the route delete dialog, adds `duplicateRoute`, and tightens responsive behaviour. Prior `staging-features` work (Turnstile, embeds, org logo, cross-workspace transfer, orphan-stop choice, export-all-stops fix, requirements rewrite) had already landed on `main`.
+- **Staging is live.** Editor at https://staging.gtfsbuilder.net (worker version `e8b698fd-5e85-4405-9298-eb661bbd1fb8` as of 2026-05-11). Public feeds + embeds at https://staging-feeds.gtfsbuilder.net. First admin (`mark@eateggs.com`) is staff. One published demo feed: `bozeman-demo`.
+- **Production is DISABLED.** The Worker is deployed to `gtfsbuilder.net` (worker version `59147bd4-3f6b-45fb-9dc7-eec845ac4b7e` as of 2026-05-11, ships the rail refactor); the kill switch (`BACKEND_ENABLED=false` in `wrangler.jsonc` + `VITE_BACKEND_ENABLED=false` baked into the SPA bundle) remains flipped from 2026-05-08 after a premature launch (4 user accounts had been created within 24 hours, including 2 strangers). Existing data is preserved; flip both flags to re-enable.
 - **NF-40a (argon2id)** is the only spec-level technical debt that should land before broad RTAP distribution. Tracked in `BACKEND_REQUIREMENTS.md` §8.1.
 
 ---

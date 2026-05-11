@@ -8,9 +8,9 @@ GTFS Builder is a web application for creating, editing, analysing, and publishi
 
 | | |
 |---|---|
-| **Editor (anonymous, IndexedDB-only)** | Live in production at https://www.gtfsbuilder.net |
+| **Editor (anonymous, IndexedDB-only)** | Live in production at https://www.gtfsbuilder.net. Two-rail layout (responsive left nav + configuration right rail) shipped 2026-05-11. |
 | **Backend (auth, projects, orgs, publication, embeds)** | Live on staging at https://staging.gtfsbuilder.net (and feeds at https://staging-feeds.gtfsbuilder.net). **Disabled in production** since 2026-05-08 (kill switch) — backend code is deployed but `BACKEND_ENABLED=false` and the SPA bundle ships with `VITE_BACKEND_ENABLED=false`. |
-| **Active development branch** | `staging-features` (new since the last main merge: Turnstile signup gate; embeds with mini-site landing, per-route, per-stop, system map; org logo upload + brand colour; cross-workspace feed transfer; orphan-stop deletion choice on route delete; export-all-stops fidelity fix). |
+| **Active development branch** | `main` (rail refactor merged via `exploration/right-rail-and-responsive-left` on 2026-05-11). Earlier `staging-features` work — Turnstile signup gate; embeds with mini-site landing, per-route, per-stop, system map; org logo upload + brand colour; cross-workspace feed transfer; orphan-stop deletion choice on route delete; export-all-stops fidelity fix — landed on `main` previously. |
 
 If you are picking this project up cold: read this overview, then `docs/BACKEND_STATUS.md` for the live operational picture, then the section below that matches the area you're working in.
 
@@ -361,7 +361,8 @@ Frontend stack: React 18 + TypeScript, Vite, Zustand (Immer middleware) for stat
 - **Typography**: rounded sans-serif headings, clean body text.
 - **Map style**: Mapbox `light-v11` baseline, route shapes coloured per `route_color`, stop dots as white-with-dark-border.
 - **Empty states**: illustrated and encouraging.
-- **Layout**: left sidebar (sections + entity lists + property editors) · centre map · collapsible bottom panel (timetable, validation, versions, publish, embed, activity).
+- **Editor layout** (since 2026-05): **two-rail shell** — a responsive **left rail** for navigation between sections (continuously resizable 40–260 px via a drag handle; renders 3 variants by width: icon-only / icons + labels / full rows + accordion section caps; responsive default per viewport), centre map, **right rail** at 460 px hosting all configuration panels (opens on section selection, collapses to a thin reopen strip during shape-edit, `Cmd/Ctrl + /` toggle), and a collapsible bottom panel (timetable, validation, versions, publish, embed, activity). Route detail is master-detail with a breadcrumb, swatch + title row, Duplicate / Delete header actions, and Details / Stops / Trips / Frequencies tabs that focus the map appropriately. Three-tier text hierarchy across all panels — section H2 (rail header) / sub-section H3 (`<RailSubHeading>`) / uppercase form-field eyebrow.
+- **Topbar**: shared `<AppBrand>` + `<UserMenu>` across every page (editor, feeds, account, orgs, admin). The right-edge avatar slot is consistent across signed-out (outlined person icon) and signed-in (coral initials avatar) states, divided from the editor actions. Tagline hides below 1100 px viewport, save-status text below 900 px. Help moved to a floating "? HELP" pill at the bottom-left of the map area.
 
 ### Non-functional requirements
 
@@ -374,7 +375,7 @@ Frontend stack: React 18 + TypeScript, Vite, Zustand (Immer middleware) for stat
 
 ### User workflow
 
-The editor still guides users through this default path, though every section is reachable at any time:
+The editor guides users through this default path, though every section is reachable at any time via the left nav rail:
 
 ```
 1. Agency setup           →  Who operates this transit?
@@ -388,6 +389,8 @@ The editor still guides users through this default path, though every section is
 9. Validate & publish     →  Errors → fix; warnings → optional. Publish to a stable URL.
 10. Embed                 →  Copy iframe snippets into the agency website.
 ```
+
+On first load: nothing is selected, the right rail is closed, and the map fills the available width. Clicking any left-nav tile opens the matching configuration panel in the right rail. The bottom panel surfaces analytical views (timetable, validation, etc.) and is collapsible — it ducks under the left rail only and spans the full width across map + right rail.
 
 ---
 
@@ -405,6 +408,7 @@ Read these when you need the deep version of a particular surface:
 | [`FLEX_ROADMAP.md`](./FLEX_ROADMAP.md) | GTFS-Flex coverage tracker — shipped / partial / open / deferred per spec field. |
 | [`demand-dots-nationwide-plan.md`](./demand-dots-nationwide-plan.md) | Build pipeline + decisions for the demand-dot tile archive. |
 | [`Title VI Transit Service Analysis - Calculation Procedures Memo.md`](./Title%20VI%20Transit%20Service%20Analysis%20-%20Calculation%20Procedures%20Memo.md) | Methodology for the Title VI equity analysis. |
-| [`wireframes.html`](./wireframes.html) | Original UI sketches — historical reference. |
+| [`RAIL_ELEGANCE_PLAN.md`](./RAIL_ELEGANCE_PLAN.md) | Audit + corrective plan for the two-rail editor layout. Most items shipped on 2026-05-11 in the rail refactor; remaining polish items still tracked there. |
+| [`wireframes.html`](./wireframes.html) | Original UI sketches — historical reference. Predates the two-rail shell. |
 
 The previous `BACKEND_IMPLEMENTATION_PLAN.md` was retired in 2026-05 — Phases 1–5 are fully shipped, the live operational picture moved into `BACKEND_STATUS.md`, and the remaining outstanding items (NF-40a argon2id, transit.land submission, hard-mode quotas, Phase 7 embed sub-phases, etc.) are tracked in `BACKEND_STATUS.md` §"Outstanding work" or `EMBEDS_REQUIREMENTS.md` §3.

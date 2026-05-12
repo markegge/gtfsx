@@ -653,6 +653,133 @@ adminRouter.post('/end-impersonation', async (c) => {
   return c.body(null, 204);
 });
 
+// ─── Enterprise plan grants (staff-only) ──────────────────────────────────
+//
+// Bypasses Stripe — no subscription is created. The cached plan column on
+// user/org is set to 'enterprise' and (optionally) plan_expires_at is set
+// so the nightly cron can downgrade lapsed grants.
+
+const enterpriseGrantSchema = z.object({
+  // Unix ms. Null/undefined = open-ended grant (no expiry).
+  expiresAt: z.number().int().positive().nullable().optional(),
+  note: z.string().max(500).optional(),
+});
+
+adminRouter.post('/users/:id/enterprise-grant', async (c) => {
+  const staff = c.var.user!;
+  const id = c.req.param('id');
+  const body = await parseJson(c, enterpriseGrantSchema);
+
+  const target = await c.env.DB.prepare(`SELECT id, email FROM user WHERE id = ?`)
+    .bind(id)
+    .first<{ id: string; email: string }>();
+  if (!target) throw notFound('User not found');
+
+  const now = Date.now();
+  await c.env.DB.prepare(
+    `UPDATE user
+        SET plan = 'enterprise', plan_status = 'active',
+            plan_expires_at = ?, plan_renewal_at = ?, updated_at = ?
+      WHERE id = ?`,
+  )
+    .bind(body.expiresAt ?? null, body.expiresAt ?? null, now, id)
+    .run();
+
+  await logAudit(c.env, {
+    actorUserId: staff.id,
+    subjectType: 'user',
+    subjectId: id,
+    action: 'admin.enterprise_grant',
+    metadata: { targetEmail: target.email, expiresAt: body.expiresAt ?? null, note: body.note ?? null },
+    ip: clientIp(c.req.raw),
+  });
+
+  return c.json({ ok: true, userId: id, expiresAt: body.expiresAt ?? null });
+});
+
+adminRouter.post('/orgs/:id/enterprise-grant', async (c) => {
+  const staff = c.var.user!;
+  const id = c.req.param('id');
+  const body = await parseJson(c, enterpriseGrantSchema);
+
+  const org = await c.env.DB.prepare(`SELECT id, name FROM organization WHERE id = ? AND deleted_at IS NULL`)
+    .bind(id)
+    .first<{ id: string; name: string }>();
+  if (!org) throw notFound('Organization not found');
+
+  await c.env.DB.prepare(
+    `UPDATE organization
+        SET plan = 'enterprise', plan_status = 'active',
+            plan_expires_at = ?, plan_renewal_at = ?
+      WHERE id = ?`,
+  )
+    .bind(body.expiresAt ?? null, body.expiresAt ?? null, id)
+    .run();
+
+  await logAudit(c.env, {
+    actorUserId: staff.id,
+    subjectType: 'org',
+    subjectId: id,
+    action: 'admin.enterprise_grant',
+    metadata: { targetOrgName: org.name, expiresAt: body.expiresAt ?? null, note: body.note ?? null },
+    ip: clientIp(c.req.raw),
+  });
+
+  return c.json({ ok: true, orgId: id, expiresAt: body.expiresAt ?? null });
+});
+
+// Revoke an enterprise grant — drops the principal back to 'free'.
+adminRouter.post('/users/:id/enterprise-revoke', async (c) => {
+  const staff = c.var.user!;
+  const id = c.req.param('id');
+  const target = await c.env.DB.prepare(`SELECT id, email, plan FROM user WHERE id = ?`)
+    .bind(id)
+    .first<{ id: string; email: string; plan: string }>();
+  if (!target) throw notFound('User not found');
+  if (target.plan !== 'enterprise') throw validationFailed('User is not on enterprise plan');
+
+  const now = Date.now();
+  await c.env.DB.prepare(
+    `UPDATE user SET plan = 'free', plan_status = 'active', plan_expires_at = NULL, plan_renewal_at = NULL, updated_at = ? WHERE id = ?`,
+  )
+    .bind(now, id)
+    .run();
+  await logAudit(c.env, {
+    actorUserId: staff.id,
+    subjectType: 'user',
+    subjectId: id,
+    action: 'admin.enterprise_revoke',
+    metadata: { targetEmail: target.email },
+    ip: clientIp(c.req.raw),
+  });
+  return c.json({ ok: true });
+});
+
+adminRouter.post('/orgs/:id/enterprise-revoke', async (c) => {
+  const staff = c.var.user!;
+  const id = c.req.param('id');
+  const target = await c.env.DB.prepare(`SELECT id, name, plan FROM organization WHERE id = ?`)
+    .bind(id)
+    .first<{ id: string; name: string; plan: string }>();
+  if (!target) throw notFound('Organization not found');
+  if (target.plan !== 'enterprise') throw validationFailed('Organization is not on enterprise plan');
+
+  await c.env.DB.prepare(
+    `UPDATE organization SET plan = 'free', plan_status = 'active', plan_expires_at = NULL, plan_renewal_at = NULL WHERE id = ?`,
+  )
+    .bind(id)
+    .run();
+  await logAudit(c.env, {
+    actorUserId: staff.id,
+    subjectType: 'org',
+    subjectId: id,
+    action: 'admin.enterprise_revoke',
+    metadata: { targetOrgName: target.name },
+    ip: clientIp(c.req.raw),
+  });
+  return c.json({ ok: true });
+});
+
 // ─── Organizations ────────────────────────────────────────────────────────
 
 interface OrgListRow {

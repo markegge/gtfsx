@@ -82,17 +82,17 @@ export function UserMenu() {
             <Popover.Content
               align="end"
               sideOffset={8}
-              className="bg-white rounded-xl shadow-lg border border-sand p-2 w-44 z-50"
+              className="bg-white rounded-xl shadow-lg border border-sand p-2 w-44 z-50 flex flex-col gap-2"
             >
               <button
                 onClick={() => navigate('/login')}
-                className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
+                className="w-full px-3 py-2 rounded-md text-sm font-heading font-bold bg-coral text-white hover:bg-[#d4603a] transition-colors"
               >
                 Sign in
               </button>
               <button
                 onClick={() => navigate('/signup')}
-                className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
+                className="w-full px-3 py-2 rounded-md text-sm font-heading font-bold bg-teal text-white hover:bg-[#22847a] transition-colors"
               >
                 Sign up
               </button>

@@ -13,6 +13,42 @@ import { deleteProjectBlobs } from '../projects/r2';
 
 export const DELETE_GRACE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
+// ─── Enterprise grant expiry ────────────────────────────────────────────────
+//
+// Manually-granted enterprise plans can have an `expires_at` end-date. Run
+// once a day to downgrade anything past its window. Idempotent.
+export async function expireEnterpriseGrants(env: Env): Promise<{ users: number; orgs: number }> {
+  const now = Date.now();
+  const expiredUsers = await env.DB.prepare(
+    `UPDATE user
+        SET plan = 'free', plan_status = 'active',
+            plan_expires_at = NULL, plan_renewal_at = NULL, updated_at = ?
+      WHERE plan = 'enterprise'
+        AND plan_expires_at IS NOT NULL
+        AND plan_expires_at < ?`,
+  )
+    .bind(now, now)
+    .run();
+
+  const expiredOrgs = await env.DB.prepare(
+    `UPDATE organization
+        SET plan = 'free', plan_status = 'active',
+            plan_expires_at = NULL, plan_renewal_at = NULL
+      WHERE plan = 'enterprise'
+        AND plan_expires_at IS NOT NULL
+        AND plan_expires_at < ?`,
+  )
+    .bind(now)
+    .run();
+
+  const userCount = expiredUsers.meta?.changes ?? 0;
+  const orgCount = expiredOrgs.meta?.changes ?? 0;
+  if (userCount || orgCount) {
+    console.log(`[cron] expireEnterpriseGrants users=${userCount} orgs=${orgCount}`);
+  }
+  return { users: userCount, orgs: orgCount };
+}
+
 export interface ReapSummary {
   candidates: number;
   reaped: number;

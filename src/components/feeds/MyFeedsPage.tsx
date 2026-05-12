@@ -202,11 +202,29 @@ export function MyFeedsPage() {
           <AuthButton onClick={() => setShowCreate(true)}>+ Create feed</AuthButton>
         </div>
 
-        {feedsQuotaWarning && (
-          <div className="mb-5 px-4 py-3 rounded-lg bg-gold-light text-amber-700 text-sm border border-amber-200">
-            Projects used: {feedsQuotaWarning}. Archive or delete feeds to free space.
-          </div>
-        )}
+        {feedsQuotaWarning && (() => {
+          const activeOrg = activeWorkspace.type === 'org'
+            ? userOrgs.find((o) => o.id === activeWorkspace.orgId)
+            : null;
+          const billingHref = activeOrg ? `/orgs/${activeOrg.slug}/billing` : '/pricing';
+          const ownerPlan = activeOrg ? activeOrg.plan : currentUser?.plan;
+          return (
+            <div className="mb-5 px-4 py-3 rounded-lg bg-gold-light text-amber-700 text-sm border border-amber-200 flex items-center justify-between gap-3">
+              <span>
+                Feeds used: <strong>{feedsQuotaWarning}</strong>.
+                {ownerPlan === 'free'
+                  ? ' Free workspaces include up to 3 feeds — upgrade to keep saving more.'
+                  : ' Archive or delete feeds to free space, or upgrade for higher limits.'}
+              </span>
+              <a
+                href={billingHref}
+                className="shrink-0 rounded-md bg-coral px-3 py-1.5 font-heading text-xs font-bold text-white hover:bg-[#d4603a]"
+              >
+                {ownerPlan === 'free' ? 'Upgrade' : 'Manage plan'}
+              </a>
+            </div>
+          );
+        })()}
 
         {visibleLocal && (
           <div className="mb-5 px-4 py-3 rounded-lg bg-coral-light text-coral border border-coral/30 text-sm flex items-center gap-3">

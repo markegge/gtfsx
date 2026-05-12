@@ -76,6 +76,8 @@ apiRouter.get('/me', requireAuth, async (c) => {
       displayName: user.displayName,
       status: user.status,
       staff: user.staff,
+      plan: user.plan,
+      planStatus: user.planStatus,
     },
     usage: { user: usage },
   });
@@ -390,8 +392,10 @@ apiRouter.route('/projects', projectsRouter);
 // feature module — add new routers here.
 import { orgsRouter } from './orgs/routes';
 import { adminRouter } from './admin/routes';
+import { billingRouter } from './billing/routes';
 apiRouter.route('/orgs', orgsRouter);
 apiRouter.route('/admin', adminRouter);
+apiRouter.route('/billing', billingRouter);
 // Publication and distribution endpoints hang off the projects router
 // (/api/projects/:id/publish, /catalog-submissions, etc.) so project-ownership
 // checks stay co-located with their endpoints. See worker/projects/routes.ts.

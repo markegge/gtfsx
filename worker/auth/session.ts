@@ -43,7 +43,8 @@ export async function resolveSession(env: Env, token: string): Promise<ResolvedS
   const row = await env.DB.prepare(
     `SELECT
         s.id AS session_id, s.user_id AS user_id, s.last_used_at AS last_used_at, s.expires_at AS expires_at, s.revoked_at AS revoked_at,
-        u.email AS email, u.display_name AS display_name, u.status AS status, u.staff AS staff, u.deleted_at AS deleted_at
+        u.email AS email, u.display_name AS display_name, u.status AS status, u.staff AS staff, u.deleted_at AS deleted_at,
+        u.plan AS plan, u.plan_status AS plan_status
       FROM session s
       JOIN user u ON u.id = s.user_id
       WHERE s.token_hash = ?`,
@@ -60,6 +61,8 @@ export async function resolveSession(env: Env, token: string): Promise<ResolvedS
       status: AuthedUser['status'];
       staff: number;
       deleted_at: number | null;
+      plan: AuthedUser['plan'] | null;
+      plan_status: AuthedUser['planStatus'] | null;
     }>();
 
   if (!row) return null;
@@ -84,6 +87,8 @@ export async function resolveSession(env: Env, token: string): Promise<ResolvedS
       displayName: row.display_name,
       status: row.status,
       staff: row.staff === 1,
+      plan: row.plan ?? 'free',
+      planStatus: row.plan_status ?? 'active',
     },
   };
 }

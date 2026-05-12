@@ -19,14 +19,18 @@ import { submitToCatalogs } from '../publication/submit';
 import { getOrgMembership, roleAtLeast, type OrgRole } from '../orgs/routes';
 import { isValidSlug, slugify, uniqueSlug } from './slug';
 import {
-  MAX_BLOB_BYTES,
-  MAX_PROJECTS_PER_OWNER,
-  MAX_VERSIONS_PER_PROJECT,
   countProjects,
   countVersions,
   enforceBlobSize,
   enforceQuota,
+  getOwnerQuotas,
+  type OwnerType,
 } from './quotas';
+import {
+  requirePublishAccess,
+  requireDraftLinkAccess,
+  requireOwnerFeature,
+} from '../billing/middleware';
 import {
   deleteFeedBlob,
   draftZipKey,
@@ -273,8 +277,9 @@ projectsRouter.post('/', async (c) => {
     }
   }
 
+  const ownerQuotas = await getOwnerQuotas(c.env, ownerType, ownerId);
   const used = await countProjects(c.env, ownerType, ownerId);
-  const { warning } = enforceQuota(c.env, 'projects', used, MAX_PROJECTS_PER_OWNER);
+  const { warning } = enforceQuota(c.env, 'projects', used, ownerQuotas.projects);
   setQuotaWarningHeader(c, warning);
 
   let desiredSlug: string;
@@ -361,14 +366,16 @@ projectsRouter.get('/', async (c) => {
     lastVersionCreatedAt: r.last_version_created_at,
   }));
 
+  const ownerQuotas = await getOwnerQuotas(c.env, ownerType, ownerId);
   const used = await countProjects(c.env, ownerType, ownerId);
-  const warnAt = Math.floor(MAX_PROJECTS_PER_OWNER * 0.9);
-  const warning = used >= warnAt ? `${used}/${MAX_PROJECTS_PER_OWNER}` : null;
+  const warnAt = Math.floor(ownerQuotas.projects * 0.9);
+  const warning = used >= warnAt ? `${used}/${ownerQuotas.projects}` : null;
 
   return c.json({
     projects,
     quota: {
-      projects: { used, limit: MAX_PROJECTS_PER_OWNER },
+      projects: { used, limit: ownerQuotas.projects },
+      plan: ownerQuotas.plan,
       warning,
     },
   });
@@ -413,6 +420,10 @@ projectsRouter.patch('/:id', async (c) => {
     binds.push(body.description);
   }
   if (body.brandPrimaryColor !== undefined) {
+    // Custom brand color is a paid-tier feature. Clearing it (null) is always OK.
+    if (body.brandPrimaryColor !== null) {
+      await requireOwnerFeature(c.env, current.owner_type as OwnerType, current.owner_id, 'brand_color');
+    }
     updates.push('brand_primary_color = ?');
     binds.push(body.brandPrimaryColor === null ? null : body.brandPrimaryColor.toLowerCase());
   }
@@ -533,8 +544,9 @@ projectsRouter.post('/:id/transfer', async (c) => {
   }
 
   // Quota check on the destination.
+  const destQuotas = await getOwnerQuotas(c.env, destOwnerType, destOwnerId);
   const usedAtDest = await countProjects(c.env, destOwnerType, destOwnerId);
-  enforceQuota(c.env, 'projects', usedAtDest, MAX_PROJECTS_PER_OWNER);
+  enforceQuota(c.env, 'projects', usedAtDest, destQuotas.projects);
 
   // Slug uniqueness in the destination.
   const finalSlug = await uniqueSlug(c.env, destOwnerType, destOwnerId, current.slug);
@@ -630,11 +642,12 @@ projectsRouter.put('/:id/working-state', async (c) => {
   const buf = await c.req.raw.arrayBuffer();
   const size = buf.byteLength;
   if (size === 0) throw validationFailed('Empty body');
-  if (size > MAX_BLOB_BYTES) {
-    throw new ApiError(413, 'quota_exceeded', `Working state exceeds ${MAX_BLOB_BYTES} bytes`, {
+  const saveQuotas = await getOwnerQuotas(c.env, row.owner_type as OwnerType, row.owner_id);
+  if (size > saveQuotas.blobBytes) {
+    throw new ApiError(413, 'quota_exceeded', `Working state exceeds ${saveQuotas.blobBytes} bytes`, {
       kind: 'blob',
       used: size,
-      limit: MAX_BLOB_BYTES,
+      limit: saveQuotas.blobBytes,
     });
   }
 
@@ -714,14 +727,15 @@ projectsRouter.post('/:id/versions', async (c) => {
   }
   const meta = metaResult.data;
 
+  const ownerQuotas = await getOwnerQuotas(c.env, row.owner_type as OwnerType, row.owner_id);
   const versionsUsed = await countVersions(c.env, row.id);
-  const { warning } = enforceQuota(c.env, 'versions', versionsUsed, MAX_VERSIONS_PER_PROJECT);
+  const { warning } = enforceQuota(c.env, 'versions', versionsUsed, ownerQuotas.versionsPerProject);
   setQuotaWarningHeader(c, warning);
 
   const stateBuf = await (statePart as Blob).arrayBuffer();
   const stateSize = stateBuf.byteLength;
   if (stateSize === 0) throw validationFailed('Empty state file');
-  enforceBlobSize(stateSize);
+  enforceBlobSize(stateSize, ownerQuotas.blobBytes);
 
   const versionId = ulid();
   const stateKey = versionStateKey(row.id, versionId);
@@ -939,9 +953,10 @@ projectsRouter.post('/import', async (c) => {
   const imported: unknown[] = [];
   const skipped: { name: string; reason: string }[] = [];
 
+  const importQuotas = await getOwnerQuotas(c.env, 'user', user.id);
   for (const item of body.projects) {
     const used = await countProjects(c.env, 'user', user.id);
-    if (used >= MAX_PROJECTS_PER_OWNER) {
+    if (used >= importQuotas.projects) {
       skipped.push({ name: item.name, reason: 'quota_exceeded' });
       continue;
     }
@@ -957,7 +972,7 @@ projectsRouter.post('/import', async (c) => {
       skipped.push({ name: item.name, reason: 'empty_state' });
       continue;
     }
-    if (decoded.byteLength > MAX_BLOB_BYTES) {
+    if (decoded.byteLength > importQuotas.blobBytes) {
       skipped.push({ name: item.name, reason: 'too_large' });
       continue;
     }
@@ -1091,6 +1106,18 @@ projectsRouter.post('/:id/publish', async (c) => {
   const { row: project } = await requireOwnedProject(c.env, user, id, 'editor');
   const now = Date.now();
 
+  // Feature + quota gating: managed publishing is paid-tier only. Republishing
+  // an existing publication for this project doesn't consume a new slot.
+  const existingPublication = await loadPublication(c.env, project.id);
+  await requirePublishAccess(
+    c.env,
+    project.owner_type as OwnerType,
+    project.owner_id,
+    { isNewPublication: !existingPublication },
+  );
+
+  const projectQuotas = await getOwnerQuotas(c.env, project.owner_type as OwnerType, project.owner_id);
+
   const contentType = c.req.header('Content-Type') ?? '';
   let versionId: string;
   let ignoreWarnings = false;
@@ -1121,7 +1148,7 @@ projectsRouter.post('/:id/publish', async (c) => {
     ignoreRtBreakage = metaResult.data.ignoreRtBreakage ?? false;
     incomingZip = await (zipPart as Blob).arrayBuffer();
     if (incomingZip.byteLength === 0) throw validationFailed('Empty zip');
-    enforceBlobSize(incomingZip.byteLength);
+    enforceBlobSize(incomingZip.byteLength, projectQuotas.blobBytes);
   } else {
     const body = await parseJson(c, publishJsonSchema);
     versionId = body.versionId;
@@ -1143,7 +1170,7 @@ projectsRouter.post('/:id/publish', async (c) => {
 
   // ID-stability check (BE-88). Only runs when the project has RT feed URLs
   // registered AND there's an existing publication to diff against.
-  const existing = await loadPublication(c.env, project.id);
+  const existing = existingPublication;
   const rtCount = await c.env.DB.prepare(
     `SELECT COUNT(*) AS n FROM project_rt_feed WHERE project_id = ?`,
   )
@@ -1386,6 +1413,12 @@ projectsRouter.post('/:id/draft-links', async (c) => {
   const { row: project } = await requireOwnedProject(c.env, user, id, 'editor');
   const now = Date.now();
 
+  // Draft links are a managed-hosting feature (paid tier only) — see
+  // FREEMIUM_PLAN.md §6.
+  await requireDraftLinkAccess(c.env, project.owner_type as OwnerType, project.owner_id);
+
+  const draftQuotas = await getOwnerQuotas(c.env, project.owner_type as OwnerType, project.owner_id);
+
   const contentType = c.req.header('Content-Type') ?? '';
   let versionId: string;
   let ttlDays = 30;
@@ -1412,7 +1445,7 @@ projectsRouter.post('/:id/draft-links', async (c) => {
     ttlDays = metaResult.data.ttlDays ?? 30;
     incomingZip = await (zipPart as Blob).arrayBuffer();
     if (incomingZip.byteLength === 0) throw validationFailed('Empty zip');
-    enforceBlobSize(incomingZip.byteLength);
+    enforceBlobSize(incomingZip.byteLength, draftQuotas.blobBytes);
   } else {
     const body = await parseJson(c, draftLinkCreateSchema);
     versionId = body.versionId;
@@ -1525,6 +1558,8 @@ projectsRouter.post('/:id/catalog-submissions', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');
   const { row: project } = await requireOwnedProject(c.env, user, id, 'editor');
+  // Mobility Database / transit.land submission is a paid feature.
+  await requireOwnerFeature(c.env, project.owner_type as OwnerType, project.owner_id, 'mobility_db_submit');
   const body = await parseJson(c, catalogCreateSchema);
   const now = Date.now();
 

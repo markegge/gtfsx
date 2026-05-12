@@ -12,6 +12,8 @@ import { CoveragePanel } from '../coverage/CoveragePanel';
 import { TitleVIPanel } from '../titlevi/TitleVIPanel';
 import { TimetableSidebar } from '../timetable/TimetableSidebar';
 import { FlexEditor } from '../flex/FlexEditor';
+import { PaywallOverlay } from '../billing/PaywallOverlay';
+import { useEditorPlan } from '../billing/useEditorPlan';
 
 const RIGHT_RAIL_WIDTH = 460;
 
@@ -42,6 +44,7 @@ const SECTION_GROUP: Record<SidebarSection, string | null> = {
 };
 
 function PanelBody({ section }: { section: SidebarSection }) {
+  const plan = useEditorPlan();
   switch (section) {
     case 'agency':
       return <AgencyEditor />;
@@ -58,11 +61,23 @@ function PanelBody({ section }: { section: SidebarSection }) {
     case 'flex':
       return <FlexEditor />;
     case 'costs':
-      return <CostSummary />;
+      return (
+        <PaywallOverlay feature="analysis_basic" currentPlan={plan}>
+          <CostSummary />
+        </PaywallOverlay>
+      );
     case 'coverage':
-      return <CoveragePanel />;
+      return (
+        <PaywallOverlay feature="analysis_basic" currentPlan={plan}>
+          <CoveragePanel />
+        </PaywallOverlay>
+      );
     case 'titlevi':
-      return <TitleVIPanel />;
+      return (
+        <PaywallOverlay feature="analysis_title_vi" currentPlan={plan}>
+          <TitleVIPanel />
+        </PaywallOverlay>
+      );
     default:
       return null;
   }

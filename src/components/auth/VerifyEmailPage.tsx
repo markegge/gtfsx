@@ -32,6 +32,31 @@ export function VerifyEmailPage() {
     }
   };
 
+  if (status === 'already_verified') {
+    return (
+      <AuthLayout title="Email already verified">
+        <p className="text-sm text-dark-brown mb-5">
+          This account has already been verified. You can sign in any time.
+        </p>
+        {currentUser ? (
+          <Link
+            to="/feeds"
+            className="block w-full rounded-lg bg-coral py-2.5 text-center font-heading text-sm font-bold text-white hover:bg-[#d4603a]"
+          >
+            Go to my feeds
+          </Link>
+        ) : (
+          <Link
+            to="/login"
+            className="block w-full rounded-lg bg-coral py-2.5 text-center font-heading text-sm font-bold text-white hover:bg-[#d4603a]"
+          >
+            Sign in
+          </Link>
+        )}
+      </AuthLayout>
+    );
+  }
+
   if (status === 'invalid') {
     return (
       <AuthLayout title="Link expired">

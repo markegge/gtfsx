@@ -191,7 +191,13 @@ authRouter.post('/signup', async (c) => {
       }
 
       await invalidateAuthTokensForUser(c.env, existing.id, 'verify_email');
-      const token = await createAuthToken(c.env, { kind: 'verify_email', userId: existing.id });
+      // Tag this as a signup-flow verification so the post-verify redirect
+      // can route the user through the welcome / pick-a-plan step.
+      const token = await createAuthToken(c.env, {
+        kind: 'verify_email',
+        userId: existing.id,
+        metadata: { flow: 'signup' },
+      });
       const link = `${c.env.APP_ORIGIN}/auth/verify?token=${token}`;
       try {
         await sendVerifyEmail(c.env, body.email, link);
@@ -229,7 +235,11 @@ authRouter.post('/signup', async (c) => {
         .bind(ulid(), userId, passwordHash, now, now)
         .run();
 
-      const token = await createAuthToken(c.env, { kind: 'verify_email', userId });
+      const token = await createAuthToken(c.env, {
+        kind: 'verify_email',
+        userId,
+        metadata: { flow: 'signup' },
+      });
       const link = `${c.env.APP_ORIGIN}/auth/verify?token=${token}`;
       await sendVerifyEmail(c.env, body.email, link);
     } catch (err) {
@@ -273,18 +283,38 @@ authRouter.post('/signup', async (c) => {
 authRouter.get('/verify', async (c) => {
   const token = c.req.query('token');
   const invalidRedirect = () => c.redirect(`${c.env.APP_ORIGIN}/verify-email?status=invalid`, 302);
+  const alreadyVerifiedRedirect = () => c.redirect(`${c.env.APP_ORIGIN}/verify-email?status=already_verified`, 302);
   if (!token) return invalidRedirect();
 
   const resolved = await resolveAuthToken(c.env, token, 'verify_email');
-  if (!resolved || resolved.consumedAt || resolved.expiresAt <= Date.now() || !resolved.userId) {
+  if (!resolved || !resolved.userId) {
     return invalidRedirect();
   }
+  // Distinguish a re-clicked link (token already consumed for a now-active
+  // user) from a genuinely invalid/expired token. The "already verified"
+  // case shows friendlier copy + a sign-in CTA instead of a "resend" prompt.
+  if (resolved.consumedAt) {
+    const alreadyActive = await c.env.DB
+      .prepare(`SELECT status FROM user WHERE id = ?`)
+      .bind(resolved.userId)
+      .first<{ status: string }>();
+    if (alreadyActive?.status === 'active') return alreadyVerifiedRedirect();
+    return invalidRedirect();
+  }
+  if (resolved.expiresAt <= Date.now()) return invalidRedirect();
 
   const userRow = await c.env.DB.prepare(`SELECT id, status FROM user WHERE id = ?`)
     .bind(resolved.userId)
     .first<{ id: string; status: string }>();
   if (!userRow || userRow.status === 'deleted_soft' || userRow.status === 'disabled') {
     return invalidRedirect();
+  }
+  // The pending_verification row is what we expect; if the user has already
+  // been activated (e.g. another verify link from a duplicate signup retry
+  // arrived first), short-circuit to the "already verified" page.
+  if (userRow.status === 'active') {
+    await consumeAuthToken(c.env, resolved.tokenHash);
+    return alreadyVerifiedRedirect();
   }
 
   const now = Date.now();
@@ -319,7 +349,12 @@ authRouter.get('/verify', async (c) => {
     ip,
   });
 
-  return c.redirect(`${c.env.APP_ORIGIN}/?welcome=1`, 302);
+  // Signup verifications land on the tier-picker page. Other verify-email
+  // flows (none today, but reserved for future re-verifications) fall back
+  // to the editor.
+  const isSignupFlow = resolved.metadata?.flow === 'signup';
+  const target = isSignupFlow ? '/upgrade?source=welcome' : '/?welcome=1';
+  return c.redirect(`${c.env.APP_ORIGIN}${target}`, 302);
 });
 
 // ─── Resend verification email ─────────────────────────────────────────────
@@ -334,7 +369,13 @@ authRouter.post('/verify-resend', async (c) => {
   const user = await findUserByEmail(c.env, body.email);
   if (user && user.status === 'pending_verification') {
     await invalidateAuthTokensForUser(c.env, user.id, 'verify_email');
-    const token = await createAuthToken(c.env, { kind: 'verify_email', userId: user.id });
+    // A pending_verification user only exists from a signup that hasn't yet
+    // been confirmed, so the resend carries the same signup-flow tag.
+    const token = await createAuthToken(c.env, {
+      kind: 'verify_email',
+      userId: user.id,
+      metadata: { flow: 'signup' },
+    });
     const link = `${c.env.APP_ORIGIN}/auth/verify?token=${token}`;
     try {
       await sendVerifyEmail(c.env, user.email, link);

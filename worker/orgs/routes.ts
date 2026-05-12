@@ -18,6 +18,11 @@ import {
   consumeAuthToken,
 } from '../auth/tokens';
 import { sendInvitationEmail } from '../email';
+import {
+  requireOwnerFeature,
+  requireMemberCanJoin,
+  requireOrgSeatAvailable,
+} from '../billing/middleware';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -264,7 +269,7 @@ orgsRouter.post('/', async (c) => {
 orgsRouter.get('/', async (c) => {
   const user = c.var.user!;
   const res = await c.env.DB.prepare(
-    `SELECT o.id, o.slug, o.name, o.created_at,
+    `SELECT o.id, o.slug, o.name, o.created_at, o.plan, o.plan_status,
             m.role AS role,
             (SELECT COUNT(*) FROM organization_membership mm WHERE mm.org_id = o.id) AS member_count,
             (SELECT COUNT(*) FROM feed_project p
@@ -280,6 +285,8 @@ orgsRouter.get('/', async (c) => {
       slug: string;
       name: string;
       created_at: number;
+      plan: string | null;
+      plan_status: string | null;
       role: OrgRole;
       member_count: number;
       project_count: number;
@@ -290,6 +297,8 @@ orgsRouter.get('/', async (c) => {
     slug: r.slug,
     name: r.name,
     role: r.role,
+    plan: (r.plan ?? 'free') as 'free' | 'pro' | 'team' | 'consultant' | 'consultant_firm' | 'enterprise',
+    planStatus: (r.plan_status ?? 'active') as 'active' | 'past_due' | 'canceled' | 'trialing',
     memberCount: r.member_count,
     projectCount: r.project_count,
     createdAt: r.created_at,
@@ -391,6 +400,11 @@ orgsRouter.post('/invitations/accept', async (c) => {
       role: existing.role,
     });
   }
+
+  // Free-plan users can't join orgs. Org must still have an open seat (a
+  // dormant invitation can outlive a seat shrink).
+  await requireMemberCanJoin(c.env, user.id);
+  await requireOrgSeatAvailable(c.env, orgId);
 
   const now = Date.now();
   await c.env.DB.prepare(
@@ -536,6 +550,8 @@ orgsRouter.post('/:id/logo', async (c) => {
   const id = c.req.param('id');
   // Admins + owners can manage branding.
   await requireOrgRole(c.env, user, id, 'admin');
+  // Custom org logo is a Team+ feature.
+  await requireOwnerFeature(c.env, 'org', id, 'org_logo');
 
   const form = await c.req.formData().catch(() => null);
   if (!form) throw validationFailed('multipart/form-data body required');
@@ -658,6 +674,9 @@ orgsRouter.post('/:id/invitations', async (c) => {
   if (body.role === 'admin' && callerRole !== 'owner') {
     throw forbidden('Only owners can invite admins');
   }
+
+  // Org must be on a paid plan and have an open seat before issuing invites.
+  await requireOrgSeatAvailable(c.env, id);
 
   // Rate-limit: 50 invites per org per day (covers even generous onboarding).
   await rateLimit(c.env, {

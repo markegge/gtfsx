@@ -9,6 +9,8 @@ import { VersionHistoryPanel } from '../versions/VersionHistoryPanel';
 import { PublishWithDistribution } from '../distribution/PublishWithDistribution';
 import { EmbedPanel } from '../embed/EmbedPanel';
 import { ProjectAuditPanel } from '../audit/ProjectAuditPanel';
+import { PaywallOverlay } from '../billing/PaywallOverlay';
+import { useEditorPlan } from '../billing/useEditorPlan';
 
 const MIN_HEIGHT = 120;
 const MAX_HEIGHT_FRACTION = 0.75; // max 75% of viewport
@@ -20,6 +22,7 @@ function getDefaultHeight() {
 export function BottomPanel() {
   const { bottomPanelOpen, bottomPanelTab, setBottomPanelTab, toggleBottomPanel } = useStore();
   const activeServerProjectId = useStore((s) => s.activeServerProjectId);
+  const editorPlan = useEditorPlan();
   const [panelHeight, setPanelHeight] = useState(getDefaultHeight);
   const [isDraggingState, setIsDraggingState] = useState(false);
   const isDragging = useRef(false);
@@ -143,8 +146,16 @@ export function BottomPanel() {
           {bottomPanelTab === 'service-summary' && <ServiceSummary />}
           {bottomPanelTab === 'validation' && <ValidationPanel />}
           {bottomPanelTab === 'versions' && activeServerProjectId && <VersionHistoryPanel />}
-          {bottomPanelTab === 'publish' && activeServerProjectId && <PublishWithDistribution />}
-          {bottomPanelTab === 'embed' && activeServerProjectId && <EmbedPanel />}
+          {bottomPanelTab === 'publish' && activeServerProjectId && (
+            <PaywallOverlay feature="managed_publishing" currentPlan={editorPlan}>
+              <PublishWithDistribution />
+            </PaywallOverlay>
+          )}
+          {bottomPanelTab === 'embed' && activeServerProjectId && (
+            <PaywallOverlay feature="embeds" currentPlan={editorPlan}>
+              <EmbedPanel />
+            </PaywallOverlay>
+          )}
           {bottomPanelTab === 'audit' && activeServerProjectId && <ProjectAuditPanel />}
         </div>
       )}

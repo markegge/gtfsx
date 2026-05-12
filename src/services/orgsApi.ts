@@ -8,6 +8,14 @@ export interface OrgSummary {
   slug: string;
   name: string;
   role: OrgRole;
+  plan?:
+    | 'free'
+    | 'pro'
+    | 'team'
+    | 'consultant'
+    | 'consultant_firm'
+    | 'enterprise';
+  planStatus?: 'active' | 'past_due' | 'canceled' | 'trialing';
   memberCount: number;
   projectCount: number;
   createdAt: number;

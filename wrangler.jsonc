@@ -114,8 +114,16 @@
         "APP_ORIGIN": "https://staging.gtfsbuilder.net",
         "FEEDS_ORIGIN": "https://staging-feeds.gtfsbuilder.net",
         "BACKEND_ENABLED": "true",
+        "BILLING_ENABLED": "true",
         "HARD_LIMITS": "false",
-        "MAPBOX_TOKEN": "pk.eyJ1IjoibWFya2VnZ2UiLCJhIjoiY2lrb245YWh3MHhtMXV4a21ld2R5Ymh0ciJ9.i0E2OrjPHLVtIRpN82tU5w"
+        "MAPBOX_TOKEN": "pk.eyJ1IjoibWFya2VnZ2UiLCJhIjoiY2lrb245YWh3MHhtMXV4a21ld2R5Ymh0ciJ9.i0E2OrjPHLVtIRpN82tU5w",
+        "STRIPE_PRICE_PRO_MONTHLY": "price_1TVzRAJThEbTJMIVZjGyn24F",
+        "STRIPE_PRICE_PRO_ANNUAL": "price_1TVzRBJThEbTJMIVu3BX60VV",
+        "STRIPE_PRICE_TEAM_MONTHLY": "price_1TVzRBJThEbTJMIVtvRTKzp3",
+        "STRIPE_PRICE_TEAM_ANNUAL": "price_1TVzRBJThEbTJMIVFwUHn1Qh",
+        "STRIPE_PRICE_CONSULTANT_MONTHLY": "price_1TVzRCJThEbTJMIV7To01Kr1",
+        "STRIPE_PRICE_CONSULTANT_ANNUAL": "price_1TVzRCJThEbTJMIV8Rgt2yaZ",
+        "STRIPE_PORTAL_CONFIG_ID": "bpc_1TVzRDJThEbTJMIVVFsRoSaM"
       },
       "routes": [
         { "pattern": "staging.gtfsbuilder.net", "custom_domain": true },

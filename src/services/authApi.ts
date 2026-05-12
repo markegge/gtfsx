@@ -4,6 +4,14 @@ export interface AuthedUser {
   displayName: string;
   status: string;
   staff: boolean;
+  plan?:
+    | 'free'
+    | 'pro'
+    | 'team'
+    | 'consultant'
+    | 'consultant_firm'
+    | 'enterprise';
+  planStatus?: 'active' | 'past_due' | 'canceled' | 'trialing';
 }
 
 export interface MeResponse {

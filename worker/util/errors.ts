@@ -18,10 +18,11 @@ export type ErrorCode =
   | 'token_expired'
   | 'rt_breakage'
   | 'bad_gateway'
+  | 'payment_required'
   | 'internal';
 
 export class ApiError extends HTTPException {
-  constructor(status: 400 | 401 | 403 | 404 | 409 | 410 | 413 | 422 | 429 | 500 | 502, code: ErrorCode, message: string, extra?: Record<string, unknown>) {
+  constructor(status: 400 | 401 | 402 | 403 | 404 | 409 | 410 | 413 | 422 | 429 | 500 | 502 | 503, code: ErrorCode, message: string, extra?: Record<string, unknown>) {
     super(status, {
       res: new Response(JSON.stringify({ error: code, message, ...extra }), {
         status,
@@ -49,3 +50,5 @@ export const rtBreakage = (extra?: Record<string, unknown>) =>
   new ApiError(409, 'rt_breakage', 'Publishing this version will break your GTFS-Realtime feed', extra);
 export const badGateway = (msg = 'Upstream service error', extra?: Record<string, unknown>) =>
   new ApiError(502, 'bad_gateway', msg, extra);
+export const paymentRequired = (msg: string, extra?: Record<string, unknown>) =>
+  new ApiError(402, 'payment_required', msg, extra);

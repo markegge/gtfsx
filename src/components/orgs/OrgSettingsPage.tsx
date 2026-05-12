@@ -28,6 +28,7 @@ import {
   type OrgMember,
   type OrgRole,
 } from '../../services/orgsApi';
+import { PaywallOverlay } from '../billing/PaywallOverlay';
 
 function formatDate(ms: number | null | undefined): string {
   if (!ms) return '—';
@@ -344,13 +345,19 @@ export function OrgSettingsPage() {
           </div>
         )}
 
-        <BrandingSection
-          org={org}
-          canEdit={isAdmin}
-          onUpdated={(updated) => {
-            setDetail((prev) => (prev ? { ...prev, organization: updated } : prev));
-          }}
-        />
+        <PaywallOverlay
+          feature="org_logo"
+          currentPlan={(matchingOrg as { plan?: 'free' | 'pro' | 'team' | 'consultant' | 'consultant_firm' | 'enterprise' } | null)?.plan ?? 'free'}
+          preview={false}
+        >
+          <BrandingSection
+            org={org}
+            canEdit={isAdmin}
+            onUpdated={(updated) => {
+              setDetail((prev) => (prev ? { ...prev, organization: updated } : prev));
+            }}
+          />
+        </PaywallOverlay>
 
         <section className="bg-white border border-sand rounded-2xl p-6 mb-5">
           <div className="flex items-center justify-between mb-4">

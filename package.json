@@ -47,6 +47,7 @@
     "react-map-gl": "^8.1.0",
     "react-router-dom": "^7.14.1",
     "resend": "^6.12.0",
+    "stripe": "^22.1.1",
     "ulidx": "^2.4.1",
     "zod": "^4.3.6",
     "zustand": "^5.0.12"

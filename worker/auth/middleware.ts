@@ -42,10 +42,19 @@ export const requireStaff: MiddlewareHandler<AppContext> = async (c, next) => {
 
 // CSRF defense for cookie-auth APIs: require a custom header that forms
 // can't set cross-origin. Combined with SameSite=Lax this blocks CSRF.
-// Applied to all /api/* and /auth/* POST/PUT/PATCH/DELETE routes.
+// Applied to all /api/* and /auth/* POST/PUT/PATCH/DELETE routes. Webhook
+// endpoints (with their own out-of-band auth) are explicitly exempted.
+const CSRF_EXEMPT_PATHS = [
+  '/api/billing/webhooks/', // Stripe webhooks; signature-authed instead.
+];
+
 export const requireClientHeader: MiddlewareHandler<AppContext> = async (c, next) => {
   const method = c.req.method;
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+    return next();
+  }
+  const path = new URL(c.req.url).pathname;
+  if (CSRF_EXEMPT_PATHS.some((p) => path.startsWith(p))) {
     return next();
   }
   const header = c.req.header('X-GB-Client');

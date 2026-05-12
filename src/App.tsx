@@ -31,6 +31,10 @@ import { ImpersonationBanner } from './components/admin/ImpersonationBanner';
 import { OrgSettingsPage } from './components/orgs/OrgSettingsPage';
 import { AcceptInvitationPage } from './components/orgs/AcceptInvitationPage';
 import { RtBreakageDialog } from './components/distribution/RtBreakageDialog';
+import { PricingPage } from './components/billing/PricingPage';
+import { AccountBillingPage } from './components/billing/AccountBillingPage';
+import { OrgBillingPage } from './components/billing/OrgBillingPage';
+import { WelcomePlanPage } from './components/billing/WelcomePlanPage';
 import { backendEnabled } from './utils/featureFlags';
 
 async function loadDemoFeed() {
@@ -219,11 +223,13 @@ function App() {
         <Routes>
           <Route path="/" element={<EditorRoute />} />
           <Route path="/demo" element={<EditorRoute demo />} />
+          <Route path="/pricing" element={<PricingPage />} />
           <Route path="/login" element={<BackendDisabledPage />} />
           <Route path="/signup" element={<BackendDisabledPage />} />
           <Route path="/feeds" element={<BackendDisabledPage />} />
           <Route path="/feeds/*" element={<BackendDisabledPage />} />
           <Route path="/account" element={<BackendDisabledPage />} />
+          <Route path="/account/*" element={<BackendDisabledPage />} />
           <Route path="/verify-email" element={<BackendDisabledPage />} />
           <Route path="/magic-link" element={<BackendDisabledPage />} />
           <Route path="/reset-password" element={<BackendDisabledPage />} />
@@ -247,10 +253,15 @@ function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/change-email" element={<ChangeEmailPage />} />
         <Route path="/account" element={<AccountSettingsPage />} />
+        <Route path="/account/billing" element={<AccountBillingPage />} />
+        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/welcome/plan" element={<WelcomePlanPage />} />
+        <Route path="/upgrade" element={<WelcomePlanPage />} />
         <Route path="/feeds" element={<MyFeedsPage />} />
         <Route path="/feeds/:slug" element={<ServerEditorRoute />} />
         <Route path="/feeds/*" element={<Navigate to="/feeds" replace />} />
         <Route path="/orgs/accept" element={<AcceptInvitationPage />} />
+        <Route path="/orgs/:slug/billing" element={<OrgBillingPage />} />
         <Route path="/orgs/:slug" element={<OrgSettingsPage />} />
         <Route path="/admin" element={<AdminDashboardPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />

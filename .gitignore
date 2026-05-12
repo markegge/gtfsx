@@ -19,6 +19,12 @@ streamline_test.zip
 .dev.vars
 *.tsbuildinfo
 
+# Stripe setup-script output (contains webhook signing secret)
+.stripe-config-*.json
+
+# Playwright MCP run artifacts (console logs, snapshots from test sessions)
+.playwright-mcp/
+
 # demand-dots build artifacts
 demand-dots/cache/
 demand-dots/.venv/

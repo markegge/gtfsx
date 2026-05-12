@@ -3,6 +3,17 @@ export const backendEnabled: boolean = (() => {
   return v === 'true' || v === '1' || v === true;
 })();
 
+// Independent kill-switch for the billing path. When false, paywall surfaces
+// render in a "coming soon" state instead of triggering Stripe Checkout. Pairs
+// with the BILLING_ENABLED Worker var.
+export const billingEnabled: boolean = (() => {
+  const v = import.meta.env.VITE_BILLING_ENABLED;
+  return v === 'true' || v === '1' || v === true;
+})();
+
+export const stripePublishableKey: string =
+  (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined) ?? '';
+
 // Cloudflare Turnstile site key (public). Empty string = widget disabled
 // (dev fallback). Matching TURNSTILE_SECRET_KEY lives as a Worker secret.
 export const turnstileSiteKey: string =

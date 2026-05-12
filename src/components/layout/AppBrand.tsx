@@ -29,13 +29,11 @@ export function AppBrand({
       navigate('/');
       return;
     }
-    // Editor mode: check if there's unsaved work first.
+    // Editor mode: only warn if there are actual unsaved changes. A
+    // freshly-imported project that hasn't been touched is not "unsaved
+    // work" — wiping it clean is fine.
     const state = useStore.getState();
-    const hasData =
-      state.routes.length > 0 ||
-      state.stops.length > 0 ||
-      state.shapes.length > 0;
-    if (hasData && onResetRequest) {
+    if (state.isDirty && onResetRequest) {
       onResetRequest();
     } else {
       db.projectData

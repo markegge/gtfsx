@@ -223,8 +223,29 @@ function CornerBadge({ n }: { n: number }) {
 
 /* ──────────────────── MAX RAIL · 260px ──────────────────── */
 
+/**
+ * Click a nav item: switches sections normally, but if the user clicks the
+ * already-active section the right rail toggles closed (and reopens on a
+ * subsequent click of the same item). This makes the nav buttons behave
+ * like a pinned tab where the second click hides the panel.
+ */
+function useNavClick() {
+  const sidebarSection = useStore((s) => s.sidebarSection);
+  const setSidebarSection = useStore((s) => s.setSidebarSection);
+  const rightRailOpen = useStore((s) => s.rightRailOpen);
+  const setRightRailOpen = useStore((s) => s.setRightRailOpen);
+  return (key: SidebarSection) => {
+    if (sidebarSection === key) {
+      setRightRailOpen(!rightRailOpen);
+    } else {
+      setSidebarSection(key);
+    }
+  };
+}
+
 function MaxRail({ counts }: { counts: ItemCounts }) {
-  const { sidebarSection, setSidebarSection } = useStore();
+  const sidebarSection = useStore((s) => s.sidebarSection);
+  const handleClick = useNavClick();
   const [fixedManual, setFixedManual] = useState<boolean | null>(null);
   const [flexManual, setFlexManual] = useState<boolean | null>(null);
   const [analysisManual, setAnalysisManual] = useState<boolean | null>(null);
@@ -247,7 +268,7 @@ function MaxRail({ counts }: { counts: ItemCounts }) {
     return (
       <button
         key={item.key}
-        onClick={() => setSidebarSection(item.key)}
+        onClick={() => handleClick(item.key)}
         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-left transition-colors ${
           active
             ? 'bg-coral-light text-coral font-bold'
@@ -291,7 +312,8 @@ function MaxRail({ counts }: { counts: ItemCounts }) {
 /* ──────────────────── MID RAIL · 96px ──────────────────── */
 
 function MidRail({ counts }: { counts: ItemCounts }) {
-  const { sidebarSection, setSidebarSection } = useStore();
+  const sidebarSection = useStore((s) => s.sidebarSection);
+  const handleClick = useNavClick();
 
   const renderTile = (item: NavItem) => {
     const active = sidebarSection === item.key;
@@ -299,7 +321,7 @@ function MidRail({ counts }: { counts: ItemCounts }) {
     return (
       <button
         key={item.key}
-        onClick={() => setSidebarSection(item.key)}
+        onClick={() => handleClick(item.key)}
         className={`relative mx-1.5 my-0.5 px-1.5 py-2 flex flex-col items-center gap-1 rounded-lg transition-colors ${
           active
             ? 'bg-coral-light text-coral'
@@ -338,7 +360,8 @@ function MidRail({ counts }: { counts: ItemCounts }) {
 /* ──────────────────── MIN RAIL · 40px ──────────────────── */
 
 function MinRail({ counts }: { counts: ItemCounts }) {
-  const { sidebarSection, setSidebarSection } = useStore();
+  const sidebarSection = useStore((s) => s.sidebarSection);
+  const handleClick = useNavClick();
   const all = [...SETUP, ...FIXED_ROUTE, ...FLEX, ...ANALYSIS];
   const dividerAfter = new Set<number>([
     SETUP.length - 1,
@@ -354,7 +377,7 @@ function MinRail({ counts }: { counts: ItemCounts }) {
         return (
           <div key={item.key} className="contents">
             <button
-              onClick={() => setSidebarSection(item.key)}
+              onClick={() => handleClick(item.key)}
               title={item.label}
               className={`relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
                 active ? 'bg-coral-light' : 'hover:bg-cream'

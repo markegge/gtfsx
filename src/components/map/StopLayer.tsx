@@ -12,6 +12,9 @@ export function StopLayer() {
   const mapMode = useStore((s) => s.mapMode);
   const isEditingShape = mapMode === 'edit_shape';
   const hiddenRouteIds = useStore((s) => s.hiddenRouteIds);
+  // When the Stops panel is filtering, fade non-matching stops so the user
+  // sees the filter in context. null = no overlay; render everything normally.
+  const mapStopFilter = useStore((s) => s.mapStopFilter);
 
   const geojson = useMemo(() => {
     const hiddenSet = new Set(hiddenRouteIds);
@@ -41,6 +44,8 @@ export function StopLayer() {
       }
     }
 
+    const matchedSet = mapStopFilter ? new Set(mapStopFilter.matched) : null;
+
     return {
       type: 'FeatureCollection' as const,
       features: stops
@@ -56,6 +61,7 @@ export function StopLayer() {
           const color = stopRouteColor.get(stop.stop_id) || '#8B7E74';
           const isSelected = stop.stop_id === selectedStopId;
           const numRoutes = stopRouteCount.get(stop.stop_id) || 0;
+          const isFilteredOut = !!matchedSet && !matchedSet.has(stop.stop_id);
 
           return {
             type: 'Feature' as const,
@@ -66,6 +72,7 @@ export function StopLayer() {
               color,
               numRoutes,
               isTransfer: numRoutes > 1,
+              isFilteredOut,
             },
             geometry: {
               type: 'Point' as const,
@@ -74,43 +81,75 @@ export function StopLayer() {
           };
         }),
     };
-  }, [stops, routes, routeStops, selectedStopId, selectedRouteId, hiddenRouteIds]);
+  }, [stops, routes, routeStops, selectedStopId, selectedRouteId, hiddenRouteIds, mapStopFilter]);
 
-  // Outer ring — route-colored border
+  // Outer ring — route-colored border. Filter-faded stops shrink, gray out,
+  // and drop opacity so they're context, not foreground.
   const outerCircle: LayerProps = {
     id: 'stop-circles-outer',
     type: 'circle',
     paint: {
       'circle-radius': [
         'interpolate', ['linear'], ['zoom'],
-        10, ['case', ['get', 'isSelected'], 6, 3],
-        14, ['case', ['get', 'isSelected'], 10, ['case', ['get', 'isTransfer'], 7, 6]],
+        10, [
+          'case',
+          ['get', 'isFilteredOut'], 1.5,
+          ['get', 'isSelected'], 6,
+          3,
+        ],
+        14, [
+          'case',
+          ['get', 'isFilteredOut'], 3,
+          ['get', 'isSelected'], 10,
+          ['case', ['get', 'isTransfer'], 7, 6],
+        ],
       ],
-      'circle-color': ['get', 'color'],
+      'circle-color': [
+        'case',
+        ['get', 'isFilteredOut'], '#B8AFA5',
+        ['get', 'color'],
+      ],
       'circle-opacity': isEditingShape ? 0.15 : [
         'case',
+        ['get', 'isFilteredOut'], 0.45,
         ['get', 'isSelected'], 1,
         0.9,
       ],
     },
   };
 
-  // Inner fill — white circle (or route-colored when selected)
+  // Inner fill — white circle (or route-colored when selected). Filtered-out
+  // stops use the same gray so the dot reads as a single muted dot.
   const innerCircle: LayerProps = {
     id: 'stop-circles',
     type: 'circle',
     paint: {
       'circle-radius': [
         'interpolate', ['linear'], ['zoom'],
-        10, ['case', ['get', 'isSelected'], 3, 1.5],
-        14, ['case', ['get', 'isSelected'], 5, ['case', ['get', 'isTransfer'], 4, 3.5]],
+        10, [
+          'case',
+          ['get', 'isFilteredOut'], 0.6,
+          ['get', 'isSelected'], 3,
+          1.5,
+        ],
+        14, [
+          'case',
+          ['get', 'isFilteredOut'], 1.2,
+          ['get', 'isSelected'], 5,
+          ['case', ['get', 'isTransfer'], 4, 3.5],
+        ],
       ],
       'circle-color': [
         'case',
+        ['get', 'isFilteredOut'], '#B8AFA5',
         ['get', 'isSelected'], ['get', 'color'],
         '#FFFFFF',
       ],
-      'circle-opacity': isEditingShape ? 0.15 : 1,
+      'circle-opacity': isEditingShape ? 0.15 : [
+        'case',
+        ['get', 'isFilteredOut'], 0.6,
+        1,
+      ],
     },
   };
 

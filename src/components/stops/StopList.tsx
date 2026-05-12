@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import { WHEELCHAIR_BOARDING, LOCATION_TYPES, directionName } from '../../utils/constants';
@@ -25,6 +25,7 @@ export function StopList() {
   const calendars = useStore((s) => s.calendars);
   const setEditingStopId = useStore((s) => s.setEditingStopId);
   const selectStop = useStore((s) => s.selectStop);
+  const setMapStopFilter = useStore((s) => s.setMapStopFilter);
 
   const [routeFilter, setRouteFilter] = useState<string>('');
   const [directionFilter, setDirectionFilter] = useState<DirectionFilter>('both');
@@ -88,6 +89,33 @@ export function StopList() {
     [filteredStops],
   );
 
+  // Filters at their defaults mean "show everything" — no need to overlay
+  // the map. Anything else writes the matched stop_ids to the store so the
+  // StopLayer can fade non-matches.
+  const filtersActive =
+    !!routeFilter
+    || wheelchairFilter >= 0
+    || locationTypeFilter >= 0;
+
+  useEffect(() => {
+    if (filtersActive) {
+      setMapStopFilter({ matched: filteredStops.map((s) => s.stop_id) });
+    } else {
+      setMapStopFilter(null);
+    }
+  }, [filtersActive, filteredStops, setMapStopFilter]);
+
+  // Drop the overlay when the panel unmounts (section change, rail close).
+  useEffect(() => () => setMapStopFilter(null), [setMapStopFilter]);
+
+  const clearFilters = () => {
+    setRouteFilter('');
+    setDirectionFilter('both');
+    setServiceFilter('');
+    setWheelchairFilter(-1);
+    setLocationTypeFilter(-1);
+  };
+
   const openStopEditor = (stopId: string) => {
     setEditingStopId(stopId);
     selectStop(stopId);
@@ -110,6 +138,19 @@ export function StopList() {
   return (
     <div>
       <div className="mb-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide">
+            Filters
+          </span>
+          {filtersActive && (
+            <button
+              onClick={clearFilters}
+              className="text-[11px] font-semibold text-coral hover:text-[#d4603a] transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
         <div>
           <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
             Route

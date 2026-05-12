@@ -17,6 +17,10 @@ export interface UISlice {
   editingShapeId: string | null;
   editingFlexZoneId: string | null;
   editingStopId: string | null;
+  // When the Stops panel narrows the list, the map fades non-matching stops
+  // so the user can see the filter result in context without losing the rest
+  // of the system. null = no filter active (all stops render normally).
+  mapStopFilter: { matched: string[] } | null;
   snapToRoad: boolean;
   hiddenRouteIds: string[];
   hiddenShapeIds: string[];
@@ -43,6 +47,7 @@ export interface UISlice {
   setEditingShapeId: (id: string | null) => void;
   setEditingFlexZoneId: (id: string | null) => void;
   setEditingStopId: (id: string | null) => void;
+  setMapStopFilter: (filter: { matched: string[] } | null) => void;
   setSnapToRoad: (v: boolean) => void;
   setLeftRailWidth: (w: number) => void;
   setRightRailOpen: (open: boolean) => void;
@@ -67,6 +72,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   editingShapeId: null,
   editingFlexZoneId: null,
   editingStopId: null,
+  mapStopFilter: null,
   snapToRoad: true,
   hiddenRouteIds: [],
   hiddenShapeIds: [],
@@ -102,6 +108,10 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     // The stop edit sub-panel is contextual to the user's current flow —
     // switching nav sections discards it so the new section's body renders.
     state.editingStopId = null;
+    // Filter overlay on the map is only relevant while the Stops panel is
+    // active; clear it when navigating elsewhere so other sections see the
+    // full feed unmuted.
+    if (section !== 'stops') state.mapStopFilter = null;
   }),
   setBottomPanelOpen: (open) => set((state) => { state.bottomPanelOpen = open; }),
   toggleBottomPanel: () => set((state) => { state.bottomPanelOpen = !state.bottomPanelOpen; }),
@@ -118,6 +128,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setEditingShapeId: (id) => set((state) => { state.editingShapeId = id; }),
   setEditingFlexZoneId: (id) => set((state) => { state.editingFlexZoneId = id; }),
   setEditingStopId: (id) => set((state) => { state.editingStopId = id; }),
+  setMapStopFilter: (filter) => set((state) => { state.mapStopFilter = filter; }),
   setSnapToRoad: (v) => set((state) => { state.snapToRoad = v; }),
   setLeftRailWidth: (w) => set((state) => { state.leftRailWidth = w; }),
   setRightRailOpen: (open) => set((state) => { state.rightRailOpen = open; }),

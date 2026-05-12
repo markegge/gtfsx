@@ -546,15 +546,18 @@ export function MapView() {
       return;
     }
 
-    // Stop placement mode
-    if (currentState.mapMode === 'place_stop' && currentState.selectedRouteId) {
+    // Stop placement mode — drops a new stop at the click location. Supports
+    // two contexts: with a route selected (snap-to-route + auto-add to route),
+    // or standalone (just create the stop, no route assignment).
+    if (currentState.mapMode === 'place_stop') {
       const clickLat = e.lngLat.lat;
       const clickLon = e.lngLat.lng;
       let stopLat = clickLat;
       let stopLon = clickLon;
       let bestDirectionId: 0 | 1 = currentState.stopPlacementDirection;
+      const hasRoute = !!currentState.selectedRouteId;
 
-      if (currentState.stopPlacementMode === 'snap_to_route') {
+      if (hasRoute && currentState.stopPlacementMode === 'snap_to_route') {
         const routeTrips = currentState.trips.filter((t) => t.route_id === currentState.selectedRouteId);
         const shapeTrips = routeTrips.filter((t) => t.shape_id);
         let bestDist = Infinity;
@@ -588,19 +591,26 @@ export function MapView() {
         wheelchair_boarding: 0,
       });
 
-      const existingStops = currentState.routeStops.filter(
-        (rs) => rs.route_id === currentState.selectedRouteId && rs.direction_id === bestDirectionId
-      );
-      currentState.addRouteStop({
-        route_id: currentState.selectedRouteId,
-        stop_id: stopId,
-        direction_id: bestDirectionId,
-        stop_sequence: existingStops.length,
-        _snapped: currentState.stopPlacementMode === 'snap_to_route',
-      });
+      if (hasRoute && currentState.selectedRouteId) {
+        const existingStops = currentState.routeStops.filter(
+          (rs) => rs.route_id === currentState.selectedRouteId && rs.direction_id === bestDirectionId
+        );
+        currentState.addRouteStop({
+          route_id: currentState.selectedRouteId,
+          stop_id: stopId,
+          direction_id: bestDirectionId,
+          stop_sequence: existingStops.length,
+          _snapped: currentState.stopPlacementMode === 'snap_to_route',
+        });
+      }
 
       currentState.selectStop(stopId);
-      currentState.setSidebarSection('stops');
+      // Stay in the user's current sub-panel while creating. The legacy
+      // behavior of jumping to the Stops section made sense before the
+      // CreateStopPanel existed; now it would yank the user out of their flow.
+      if (!currentState.creatingStop && !currentState.editingRouteId) {
+        currentState.setSidebarSection('stops');
+      }
       lastPlacedStopRef.current = stopId;
       return;
     }

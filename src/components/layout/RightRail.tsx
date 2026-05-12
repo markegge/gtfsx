@@ -7,6 +7,7 @@ import { RouteList } from '../routes/RouteList';
 import { requestDeleteRoute } from '../routes/requestDeleteRoute';
 import { StopList } from '../stops/StopList';
 import { StopEditPanel } from '../stops/StopEditPanel';
+import { CreateStopPanel } from '../stops/CreateStopPanel';
 import { FaresEditor } from '../fares/FaresEditor';
 import { CostSummary } from '../costs/CostSummary';
 import { CoveragePanel } from '../coverage/CoveragePanel';
@@ -308,6 +309,76 @@ function StopEditHeader() {
   );
 }
 
+/**
+ * Header for the CreateStopPanel. Mirrors StopEditHeader's breadcrumb logic
+ * but with a "New stop" leaf instead of a stop name, so the user can see
+ * whether they're creating within a route context or standalone.
+ */
+function CreateStopHeader() {
+  const editingRouteId = useStore((s) => s.editingRouteId);
+  const route = useStore((s) =>
+    editingRouteId ? s.routes.find((r) => r.route_id === editingRouteId) : null,
+  );
+  const section = useStore((s) => s.sidebarSection);
+  const setCreatingStop = useStore((s) => s.setCreatingStop);
+  const setRouteDetailTab = useStore((s) => s.setRouteDetailTab);
+  const setSidebarSection = useStore((s) => s.setSidebarSection);
+  const setMapMode = useStore((s) => s.setMapMode);
+
+  const fromRouteContext = section === 'routes' && !!route;
+
+  const goBack = () => {
+    setCreatingStop(false);
+    // Don't leave the map in 'place_stop' mode after closing the create panel.
+    if (useStore.getState().mapMode === 'place_stop') setMapMode('select');
+    if (fromRouteContext) setRouteDetailTab('stops');
+  };
+
+  return (
+    <div className="px-5 py-3.5 border-b border-sand bg-white shrink-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <nav className="text-[13px] text-warm-gray flex items-center gap-1.5">
+            <button onClick={goBack} className="hover:text-coral transition-colors">←</button>
+            {fromRouteContext && route ? (
+              <>
+                <button onClick={() => setSidebarSection('routes')} className="hover:text-coral transition-colors">
+                  Routes
+                </button>
+                <span className="opacity-50">›</span>
+                <button
+                  onClick={() => { setCreatingStop(false); setRouteDetailTab('details'); }}
+                  className="hover:text-coral transition-colors truncate"
+                >
+                  {route.route_short_name || route.route_long_name || 'Route'}
+                </button>
+                <span className="opacity-50">›</span>
+                <button onClick={goBack} className="hover:text-coral transition-colors">
+                  Stops
+                </button>
+              </>
+            ) : (
+              <button onClick={goBack} className="hover:text-coral transition-colors">
+                Stops
+              </button>
+            )}
+          </nav>
+          <h2 className="mt-1 font-heading font-extrabold text-lg text-dark-brown leading-tight truncate">
+            New stop
+          </h2>
+        </div>
+        <button
+          onClick={() => useStore.getState().setRightRailOpen(false)}
+          className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
+          title="Close editor"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function GenericHeader({ section }: { section: SidebarSection }) {
   const setRightRailOpen = useStore((s) => s.setRightRailOpen);
   const title = SECTION_TITLES[section] ?? 'Configuration';
@@ -341,6 +412,7 @@ export function RightRail() {
   const rightRailOpen = useStore((s) => s.rightRailOpen);
   const editingRouteId = useStore((s) => s.editingRouteId);
   const editingStopId = useStore((s) => s.editingStopId);
+  const creatingStop = useStore((s) => s.creatingStop);
   const mapMode = useStore((s) => s.mapMode);
   const storedWidth = useStore((s) => s.rightRailWidth);
   const setRightRailWidth = useStore((s) => s.setRightRailWidth);
@@ -420,6 +492,7 @@ export function RightRail() {
 
   const inRouteDetail = section === 'routes' && !!editingRouteId;
   const editingStop = !!editingStopId;
+  const creatingNewStop = !!creatingStop;
 
   return (
     <aside
@@ -440,14 +513,20 @@ export function RightRail() {
         }`}
       />
       {isDragging && <div className="fixed inset-0 z-50 cursor-col-resize" />}
-      {editingStop
-        ? <StopEditHeader />
-        : inRouteDetail
-          ? <RouteDetailHeader />
-          : <GenericHeader section={section} />}
+      {creatingNewStop
+        ? <CreateStopHeader />
+        : editingStop
+          ? <StopEditHeader />
+          : inRouteDetail
+            ? <RouteDetailHeader />
+            : <GenericHeader section={section} />}
       <div className="flex-1 overflow-y-auto">
         <div className="p-5">
-          {editingStop ? <StopEditPanel /> : <PanelBody section={section} />}
+          {creatingNewStop
+            ? <CreateStopPanel />
+            : editingStop
+              ? <StopEditPanel />
+              : <PanelBody section={section} />}
         </div>
       </div>
     </aside>

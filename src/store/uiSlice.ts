@@ -17,6 +17,9 @@ export interface UISlice {
   editingShapeId: string | null;
   editingFlexZoneId: string | null;
   editingStopId: string | null;
+  // When true, RightRail renders the CreateStopPanel sub-panel instead of
+  // the section body. Origin is implied by sidebarSection + editingRouteId.
+  creatingStop: boolean;
   // When the Stops panel narrows the list, the map fades non-matching stops
   // so the user can see the filter result in context without losing the rest
   // of the system. null = no filter active (all stops render normally).
@@ -47,6 +50,7 @@ export interface UISlice {
   setEditingShapeId: (id: string | null) => void;
   setEditingFlexZoneId: (id: string | null) => void;
   setEditingStopId: (id: string | null) => void;
+  setCreatingStop: (creating: boolean) => void;
   setMapStopFilter: (filter: { matched: string[] } | null) => void;
   setSnapToRoad: (v: boolean) => void;
   setLeftRailWidth: (w: number) => void;
@@ -72,6 +76,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   editingShapeId: null,
   editingFlexZoneId: null,
   editingStopId: null,
+  creatingStop: false,
   mapStopFilter: null,
   snapToRoad: true,
   hiddenRouteIds: [],
@@ -105,9 +110,11 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     if (section !== 'stops' && (state.mapMode === 'place_stop' || state.mapMode === 'move_stop')) {
       state.mapMode = 'select';
     }
-    // The stop edit sub-panel is contextual to the user's current flow —
-    // switching nav sections discards it so the new section's body renders.
+    // The stop edit / create sub-panels are contextual to the user's current
+    // flow — switching nav sections discards them so the new section's body
+    // renders.
     state.editingStopId = null;
+    state.creatingStop = false;
     // Filter overlay on the map is only relevant while the Stops panel is
     // active; clear it when navigating elsewhere so other sections see the
     // full feed unmuted.
@@ -128,6 +135,12 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setEditingShapeId: (id) => set((state) => { state.editingShapeId = id; }),
   setEditingFlexZoneId: (id) => set((state) => { state.editingFlexZoneId = id; }),
   setEditingStopId: (id) => set((state) => { state.editingStopId = id; }),
+  setCreatingStop: (creating) => set((state) => {
+    state.creatingStop = creating;
+    // Entering creating mode clears any open edit-stop sub-panel so the
+    // user sees a fresh placement form, not someone else's properties.
+    if (creating) state.editingStopId = null;
+  }),
   setMapStopFilter: (filter) => set((state) => { state.mapStopFilter = filter; }),
   setSnapToRoad: (v) => set((state) => { state.snapToRoad = v; }),
   setLeftRailWidth: (w) => set((state) => { state.leftRailWidth = w; }),

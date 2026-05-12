@@ -114,6 +114,7 @@ function SortableStopItem({
 export function RouteStopsTab() {
   const routeId = useStore((s) => s.editingRouteId);
   const route = useStore((s) => s.routes.find((r) => r.route_id === routeId));
+  const routes = useStore((s) => s.routes);
   const stops = useStore((s) => s.stops);
   const routeStops = useStore((s) => s.routeStops);
   const stopTimes = useStore((s) => s.stopTimes);
@@ -124,15 +125,14 @@ export function RouteStopsTab() {
   const reorderRouteStops = useStore((s) => s.reorderRouteStops);
   const removeStop = useStore((s) => s.removeStop);
   const setEditingStopId = useStore((s) => s.setEditingStopId);
-  const mapMode = useStore((s) => s.mapMode);
-  const setMapMode = useStore((s) => s.setMapMode);
-  const stopPlacementMode = useStore((s) => s.stopPlacementMode);
-  const setStopPlacementMode = useStore((s) => s.setStopPlacementMode);
+  const setCreatingStop = useStore((s) => s.setCreatingStop);
   const directionId = useStore((s) => s.stopPlacementDirection);
   const setDirectionId = useStore((s) => s.setStopPlacementDirection);
 
   const [addExistingStopId, setAddExistingStopId] = useState<string>('');
   const [confirmRemoveStop, setConfirmRemoveStop] = useState<{ stopId: string } | null>(null);
+  // 'unassigned' (default) | 'all' | 'route:<id>'
+  const [assignmentFilter, setAssignmentFilter] = useState<string>('unassigned');
   // Safari sometimes fires a synthetic `click` on the pointerup target after
   // a drag completes, which selects whichever stop the cursor was over and
   // visually "locks" the row in the active state. Track the time of the last
@@ -190,13 +190,34 @@ export function RouteStopsTab() {
     if (stop && flyTo) flyTo(stop.stop_lon, stop.stop_lat);
   }, [stops, selectStop, selectedStopId]);
 
+  // Stops already assigned to this route+direction — always exclude from the
+  // "Add existing" pool so the dropdown doesn't offer to add a duplicate.
   const routeStopIdsThisDir = new Set(
     routeStops
       .filter((rs) => rs.route_id === routeId && rs.direction_id === directionId)
       .map((rs) => rs.stop_id),
   );
+
+  // Build the assignment-filtered candidate set for the "Add existing" dropdown.
+  // 'unassigned' = stops not assigned to ANY route via route_stops.
+  // 'route:<id>' = stops on a specific other route.
+  // 'all'        = every stop in the feed.
+  const assignedAnywhere = new Set(routeStops.map((rs) => rs.stop_id));
+  const stopsOnOtherRoute = (otherRouteId: string) => new Set(
+    routeStops.filter((rs) => rs.route_id === otherRouteId).map((rs) => rs.stop_id),
+  );
+  const filterSet: ((sid: string) => boolean) = (() => {
+    if (assignmentFilter === 'all') return () => true;
+    if (assignmentFilter === 'unassigned') return (sid: string) => !assignedAnywhere.has(sid);
+    if (assignmentFilter.startsWith('route:')) {
+      const otherId = assignmentFilter.slice('route:'.length);
+      const ids = stopsOnOtherRoute(otherId);
+      return (sid: string) => ids.has(sid);
+    }
+    return () => true;
+  })();
   const availableStops = stops
-    .filter((s) => !routeStopIdsThisDir.has(s.stop_id))
+    .filter((s) => !routeStopIdsThisDir.has(s.stop_id) && filterSet(s.stop_id))
     .sort((a, b) => (a.stop_name || a.stop_id).localeCompare(b.stop_name || b.stop_id));
 
   return (
@@ -221,37 +242,38 @@ export function RouteStopsTab() {
         </div>
       </div>
 
-      {/* Placement mode */}
-      <div className="mb-3">
-        <div className="flex gap-1 bg-sand rounded-lg p-0.5">
-          <button
-            onClick={() => setStopPlacementMode('snap_to_route')}
-            className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors
-              ${stopPlacementMode === 'snap_to_route' ? 'bg-white text-dark-brown shadow-sm' : 'text-warm-gray'}`}
-          >
-            Snap to Route
-          </button>
-          <button
-            onClick={() => setStopPlacementMode('freehand')}
-            className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors
-              ${stopPlacementMode === 'freehand' ? 'bg-white text-dark-brown shadow-sm' : 'text-warm-gray'}`}
-          >
-            Freehand
-          </button>
-        </div>
+      {/* Add stops to this route+direction */}
+      <div className="mb-3 space-y-2">
         <button
-          onClick={() => setMapMode(mapMode === 'place_stop' ? 'select' : 'place_stop')}
-          className={`w-full mt-2 px-4 py-2 rounded-lg font-heading font-bold text-sm transition-colors
-            ${mapMode === 'place_stop'
-              ? 'bg-coral text-white'
-              : 'bg-sand text-brown hover:bg-coral-light hover:text-coral'
-            }`}
+          onClick={() => setCreatingStop(true)}
+          className="w-full px-4 py-2 rounded-lg font-heading font-bold text-sm bg-coral text-white hover:bg-[#d4603a] transition-colors"
         >
-          {mapMode === 'place_stop' ? 'Done Placing Stops' : 'Place Stops on Map'}
+          + Create new stop
         </button>
 
-        {availableStops.length > 0 && (
-          <div className="mt-2 flex gap-1">
+        {/* Filter the "Add existing" pool by current assignment so the dropdown
+            isn't 1000+ stops long for big feeds. */}
+        <div>
+          <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
+            Show stops from
+          </label>
+          <select
+            value={assignmentFilter}
+            onChange={(e) => { setAssignmentFilter(e.target.value); setAddExistingStopId(''); }}
+            className="w-full px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
+          >
+            <option value="unassigned">Unassigned stops</option>
+            <option value="all">All stops</option>
+            {routes.filter((r) => r.route_id !== routeId).map((r) => (
+              <option key={r.route_id} value={`route:${r.route_id}`}>
+                {r.route_short_name || r.route_long_name || 'Untitled Route'}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {availableStops.length > 0 ? (
+          <div className="flex gap-1">
             <select
               value={addExistingStopId}
               onChange={(e) => setAddExistingStopId(e.target.value)}
@@ -283,6 +305,8 @@ export function RouteStopsTab() {
               Add
             </button>
           </div>
+        ) : (
+          <p className="text-[11px] text-warm-gray italic">No stops match this filter.</p>
         )}
       </div>
 
@@ -291,7 +315,7 @@ export function RouteStopsTab() {
         <EmptyState
           icon="🚏"
           title="No stops in this direction"
-          description="Click 'Place Stops on Map' to drop stops along this route, or add an existing stop above."
+          description="Use 'Create new stop' to place a new stop on the map, or pick one from the dropdown above."
         />
       ) : (
         <div>

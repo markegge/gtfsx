@@ -33,7 +33,22 @@ export function TopBar() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const saveStatus = isDirty ? 'Unsaved changes' : lastSavedAt ? 'Saved' : 'New project';
+  // Status reflects BACKEND save state — IndexedDB autosaves don't promote
+  // a draft to "Saved." Anonymous editors get a distinct label so the dot
+  // never claims their work is durable in the cloud.
+  const serverBacked = !!activeServerProjectId;
+  const saveStatus = !serverBacked
+    ? 'Local draft'
+    : isDirty
+      ? 'Unsaved changes'
+      : lastSavedAt
+        ? 'Saved'
+        : 'New project';
+  const saveDotClass = !serverBacked
+    ? 'bg-warm-gray/50'
+    : isDirty
+      ? 'bg-gold'
+      : 'bg-teal';
 
   // Feed is considered "empty" (and Export disabled) when there's nothing
   // worth exporting — no agency, no routes, no stops.
@@ -94,7 +109,7 @@ export function TopBar() {
 
         {/* Save status — hides on small viewports (second to go, after the tagline). */}
         <div className="hidden min-[900px]:flex items-center gap-1.5 text-xs text-warm-gray whitespace-nowrap shrink-0">
-          <div className={`w-1.5 h-1.5 rounded-full ${isDirty ? 'bg-gold' : 'bg-teal'}`} />
+          <div className={`w-1.5 h-1.5 rounded-full ${saveDotClass}`} />
           {saveStatus}
         </div>
 

@@ -16,7 +16,7 @@ const MIN_HEIGHT = 120;
 const MAX_HEIGHT_FRACTION = 0.75; // max 75% of viewport
 
 function getDefaultHeight() {
-  return Math.round(window.innerHeight * 0.33);
+  return Math.round(window.innerHeight * 0.45);
 }
 
 export function BottomPanel() {

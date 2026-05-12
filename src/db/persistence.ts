@@ -8,6 +8,13 @@ const DATA_KEYS = [
   'projectId', 'projectName',
 ] as const;
 
+// localStorage key for the most recently autosaved anonymous projectId.
+// EditorRoute reads this on mount so refresh / reopen restores the draft —
+// otherwise the random projectId the store initializes with on each load
+// would never match the autosaved row in IndexedDB and the data would
+// silently orphan.
+export const LAST_PROJECT_KEY = 'gtfs:lastProjectId';
+
 export async function saveProject() {
   const state = useStore.getState();
   const snapshot: Record<string, any> = {};
@@ -26,12 +33,26 @@ export async function saveProject() {
     storeSnapshot: JSON.stringify(snapshot),
   });
 
-  // When the user is on a server-backed feed, "Saved" reflects server state,
-  // not the local IndexedDB cache. Local writes still happen for offline
-  // resilience, but the user-visible saved indicator only flips on a
-  // successful server save (see saveProjectNow in serverPersistence.ts).
-  const serverBacked = useStore.getState().activeServerProjectId !== null;
-  if (!serverBacked) state.markSaved();
+  // Remember which anonymous draft this tab was editing so the next page
+  // load (refresh, browser restart, or just reopening the tab) reloads
+  // the same project from IndexedDB instead of a fresh empty one.
+  try {
+    localStorage.setItem(LAST_PROJECT_KEY, state.projectId);
+  } catch {
+    // Storage quota / private mode — losing the pointer just means the
+    // refreshed tab won't auto-restore; the draft is still in IndexedDB.
+  }
+
+  // The user-visible "Saved / Unsaved changes" indicator tracks BACKEND save
+  // state, not the local IndexedDB cache — anonymous users have nothing
+  // backed up in the cloud even after autosave completes. Server-backed save
+  // markSaved happens in serverPersistence.saveProjectNow. We just log the
+  // local-cache write so devs can confirm IDB autosave is healthy from the
+  // console without polluting the UI.
+  console.debug(
+    '[idb-autosave] Saved snapshot',
+    { projectId: state.projectId, t: new Date().toISOString() },
+  );
 }
 
 export async function loadProject(projectId: string) {

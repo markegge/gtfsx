@@ -41,7 +41,7 @@ const MID_THRESHOLD = 64;   // < this → render min variant (icons only)
 const MAX_THRESHOLD = 180;  // >= this → render max variant (rows)
 // Auto-default thresholds.
 const NARROW_VIEWPORT = 600;     // below this (phones), force min (40 px)
-const WIDE_VIEWPORT = 1080;      // above this, default to max (260 px)
+const WIDE_VIEWPORT = 1440;      // above this, default to max (260 px)
                                  // between → default to mid (96 px)
 
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { SaveAsDialog } from './components/feeds/SaveAsDialog';
-import { setupAutoSave, loadProject } from './db/persistence';
+import { setupAutoSave, loadProject, LAST_PROJECT_KEY } from './db/persistence';
 import {
   loadProjectFromServer,
 } from './db/serverPersistence';
@@ -58,7 +58,18 @@ function EditorRoute({ demo = false }: { demo?: boolean }) {
       loadDemoFeed().catch(console.error);
       return;
     }
-    const projectId = useStore.getState().projectId;
+    // Recover the last autosaved anonymous draft if one exists, so refresh
+    // doesn't silently drop the user's work. The store initializes
+    // projectId to a fresh UUID on every page load, so without this we'd
+    // always miss the IndexedDB row and boot a blank feed.
+    let projectId: string;
+    try {
+      const stored = localStorage.getItem(LAST_PROJECT_KEY);
+      projectId = stored || useStore.getState().projectId;
+      if (stored) useStore.getState().setProjectId(stored);
+    } catch {
+      projectId = useStore.getState().projectId;
+    }
     loadProject(projectId).catch(() => {});
     const unsub = setupAutoSave();
     return unsub;

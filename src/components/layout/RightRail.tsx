@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '../../store';
 import type { SidebarSection, RouteDetailTab } from '../../types/ui';
 import { AgencyEditor } from '../agency/AgencyEditor';
@@ -15,7 +15,13 @@ import { FlexEditor } from '../flex/FlexEditor';
 import { PaywallOverlay } from '../billing/PaywallOverlay';
 import { useEditorPlan } from '../billing/useEditorPlan';
 
-const RIGHT_RAIL_WIDTH = 460;
+const RIGHT_RAIL_DEFAULT_WIDTH = 460;
+const RIGHT_RAIL_MIN_WIDTH = 320;
+const RIGHT_RAIL_MAX_WIDTH = 720;
+
+function clamp(n: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, n));
+}
 
 const SECTION_TITLES: Record<SidebarSection, string> = {
   agency: 'Agency',
@@ -245,6 +251,11 @@ export function RightRail() {
   const rightRailOpen = useStore((s) => s.rightRailOpen);
   const editingRouteId = useStore((s) => s.editingRouteId);
   const mapMode = useStore((s) => s.mapMode);
+  const storedWidth = useStore((s) => s.rightRailWidth);
+  const setRightRailWidth = useStore((s) => s.setRightRailWidth);
+
+  const widthPx = clamp(storedWidth, RIGHT_RAIL_MIN_WIDTH, RIGHT_RAIL_MAX_WIDTH);
+  const [isDragging, setIsDragging] = useState(false);
 
   const isShapeEditing =
     mapMode === 'draw_route' ||
@@ -255,10 +266,27 @@ export function RightRail() {
 
   const showFullRail = !!section && rightRailOpen && !isShapeEditing;
 
-  const railSizeKey = `${showFullRail ? '1' : '0'}-${isShapeEditing ? '1' : '0'}`;
+  const railSizeKey = `${showFullRail ? '1' : '0'}-${isShapeEditing ? '1' : '0'}-${widthPx}`;
   useEffect(() => {
     requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
   }, [railSizeKey]);
+
+  const startDrag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    const onMove = (ev: MouseEvent) => {
+      // Rail is anchored to the right edge of the viewport, so width = (right edge) - cursorX.
+      const next = clamp(window.innerWidth - ev.clientX, RIGHT_RAIL_MIN_WIDTH, RIGHT_RAIL_MAX_WIDTH);
+      setRightRailWidth(next);
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      setIsDragging(false);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   if (isShapeEditing) {
     return (
@@ -303,9 +331,23 @@ export function RightRail() {
 
   return (
     <aside
-      className="shrink-0 bg-white border-l border-sand flex flex-col overflow-hidden"
-      style={{ width: RIGHT_RAIL_WIDTH }}
+      className={`relative shrink-0 bg-white border-l border-sand flex flex-col overflow-hidden ${
+        isDragging ? '' : 'transition-[width] duration-150'
+      }`}
+      style={{ width: widthPx }}
     >
+      <div
+        onMouseDown={startDrag}
+        onDoubleClick={() => setRightRailWidth(RIGHT_RAIL_DEFAULT_WIDTH)}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize editor rail"
+        title="Drag to resize · double-click to reset"
+        className={`absolute top-0 left-0 h-full w-1.5 cursor-col-resize z-10 transition-colors ${
+          isDragging ? 'bg-coral/40' : 'bg-transparent hover:bg-coral/20'
+        }`}
+      />
+      {isDragging && <div className="fixed inset-0 z-50 cursor-col-resize" />}
       {inRouteDetail ? <RouteDetailHeader /> : <GenericHeader section={section} />}
       <div className="flex-1 overflow-y-auto">
         <div className="p-5">

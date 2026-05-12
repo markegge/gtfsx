@@ -21,6 +21,7 @@ export interface UISlice {
   hiddenShapeIds: string[];
   leftRailWidth: number;
   rightRailOpen: boolean;
+  rightRailWidth: number;
   routeDetailTab: RouteDetailTab;
   routeDeleteConfirmId: string | null;
   toggleRouteVisibility: (routeId: string) => void;
@@ -43,6 +44,7 @@ export interface UISlice {
   setSnapToRoad: (v: boolean) => void;
   setLeftRailWidth: (w: number) => void;
   setRightRailOpen: (open: boolean) => void;
+  setRightRailWidth: (w: number) => void;
   setRouteDetailTab: (tab: RouteDetailTab) => void;
   setRouteDeleteConfirmId: (id: string | null) => void;
 }
@@ -70,6 +72,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   // before the responsive init runs.
   leftRailWidth: 96,
   rightRailOpen: false,
+  rightRailWidth: 460,
   routeDetailTab: 'details',
   routeDeleteConfirmId: null,
   toggleRouteVisibility: (routeId) => set((state) => {
@@ -111,6 +114,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setSnapToRoad: (v) => set((state) => { state.snapToRoad = v; }),
   setLeftRailWidth: (w) => set((state) => { state.leftRailWidth = w; }),
   setRightRailOpen: (open) => set((state) => { state.rightRailOpen = open; }),
+  setRightRailWidth: (w) => set((state) => { state.rightRailWidth = w; }),
   setRouteDetailTab: (tab) => set((state) => { state.routeDetailTab = tab; }),
   setRouteDeleteConfirmId: (id) => set((state) => { state.routeDeleteConfirmId = id; }),
 });

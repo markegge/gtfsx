@@ -110,25 +110,56 @@ export function CatalogSearch({ onSelect }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+      {/* `autoComplete="off"` + the vendor-specific data attributes tell the
+          common password managers (1Password / LastPass / Dashlane / Bitwarden)
+          that these are search fields, not login/credential fields. Without
+          them, 1Password in particular pops a "Save in 1Password" prompt
+          over the agency-name input the first time you type into it. */}
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-2"
+        autoComplete="off"
+        data-form-type="search"
+      >
         <input
           autoFocus
+          type="search"
+          name="catalog-search-provider"
           value={provider}
           onChange={(e) => setProvider(e.target.value)}
           placeholder="Agency or city (e.g. Streamline, Bozeman, SFMTA)"
+          autoComplete="off"
+          data-1p-ignore
+          data-lpignore="true"
+          data-form-type="other"
+          data-bwignore
           className="px-3 py-2 border-2 border-sand rounded-lg text-sm bg-white focus:outline-none focus:border-coral"
         />
         <div className="flex gap-2">
           <input
+            type="search"
+            name="catalog-search-country"
             value={country}
             onChange={(e) => setCountry(e.target.value)}
             placeholder="Country (US)"
+            autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
+            data-bwignore
             className="w-20 px-3 py-2 border-2 border-sand rounded-lg text-sm bg-white focus:outline-none focus:border-coral uppercase"
           />
           <input
+            type="search"
+            name="catalog-search-region"
             value={subdivision}
             onChange={(e) => setSubdivision(e.target.value)}
             placeholder="State / region (optional)"
+            autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
+            data-bwignore
             className="flex-1 px-3 py-2 border-2 border-sand rounded-lg text-sm bg-white focus:outline-none focus:border-coral"
           />
           <button

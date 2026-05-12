@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -133,6 +133,11 @@ export function RouteStopsTab() {
 
   const [addExistingStopId, setAddExistingStopId] = useState<string>('');
   const [confirmRemoveStop, setConfirmRemoveStop] = useState<{ stopId: string } | null>(null);
+  // Safari sometimes fires a synthetic `click` on the pointerup target after
+  // a drag completes, which selects whichever stop the cursor was over and
+  // visually "locks" the row in the active state. Track the time of the last
+  // dragEnd and ignore row clicks for a short window after it.
+  const lastDragEndAtRef = useRef<number>(0);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -158,6 +163,7 @@ export function RouteStopsTab() {
   const stopIds = directionStops.map((s) => s.stop_id);
 
   const handleDragEnd = (event: DragEndEvent) => {
+    lastDragEndAtRef.current = Date.now();
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = orderedRouteStops.findIndex((rs) => rs.stop_id === active.id);
@@ -169,12 +175,20 @@ export function RouteStopsTab() {
     reorderRouteStops(routeId, directionId, newOrder);
   };
 
+  // Click on a stop row: select it, fly the map to it. Clicking the
+  // already-selected row deselects (so the active state is dismissable in
+  // place). Suppress if the click came too close to a dragEnd — Safari fires
+  // a synthetic click on the pointerup target after pointermove drags, which
+  // otherwise selects whichever stop was under the cursor at drop time.
   const handleSelect = useCallback((stopId: string) => {
-    selectStop(stopId);
+    if (Date.now() - lastDragEndAtRef.current < 300) return;
+    const next = selectedStopId === stopId ? null : stopId;
+    selectStop(next);
+    if (next === null) return;
     const stop = stops.find((s) => s.stop_id === stopId);
     const flyTo = (window as { __mapFlyTo?: (lng: number, lat: number) => void }).__mapFlyTo;
     if (stop && flyTo) flyTo(stop.stop_lon, stop.stop_lat);
-  }, [stops, selectStop]);
+  }, [stops, selectStop, selectedStopId]);
 
   const routeStopIdsThisDir = new Set(
     routeStops
@@ -299,13 +313,16 @@ export function RouteStopsTab() {
                     routeColor={routeColor}
                     onSelect={() => handleSelect(stop.stop_id)}
                     onEdit={() => {
+                      // Same Safari post-drag click guard as handleSelect.
+                      if (Date.now() - lastDragEndAtRef.current < 300) return;
                       // Hand off to the global stop-edit sub-panel. RightRail's
                       // breadcrumb shows Routes › {route} › Stops because
                       // editingRouteId is still set and section is "routes".
-                      handleSelect(stop.stop_id);
+                      selectStop(stop.stop_id);
                       setEditingStopId(stop.stop_id);
                     }}
                     onRemove={() => {
+                      if (Date.now() - lastDragEndAtRef.current < 300) return;
                       const otherUses = routeStops.filter(
                         (rs) => rs.stop_id === stop.stop_id
                           && !(rs.route_id === routeId && rs.direction_id === directionId),

@@ -11,12 +11,15 @@ For first-time Cloudflare provisioning (D1, KV, R2, secrets, Resend, Turnstile) 
 ```
 main = source of truth.   Stays deployable at all times.
 Feature branches = short-lived, branched off main, merged via --ff-only.
-Two environments:  staging.gtfsbuilder.net  ← deploy freely here
-                   gtfsbuilder.net          ← deploy when staging looks good
-                                              + the kill-switch flags are ready
+
+Push to main          → CI deploys to staging.gtfsbuilder.net  (auto)
+Tag a commit prod-*   → CI deploys to gtfsbuilder.net          (deliberate)
+
+Kill-switch flags (BACKEND_ENABLED + VITE_BACKEND_ENABLED) keep prod safe
+while main races ahead with backend features under development.
 ```
 
-There is no long-lived "develop" branch. The kill-switch flags (`BACKEND_ENABLED` worker var + `VITE_BACKEND_ENABLED` build flag) are how prod stays safe even when `main` is ahead of what should be visible to real users.
+There is no long-lived "develop" branch. Staging tracks `main` continuously; production only moves when you tag a commit `prod-YYYY-MM-DD` and push the tag. See "Deploying to production" below.
 
 ---
 
@@ -82,11 +85,17 @@ npx tsc -p tsconfig.worker.json --noEmit                      # worker typecheck
 
 Free and reversible. Deploy to staging often — that's the whole point.
 
+**Automatic (default):** every push to `main` triggers `.github/workflows/deploy.yml` → the `staging` job. The build runs with `VITE_BACKEND_ENABLED=true` / `VITE_BILLING_ENABLED=true` and `wrangler deploy --env staging`. Watch it under the Actions tab.
+
+**Manual (when you can't push yet, or for hotfix iteration):**
+
 ```bash
 npm run build
 source ~/proj/.env                       # exports CLOUDFLARE_API_TOKEN
 npx wrangler deploy --env staging
 ```
+
+You can also re-run the staging deploy from `main` without a new commit via Actions → "Deploy" → Run workflow → `staging`.
 
 Visit https://staging.gtfsbuilder.net (editor) and https://staging-feeds.gtfsbuilder.net (feeds + embeds) to verify. Then iterate.
 
@@ -131,17 +140,55 @@ git push origin --delete feature/<branch>
 
 ## Deploying to production
 
-`main` is always deployable. Deploys to prod are deliberate — not on every push.
+`main` is always deployable. Deploys to prod are **tag-driven** — pushing to `main` only updates staging. Production ships when you tag a commit `prod-YYYY-MM-DD[.N]` and push the tag, which triggers `.github/workflows/deploy.yml` → the `production` job.
+
+### Promotion checklist
+
+Before tagging, in order:
+
+1. **Staging is healthy.** You've actually used staging.gtfsbuilder.net for the work being shipped, not just verified it built. Eyeball `wrangler tail --env staging` for unexpected errors in the last session.
+2. **Migrations applied on prod first** (manual; staging-first). See "Schema migrations on prod" below.
+3. **Kill-switch flags reviewed.** If the commit being promoted relies on backend features, are `BACKEND_ENABLED` (wrangler.jsonc top-level) and `VITE_BACKEND_ENABLED` (workflow build env) flipped in sync? They're tied: the CI build of `production` uses the values in `.github/workflows/deploy.yml`; the worker reads `wrangler.jsonc`. Out-of-sync = SPA shows a feature the worker rejects, or vice versa.
+4. **Promote.** Tag and push:
+
+   ```bash
+   git checkout main
+   git pull origin main
+   # Tag format: prod-YYYY-MM-DD, with .2, .3, … suffixes for same-day re-promotions.
+   git tag prod-$(date +%Y-%m-%d)
+   git push --tags
+   ```
+
+   GitHub Actions builds with `VITE_BACKEND_ENABLED=false` / `VITE_BILLING_ENABLED=false` (matching today's prod kill-switch state) and runs `wrangler deploy --env=""`.
+
+5. **Smoke-test in an incognito window:** homepage loads, anonymous IndexedDB editor saves/loads, GTFS export downloads.
+6. **Leave the tag in place.** It's your "last known good" anchor for rollback (`gh run rerun <runId>` or re-deploy from that SHA).
+
+If the build fails mid-promotion, delete the tag (`git tag -d prod-… && git push origin :refs/tags/prod-…`) and re-tag a fixed commit. Tags should always represent successful deploys.
+
+### Re-running prod manually
+
+Actions → "Deploy" → Run workflow → `production`. Runs against the workflow file's `main` head (workflow_dispatch always uses the default branch). To deploy a specific older commit to prod, re-tag that SHA with a new `prod-…` name and push.
+
+### Why tag-driven
+
+- "Push to main" auto-deploys staging only. You can race main ahead without touching prod.
+- Promoting prod is a deliberate, named act tied to a commit you can roll back to. No accidental prod shipments because someone merged a docs typo.
+- The tag is the audit trail; `git tag --list 'prod-*' --sort=-creatordate | head` shows recent deploys at a glance.
+
+### Manual fallback
+
+If GitHub Actions is unavailable and you must ship now:
 
 ```bash
 git checkout main
 git pull origin main
-npm run build                           # honours .env (VITE_BACKEND_ENABLED set there)
+VITE_BACKEND_ENABLED=false VITE_BILLING_ENABLED=false npm run build
 source ~/proj/.env
-npx wrangler deploy --env=""            # empty --env explicitly targets the top-level (prod) block
+npx wrangler deploy --env=""
 ```
 
-The `--env=""` is required: with multiple environments declared in `wrangler.jsonc`, omitting the flag emits an "ambiguous environment" warning. Pass an empty string to be explicit.
+The `--env=""` is required: with multiple environments declared in `wrangler.jsonc`, omitting the flag emits an "ambiguous environment" warning. Pass an empty string to be explicit. After a manual deploy, retro-tag the SHA so the audit trail stays intact: `git tag prod-$(date +%Y-%m-%d) <sha> && git push --tags`.
 
 ### Schema migrations on prod
 

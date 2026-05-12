@@ -26,6 +26,7 @@ function SortableStopItem({
   isSelected,
   routeColor,
   onSelect,
+  onEdit,
   onRemove,
 }: {
   stop: Stop;
@@ -33,6 +34,7 @@ function SortableStopItem({
   isSelected: boolean;
   routeColor: string;
   onSelect: () => void;
+  onEdit: () => void;
   onRemove: () => void;
 }) {
   const {
@@ -84,6 +86,13 @@ function SortableStopItem({
         )}
       </button>
       <button
+        onClick={(e) => { e.stopPropagation(); onEdit(); }}
+        className="text-coral hover:text-[#d4603a] text-[10px] font-semibold shrink-0 opacity-0 group-hover:opacity-100 transition-opacity px-1"
+        title="Edit stop properties"
+      >
+        Edit
+      </button>
+      <button
         onClick={(e) => { e.stopPropagation(); onRemove(); }}
         className="text-warm-gray hover:text-red-500 text-xs shrink-0 opacity-0 group-hover:opacity-100 transition-opacity px-0.5"
         title="Remove from route"
@@ -114,6 +123,7 @@ export function RouteStopsTab() {
   const removeRouteStop = useStore((s) => s.removeRouteStop);
   const reorderRouteStops = useStore((s) => s.reorderRouteStops);
   const removeStop = useStore((s) => s.removeStop);
+  const setEditingStopId = useStore((s) => s.setEditingStopId);
   const mapMode = useStore((s) => s.mapMode);
   const setMapMode = useStore((s) => s.setMapMode);
   const stopPlacementMode = useStore((s) => s.stopPlacementMode);
@@ -288,6 +298,13 @@ export function RouteStopsTab() {
                     isSelected={selectedStopId === stop.stop_id}
                     routeColor={routeColor}
                     onSelect={() => handleSelect(stop.stop_id)}
+                    onEdit={() => {
+                      // Hand off to the global stop-edit sub-panel. RightRail's
+                      // breadcrumb shows Routes › {route} › Stops because
+                      // editingRouteId is still set and section is "routes".
+                      handleSelect(stop.stop_id);
+                      setEditingStopId(stop.stop_id);
+                    }}
                     onRemove={() => {
                       const otherUses = routeStops.filter(
                         (rs) => rs.stop_id === stop.stop_id

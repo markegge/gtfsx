@@ -16,6 +16,7 @@ export interface UISlice {
   editingRouteId: string | null;
   editingShapeId: string | null;
   editingFlexZoneId: string | null;
+  editingStopId: string | null;
   snapToRoad: boolean;
   hiddenRouteIds: string[];
   hiddenShapeIds: string[];
@@ -41,6 +42,7 @@ export interface UISlice {
   setEditingRouteId: (id: string | null) => void;
   setEditingShapeId: (id: string | null) => void;
   setEditingFlexZoneId: (id: string | null) => void;
+  setEditingStopId: (id: string | null) => void;
   setSnapToRoad: (v: boolean) => void;
   setLeftRailWidth: (w: number) => void;
   setRightRailOpen: (open: boolean) => void;
@@ -64,6 +66,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   editingRouteId: null,
   editingShapeId: null,
   editingFlexZoneId: null,
+  editingStopId: null,
   snapToRoad: true,
   hiddenRouteIds: [],
   hiddenShapeIds: [],
@@ -96,6 +99,9 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     if (section !== 'stops' && (state.mapMode === 'place_stop' || state.mapMode === 'move_stop')) {
       state.mapMode = 'select';
     }
+    // The stop edit sub-panel is contextual to the user's current flow —
+    // switching nav sections discards it so the new section's body renders.
+    state.editingStopId = null;
   }),
   setBottomPanelOpen: (open) => set((state) => { state.bottomPanelOpen = open; }),
   toggleBottomPanel: () => set((state) => { state.bottomPanelOpen = !state.bottomPanelOpen; }),
@@ -111,6 +117,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setEditingRouteId: (id) => set((state) => { state.editingRouteId = id; }),
   setEditingShapeId: (id) => set((state) => { state.editingShapeId = id; }),
   setEditingFlexZoneId: (id) => set((state) => { state.editingFlexZoneId = id; }),
+  setEditingStopId: (id) => set((state) => { state.editingStopId = id; }),
   setSnapToRoad: (v) => set((state) => { state.snapToRoad = v; }),
   setLeftRailWidth: (w) => set((state) => { state.leftRailWidth = w; }),
   setRightRailOpen: (open) => set((state) => { state.rightRailOpen = open; }),

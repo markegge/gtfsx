@@ -190,39 +190,6 @@ export function MapView() {
   // half the size delta so the content that was visually centered stays
   // visually centered. Attached via onLoad so the mapbox-gl instance is
   // guaranteed to exist; a useEffect on mount races with map creation.
-  // Poll until the mapbox-gl instance is exposed by react-map-gl, then wire up
-  // a resize listener that pans the camera by half the size delta so visible
-  // features stay anchored to the same DOM position when the map container
-  // resizes (right rail open/close, bottom panel toggle, drag-to-resize).
-  // Mapbox's default resize() keeps the camera lng/lat fixed, which shifts
-  // every feature toward the side that grew — making popups slide under the
-  // left rail when the right rail opens.
-  useEffect(() => {
-    let cancelled = false;
-    let detach: (() => void) | null = null;
-    const attach = () => {
-      if (cancelled) return;
-      const map = mapRef.current?.getMap?.();
-      if (!map) { window.setTimeout(attach, 50); return; }
-      const canvas = map.getCanvas();
-      let prev = { w: canvas.clientWidth, h: canvas.clientHeight };
-      const onResize = () => {
-        const w = canvas.clientWidth;
-        const h = canvas.clientHeight;
-        const dx = (w - prev.w) / 2;
-        const dy = (h - prev.h) / 2;
-        prev = { w, h };
-        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-          map.panBy([dx, dy], { duration: 0, animate: false });
-        }
-      };
-      map.on('resize', onResize);
-      detach = () => map.off('resize', onResize);
-    };
-    attach();
-    return () => { cancelled = true; detach?.(); };
-  }, []);
-
   // === Shape editing: Save and Discard ===
 
   const saveShapeEdit = useCallback(() => {

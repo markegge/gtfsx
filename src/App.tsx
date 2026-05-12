@@ -45,6 +45,9 @@ async function loadDemoFeed() {
   const data = await importGtfsZip(file);
   loadImportIntoStore(data);
   useStore.getState().setProjectName('Streamline Transit — Demo');
+  // Loading is not "editing" — clear the dirty flag so the beforeunload
+  // prompt doesn't fire on refresh until the user actually changes something.
+  useStore.getState().markSaved();
 }
 
 function EditorRoute({ demo = false }: { demo?: boolean }) {

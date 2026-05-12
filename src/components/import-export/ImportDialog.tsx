@@ -78,6 +78,10 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
     loadImportIntoStore(data);
     useStore.getState().setProjectName(name);
     fitMapToImport(data);
+    // Treat the import as a load, not an edit — clear dirty so the
+    // beforeunload prompt only fires once the user actually modifies the
+    // freshly imported feed.
+    useStore.getState().markSaved();
     setImportedCounts({
       routes: data.routes.length,
       stops: data.stops.length,

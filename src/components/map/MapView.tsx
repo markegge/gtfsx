@@ -268,6 +268,42 @@ export function MapView() {
     useStore.getState().setMapMode('select');
   }, []);
 
+  // One-shot "fit map to project data" on initial load. The Map component's
+  // initialViewState is computed at mount, often BEFORE async project data
+  // (loadProjectFromServer / loadDemoFeed / loadImportIntoStore) has populated
+  // the store — so the map opens centered on Bozeman regardless of where the
+  // feed actually is. This effect waits for both the mapbox instance to be
+  // ready and the store to contain stops/shapes, then fits once.
+  const initialFitDoneRef = useRef(false);
+  useEffect(() => {
+    if (initialFitDoneRef.current) return;
+    if (stops.length === 0 && shapes.length === 0) return;
+    const map = mapRef.current?.getMap?.();
+    if (!map) return; // Map not initialized yet; re-runs on the next data tick.
+    let minLat = Infinity, minLon = Infinity, maxLat = -Infinity, maxLon = -Infinity;
+    for (const s of stops) {
+      if (s.stop_lat < minLat) minLat = s.stop_lat;
+      if (s.stop_lat > maxLat) maxLat = s.stop_lat;
+      if (s.stop_lon < minLon) minLon = s.stop_lon;
+      if (s.stop_lon > maxLon) maxLon = s.stop_lon;
+    }
+    for (const sh of shapes) {
+      for (const p of sh.points) {
+        if (p.shape_pt_lat < minLat) minLat = p.shape_pt_lat;
+        if (p.shape_pt_lat > maxLat) maxLat = p.shape_pt_lat;
+        if (p.shape_pt_lon < minLon) minLon = p.shape_pt_lon;
+        if (p.shape_pt_lon > maxLon) maxLon = p.shape_pt_lon;
+      }
+    }
+    if (!Number.isFinite(minLat) || minLat === maxLat || minLon === maxLon) return;
+    map.fitBounds([[minLon, minLat], [maxLon, maxLat]], {
+      padding: 60,
+      maxZoom: 14,
+      duration: 0,
+    });
+    initialFitDoneRef.current = true;
+  }, [stops, shapes]);
+
   // Expose map flyTo on window for sidebar components
   useEffect(() => {
     (window as any).__mapFlyTo = (lng: number, lat: number, zoom?: number) => {

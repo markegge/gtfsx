@@ -140,9 +140,37 @@ export const createShapeSlice: StateCreator<ShapeSlice, [['zustand/immer', never
       // original shape to the new shape. Direction 0 trips stay put.
       // Cross-slice access — same pattern as TripSlice's reassignTripId.
       const trips = (state as unknown as { trips: Trip[] }).trips;
+      let reassigned = 0;
       for (const t of trips) {
         if (t.route_id === route_id && t.direction_id === 1 && t.shape_id === shape_id) {
           t.shape_id = newShapeId;
+          reassigned++;
+        }
+      }
+
+      // If the route had no direction-1 trips at all (common when the user
+      // is preparing the inbound shape before defining inbound trips),
+      // create a placeholder trip so the new shape actually shows up in
+      // the Route Shapes list and is editable. Service_id is borrowed
+      // from the first outbound trip on this route.
+      if (reassigned === 0) {
+        const seed = trips.find((t) => t.route_id === route_id && t.direction_id === 0);
+        if (seed) {
+          const baseId = `${route_id}-inbound-trip`;
+          let placeholderTripId = baseId;
+          const existingTripIds = new Set(trips.map((t) => t.trip_id));
+          let n = 2;
+          while (existingTripIds.has(placeholderTripId)) {
+            placeholderTripId = `${baseId}-${n}`;
+            n++;
+          }
+          trips.push({
+            trip_id: placeholderTripId,
+            route_id,
+            service_id: seed.service_id,
+            direction_id: 1,
+            shape_id: newShapeId,
+          });
         }
       }
 

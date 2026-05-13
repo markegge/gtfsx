@@ -3,15 +3,6 @@ import { Popup } from 'react-map-gl/mapbox';
 import { useStore } from '../../store';
 import { formatTimeShort } from '../../utils/time';
 
-function scrollToStopProperties() {
-  // Double rAF ensures we're past React's render cycle before scrolling
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      document.getElementById('stop-properties')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  });
-}
-
 interface StopPopupProps {
   stopId: string;
   onClose: () => void;
@@ -25,12 +16,17 @@ export function StopPopup({ stopId, onClose }: StopPopupProps) {
   const stopTimes = useStore((s) => s.stopTimes);
   const selectStop = useStore((s) => s.selectStop);
   const setSidebarSection = useStore((s) => s.setSidebarSection);
+  const setEditingStopId = useStore((s) => s.setEditingStopId);
 
+  // The right rail's StopEditPanel is gated on `editingStopId`. Setting
+  // the sidebar to 'stops' alone just renders the Stops *list*, not the
+  // editor — so we also need to set editingStopId so the breadcrumb
+  // ("← Stops") and the property form actually appear.
   const handleEdit = () => {
     selectStop(stopId);
     setSidebarSection('stops');
+    setEditingStopId(stopId);
     onClose();
-    scrollToStopProperties();
   };
 
   const info = useMemo(() => {

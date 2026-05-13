@@ -27,6 +27,7 @@ export type MapMode =
   | 'move_stop'
   | 'edit_vertices'
   | 'edit_shape'
+  | 'split_shape'
   | 'draw_flex_zone'
   | 'edit_flex_zone';
 

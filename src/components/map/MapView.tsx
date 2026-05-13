@@ -22,6 +22,7 @@ import { snapToRoad } from '../../services/snapToRoad';
 import { simplifyShapePoints } from '../../services/simplifyShape';
 import nearestPointOnLine from '@turf/nearest-point-on-line';
 import distance from '@turf/distance';
+import length from '@turf/length';
 import { lineString, point } from '@turf/helpers';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
@@ -53,6 +54,16 @@ export function MapView() {
   const originalFlexZoneGeojsonRef = useRef<GeoJSON.FeatureCollection | null>(null);
   // Confirm discard dialog
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  // Pending shape-split preview — see split_shape handler below.
+  const [pendingSplit, setPendingSplit] = useState<null | {
+    routeId: string;
+    shapeId: string;
+    lng: number;
+    lat: number;
+    outboundLengthM: number;
+    inboundLengthM: number;
+    splitDistanceFromClickM: number;
+  }>(null);
   // Snapping indicator
   const [isSnapping, setIsSnapping] = useState(false);
   // Map layer controls
@@ -546,6 +557,74 @@ export function MapView() {
       return;
     }
 
+    // Shape-split mode — user picked a turnaround point on the existing
+    // outbound shape. Snap to the polyline, validate, then queue a confirm
+    // modal that previews outbound/inbound lengths before mutating anything.
+    if (currentState.mapMode === 'split_shape' && currentState.editingRouteId) {
+      const routeId = currentState.editingRouteId;
+      // Find this route's single shape — the trip whose shape_id is in
+      // shapes. If a route somehow has multiple shapes the button is
+      // hidden in RouteEditor, but defend here too.
+      const routeTrips = currentState.trips.filter((t) => t.route_id === routeId && t.shape_id);
+      const shapeIds = [...new Set(routeTrips.map((t) => t.shape_id!))];
+      if (shapeIds.length !== 1) {
+        currentState.setMapMode('select');
+        return;
+      }
+      const shape = currentState.shapes.find((s) => s.shape_id === shapeIds[0]);
+      if (!shape || shape.points.length < 3) {
+        currentState.setMapMode('select');
+        return;
+      }
+      const coords = shape.points.map((p) => [p.shape_pt_lon, p.shape_pt_lat] as [number, number]);
+      const line = lineString(coords);
+      const snapped = nearestPointOnLine(line, point([e.lngLat.lng, e.lngLat.lat]), { units: 'meters' });
+      const snapDistM = (snapped.properties.dist ?? Infinity) * 1000; // turf returns km here
+
+      // Reject if the click landed far from the polyline at this zoom.
+      // 200m is generous for typical city-scale routes and discourages
+      // accidental clicks far from the line.
+      if (snapDistM > 200) {
+        // No-op; let the user try again. Could surface a toast later.
+        return;
+      }
+
+      const segIndex = snapped.properties.index ?? 0;
+      // Edge proximity: reject splits within ~5% of either endpoint of the
+      // polyline. Use cumulative shape_dist_traveled when available, else
+      // fall back to a vertex-index ratio.
+      const totalLen = shape.points[shape.points.length - 1].shape_dist_traveled || coords.length;
+      const fracFromStart = (shape.points[segIndex]?.shape_dist_traveled ?? segIndex) / totalLen;
+      if (fracFromStart < 0.05 || fracFromStart > 0.95) {
+        return;
+      }
+
+      // Compute preview lengths without mutating state.
+      const outboundCoords = [
+        ...coords.slice(0, segIndex + 1),
+        [snapped.geometry.coordinates[0], snapped.geometry.coordinates[1]] as [number, number],
+      ];
+      const inboundCoords = [
+        [snapped.geometry.coordinates[0], snapped.geometry.coordinates[1]] as [number, number],
+        ...coords.slice(segIndex + 1),
+      ];
+      const outboundLengthM = outboundCoords.length >= 2
+        ? length(lineString(outboundCoords), { units: 'meters' }) : 0;
+      const inboundLengthM = inboundCoords.length >= 2
+        ? length(lineString(inboundCoords), { units: 'meters' }) : 0;
+
+      setPendingSplit({
+        routeId,
+        shapeId: shape.shape_id,
+        lng: snapped.geometry.coordinates[0],
+        lat: snapped.geometry.coordinates[1],
+        outboundLengthM,
+        inboundLengthM,
+        splitDistanceFromClickM: snapDistM,
+      });
+      return;
+    }
+
     // Stop placement mode — drops a new stop at the click location. Supports
     // two contexts: with a route selected (snap-to-route + auto-add to route),
     // or standalone (just create the stop, no route assignment).
@@ -791,6 +870,57 @@ export function MapView() {
           Snapping to road...
         </div>
       )}
+
+      {/* Shape split confirmation. Previews the outbound/inbound halves
+          (lengths) so the user can sanity-check before the irreversible
+          mutation. Confirm dispatches splitShapeForRoute; Cancel leaves
+          the user in split_shape mode so they can pick a different point. */}
+      {pendingSplit && (() => {
+        const fmtKm = (m: number) => m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
+        const onConfirm = () => {
+          const splitFn = useStore.getState().splitShapeForRoute;
+          const res = splitFn(pendingSplit.routeId, pendingSplit.shapeId, pendingSplit.lng, pendingSplit.lat);
+          setPendingSplit(null);
+          if (res.ok) {
+            useStore.getState().setMapMode('select');
+          }
+        };
+        const onCancel = () => {
+          setPendingSplit(null);
+        };
+        return (
+          <div className="absolute inset-0 flex items-center justify-center z-20">
+            <div className="absolute inset-0 bg-black/30" onClick={onCancel} />
+            <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-sm mx-4">
+              <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
+                Split shape into outbound + inbound?
+              </h3>
+              <p className="text-sm text-warm-gray mb-3">
+                Everything before the split point will remain the outbound shape. Everything after becomes a new inbound shape, and any direction-1 trips on this route currently using the existing shape will be reassigned.
+              </p>
+              <div className="text-xs text-dark-brown bg-cream rounded-lg p-3 mb-4 space-y-1">
+                <div className="flex justify-between"><span>Outbound length</span><strong>{fmtKm(pendingSplit.outboundLengthM)}</strong></div>
+                <div className="flex justify-between"><span>Inbound length</span><strong>{fmtKm(pendingSplit.inboundLengthM)}</strong></div>
+                <div className="flex justify-between text-warm-gray"><span>Snap distance from click</span><span>{fmtKm(pendingSplit.splitDistanceFromClickM)}</span></div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={onCancel}
+                  className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={onConfirm}
+                  className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors"
+                >
+                  Split shape
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Discard shape changes confirmation */}
       {showDiscardConfirm && (

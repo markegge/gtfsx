@@ -9,6 +9,8 @@ import { snapToRoad } from '../../services/snapToRoad';
 import { simplifyShapePoints, SIMPLIFY_LEVELS } from '../../services/simplifyShape';
 import type { Route } from '../../types/gtfs';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
+import distance from '@turf/distance';
+import { point } from '@turf/helpers';
 
 function formatCurrency(n: number): string {
   return '$' + Math.round(n).toLocaleString();
@@ -619,6 +621,52 @@ export function RouteEditor() {
                   ? `Draw ${directionName(route, availableDirection)} Shape`
                   : routeShapes.length > 0 ? 'Draw Another Shape' : 'Draw Route Shape'}
               </button>
+
+              {/* When the user has an outbound shape but no inbound, offer a
+                  split alternative: pick a turnaround point on the existing
+                  shape and cleave it into outbound + inbound halves. Common
+                  case is imported feeds where someone drew the whole loop
+                  as one continuous Direction-0 line. */}
+              {hasOutbound && !hasInbound && (() => {
+                const outboundShape = routeShapes.find((s) => s.trip?.direction_id === 0)?.shape;
+                if (!outboundShape || outboundShape.points.length < 3) return null;
+                const first = outboundShape.points[0];
+                const last = outboundShape.points[outboundShape.points.length - 1];
+                const isLoop = distance(
+                  point([first.shape_pt_lon, first.shape_pt_lat]),
+                  point([last.shape_pt_lon, last.shape_pt_lat]),
+                  { units: 'meters' },
+                ) < 100;
+                const splitting = mapMode === 'split_shape';
+                return (
+                  <button
+                    onClick={() => {
+                      if (isLoop) return;
+                      if (splitting) {
+                        setMapMode('select');
+                      } else {
+                        setMapMode('split_shape');
+                      }
+                    }}
+                    disabled={isLoop}
+                    title={isLoop
+                      ? "This shape's start and end are very close — it looks like a loop, splitting wouldn't produce meaningful outbound/inbound halves."
+                      : 'Click a point on the existing shape on the map to split it into outbound + inbound halves.'}
+                    className={`w-full mt-2 px-4 py-2 rounded-lg font-heading font-bold text-sm transition-colors
+                      ${isLoop
+                        ? 'bg-sand text-warm-gray cursor-not-allowed opacity-50'
+                        : splitting
+                          ? 'bg-coral text-white'
+                          : 'bg-sand text-brown hover:bg-coral-light hover:text-coral'}`}
+                  >
+                    {isLoop
+                      ? 'Split disabled (shape looks like a loop)'
+                      : splitting
+                        ? 'Click route on map to split…  (Cancel)'
+                        : `Or split existing ${directionName(route, 0)} shape`}
+                  </button>
+                );
+              })()}
             </>
           );
         })()}

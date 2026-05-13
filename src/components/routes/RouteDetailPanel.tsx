@@ -3,7 +3,7 @@ import { useStore } from '../../store';
 import { RouteEditor } from './RouteEditor';
 import { RouteStopsTab } from './RouteStopsTab';
 import { RouteTripsTab } from './RouteTripsTab';
-import { RouteFrequenciesTab } from './RouteFrequenciesTab';
+import { RouteCostsTab } from './RouteCostsTab';
 import type { RouteDetailTab } from '../../types/ui';
 
 type Bounds = [[number, number], [number, number]];
@@ -77,8 +77,8 @@ export function RouteDetailPanel() {
       return <RouteStopsTab />;
     case 'trips':
       return <RouteTripsTab />;
-    case 'frequencies':
-      return <RouteFrequenciesTab />;
+    case 'costs':
+      return <RouteCostsTab />;
     default:
       return <RouteEditor />;
   }

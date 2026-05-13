@@ -4,87 +4,8 @@ import { FormField } from '../ui/FormField';
 import { RailSubHeading, RailDivider } from '../ui/RailHeadings';
 import { ROUTE_COLORS, getContrastTextColor } from '../../utils/colors';
 import { ROUTE_TYPES, directionName } from '../../utils/constants';
-import { calculateRouteSpans, applyRouteCosts } from '../../services/costEstimation';
 import { snapToRoad } from '../../services/snapToRoad';
 import { simplifyShapePoints, SIMPLIFY_LEVELS } from '../../services/simplifyShape';
-import type { Route } from '../../types/gtfs';
-import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
-
-function formatCurrency(n: number): string {
-  return '$' + Math.round(n).toLocaleString();
-}
-
-function CostEstimationSection({ route }: { route: Route }) {
-  const { routes, trips, stopTimes, calendars, calendarDates, updateRoute } = useStore();
-  const { byTrip: stopTimesByTrip } = useStopTimesIndex();
-
-  // Phase 2: Memoize spans separately from cost application
-  const spans = useMemo(
-    () => calculateRouteSpans(route.route_id, { routes, trips, stopTimes, calendars, calendarDates, stopTimesByTrip }),
-    [route.route_id, routes, trips, stopTimes, calendars, calendarDates, stopTimesByTrip]
-  );
-
-  const stats = useMemo(
-    () => applyRouteCosts(spans, route._cost_per_revenue_hour ?? 0, 1.2),
-    [spans, route._cost_per_revenue_hour]
-  );
-
-  return (
-    <div className="px-3 pb-3">
-      <div className="mb-3">
-        <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-          Cost per Revenue Hour ($)
-        </label>
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={route._cost_per_revenue_hour ?? ''}
-          onChange={(e) => {
-            const val = e.target.value;
-            updateRoute(route.route_id, {
-              _cost_per_revenue_hour: val === '' ? undefined : Number(val),
-            });
-          }}
-          placeholder="e.g., 125"
-          className="w-full px-3 py-2 border-2 border-sand rounded-lg text-sm text-dark-brown bg-cream focus:outline-none focus:border-coral focus:bg-white transition-colors"
-        />
-      </div>
-      <div className="flex flex-col gap-1.5 text-sm">
-        <div className="flex justify-between">
-          <span className="text-warm-gray">Weekly Revenue Hours</span>
-          <span className="font-semibold text-dark-brown">{stats.revenueHoursWeekly.toFixed(1)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-warm-gray">Total Hours (w/ deadhead)</span>
-          <span className="font-semibold text-dark-brown">{stats.totalHoursWeekly.toFixed(1)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-warm-gray">Trips / Week</span>
-          <span className="font-semibold text-dark-brown">{stats.tripsPerWeek}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-warm-gray">Peak Vehicles</span>
-          <span className="font-semibold text-dark-brown">{stats.peakVehicles}</span>
-        </div>
-        {route._cost_per_revenue_hour != null && route._cost_per_revenue_hour > 0 && (
-          <>
-            <div className="h-px bg-sand my-1" />
-            <div className="flex justify-between">
-              <span className="text-warm-gray">Weekly Cost</span>
-              <span className="font-semibold text-coral">{formatCurrency(stats.weeklyCost)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-warm-gray">Annual Cost</span>
-              <span className="font-semibold text-coral">{formatCurrency(stats.annualCost)}</span>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function RouteEditor() {
   const {
     routes, updateRoute, trips, shapes, removeTrip,
@@ -97,7 +18,6 @@ export function RouteEditor() {
     hiddenShapeIds, toggleShapeVisibility,
   } = useStore();
 
-  const [costOpen, setCostOpen] = useState(false);
   const [snappingShapeId, setSnappingShapeId] = useState<string | null>(null);
   const [drawDirection, setDrawDirection] = useState<0 | 1>(0);
   const [confirmDeleteShapeId, setConfirmDeleteShapeId] = useState<string | null>(null);
@@ -346,26 +266,6 @@ export function RouteEditor() {
           Allows passengers to board or alight anywhere along the route, not just at fixed stops. Leave unset unless this is flag-stop / deviated fixed-route service.
         </p>
       </div>
-
-      {/* Cost Estimation */}
-      <RailDivider />
-      <RailSubHeading
-        action={
-          <button
-            onClick={() => setCostOpen(!costOpen)}
-            className="text-xs text-warm-gray hover:text-coral transition-colors"
-          >
-            {costOpen ? '−' : '+ Add'}
-          </button>
-        }
-      >
-        Cost Estimation
-      </RailSubHeading>
-      {costOpen && (
-        <div className="bg-cream rounded-lg mb-4">
-          <CostEstimationSection route={route} />
-        </div>
-      )}
 
       {/* Shapes section */}
       <RailDivider />

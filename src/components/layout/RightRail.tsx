@@ -95,7 +95,7 @@ const ROUTE_TABS: { id: RouteDetailTab; label: string }[] = [
   { id: 'details', label: 'Details' },
   { id: 'stops', label: 'Stops' },
   { id: 'trips', label: 'Trips' },
-  { id: 'frequencies', label: 'Frequencies' },
+  { id: 'costs', label: 'Costs' },
 ];
 
 function RouteDetailHeader() {

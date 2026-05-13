@@ -63,6 +63,10 @@ export function MapView() {
     outboundLengthM: number;
     inboundLengthM: number;
     splitDistanceFromClickM: number;
+    // Shape's first ≈ last vertex (within 100m). True loops don't have a
+    // clean outbound/inbound split; flag here so the confirm modal can
+    // warn the user.
+    isLoop: boolean;
   }>(null);
   // Snapping indicator
   const [isSnapping, setIsSnapping] = useState(false);
@@ -613,6 +617,18 @@ export function MapView() {
       const inboundLengthM = inboundCoords.length >= 2
         ? length(lineString(inboundCoords), { units: 'meters' }) : 0;
 
+      // Loop check: first ≈ last vertex (within 100m). Surfaced in the
+      // confirm modal as a warning rather than a hard block — some users
+      // legitimately want to split a near-loop shape (e.g. a route that
+      // does a quick block to turn around at the terminus).
+      const firstPt = shape.points[0];
+      const lastPt = shape.points[shape.points.length - 1];
+      const isLoop = distance(
+        point([firstPt.shape_pt_lon, firstPt.shape_pt_lat]),
+        point([lastPt.shape_pt_lon, lastPt.shape_pt_lat]),
+        { units: 'meters' },
+      ) < 100;
+
       setPendingSplit({
         routeId,
         shapeId: shape.shape_id,
@@ -621,6 +637,7 @@ export function MapView() {
         outboundLengthM,
         inboundLengthM,
         splitDistanceFromClickM: snapDistM,
+        isLoop,
       });
       return;
     }
@@ -898,6 +915,11 @@ export function MapView() {
               <p className="text-sm text-warm-gray mb-3">
                 Everything before the split point will remain the outbound shape. Everything after becomes a new inbound shape, and any direction-1 trips on this route currently using the existing shape will be reassigned.
               </p>
+              {pendingSplit.isLoop && (
+                <div className="mb-3 px-3 py-2 rounded-lg bg-gold-light border border-gold text-xs text-amber-900">
+                  <strong>Looks like a loop:</strong> this shape's start and end vertices are within 100&nbsp;m of each other. Splitting a loop route usually doesn't produce meaningful outbound/inbound halves. Are you sure?
+                </div>
+              )}
               <div className="text-xs text-dark-brown bg-cream rounded-lg p-3 mb-4 space-y-1">
                 <div className="flex justify-between"><span>Outbound length</span><strong>{fmtKm(pendingSplit.outboundLengthM)}</strong></div>
                 <div className="flex justify-between"><span>Inbound length</span><strong>{fmtKm(pendingSplit.inboundLengthM)}</strong></div>

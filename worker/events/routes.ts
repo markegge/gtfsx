@@ -1,0 +1,74 @@
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { ulid } from 'ulidx';
+import type { AppContext } from '../env';
+import { validationFailed } from '../util/errors';
+import { clientIp, rateLimit } from '../util/rateLimit';
+
+// ─── Public, cookieless event ingestion ────────────────────────────────────
+//
+// One row per page view. No PII stored: no IP, no User-Agent, no user id.
+// `session_id` is a random value the client holds in sessionStorage — it
+// scopes a "visit" without using a cookie. The `ref` field is captured once
+// per session from the `?ref=` query parameter on the inbound URL.
+//
+// CSRF protection via the global requireClientHeader middleware on /api/* is
+// still in effect: legitimate calls send X-GB-Client: web and the beacon uses
+// `fetch(..., { keepalive: true })` to survive page unload while keeping the
+// header. We don't accept cross-origin POSTs.
+
+const TrackSchema = z.object({
+  kind: z.literal('page_view'),
+  path: z.string().min(1).max(512),
+  ref: z.string().min(1).max(128).nullable().optional(),
+  sessionId: z.string().min(8).max(64),
+});
+
+async function parseJson<T extends z.ZodTypeAny>(
+  c: { req: { json: () => Promise<unknown> } },
+  schema: T,
+): Promise<z.infer<T>> {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    throw validationFailed('Invalid JSON body');
+  }
+  const result = schema.safeParse(body);
+  if (!result.success) {
+    throw validationFailed('Invalid request', { issues: result.error.issues });
+  }
+  return result.data;
+}
+
+export const eventsRouter = new Hono<AppContext>();
+
+eventsRouter.post('/track', async (c) => {
+  const body = await parseJson(c, TrackSchema);
+
+  // Generous cap: 120 events/min/IP. A real user clicking through the editor
+  // tops out well below this; anything higher is almost certainly broken.
+  await rateLimit(c.env, {
+    key: `track:${clientIp(c.req.raw)}`,
+    limit: 120,
+    windowSec: 60,
+  });
+
+  const country = c.req.header('CF-IPCountry') ?? null;
+  await c.env.DB.prepare(
+    `INSERT INTO event (id, ts, kind, path, ref, session_id, country)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      ulid(),
+      Date.now(),
+      body.kind,
+      body.path,
+      body.ref ?? null,
+      body.sessionId,
+      country,
+    )
+    .run();
+
+  return c.body(null, 204);
+});

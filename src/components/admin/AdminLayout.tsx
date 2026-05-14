@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { to: '/admin/users', label: 'Users' },
   { to: '/admin/orgs', label: 'Organizations' },
   { to: '/admin/audit', label: 'Audit log' },
+  { to: '/admin/events', label: 'Events' },
 ];
 
 export function AdminLayout({ title, subtitle, children, headerExtra }: AdminLayoutProps) {

@@ -25,6 +25,7 @@ Reference spec for the account / project / publication / distribution backend. T
 | `project_catalog_submission` | Opt-in record per (project, catalog) for Mobility DB / transit.land. Stores the external feed id. |
 | `project_rt_feed` | Registered external GTFS-RT feed URLs (BE-87). Metadata only — we don't proxy. |
 | `audit_event` | Append-only log of significant actions. |
+| `event` | Cookieless page-view log for inbound-referral analytics. One row per route change; no IP, no UA, no user id. `session_id` is a random per-tab value the client holds in sessionStorage; `ref` is the inbound `?ref=…` tag captured once per session. |
 
 Schema lives in `worker/migrations/*.sql`. All IDs are ULIDs (lexicographically sortable, URL-safe). All bearer-token values are SHA-256 hashed at rest — the cleartext is delivered only once.
 
@@ -220,6 +221,8 @@ JSON over cookie-auth for the editor; fully public reads on the FEEDS origin. Th
 | `PUT  /api/projects/:id/rt-feeds` | Register/update RT feed URLs |
 | `GET  /api/projects/:id/audit` | Per-project action log |
 | `POST /api/projects/import` | Bulk-import local IndexedDB feeds (signed-in migration) |
+| `POST /api/events/track` | Cookieless page-view beacon (no auth; CSRF-gated; rate-limited 120/min/IP) |
+| `GET  /api/admin/events/summary?from=&to=` | Staff-only: visits + page views grouped by `ref` over a time window |
 | `GET  /api/admin/*` | Operator console — staff-only, returns 404 to non-staff |
 
 ### Feeds origin (no auth)
@@ -256,6 +259,7 @@ JSON over cookie-auth for the editor; fully public reads on the FEEDS origin. Th
 - **NF-51**: Email is never shared with third parties. No marketing without explicit opt-in.
 - **NF-52**: Data export — `GET /api/me/export` returns a ZIP of all the user's projects, versions, profile, and audit log.
 - **NF-53**: Hard-purge 30 days after account deletion (cron in `worker/cron/tasks.ts`).
+- **NF-54**: Analytics are cookieless. The `event` table records `path`, `ref`, a per-tab sessionStorage id, and the country code from `CF-IPCountry`. No IP, no User-Agent, no user id, no cross-session linkage. `?ref=` is stripped from the URL on capture so it doesn't propagate into shared links.
 
 ### 8.3 Availability & performance
 
@@ -269,6 +273,7 @@ JSON over cookie-auth for the editor; fully public reads on the FEEDS origin. Th
 - **NF-70**: Cloudflare Workers Analytics + Logpush for the API.
 - **NF-71** *(planned)*: Per-project usage metrics shown to the owner (DAU, projects created, publishes/week, feed download counts).
 - **NF-72** *(planned)*: Error reporting (Sentry or Logpush sink) with PII redaction.
+- **NF-73**: First-party page-view analytics. The frontend fires `POST /api/events/track` on every SPA route change (excluding `/admin/*`) via `fetch(..., { keepalive: true })`. `?ref=` is captured once per session into sessionStorage, then stripped from the URL via `history.replaceState`. The staff-only dashboard at `/admin/events` aggregates visits (distinct `session_id`) and page views grouped by `ref` over preset windows (7d / 30d / all / custom). See `worker/events/routes.ts` and `src/services/trackBeacon.ts`.
 
 ---
 

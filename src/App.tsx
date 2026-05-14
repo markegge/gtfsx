@@ -27,6 +27,7 @@ import { AdminUserDetailPage } from './components/admin/AdminUserDetailPage';
 import { AdminOrgsPage } from './components/admin/AdminOrgsPage';
 import { AdminOrgDetailPage } from './components/admin/AdminOrgDetailPage';
 import { AdminAuditPage } from './components/admin/AdminAuditPage';
+import { AdminEventsPage } from './components/admin/AdminEventsPage';
 import { ImpersonationBanner } from './components/admin/ImpersonationBanner';
 import { OrgSettingsPage } from './components/orgs/OrgSettingsPage';
 import { AcceptInvitationPage } from './components/orgs/AcceptInvitationPage';
@@ -36,6 +37,17 @@ import { AccountBillingPage } from './components/billing/AccountBillingPage';
 import { OrgBillingPage } from './components/billing/OrgBillingPage';
 import { WelcomePlanPage } from './components/billing/WelcomePlanPage';
 import { backendEnabled } from './utils/featureFlags';
+import { captureRefFromUrl, trackPageview } from './services/trackBeacon';
+
+function PageviewTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    // Don't inflate the dashboard with admin-side navigation.
+    if (location.pathname.startsWith('/admin')) return;
+    trackPageview(location.pathname);
+  }, [location.pathname]);
+  return null;
+}
 
 async function loadDemoFeed() {
   const res = await fetch(`${import.meta.env.BASE_URL}streamline.zip`);
@@ -210,6 +222,7 @@ function App() {
   useEffect(() => {
     if (backendEnabled) {
       useStore.getState().hydrateAuth().catch(() => {});
+      captureRefFromUrl();
     }
   }, []);
 
@@ -251,6 +264,7 @@ function App() {
   return (
     <BrowserRouter>
       <ImpersonationBanner />
+      <PageviewTracker />
       <Routes>
         <Route path="/" element={<EditorRoute />} />
         <Route path="/demo" element={<EditorRoute demo />} />
@@ -277,6 +291,7 @@ function App() {
         <Route path="/admin/orgs" element={<AdminOrgsPage />} />
         <Route path="/admin/orgs/:id" element={<AdminOrgDetailPage />} />
         <Route path="/admin/audit" element={<AdminAuditPage />} />
+        <Route path="/admin/events" element={<AdminEventsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       {/* Global RT-breakage dialog — listens for `gb:rt-breakage` events from

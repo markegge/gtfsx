@@ -288,6 +288,27 @@ export function listAuditEvents(filters: AdminAuditFilters = {}): Promise<AdminA
   return request<AdminAuditListResponse>(`/api/admin/audit${qs}`);
 }
 
+export interface AdminEventsSummaryRow {
+  ref: string | null;
+  visits: number;
+  pageViews: number;
+}
+
+export interface AdminEventsSummaryResponse {
+  rows: AdminEventsSummaryRow[];
+  totals: { visits: number; pageViews: number };
+  from: number | null;
+  to: number | null;
+}
+
+export function getEventsSummary(opts: {
+  from?: number;
+  to?: number;
+} = {}): Promise<AdminEventsSummaryResponse> {
+  const qs = buildQuery({ from: opts.from, to: opts.to });
+  return request<AdminEventsSummaryResponse>(`/api/admin/events/summary${qs}`);
+}
+
 export function auditCsvUrl(filters: AdminAuditFilters = {}): string {
   const qs = buildQuery({
     actorUserId: filters.actorUserId,

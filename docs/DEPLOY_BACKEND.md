@@ -43,6 +43,8 @@ Migrations live in `worker/migrations/`:
 | `0003_distribution.sql` | `publication`, `publication_history`, `project_catalog_submission`, `project_rt_feed`. |
 | `0004_branding.sql` | `feed_project.brand_primary_color`. |
 | `0005_org_branding.sql` | `organization.brand_logo_r2_key` / `_content_type` / `_updated_at`. |
+| `0006_billing.sql` | `user.plan` / `_status` / `_renewal_at` and matching columns on `organization`; `subscription` table; Stripe customer ids. |
+| `0007_events.sql` | `event` table for cookieless page-view analytics (no PII). |
 
 Apply:
 
@@ -116,6 +118,7 @@ In an incognito window against the deployed origin:
 - [ ] Org settings → upload a brand logo → reload, confirm it renders next to the org name.
 - [ ] Publish a version. Visit `feeds.<host>/<slug>/gtfs.zip` (200), `feeds.<host>/<slug>` (mini-site), `feeds.<host>/<slug>/embed/route/<id>` (per-route embed), `feeds.<host>/<slug>/embed/system-map`, `feeds.<host>/<slug>/embed/stop/<stop_id>`.
 - [ ] Anonymous editor in another browser → sign in → local IndexedDB feeds offered for import.
+- [ ] Visit any non-`/admin` page with `?ref=smoke-test` appended → page loads and the `ref` query param disappears from the address bar. As a staff user, open `/admin/events` and confirm a row with `ref=smoke-test` appears under "Last 7 days".
 
 If any step fails, `wrangler tail` shows structured logs. Each request has a `requestId` in audit metadata to correlate user reports.
 
@@ -142,3 +145,5 @@ If any step fails, `wrangler tail` shows structured logs. Each request has a `re
 | Count active users (30d) | `wrangler d1 execute gtfs-builder --remote --command "SELECT COUNT(DISTINCT user_id) FROM session WHERE last_used_at > (unixepoch()-2592000)*1000"` |
 | Promote a user to staff | `wrangler d1 execute gtfs-builder --remote --command "UPDATE user SET staff=1 WHERE email='...'"` |
 | Reset rate limits during testing | `scripts/reset-rate-limits.sh [staging|prod|local]` |
+| Inspect raw page-view events | `wrangler d1 execute gtfs-builder --remote --command "SELECT ts, path, ref, country FROM event ORDER BY ts DESC LIMIT 20"` |
+| Purge old events (manual cleanup) | `wrangler d1 execute gtfs-builder --remote --command "DELETE FROM event WHERE ts < (unixepoch()-15552000)*1000"` (older than 180 days) |

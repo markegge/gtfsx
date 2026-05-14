@@ -237,6 +237,7 @@ The backend tier is implemented as a single Cloudflare Worker that also serves t
 - ✅ Users: paginated table, filter by status + email substring, row actions (disable / re-enable, resend verification, impersonate).
 - ✅ Orgs: paginated table, member-role management.
 - ✅ Audit log: filtered + paginated viewer with CSV export.
+- ✅ Events: cookieless page-view analytics. Inbound `?ref=` tag captured once per session (stripped from the URL), tallied on `/admin/events` with date presets (7d / 30d / all / custom). No IP, no UA, no user id stored. See BACKEND_REQUIREMENTS §8.2 NF-54 and §8.4 NF-73.
 - 🔲 Global full-text search, bulk operations, abuse review queues — deferred per BACKEND_REQUIREMENTS §10.6.
 
 ### 3.6 Org branding

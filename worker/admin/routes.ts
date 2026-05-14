@@ -1155,3 +1155,73 @@ adminRouter.get('/audit.csv', async (c) => {
   }
   return new Response(body, { status: 200, headers });
 });
+
+// ─── Analytics events summary ──────────────────────────────────────────────
+//
+// Aggregates the `event` table written by /api/events/track. The dashboard
+// shows inbound referrals grouped by `ref`, where a "visit" is a distinct
+// session_id within the requested window. Null ref renders as "direct".
+
+adminRouter.get('/events/summary', async (c) => {
+  const staff = c.var.user!;
+  await rateLimit(c.env, { key: `admin:events:${staff.id}`, limit: 60, windowSec: 60 });
+
+  const url = new URL(c.req.url);
+  const fromRaw = url.searchParams.get('from');
+  const toRaw = url.searchParams.get('to');
+
+  const from = fromRaw ? Number(fromRaw) : null;
+  const to = toRaw ? Number(toRaw) : null;
+  if ((fromRaw && !Number.isFinite(from)) || (toRaw && !Number.isFinite(to))) {
+    throw validationFailed('Invalid from/to (expected unix ms)');
+  }
+
+  const binds: unknown[] = [];
+  const clauses: string[] = [`kind = 'page_view'`];
+  if (from !== null) {
+    clauses.push('ts >= ?');
+    binds.push(from);
+  }
+  if (to !== null) {
+    clauses.push('ts <= ?');
+    binds.push(to);
+  }
+  const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+
+  const rowsRes = await c.env.DB.prepare(
+    `SELECT COALESCE(ref, '') AS ref,
+            COUNT(DISTINCT session_id) AS visits,
+            COUNT(*) AS page_views
+       FROM event
+       ${whereSql}
+       GROUP BY COALESCE(ref, '')
+       ORDER BY visits DESC, ref ASC`,
+  )
+    .bind(...binds)
+    .all<{ ref: string; visits: number; page_views: number }>();
+
+  const rows = (rowsRes.results ?? []).map((r) => ({
+    ref: r.ref || null,
+    visits: r.visits,
+    pageViews: r.page_views,
+  }));
+
+  const totalsRes = await c.env.DB.prepare(
+    `SELECT COUNT(DISTINCT session_id) AS visits,
+            COUNT(*) AS page_views
+       FROM event
+       ${whereSql}`,
+  )
+    .bind(...binds)
+    .first<{ visits: number; page_views: number }>();
+
+  return c.json({
+    rows,
+    totals: {
+      visits: totalsRes?.visits ?? 0,
+      pageViews: totalsRes?.page_views ?? 0,
+    },
+    from,
+    to,
+  });
+});

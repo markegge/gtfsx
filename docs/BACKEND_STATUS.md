@@ -1,6 +1,6 @@
 # Backend Status Snapshot
 
-**As of 2026-05-11.** Live operational picture of the backend and embeds. This is the doc you should re-read first when you come back after a break — and the doc you should update when you change deployed state.
+**As of 2026-05-14.** Live operational picture of the backend and embeds. This is the doc you should re-read first when you come back after a break — and the doc you should update when you change deployed state.
 
 The high-level overview is in [`REQUIREMENTS.md`](./REQUIREMENTS.md). The reference spec is in [`BACKEND_REQUIREMENTS.md`](./BACKEND_REQUIREMENTS.md). Provisioning instructions are in [`DEPLOY_BACKEND.md`](./DEPLOY_BACKEND.md). Embeds spec is in [`EMBEDS_REQUIREMENTS.md`](./EMBEDS_REQUIREMENTS.md).
 
@@ -12,6 +12,7 @@ The high-level overview is in [`REQUIREMENTS.md`](./REQUIREMENTS.md). The refere
 - **Staging is live.** Editor at https://staging.gtfsbuilder.net (worker version `e8b698fd-5e85-4405-9298-eb661bbd1fb8` as of 2026-05-11). Public feeds + embeds at https://staging-feeds.gtfsbuilder.net. First admin (`mark@eateggs.com`) is staff. One published demo feed: `bozeman-demo`.
 - **Production is DISABLED.** The Worker is deployed to `gtfsbuilder.net` (worker version `59147bd4-3f6b-45fb-9dc7-eec845ac4b7e` as of 2026-05-11, ships the rail refactor); the kill switch (`BACKEND_ENABLED=false` in `wrangler.jsonc` + `VITE_BACKEND_ENABLED=false` baked into the SPA bundle) remains flipped from 2026-05-08 after a premature launch (4 user accounts had been created within 24 hours, including 2 strangers). Existing data is preserved; flip both flags to re-enable.
 - **NF-40a (argon2id)** is the only spec-level technical debt that should land before broad RTAP distribution. Tracked in `BACKEND_REQUIREMENTS.md` §8.1.
+- **Analytics (2026-05-14).** Cookieless page-view tracking is live: `POST /api/events/track` writes to the `event` table; `/admin/events` aggregates visits + page views grouped by inbound `?ref=` tag. No PII recorded. Beacon does not fire on prod until the kill switch is flipped (the frontend gates on `backendEnabled`). Migration 0007 is applied on both D1 databases.
 
 ---
 
@@ -29,7 +30,7 @@ The high-level overview is in [`REQUIREMENTS.md`](./REQUIREMENTS.md). The refere
 
 - Worker: `gtfs-builder-staging`.
 - Custom domains: `staging.gtfsbuilder.net`, `staging-feeds.gtfsbuilder.net`.
-- D1: `gtfs-builder-staging` (id `f62aa5db-329f-4a78-bf35-4b96f79d4392`). Migrations 0001–0005 applied.
+- D1: `gtfs-builder-staging` (id `f62aa5db-329f-4a78-bf35-4b96f79d4392`). Migrations 0001–0007 applied.
 - KV: id `ceb1f063c83a4bec9306e66288a51dc8`.
 - R2: `gtfs-builder-feeds-staging` (feed blobs + org logos).
 - Secrets: `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`, `MOBILITY_DATABASE_REFRESH_TOKEN`.
@@ -42,13 +43,13 @@ The high-level overview is in [`REQUIREMENTS.md`](./REQUIREMENTS.md). The refere
 
 - Worker `gtfs-builder` is deployed but the SPA renders the anonymous IndexedDB-only flow. `/login`, `/signup`, `/feeds*`, `/account`, `/admin/*` render the `BackendDisabledPage` placeholder.
 - Resources provisioned and intact:
-  - D1: `gtfs-builder` (id `cfb27d4e-6ba8-488e-95f9-674cc0560cbe`). Migrations 0001–0003 applied (0004 + 0005 not yet applied since prod is disabled).
+  - D1: `gtfs-builder` (id `cfb27d4e-6ba8-488e-95f9-674cc0560cbe`). Migrations 0001–0007 applied (0007 = cookieless `event` analytics table, applied 2026-05-14 ahead of the broader re-enable).
   - KV: id `da2476e5027346988e380474fa6deef5`.
   - R2: `gtfs-builder-feeds`.
   - Secrets: `RESEND_API_KEY`, `MOBILITY_DATABASE_REFRESH_TOKEN`.
   - Custom domains bound: `gtfsbuilder.net`, `www.gtfsbuilder.net`, `feeds.gtfsbuilder.net`. SSL certs provisioned.
 - 4 user accounts in prod D1 (`mark@eateggs.com` staff=1, 3 others including 2 strangers from the brief launch window). 0 published feeds.
-- **To re-enable**: flip `BACKEND_ENABLED=true` in `wrangler.jsonc` top-level vars; rebuild with `VITE_BACKEND_ENABLED=true` (see `.env.example`); apply pending migrations 0004 + 0005 to prod D1; set `TURNSTILE_SECRET_KEY` secret on prod; `wrangler deploy --env=""`.
+- **To re-enable**: flip `BACKEND_ENABLED=true` in `wrangler.jsonc` top-level vars; rebuild with `VITE_BACKEND_ENABLED=true` (see `.env.example`); set `TURNSTILE_SECRET_KEY` secret on prod; `wrangler deploy --env=""`. (Migrations 0001–0007 are already applied on the prod D1.)
 
 ---
 
@@ -75,12 +76,11 @@ In rough priority order. Items that have a long-form home elsewhere are linked.
 
 ### Re-enable production checklist
 
-1. Apply migrations 0004 (brand color) + 0005 (org logo) to prod D1.
-2. Set the `TURNSTILE_SECRET_KEY` secret on the prod Worker (the same Turnstile site is configured for both `staging.gtfsbuilder.net` and `gtfsbuilder.net`).
-3. Verify `noreply@gtfsbuilder.net` is a verified Resend sender on the prod sending domain (`AUTH_EMAIL_FROM` in `wrangler.jsonc`).
-4. Flip `BACKEND_ENABLED` (worker var) and `VITE_BACKEND_ENABLED` (frontend env) to `true`.
-5. Promote yourself to staff after first signup: `wrangler d1 execute gtfs-builder --remote --command "UPDATE user SET staff=1 WHERE email='mark@eateggs.com'"`.
-6. Walk the smoke-test in `DEPLOY_BACKEND.md` §7.
+1. Set the `TURNSTILE_SECRET_KEY` secret on the prod Worker (the same Turnstile site is configured for both `staging.gtfsbuilder.net` and `gtfsbuilder.net`).
+2. Verify `noreply@gtfsbuilder.net` is a verified Resend sender on the prod sending domain (`AUTH_EMAIL_FROM` in `wrangler.jsonc`).
+3. Flip `BACKEND_ENABLED` (worker var) and `VITE_BACKEND_ENABLED` (frontend env) to `true`.
+4. Promote yourself to staff after first signup: `wrangler d1 execute gtfs-builder --remote --command "UPDATE user SET staff=1 WHERE email='mark@eateggs.com'"`.
+5. Walk the smoke-test in `DEPLOY_BACKEND.md` §7 (now includes a `?ref=` analytics check).
 
 ### Phase 7 (embeds) follow-ups
 

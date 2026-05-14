@@ -814,6 +814,7 @@ export function MapView() {
 
   const cursor = mapMode === 'draw_route' || mapMode === 'draw_flex_zone' ? 'crosshair'
     : mapMode === 'place_stop' ? 'crosshair'
+    : mapMode === 'split_shape' ? 'crosshair'
     : mapMode === 'move_stop' ? (hoveringStop ? 'grab' : 'crosshair')
     : mapMode === 'edit_shape' || mapMode === 'edit_flex_zone' ? 'default'
     : hoveringFeature ? 'pointer'

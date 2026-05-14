@@ -16,6 +16,16 @@ export function RouteLayer() {
   const bottomPanelTab = useStore((s) => s.bottomPanelTab);
   const timetableDirectionId = useStore((s) => s.timetableDirectionId);
   const isTimetableEditing = bottomPanelOpen && bottomPanelTab === 'timetable' && !!selectedRouteId;
+  // Route › Stops tab + a direction picked → emphasize that direction's
+  // shape over the other so the user can see which line they're editing.
+  const sidebarSection = useStore((s) => s.sidebarSection);
+  const editingRouteId = useStore((s) => s.editingRouteId);
+  const routeDetailTab = useStore((s) => s.routeDetailTab);
+  const stopPlacementDirection = useStore((s) => s.stopPlacementDirection);
+  const isRouteStopsEditing =
+    sidebarSection === 'routes'
+    && routeDetailTab === 'stops'
+    && !!editingRouteId;
 
   const geojson = useMemo(() => {
     const hiddenRouteSet = new Set(hiddenRouteIds);
@@ -72,7 +82,13 @@ export function RouteLayer() {
               ['get', 'isSelected'], 0.4,
               0.2,
             ]
-          : ['case', ['get', 'isSelected'], 1, 0.7],
+          : isRouteStopsEditing
+            ? ['case',
+                ['all', ['get', 'isSelected'], ['==', ['get', 'direction_id'], stopPlacementDirection]], 1,
+                ['get', 'isSelected'], 0.3,
+                0.2,
+              ]
+            : ['case', ['get', 'isSelected'], 1, 0.7],
     },
     layout: {
       'line-join': 'round',
@@ -111,7 +127,13 @@ export function RouteLayer() {
               ['get', 'isSelected'], 0.3,
               0.15,
             ]
-          : ['case', ['get', 'isSelected'], 1, 0.6],
+          : isRouteStopsEditing
+            ? ['case',
+                ['all', ['get', 'isSelected'], ['==', ['get', 'direction_id'], stopPlacementDirection]], 1,
+                ['get', 'isSelected'], 0.25,
+                0.15,
+              ]
+            : ['case', ['get', 'isSelected'], 1, 0.6],
     },
   };
 

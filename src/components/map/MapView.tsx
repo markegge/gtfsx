@@ -621,10 +621,24 @@ export function MapView() {
       const snapped = nearestPointOnLine(line, point([e.lngLat.lng, e.lngLat.lat]), { units: 'meters' });
       const snapDistM = (snapped.properties.dist ?? Infinity) * 1000; // turf returns km here
 
-      // Reject if the click landed far from the polyline at this zoom.
-      // 200m is generous for typical city-scale routes and discourages
-      // accidental clicks far from the line.
-      if (snapDistM > 200) {
+      // Convert the snap distance to screen pixels at the current zoom so the
+      // tolerance is consistent regardless of how zoomed-in the user is —
+      // 200 m feels precise at street level but generous at metro scale.
+      // Threshold ~24px ≈ a generous fingertip / 1/4-inch click target.
+      const mapInstance = mapRef.current?.getMap();
+      let snapDistPx = Infinity;
+      if (mapInstance) {
+        try {
+          const clickPx = mapInstance.project([e.lngLat.lng, e.lngLat.lat]);
+          const snappedPx = mapInstance.project(snapped.geometry.coordinates as [number, number]);
+          const dx = clickPx.x - snappedPx.x;
+          const dy = clickPx.y - snappedPx.y;
+          snapDistPx = Math.hypot(dx, dy);
+        } catch {
+          snapDistPx = Infinity;
+        }
+      }
+      if (snapDistPx > 24) {
         // No-op; let the user try again. Could surface a toast later.
         return;
       }

@@ -221,3 +221,29 @@ export function unsubscribeFromThread(threadId: string): Promise<{ subscribed: b
 export function getMySubscription(threadId: string): Promise<{ subscribed: boolean }> {
   return requestJson(`/api/forum/threads/${encodeURIComponent(threadId)}/subscription`);
 }
+
+// ─── Image upload ───────────────────────────────────────────────────────────
+
+export interface UploadedImage {
+  id: string;
+  url: string;
+  contentType: string;
+  width?: number;
+  height?: number;
+  deduped?: boolean;
+}
+
+export async function uploadForumImage(file: File): Promise<UploadedImage> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch('/api/forum/uploads/image', {
+    method: 'POST',
+    headers: { ...BASE_HEADERS },
+    credentials: 'include',
+    body: form,
+  }).catch((e) => {
+    throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as UploadedImage;
+}

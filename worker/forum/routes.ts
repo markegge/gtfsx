@@ -18,6 +18,7 @@ import {
   notifySubscribersOfReply,
   notifyThreadAuthorOfReply,
 } from './notify';
+import { uploadsRouter } from './uploads';
 import type {
   AuthorDto,
   CategoryDto,
@@ -29,6 +30,9 @@ import type {
 } from './types';
 
 export const forumRouter = new Hono<AppContext>();
+
+// Image uploads (multipart) mounted under /api/forum/uploads/*.
+forumRouter.route('/uploads', uploadsRouter);
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
 

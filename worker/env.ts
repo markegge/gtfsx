@@ -8,6 +8,7 @@ export interface Env {
   // Storage
   TILES: R2Bucket;         // existing PMTiles archive
   FEEDS: R2Bucket;         // feed blobs: working states, version snapshots, rendered ZIPs
+  FORUM_IMAGES: R2Bucket;  // user-uploaded forum images (served via FEEDS_ORIGIN/_forum-images/<key>)
   DB: D1Database;          // auth + feed metadata
   KV: KVNamespace;         // rate-limit counters, cache
 

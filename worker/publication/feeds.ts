@@ -114,6 +114,7 @@ const EMBED_ROUTE_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/route\/([^/?#]+)\/?$/;
 const EMBED_STOP_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/stop\/([^/?#]+)\/?$/;
 const EMBED_SYSMAP_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/system-map\/?$/;
 const ORG_LOGO_RE = /^\/_\/orgs\/([A-Z0-9]+)\/logo\/?$/i;
+const FORUM_IMAGE_RE = /^\/_forum-images\/(images\/[A-Z0-9]+\/[A-Z0-9]+\.(?:jpg|png|gif|webp))$/i;
 const LANDING_RE = /^\/([a-z0-9][a-z0-9-]*)\/?$/;
 
 export async function feedsHandler(
@@ -164,6 +165,10 @@ export async function feedsHandler(
   if (orgLogo) {
     return serveOrgLogo(request, env, orgLogo[1]);
   }
+  const forumImage = url.pathname.match(FORUM_IMAGE_RE);
+  if (forumImage) {
+    return serveForumImage(request, env, forumImage[1]);
+  }
   // Landing page — must come last so the more-specific embed/zip/draft
   // patterns match first. Excludes reserved subpaths.
   const landing = url.pathname.match(LANDING_RE);
@@ -172,6 +177,49 @@ export async function feedsHandler(
   }
 
   return notFound();
+}
+
+// ─── Forum image (public read) ──────────────────────────────────────────────
+
+// Serve user-uploaded forum images from FORUM_IMAGES at
+// /_forum-images/images/<userId>/<imageId>.<ext>. The path mirrors the R2
+// key 1:1 — image immutability is enforced by content-addressing in the
+// upload flow (ULID-keyed). soft-deleted rows are blocked here so a
+// /api/forum/uploads delete really removes the image from the public web.
+async function serveForumImage(request: Request, env: Env, r2Key: string): Promise<Response> {
+  const row = await env.DB.prepare(
+    `SELECT content_type, deleted_at FROM forum_image WHERE r2_key = ? LIMIT 1`,
+  ).bind(r2Key).first<{ content_type: string; deleted_at: number | null }>();
+  if (!row) return notFound('Image not found.');
+  if (row.deleted_at) return gone('Image deleted.');
+
+  const obj = await env.FORUM_IMAGES.get(r2Key);
+  if (!obj) return notFound('Image not found.');
+
+  const etag = obj.httpEtag;
+  if (etagMatches(request.headers.get('If-None-Match'), etag)) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        ETag: etag,
+        Vary: 'Accept-Encoding',
+      },
+    });
+  }
+
+  const headers = new Headers({
+    'Content-Type': row.content_type,
+    'Cache-Control': 'public, max-age=31536000, immutable',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'; img-src 'self' data:; sandbox",
+    ETag: etag,
+    Vary: 'Accept-Encoding',
+  });
+  if (request.method === 'HEAD') {
+    return new Response(null, { status: 200, headers });
+  }
+  return new Response(obj.body, { status: 200, headers });
 }
 
 // ─── Org brand logo (public read) ───────────────────────────────────────────

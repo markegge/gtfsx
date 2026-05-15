@@ -40,6 +40,10 @@
     {
       "binding": "FEEDS",
       "bucket_name": "gtfs-builder-feeds"
+    },
+    {
+      "binding": "FORUM_IMAGES",
+      "bucket_name": "gtfs-builder-forum-images"
     }
   ],
   "d1_databases": [
@@ -107,7 +111,8 @@
       "name": "gtfs-builder-staging",
       "r2_buckets": [
         { "binding": "TILES", "bucket_name": "gtfs-builder-tiles" },
-        { "binding": "FEEDS", "bucket_name": "gtfs-builder-feeds-staging" }
+        { "binding": "FEEDS", "bucket_name": "gtfs-builder-feeds-staging" },
+        { "binding": "FORUM_IMAGES", "bucket_name": "gtfs-builder-forum-images-staging" }
       ],
       "d1_databases": [
         {

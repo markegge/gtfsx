@@ -10,11 +10,15 @@ import { Fragment, type ReactNode } from 'react';
 //   - Inline code (`code`)
 //   - Bold (**text**) and italic (*text* or _text_)
 //   - Links [text](url) — http/https only, otherwise text passes through unlinked
+//   - Images ![alt](url) — only same-origin (/_forum-images/...), otherwise alt
+//     text falls through. The allowlist is the abuse barrier: nothing else gets
+//     rendered as an <img>, so users can't hot-link tracking pixels, host
+//     arbitrary content, or exploit third-party CSP holes.
 //   - Auto-link bare URLs
 //   - Hard line breaks within paragraphs
 //
 // Anything else passes through as plain text. We deliberately do NOT support
-// raw HTML, images, tables, or footnotes in v1.
+// raw HTML, tables, or footnotes in v1.
 
 interface MarkdownProps {
   children: string;
@@ -180,7 +184,7 @@ function renderBlock(b: Block): ReactNode {
 }
 
 function renderInline(text: string): ReactNode {
-  // Tokenize into: code span, link, bold, italic, autolink, plain.
+  // Tokenize into: code span, image, link, bold, italic, autolink, plain.
   // Approach: walk through the string and split on the next pattern match.
   const out: ReactNode[] = [];
   let i = 0;
@@ -192,6 +196,28 @@ function renderInline(text: string): ReactNode {
     let m: RegExpExecArray | null = /^`([^`\n]+)`/.exec(rest);
     if (m) {
       out.push(<code key={key++} className="bg-sand/60 px-1 rounded text-[0.85em]">{m[1]}</code>);
+      i += m[0].length;
+      continue;
+    }
+
+    // Image: ![alt](url). Must precede the link branch (both start with `[`).
+    m = /^!\[([^\]]*)\]\(([^)\s]+)\)/.exec(rest);
+    if (m) {
+      const src = safeImageSrc(m[2]);
+      if (src) {
+        out.push(
+          <img
+            key={key++}
+            src={src}
+            alt={m[1]}
+            loading="lazy"
+            className="max-w-full h-auto rounded-md my-2 border border-sand"
+          />,
+        );
+      } else {
+        // Allowlist miss — render the alt text so context survives.
+        out.push(<span key={key++}>{m[1]}</span>);
+      }
       i += m[0].length;
       continue;
     }
@@ -246,7 +272,7 @@ function renderInline(text: string): ReactNode {
     }
 
     // Plain char run — consume until the next markdown-meaningful character.
-    const next = rest.search(/[`\[*_\n]|https?:\/\//);
+    const next = rest.search(/[`![*_\n]|https?:\/\//);
     const take = next === -1 ? rest.length : Math.max(1, next);
     out.push(<span key={key++}>{rest.slice(0, take)}</span>);
     i += take;
@@ -262,4 +288,32 @@ function safeHref(raw: string): string | null {
     // not a valid absolute URL
   }
   return null;
+}
+
+// Allow only images served from our own forum-images path. Relative paths
+// (`/_forum-images/…`) and absolute URLs on the configured feeds origin both
+// pass; anything else falls back to alt text — same allowlist enforced
+// server-side in worker/forum/markdown.ts.
+function safeImageSrc(raw: string): string | null {
+  const prefix = '/_forum-images/';
+  if (raw.startsWith(prefix)) return raw;
+  try {
+    const u = new URL(raw, window.location.origin);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    if (!u.pathname.startsWith(prefix)) return null;
+    // Same-origin or feeds-origin only. window.location.host is the SPA
+    // host; the feeds host is configured via VITE_FEEDS_ORIGIN at build time.
+    const allowed = [
+      window.location.host,
+      (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_FEEDS_ORIGIN
+        ? new URL(
+            (import.meta as ImportMeta & { env: Record<string, string | undefined> }).env.VITE_FEEDS_ORIGIN!,
+          ).host
+        : null,
+    ].filter(Boolean) as string[];
+    if (!allowed.includes(u.host)) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
 }

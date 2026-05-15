@@ -6,6 +6,8 @@ import { sessionMiddleware, requireClientHeader } from './auth/middleware';
 import { authRouter } from './auth/routes';
 import { apiRouter } from './api';
 import { feedsHandler } from './publication/feeds';
+import { maybeRenderForumPage } from './forum/dispatcher';
+import { serveSitemap } from './forum/sitemap';
 
 const app = new Hono<AppContext>();
 
@@ -132,6 +134,30 @@ export default {
       url.pathname.startsWith('/_import')
     ) {
       return app.fetch(request, env, ctx);
+    }
+
+    // Forum pages get server-rendered SEO content injected into the SPA shell
+    // before the React bundle takes over. The dispatcher returns null for
+    // SPA-only paths (/community/new, /community/profile) so they fall
+    // through to the static-assets binding unchanged.
+    if (env.BACKEND_ENABLED === 'true') {
+      try {
+        const ssr = await maybeRenderForumPage(request, env);
+        if (ssr) return ssr;
+      } catch (err) {
+        // Never let SSR break the SPA shell — log and fall back.
+        console.error('[forum-ssr] render error, falling back to SPA shell:', err);
+      }
+    }
+
+    // Dynamic sitemap that augments the static one in `public/` with every
+    // public forum thread URL.
+    if (url.pathname === '/sitemap.xml' && env.BACKEND_ENABLED === 'true') {
+      try {
+        return await serveSitemap(request, env);
+      } catch (err) {
+        console.error('[forum-sitemap] error, falling back to static sitemap:', err);
+      }
     }
 
     // Everything else: static assets (SPA fallback handled by the binding).

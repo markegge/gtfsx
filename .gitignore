@@ -32,6 +32,8 @@ demand-dots/dots_*.geojson
 tiles/*.ldjson
 tiles/*.pmtiles
 tiles/*.mbtiles
+tiles/ldjson/
+test/
 
 # Editor directories and files
 .vscode/*

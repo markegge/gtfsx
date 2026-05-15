@@ -15,12 +15,28 @@
       :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --code-bg:#FFFFFF; }
       * { box-sizing: border-box; }
       body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
-      header, footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
-      header { display:flex; align-items:center; justify-content:space-between; padding-top:24px; padding-bottom:24px; border-bottom:1px solid var(--rule); }
-      .brand { display:flex; align-items:center; gap:10px; text-decoration:none; color:var(--ink); font-weight:700; }
-      .brand img { width:36px; height:36px; }
-      .cta { display:inline-block; background:var(--accent); color:#fff; padding:10px 18px; border-radius:8px; text-decoration:none; font-weight:600; }
-      .cta:hover { filter: brightness(0.95); }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      /* ─── site header (matches the editor) ─── */
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { width:44px; height:44px; }
+      .site-header .brand-name { font-weight:800; font-size:1.5rem; color:var(--accent); letter-spacing:-0.01em; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; transition:color 0.15s, background 0.15s; }
+      .site-header nav a:hover { color:var(--ink); background:var(--bg); }
+      .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .cta:hover { filter:brightness(0.95); }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a:hover { color:var(--ink); }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      .site-header .user-slot .user-avatar:hover { filter:brightness(0.95); }
+      @media (max-width: 720px) {
+        .site-header nav, .site-header .cta { display:none; }
+        .site-header .brand-name { font-size:1.25rem; }
+        .site-header .brand img { width:36px; height:36px; }
+      }
       main { padding-top: 40px; padding-bottom: 60px; }
       h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; }
       h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
@@ -47,9 +63,23 @@
     </style>
   </head>
   <body>
-    <header>
-      <a href="/" class="brand"><img src="/gtfs-studio-logo.svg" alt="" /> GTFS Studio</a>
-      <a href="/" class="cta">Launch the editor</a>
+    <header class="site-header">
+      <a href="/" class="brand">
+        <img src="/gtfs-studio-logo.svg" alt="" />
+        <span class="brand-name">GTFS Studio</span>
+      </a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/" class="active">Integrations</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot">
+          <a href="/login">Sign in</a>
+        </div>
+      </div>
     </header>
 
     <main>
@@ -165,5 +195,21 @@
       <a href="/learn/gtfs/">What is GTFS?</a>
       <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
     </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
   </body>
 </html>

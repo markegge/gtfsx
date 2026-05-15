@@ -105,6 +105,14 @@ async function request<T = unknown>(
   return undefined as T;
 }
 
+export interface SignupResponse {
+  // True when the signup carried a valid invitation token and was auto-
+  // activated; the server set a session cookie and `user` is populated.
+  // False (default) means the user has to click the verification email.
+  activated: boolean;
+  user?: AuthedUser;
+}
+
 export function signup(input: {
   email: string;
   displayName: string;
@@ -113,8 +121,11 @@ export function signup(input: {
   // Optional post-verify redirect path. Used by invitee signups so the user
   // lands on /orgs/accept instead of the tier picker.
   next?: string;
-}): Promise<void> {
-  return request('/auth/signup', { method: 'POST', body: input });
+  // Raw invitation token from the email link. When present + valid, the
+  // server skips email verification and logs the user in immediately.
+  invitationToken?: string;
+}): Promise<SignupResponse> {
+  return request<SignupResponse>('/auth/signup', { method: 'POST', body: input });
 }
 
 export function login(input: { email: string; password: string }): Promise<{ user: AuthedUser }> {

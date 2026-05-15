@@ -1,19 +1,34 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FormField } from '../ui/FormField';
 import { AuthLayout } from './AuthLayout';
 import { AuthButton } from './AuthButton';
 import { TurnstileWidget } from './TurnstileWidget';
 import { signup, ApiError } from '../../services/authApi';
 import { turnstileSiteKey } from '../../utils/featureFlags';
+import { useStore } from '../../store';
 
 export function SignupPage() {
+  const navigate = useNavigate();
+  const setCurrentUser = useStore((s) => s.setCurrentUser);
   const [searchParams] = useSearchParams();
   // Both pre-filled by the invitation flow. `email` populates the form;
   // `next` threads through to the verify-email redirect so the user lands
-  // on /orgs/accept after confirming and bypasses the tier picker.
+  // on /orgs/accept after confirming and bypasses the tier picker. When
+  // `next` is /orgs/accept?token=…, we extract the invitation token and
+  // pass it to the server so the account is auto-activated — clicking the
+  // invite link already proved control of the email address.
   const initialEmail = searchParams.get('email') ?? '';
   const nextPath = searchParams.get('next') ?? '';
+  const invitationToken = useMemo(() => {
+    if (!nextPath.startsWith('/orgs/accept')) return undefined;
+    try {
+      const u = new URL(nextPath, window.location.origin);
+      return u.searchParams.get('token') ?? undefined;
+    } catch {
+      return undefined;
+    }
+  }, [nextPath]);
   // Login link from the footer should preserve the `next` so users with
   // an existing account can still land in the right place.
   const loginHref = useMemo(() => {
@@ -45,13 +60,21 @@ export function SignupPage() {
     setGeneralError(null);
     setLoading(true);
     try {
-      await signup({
+      const res = await signup({
         email: email.trim(),
         displayName: displayName.trim(),
         password,
         turnstileToken: turnstileToken ?? undefined,
         next: nextPath || undefined,
+        invitationToken,
       });
+      // Auto-activated invitee: skip the "check your email" screen and head
+      // straight to the accept page (or wherever `next` points).
+      if (res.activated && res.user) {
+        setCurrentUser(res.user);
+        navigate(nextPath || '/feeds', { replace: true });
+        return;
+      }
       setDone(true);
     } catch (err) {
       if (err instanceof ApiError) {

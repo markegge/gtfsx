@@ -38,12 +38,20 @@ const displayNameSchema = z.string().trim().min(1).max(120);
 // invitee flow to bounce the user back to /orgs/accept?token=… so they skip
 // the tier picker entirely. Validated as a same-origin relative path before
 // being honored at redirect time.
+//
+// `invitationToken` is the raw invitation token from the email link. Its
+// presence is the signal that the signing-up user already proved ownership
+// of this email address by clicking the invitation (which the server only
+// ever sent to that email). When the token resolves and matches the
+// submitted email, the user is activated immediately and gets a session —
+// no second confirmation email is sent.
 const signupSchema = z.object({
   email: emailSchema,
   displayName: displayNameSchema,
   password: passwordSchema,
   turnstileToken: z.string().max(2048).optional(),
   next: z.string().max(512).optional(),
+  invitationToken: z.string().max(2048).optional(),
 });
 
 const loginSchema = z.object({
@@ -172,6 +180,27 @@ authRouter.post('/signup', async (c) => {
   // send. No-op when the secret isn't configured (dev fallback).
   await verifyTurnstile(c.env, body.turnstileToken, ip);
 
+  // Invitation-token fast path. If the user clicked an invite email link
+  // their possession of the token proves they own this address, so we skip
+  // the verify-email round-trip and activate immediately. The token must
+  // still be live and match the submitted email. We don't consume it here —
+  // /api/orgs/invitations/accept will do that when the user joins the org.
+  let autoActivate = false;
+  if (body.invitationToken) {
+    const resolved = await resolveAuthToken(c.env, body.invitationToken, 'invitation');
+    if (
+      resolved &&
+      !resolved.consumedAt &&
+      resolved.expiresAt > Date.now() &&
+      resolved.email &&
+      resolved.email.toLowerCase() === body.email.toLowerCase()
+    ) {
+      autoActivate = true;
+    }
+  }
+
+  let autoActivatedUserId: string | null = null;
+
   await withMinDelay(200, async () => {
     const existing = await findUserByEmail(c.env, body.email);
 
@@ -213,7 +242,25 @@ authRouter.post('/signup', async (c) => {
           .run();
       }
 
+      // Invitation-driven retry: activate the row and let the caller make a
+      // session. Outstanding verify_email tokens get invalidated either way.
       await invalidateAuthTokensForUser(c.env, existing.id, 'verify_email');
+      if (autoActivate) {
+        await c.env.DB.prepare(
+          `UPDATE user SET status = 'active', updated_at = ? WHERE id = ?`,
+        )
+          .bind(now, existing.id)
+          .run();
+        autoActivatedUserId = existing.id;
+        await logAudit(c.env, {
+          actorUserId: existing.id,
+          subjectType: 'user',
+          subjectId: existing.id,
+          action: 'user.signup.activated_by_invitation',
+          ip,
+        });
+        return;
+      }
       // Tag this as a signup-flow verification so the post-verify redirect
       // can route the user through the welcome / pick-a-plan step.
       const token = await createAuthToken(c.env, {
@@ -240,13 +287,16 @@ authRouter.post('/signup', async (c) => {
     }
 
     // Fresh signup path (no existing user, or existing is deleted_soft).
+    // Invitation-driven fresh signups go straight to active; everything else
+    // starts pending_verification and waits for the email click.
     const now = Date.now();
     const userId = ulid();
+    const initialStatus = autoActivate ? 'active' : 'pending_verification';
     await c.env.DB.prepare(
       `INSERT INTO user (id, email, display_name, status, staff, created_at, updated_at)
-       VALUES (?, ?, ?, 'pending_verification', 0, ?, ?)`,
+       VALUES (?, ?, ?, ?, 0, ?, ?)`,
     )
-      .bind(userId, body.email, body.displayName, now, now)
+      .bind(userId, body.email, body.displayName, initialStatus, now, now)
       .run();
 
     try {
@@ -257,6 +307,18 @@ authRouter.post('/signup', async (c) => {
       )
         .bind(ulid(), userId, passwordHash, now, now)
         .run();
+
+      if (autoActivate) {
+        autoActivatedUserId = userId;
+        await logAudit(c.env, {
+          actorUserId: userId,
+          subjectType: 'user',
+          subjectId: userId,
+          action: 'user.signup.activated_by_invitation',
+          ip,
+        });
+        return;
+      }
 
       const token = await createAuthToken(c.env, {
         kind: 'verify_email',
@@ -293,7 +355,35 @@ authRouter.post('/signup', async (c) => {
     });
   });
 
-  return c.body(null, 204);
+  // Invitation-driven signup: log the user in right now so the SPA can
+  // redirect them straight to /orgs/accept without another round-trip
+  // through verify-email. The user shape mirrors /api/me.
+  if (autoActivatedUserId) {
+    const userId = autoActivatedUserId;
+    const userRow = await c.env.DB.prepare(
+      `SELECT id, email, display_name, status, staff, deleted_at, plan, plan_status
+         FROM user WHERE id = ?`,
+    ).bind(userId).first<UserRow>();
+    if (userRow) {
+      const session = await createSession(c.env, {
+        userId,
+        ip,
+        userAgent: c.req.header('User-Agent') ?? null,
+      });
+      c.header('Set-Cookie', sessionCookie(session.token, session.expiresAt));
+      await logAudit(c.env, {
+        actorUserId: userId,
+        subjectType: 'session',
+        subjectId: userId,
+        action: 'session.login',
+        metadata: { method: 'signup_invitation' },
+        ip,
+      });
+      return c.json({ activated: true, user: shapeUser(userRow) });
+    }
+  }
+
+  return c.json({ activated: false });
 });
 
 // ─── Verify email ──────────────────────────────────────────────────────────

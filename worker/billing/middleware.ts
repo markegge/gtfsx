@@ -92,20 +92,11 @@ export async function requireDraftLinkAccess(
 }
 
 // ─── Seat enforcement for org memberships ───────────────────────────────────
-
-// Used by POST /api/orgs/:id/invitations and /api/orgs/:id/members. The
-// invitee must be a plan that can be a member of orgs they don't own.
-export async function requireMemberCanJoin(env: Env, userId: string): Promise<Plan> {
-  const plan = await getOwnerPlan(env, 'user', userId);
-  if (plan === 'free') {
-    throw paywall({
-      feature: 'cross_org_member',
-      currentPlan: plan,
-      upgradeTo: 'pro',
-    }, 'This user must upgrade to a paid plan before joining an organization.');
-  }
-  return plan;
-}
+//
+// The paying party for any org membership is the org itself (Team or
+// Enterprise). Free users can be members of paid orgs at no charge —
+// previously we gated joins on the invitee's personal plan, but that broke
+// the canonical "transit agency invites their planner" use case.
 
 // Used by POST /api/orgs/:id/invitations and /api/orgs/:id/members. The org's
 // plan + paid seat count must have headroom for one more member.

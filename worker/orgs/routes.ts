@@ -20,7 +20,6 @@ import {
 import { sendInvitationEmail } from '../email';
 import {
   requireOwnerFeature,
-  requireMemberCanJoin,
   requireOrgSeatAvailable,
 } from '../billing/middleware';
 
@@ -401,9 +400,9 @@ orgsRouter.post('/invitations/accept', async (c) => {
     });
   }
 
-  // Free-plan users can't join orgs. Org must still have an open seat (a
-  // dormant invitation can outlive a seat shrink).
-  await requireMemberCanJoin(c.env, user.id);
+  // Org must be on a paid plan (Team/Enterprise hosts the membership; the
+  // member doesn't need their own subscription). For Team/Enterprise we
+  // skip the seat-cap check entirely — see worker/billing/middleware.ts.
   await requireOrgSeatAvailable(c.env, orgId);
 
   const now = Date.now();

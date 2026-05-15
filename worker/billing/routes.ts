@@ -114,6 +114,14 @@ billingRouter.get('/orgs/:id', async (c) => {
     .bind(orgId)
     .first<{ n: number }>();
 
+  // Team and Enterprise are flat-priced with unlimited members; plan_seat_count
+  // is left at 1 for legacy Stripe accounting but should not gate membership.
+  // Surface a large sentinel so the UI's `unbounded` quota meter renders it
+  // as "Unlimited".
+  const seatsLimit = row.plan === 'team' || row.plan === 'enterprise'
+    ? 99999
+    : row.plan_seat_count;
+
   return c.json({
     owner: { type: 'org', id: orgId },
     plan: row.plan,
@@ -127,7 +135,7 @@ billingRouter.get('/orgs/:id', async (c) => {
       publishedFeeds: { used: usedPublished, limit: quotas.publishedFeeds },
       versionsPerProject: { limit: quotas.versionsPerProject },
       blobBytes: { limit: quotas.blobBytes },
-      seats: { used: membersRow?.n ?? 0, limit: row.plan_seat_count },
+      seats: { used: membersRow?.n ?? 0, limit: seatsLimit },
     },
   });
 });

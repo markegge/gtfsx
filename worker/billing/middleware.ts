@@ -124,6 +124,10 @@ export async function requireOrgSeatAvailable(env: Env, orgId: string): Promise<
       upgradeTo: 'team',
     }, 'This organization needs a paid plan before adding members.');
   }
+  // Team and Enterprise are flat-priced with unlimited members — no headroom
+  // check needed. plan_seat_count stays for forward-compat (e.g. a future
+  // per-seat add-on) but isn't a gate today.
+  if (plan === 'team' || plan === 'enterprise') return;
   const membersRow = await env.DB.prepare(
     `SELECT COUNT(*) AS n FROM organization_membership WHERE org_id = ?`,
   )

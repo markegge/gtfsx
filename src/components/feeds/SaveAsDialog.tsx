@@ -11,6 +11,7 @@ export function SaveAsDialog({ onClose }: { onClose: () => void }) {
   const projectName = useStore((s) => s.projectName);
   const userOrgs = useStore((s) => s.userOrgs);
   const activeWorkspace = useStore((s) => s.activeWorkspace);
+  const setActiveWorkspace = useStore((s) => s.setActiveWorkspace);
   const setActiveServerProject = useStore((s) => s.setActiveServerProject);
   const upsertFeedProject = useStore((s) => s.upsertFeedProject);
   const setProjectId = useStore((s) => s.setProjectId);
@@ -55,6 +56,17 @@ export function SaveAsDialog({ onClose }: { onClose: () => void }) {
       setActiveServerProject(project.id);
       upsertFeedProject({ ...project, workingStateVersion });
       markSaved();
+
+      // Sync the workspace switcher to the chosen destination so the header
+      // chip + "current workspace" indicator match the feed's actual owner.
+      // Without this the user can save into Org X but still see "My personal
+      // feeds" highlighted as active.
+      if (ownerArg.type === 'org') {
+        const org = userOrgs.find((o) => o.id === ownerArg.id);
+        if (org) setActiveWorkspace({ type: 'org', orgId: org.id, role: org.role });
+      } else {
+        setActiveWorkspace({ type: 'personal' });
+      }
 
       navigate(`/feeds/${encodeURIComponent(project.slug)}`);
     } catch (err) {

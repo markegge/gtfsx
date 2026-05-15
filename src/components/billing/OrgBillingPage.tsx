@@ -202,7 +202,11 @@ export function OrgBillingPage() {
                   )}
                 </div>
                 <div className="mt-1 text-sm text-warm-gray">
-                  Seats: <span className="font-semibold text-brown">{state.quotas.seats.used} / {state.planSeatCount}</span>
+                  Seats: <span className="font-semibold text-brown">
+                    {state.plan === 'team' || state.plan === 'enterprise'
+                      ? `${state.quotas.seats.used} (unlimited)`
+                      : `${state.quotas.seats.used} / ${state.planSeatCount}`}
+                  </span>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -258,6 +262,7 @@ export function OrgBillingPage() {
                 label="Seats"
                 used={state.quotas.seats.used}
                 limit={state.quotas.seats.limit}
+                unbounded={state.quotas.seats.limit >= 9999}
               />
             </div>
           </section>

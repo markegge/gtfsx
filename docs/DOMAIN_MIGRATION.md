@@ -103,7 +103,7 @@ Once Phases 3–7 are done:
 - [ ] Run the full `DEPLOY_BACKEND.md` §7 smoke test against the new domain.
 - [ ] Hit `https://staging.gtfsstudio.net/?ref=migration-test`, check `/admin/events` shows the new ref.
 - [ ] Stripe test-mode checkout → confirm the new webhook fires and updates `subscription` row in D1.
-- [ ] On the old domain (`https://staging.gtfsstudio.net`) — should still work normally until Phase 10 wires the redirect.
+- [ ] On the old domain (`https://staging.gtfsbuilder.net`) — should 301 to `https://staging.gtfsstudio.net` once Phase 10 ships.
 
 ### Phase 9 — Production cutover (Claude)
 
@@ -114,11 +114,12 @@ Once Phases 3–7 are done:
 
 ### Phase 10 — 301 redirect old → new (Claude)
 
-Done after Phase 9 is verified, so old-domain hits start sending traffic to the new home.
+Bundled **atomically with Phase 9** — redirect ships in the same commit as the prod cutover so old-domain consumers never see a broken state.
 
-- [ ] In `worker/index.ts`, add an early-return: if `url.hostname` ends in `gtfsstudio.net`, return a 301 to the same path on the corresponding `gtfsstudio.net` host. Preserves query string + path + hash. Special case `www.` and `feeds.` and `staging.` / `staging-feeds.` subdomains.
-- [ ] Keep the old domain routes (`gtfsstudio.net`, `www.gtfsstudio.net`, `feeds.gtfsstudio.net`, `staging.gtfsstudio.net`, `staging-feeds.gtfsstudio.net`) in `wrangler.jsonc` so the Worker still serves them — those bindings carry the redirect.
-- [ ] Deploy. Verify with `curl -I https://feeds.gtfsstudio.net/bozeman-demo/gtfs.zip` — expect `HTTP/2 301` with `location: https://feeds.gtfsstudio.net/bozeman-demo/gtfs.zip`.
+- [x] Added old-domain routes (`gtfsbuilder.net`, `www.gtfsbuilder.net`, `feeds.gtfsbuilder.net`, `staging.gtfsbuilder.net`, `staging-feeds.gtfsbuilder.net`) back to `wrangler.jsonc` so the Worker keeps the bindings.
+- [x] Added a 301 redirect at the top of `worker/index.ts`'s `fetch` handler: when `url.hostname === 'gtfsbuilder.net'` or ends in `.gtfsbuilder.net`, swap the suffix to `gtfsstudio.net` and 301. Path + query preserved.
+- [ ] Verify on staging post-deploy: `curl -I https://staging.gtfsbuilder.net` → `301`, location `https://staging.gtfsstudio.net/`.
+- [ ] Verify on prod post-deploy: `curl -I https://feeds.gtfsbuilder.net/bozeman-demo/gtfs.zip` → `301`, location `https://feeds.gtfsstudio.net/bozeman-demo/gtfs.zip`.
 
 ### Phase 11 — Catalog notifications (user, async)
 

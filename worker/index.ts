@@ -56,6 +56,22 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
+    // Legacy-domain 301 redirect (post-rebrand 2026-05-14). gtfsbuilder.net
+    // and every subdomain were bound to this Worker before the rename; we
+    // keep them bound and 301 to the matching gtfsstudio.net host so that
+    // already-shared links — especially feed URLs polled by downstream
+    // catalogs (Mobility DB, transit.land) — keep working.
+    if (
+      url.hostname === 'gtfsbuilder.net' ||
+      url.hostname.endsWith('.gtfsbuilder.net')
+    ) {
+      const newHost = url.hostname.replace(/gtfsbuilder\.net$/, 'gtfsstudio.net');
+      return Response.redirect(
+        `https://${newHost}${url.pathname}${url.search}`,
+        301,
+      );
+    }
+
     // Public feed distribution lives on a separate hostname (FEEDS_ORIGIN):
     //   prod:    feeds.gtfsstudio.net
     //   staging: staging-feeds.gtfsstudio.net

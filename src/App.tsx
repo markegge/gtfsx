@@ -47,6 +47,7 @@ import { ComposeThread } from './components/community/ComposeThread';
 import { ProfileEditor } from './components/community/ProfileEditor';
 import { ProfilePage } from './components/community/ProfilePage';
 import { DisplayNameGate } from './components/community/DisplayNameGate';
+import { HelpPage } from './components/help/HelpPage';
 
 function PageviewTracker() {
   const location = useLocation();
@@ -255,6 +256,7 @@ function App() {
           <Route path="/demo" element={<EditorRoute demo />} />
           <Route path="/import" element={<DeepLinkImportPage />} />
           <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/help" element={<HelpPage />} />
           <Route path="/login" element={<BackendDisabledPage />} />
           <Route path="/signup" element={<BackendDisabledPage />} />
           <Route path="/feeds" element={<BackendDisabledPage />} />
@@ -290,6 +292,7 @@ function App() {
         <Route path="/account" element={<AccountSettingsPage />} />
         <Route path="/account/billing" element={<AccountBillingPage />} />
         <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/help" element={<HelpPage />} />
         <Route path="/welcome/plan" element={<WelcomePlanPage />} />
         <Route path="/upgrade" element={<WelcomePlanPage />} />
         <Route path="/feeds" element={<MyFeedsPage />} />

@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Quick Start — GTFS Studio</title>
+    <meta name="description" content="A 7-step quick start guide for GTFS Studio: set up your agency, define calendars, draw routes, add stops, build timetables, set fares, and export a standards-compliant GTFS feed." />
+    <link rel="canonical" href="https://www.gtfsstudio.net/docs/quick-start/" />
+    <meta property="og:title" content="Quick Start — GTFS Studio" />
+    <meta property="og:description" content="A 7-step quick start guide for building a GTFS feed in GTFS Studio." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsstudio.net/docs/quick-start/" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --sand:#FBF6EE; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { width:44px; height:44px; }
+      .site-header .brand-name { font-weight:800; font-size:1.5rem; color:var(--accent); letter-spacing:-0.01em; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; transition:color 0.15s, background 0.15s; }
+      .site-header nav a:hover { color:var(--ink); background:var(--bg); }
+      .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .cta:hover { filter:brightness(0.95); }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a:hover { color:var(--ink); }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      @media (max-width: 720px) {
+        .site-header nav, .site-header .cta { display:none; }
+        .site-header .brand-name { font-size:1.25rem; }
+        .site-header .brand img { width:36px; height:36px; }
+      }
+      main { padding-top: 40px; padding-bottom: 60px; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      .toc { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 24px 0; }
+      .toc h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; }
+      .toc ol { margin: 0; padding-left: 1.2rem; }
+      a { color: var(--accent); }
+      ul { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code, kbd { background:var(--sand); padding: 1px 6px; border-radius:4px; font-size:0.9em; }
+      kbd { border:1px solid var(--rule); font-family: ui-monospace, monospace; }
+      .keys { display:grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 0.95em; }
+      .next-up { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 36px 0 0; }
+      .next-up h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; font-size:1.1rem; }
+      footer { padding: 24px 24px 60px; color:var(--muted); font-size: 0.95em; display:flex; gap:18px; flex-wrap:wrap; border-top:1px solid var(--rule); margin-top: 32px; }
+      footer a { color: var(--muted); text-decoration:none; }
+      footer a:hover { color:var(--accent); }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/">
+        <img src="/gtfs-studio-logo.svg" alt="" />
+        <span class="brand-name">GTFS Studio</span>
+      </a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot">
+          <a href="/login">Sign in</a>
+        </div>
+      </div>
+    </header>
+    <main>
+      <h1>Quick Start</h1>
+      <p class="lede">The fastest path from a blank canvas to a working GTFS feed. Each step takes a minute or two; the whole guide should land you with an exportable feed in well under an hour.</p>
+
+      <div class="toc">
+        <h2>On this page</h2>
+        <ol>
+          <li><a href="#agency">Set up your agency</a></li>
+          <li><a href="#calendars">Define service calendars</a></li>
+          <li><a href="#routes">Draw your routes</a></li>
+          <li><a href="#stops">Add stops</a></li>
+          <li><a href="#timetables">Build timetables</a></li>
+          <li><a href="#fares">Set fares</a></li>
+          <li><a href="#export">Validate and export</a></li>
+          <li><a href="#flex">Flex (on-demand) service</a></li>
+          <li><a href="#analysis">Analysis tools</a></li>
+          <li><a href="#shortcuts">Keyboard shortcuts &amp; tips</a></li>
+        </ol>
+      </div>
+
+      <h2 id="agency">1. Set up your agency</h2>
+      <p>Click <strong>Agency</strong> in the sidebar. Enter your agency name, URL, and timezone. This identifies who operates the transit service.</p>
+
+      <h2 id="calendars">2. Define service calendars</h2>
+      <p>Click <strong>Calendars</strong>. Create service patterns (e.g., Weekdays, Weekends) by toggling which days of the week service runs. Set the date range and add holiday exceptions. Use <strong>Add US Holidays</strong> to quickly add federal holidays.</p>
+
+      <h2 id="routes">3. Draw your routes</h2>
+      <p>Click <strong>Routes</strong>, then <strong>Create Route</strong>. Give it a name, pick a color, and click <strong>Draw Route Shape</strong>. Click on the map to place points along the route, then <strong>double-click</strong> to finish.</p>
+      <ul>
+        <li><strong>Snap to road</strong> (on by default) snaps your line to the road network.</li>
+        <li>Use the <strong>direction picker</strong> to draw separate outbound/inbound shapes.</li>
+        <li><strong>Edit Vertices</strong> to drag, add, or delete points on an existing shape.</li>
+        <li><strong>Simplify</strong> reduces vertex count if a shape has too many points.</li>
+      </ul>
+
+      <h2 id="stops">4. Add stops</h2>
+      <p>Select a route and click <strong>Add Stops to Route</strong>, or go to <strong>Stops</strong>. Choose a route from the dropdown, then click <strong>Place Stops on Map</strong>.</p>
+      <ul>
+        <li><strong>Snap to Route</strong> (default) places stops on the route line.</li>
+        <li><strong>Freehand</strong> lets you place stops anywhere.</li>
+        <li>Click each stop in the sidebar to edit its name and properties.</li>
+      </ul>
+
+      <h2 id="timetables">5. Build timetables</h2>
+      <p>Click <strong>Timetables</strong> and select a route. The bottom panel shows a grid of trips (rows) and stops (columns). Enter departure times in each cell.</p>
+      <ul>
+        <li>Type times as <code>7:30</code> or <code>730</code> — they auto-format.</li>
+        <li><strong>+ Add Trip</strong> creates a new row.</li>
+        <li><strong>Repeat Every…</strong> duplicates the last trip at a fixed headway.</li>
+        <li>The <strong>interpolate</strong> button (arrow icon) fills intermediate stop times from the first and last.</li>
+        <li>Use the <strong>Outbound/Inbound</strong> toggle to switch directions.</li>
+      </ul>
+
+      <h2 id="fares">6. Set fares (recommended)</h2>
+      <p>Click <strong>Fares</strong> to define ticket prices. Add a fare with a price and associate it with your routes. Trip planning apps need this data.</p>
+
+      <h2 id="export">7. Validate and export</h2>
+      <p>Click <strong>Export GTFS</strong> in the top bar. The app validates your feed and shows any errors or warnings. Fix errors (click them to navigate to the issue), then export as a ZIP file.</p>
+
+      <h2 id="flex">Flex (on-demand) service</h2>
+      <p>Click <strong>Flex</strong> in the sidebar to define GTFS-Flex zones for demand-response or dial-a-ride service. Each zone automatically gets a paired route (editable from the <strong>Routes</strong> panel) so it appears in trip planners.</p>
+      <h3>Creating a zone</h3>
+      <p>Click <strong>+ Create New Flex Zone</strong>, then pick one of three methods:</p>
+      <ul>
+        <li><strong>Draw Zone on Map</strong> — click to place polygon vertices, double-click to close.</li>
+        <li><strong>Create Stop Group</strong> — a named group of existing stops (<code>location_groups.txt</code>).</li>
+        <li><strong>Auto-generate from fixed routes</strong> — buffer existing routes into flex zones.</li>
+      </ul>
+      <h3>Configuring a zone</h3>
+      <p>Select a zone to open <strong>Service Details</strong>:</p>
+      <ul>
+        <li><strong>Service pattern</strong> — pick from your calendars (or calendar_dates-only services).</li>
+        <li><strong>Pickup window</strong> — start/end times in HH:MM:SS (required to export).</li>
+        <li><strong>Booking rule</strong> — advance notice, phone/URL, messages (<code>booking_rules.txt</code>).</li>
+        <li><strong>Additional service windows</strong> — morning + evening shifts on one zone.</li>
+        <li><strong>Fare</strong> — link to a fare defined in the Fares panel.</li>
+        <li><strong>Travel-time estimation</strong> — mean/safe duration factors for trip planners.</li>
+      </ul>
+      <p>Click a zone on the map to get a popup with quick links to <strong>Edit Route</strong> and <strong>Edit Service Details</strong>. Zone fill colour tracks the linked route's colour.</p>
+      <p>Export produces <code>locations.geojson</code>, <code>booking_rules.txt</code>, and (for stop-group zones) <code>location_groups.txt</code> + <code>location_group_stops.txt</code>. Zones missing a pickup window are flagged in the Export dialog and skipped.</p>
+
+      <h2 id="analysis">Analysis tools</h2>
+      <p><strong>Costs</strong> — Set a cost per revenue hour and deadhead factor to estimate daily and annual operating costs per route and system-wide.</p>
+      <p><strong>Coverage</strong> — Analyze population, households, and jobs within walking distance of your stops using Census data.</p>
+
+      <h2 id="shortcuts">Keyboard shortcuts &amp; tips</h2>
+      <div class="keys">
+        <span><kbd>Esc</kbd> Cancel drawing / discard edits</span>
+        <span><kbd>Delete</kbd> Remove selected vertex</span>
+        <span><kbd>Tab</kbd> Next timetable cell</span>
+        <span><kbd>Shift</kbd>+<kbd>Tab</kbd> Previous cell</span>
+      </div>
+      <h3>Tips</h3>
+      <ul>
+        <li>Click any route or stop on the map to see details and quick-edit.</li>
+        <li>Direction arrows on routes show the direction of travel.</li>
+        <li>Import an existing GTFS ZIP to edit a feed you already have.</li>
+        <li>Your work auto-saves to the browser — refresh won't lose data.</li>
+      </ul>
+
+      <div class="next-up">
+        <h2>Next up</h2>
+        <p>For a deeper walkthrough of every panel, conventions, and edge cases, see the full <a href="/docs/">documentation</a>. Stuck or curious? The <a href="/community">community forum</a> has answers and a place to ask. Need direct support? Visit the <a href="/help">Help page</a>.</p>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+      <a href="/docs/deep-links/">Deep-link integration</a>
+      <a href="/community">Community</a>
+      <a href="/help">Help</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

@@ -28,6 +28,7 @@ import { AdminOrgsPage } from './components/admin/AdminOrgsPage';
 import { AdminOrgDetailPage } from './components/admin/AdminOrgDetailPage';
 import { AdminAuditPage } from './components/admin/AdminAuditPage';
 import { AdminEventsPage } from './components/admin/AdminEventsPage';
+import { DeepLinkImportPage } from './components/import-export/DeepLinkImportPage';
 import { ImpersonationBanner } from './components/admin/ImpersonationBanner';
 import { OrgSettingsPage } from './components/orgs/OrgSettingsPage';
 import { AcceptInvitationPage } from './components/orgs/AcceptInvitationPage';
@@ -244,6 +245,7 @@ function App() {
         <Routes>
           <Route path="/" element={<EditorRoute />} />
           <Route path="/demo" element={<EditorRoute demo />} />
+          <Route path="/import" element={<DeepLinkImportPage />} />
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/login" element={<BackendDisabledPage />} />
           <Route path="/signup" element={<BackendDisabledPage />} />
@@ -268,6 +270,7 @@ function App() {
       <Routes>
         <Route path="/" element={<EditorRoute />} />
         <Route path="/demo" element={<EditorRoute demo />} />
+        <Route path="/import" element={<DeepLinkImportPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />

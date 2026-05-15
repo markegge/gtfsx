@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Deep-link imports – GTFS Studio for ecosystem partners</title>
+    <meta name="description" content="Open any GTFS feed in GTFS Studio with a single URL. Build 'Edit in GTFS Studio' buttons for Mobility Database, transit.land, the Canonical GTFS Validator, or any tool that knows a feed's URL." />
+    <link rel="canonical" href="https://www.gtfsstudio.net/docs/deep-links/" />
+    <meta property="og:title" content="Deep-link imports – GTFS Studio" />
+    <meta property="og:description" content="Open any GTFS feed in GTFS Studio with a single URL. Designed for ecosystem partners building 'Edit in GTFS Studio' buttons." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsstudio.net/docs/deep-links/" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --code-bg:#FFFFFF; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      header, footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      header { display:flex; align-items:center; justify-content:space-between; padding-top:24px; padding-bottom:24px; border-bottom:1px solid var(--rule); }
+      .brand { display:flex; align-items:center; gap:10px; text-decoration:none; color:var(--ink); font-weight:700; }
+      .brand img { width:36px; height:36px; }
+      .cta { display:inline-block; background:var(--accent); color:#fff; padding:10px 18px; border-radius:8px; text-decoration:none; font-weight:600; }
+      .cta:hover { filter: brightness(0.95); }
+      main { padding-top: 40px; padding-bottom: 60px; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      a { color: var(--accent); }
+      ul { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code { background:var(--code-bg); border:1px solid var(--rule); padding:1px 6px; border-radius:4px; font-size:0.9em; word-break: break-word; }
+      pre { background:var(--code-bg); border:1px solid var(--rule); border-radius:8px; padding:14px 16px; overflow:auto; font-size:0.88em; }
+      pre code { background:none; border:none; padding:0; }
+      table { width:100%; border-collapse:collapse; margin: 12px 0 20px; }
+      th, td { text-align:left; vertical-align:top; padding:8px 10px; border-bottom:1px solid var(--rule); font-size:0.95em; }
+      th { font-weight:700; }
+      .button-preview {
+        display:inline-flex; align-items:center; gap:10px;
+        background:var(--accent); color:#fff;
+        padding:10px 18px; border-radius:8px;
+        text-decoration:none; font-weight:600;
+      }
+      .button-preview img { width:24px; height:24px; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; }
+      footer a { color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/" class="brand"><img src="/gtfs-studio-logo.svg" alt="" /> GTFS Studio</a>
+      <a href="/" class="cta">Launch the editor</a>
+    </header>
+
+    <main>
+      <h1>Deep-link imports</h1>
+      <p class="lede">Build an "Edit in GTFS Studio" button. One URL opens any GTFS feed in the editor — no upload, no download, no account.</p>
+
+      <h2>What it is</h2>
+      <p>GTFS Studio accepts inbound URLs that name a GTFS feed by direct ZIP URL or by catalog id. A click on such a link fetches the feed server-side, validates that it parses as GTFS, and drops the user straight into the editor. Designed for catalogs (Mobility Database, transit.land), validators, blog posts, and cold-email outreach.</p>
+
+      <h2>Quick start</h2>
+
+      <h3>1. Direct feed URL</h3>
+      <pre><code>https://www.gtfsstudio.net/import?url=https%3A%2F%2Fexample.org%2Fgtfs.zip</code></pre>
+      <p>URL-encode the feed URL (use <code>encodeURIComponent</code> in JavaScript). HTTPS feeds preferred; HTTP is accepted but discouraged.</p>
+
+      <h3>2. Mobility Database feed id</h3>
+      <pre><code>https://www.gtfsstudio.net/import?source=mobilitydb&amp;feed_id=mdb-1234</code></pre>
+      <p>We resolve <code>feed_id</code> to the feed's latest hosted dataset via the Mobility Database API, then load it. Use the <code>id</code> field from the catalog (e.g. <code>mdb-1234</code>).</p>
+
+      <h3>3. transit.land Onestop id</h3>
+      <pre><code>https://www.gtfsstudio.net/import?source=transitland&amp;onestop_id=f-9q9-bart</code></pre>
+      <p><em>Status: not yet wired up — requires a transit.land API key on our end. Coming soon. Use the direct-URL variant in the meantime.</em></p>
+
+      <h2>URL parameters</h2>
+      <table>
+        <thead>
+          <tr><th>Parameter</th><th>Required?</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>url</code></td>
+            <td>Yes for direct imports</td>
+            <td>URL-encoded GTFS <code>.zip</code> URL. Mutually exclusive with <code>source</code>.</td>
+          </tr>
+          <tr>
+            <td><code>source</code></td>
+            <td>Yes for catalog imports</td>
+            <td>Catalog name. Currently <code>mobilitydb</code>; <code>transitland</code> coming soon.</td>
+          </tr>
+          <tr>
+            <td><code>feed_id</code></td>
+            <td>With <code>source=mobilitydb</code></td>
+            <td>Mobility Database feed id, e.g. <code>mdb-1234</code>.</td>
+          </tr>
+          <tr>
+            <td><code>onestop_id</code></td>
+            <td>With <code>source=transitland</code></td>
+            <td>transit.land Onestop id, e.g. <code>f-9q9-bart</code>.</td>
+          </tr>
+          <tr>
+            <td><code>ref</code></td>
+            <td>Optional</td>
+            <td>Attribution tag. Recorded in our analytics; known partner refs (<code>mobilitydb</code>, <code>transitland</code>, <code>gtfs_validator</code>) render a "Loaded from …" badge.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Button snippets</h2>
+
+      <h3>Text link</h3>
+      <pre><code>&lt;a href="https://www.gtfsstudio.net/import?url=https%3A%2F%2Fexample.org%2Fgtfs.zip&amp;ref=YOUR_REF"&gt;Edit in GTFS Studio&lt;/a&gt;</code></pre>
+
+      <h3>Logo button</h3>
+      <p>Renders like this:</p>
+      <p><a class="button-preview" href="/import?url=https%3A%2F%2Fexample.org%2Fgtfs.zip&amp;ref=docs_preview"><img src="/gtfs-studio-logo.svg" alt="" />Edit in GTFS Studio</a></p>
+      <pre><code>&lt;a href="https://www.gtfsstudio.net/import?url=https%3A%2F%2Fexample.org%2Fgtfs.zip&amp;ref=YOUR_REF"
+   style="display:inline-flex;align-items:center;gap:10px;
+          background:#E8734A;color:#fff;padding:10px 18px;
+          border-radius:8px;text-decoration:none;font-weight:600;
+          font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;"&gt;
+  &lt;img src="https://www.gtfsstudio.net/gtfs-studio-logo.svg"
+       alt="" width="24" height="24" /&gt;
+  Edit in GTFS Studio
+&lt;/a&gt;</code></pre>
+      <p>Use the logo SVG at <a href="/gtfs-studio-logo.svg">https://www.gtfsstudio.net/gtfs-studio-logo.svg</a>. Square aspect, transparent background, hot-link friendly.</p>
+
+      <h2>Errors and edge cases</h2>
+      <p>The <code>/import</code> page handles every common failure mode with a user-facing message and a path forward. Partners don't need to validate URLs themselves; just hand off and we'll show the right error.</p>
+      <table>
+        <thead><tr><th>What happens</th><th>What the user sees</th></tr></thead>
+        <tbody>
+          <tr><td>Missing or malformed parameters</td><td>"We need a GTFS feed URL to import." + upload fallback</td></tr>
+          <tr><td>Fetch timed out (&gt;30 s) or returned non-200</td><td>"Couldn't reach the feed at [URL]." + retry / paste-URL</td></tr>
+          <tr><td>Response isn't a ZIP</td><td>"That URL didn't return a GTFS zip file." + upload fallback</td></tr>
+          <tr><td>ZIP isn't valid GTFS</td><td>"We got a ZIP but it doesn't look like GTFS." + upload fallback</td></tr>
+          <tr><td>Catalog id not found</td><td>"We couldn't find feed [id] in [catalog]." + paste-URL fallback</td></tr>
+          <tr><td>File exceeds 100 MB</td><td>"This feed is larger than our 100 MB import limit." + contact</td></tr>
+          <tr><td>URL points at a private network</td><td>Hard reject (SSRF protection — blocks 10/8, 172.16/12, 192.168/16, 127/8, 169.254/16, and IPv6 literals).</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Rate limits and reliability</h2>
+      <ul>
+        <li><strong>Rate limit:</strong> 30 imports per hour per IP. If a partner expects burst usage above this, get in touch — we can lift it per-domain.</li>
+        <li><strong>Size limit:</strong> 100 MB compressed (enforced via streaming; <code>Content-Length</code> headers can lie, so the cap holds even when servers misreport).</li>
+        <li><strong>Redirect cap:</strong> 5 hops, SSRF check at each.</li>
+        <li><strong>Timeout:</strong> 30 s total for fetch + parse.</li>
+        <li><strong>Target uptime:</strong> matches the editor itself — Cloudflare-hosted, p99 &lt; 200 ms worldwide for a cached fetch path.</li>
+      </ul>
+
+      <h2>Partner attribution</h2>
+      <p>Pass <code>ref=&lt;your-name&gt;</code> on the import URL to (a) show up in our analytics dashboard so we can track which integrations send traffic, and (b) render a small "Loaded from &lt;partner&gt;" badge in the editor — visible only for known partner refs. Currently recognised: <code>mobilitydb</code>, <code>transitland</code>, <code>gtfs_validator</code>. Get in touch to add yours.</p>
+
+      <h2>Contact</h2>
+      <p>Mark Egge — <a href="mailto:mark@gtfsstudio.net">mark@gtfsstudio.net</a>. Happy to whitelist partner domains for higher rate limits, register additional ref tags for attribution badges, or pair on integration design.</p>
+    </main>
+
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/docs/deep-links/">Deep-link integration</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+  </body>
+</html>

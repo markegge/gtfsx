@@ -394,10 +394,12 @@ import { orgsRouter } from './orgs/routes';
 import { adminRouter } from './admin/routes';
 import { billingRouter } from './billing/routes';
 import { eventsRouter } from './events/routes';
+import { importRouter } from './import/routes';
 apiRouter.route('/orgs', orgsRouter);
 apiRouter.route('/admin', adminRouter);
 apiRouter.route('/billing', billingRouter);
 apiRouter.route('/events', eventsRouter);
+apiRouter.route('/import', importRouter);
 // Publication and distribution endpoints hang off the projects router
 // (/api/projects/:id/publish, /catalog-submissions, etc.) so project-ownership
 // checks stay co-located with their endpoints. See worker/projects/routes.ts.

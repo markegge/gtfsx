@@ -91,7 +91,7 @@ export async function requireDraftLinkAccess(
   return requireOwnerFeature(env, ownerType, ownerId, 'draft_links');
 }
 
-// ─── Seat enforcement for org memberships (consultant capability) ───────────
+// ─── Seat enforcement for org memberships ───────────────────────────────────
 
 // Used by POST /api/orgs/:id/invitations and /api/orgs/:id/members. The
 // invitee must be a plan that can be a member of orgs they don't own.
@@ -102,7 +102,7 @@ export async function requireMemberCanJoin(env: Env, userId: string): Promise<Pl
       feature: 'cross_org_member',
       currentPlan: plan,
       upgradeTo: 'pro',
-    }, 'This user must upgrade to Pro or Consultant before joining an organization.');
+    }, 'This user must upgrade to a paid plan before joining an organization.');
   }
   return plan;
 }

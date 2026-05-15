@@ -5,8 +5,6 @@ const STYLES: Record<Plan, string> = {
   free: 'bg-sand text-brown',
   pro: 'bg-teal-light text-teal',
   team: 'bg-purple-light text-purple',
-  consultant: 'bg-coral-light text-coral',
-  consultant_firm: 'bg-coral-light text-coral',
   enterprise: 'bg-gold-light text-amber-700',
 };
 

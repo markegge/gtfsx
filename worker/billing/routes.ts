@@ -132,13 +132,12 @@ billingRouter.get('/orgs/:id', async (c) => {
   });
 });
 
-// Self-serve checkout supports the three flat-priced plans. Consultant firms
-// (per-seat scaling for an org) are reached by upgrading from solo Consultant
-// via a separate add-seats flow — not directly from this endpoint.
+// Self-serve checkout supports the two flat-priced plans (Pro on the user,
+// Team on the org). Enterprise is sales-led.
 const checkoutSchema = z.object({
   ownerType: z.enum(['user', 'org']),
   ownerId: z.string().min(1),
-  plan: z.enum(['pro', 'team', 'consultant']),
+  plan: z.enum(['pro', 'team']),
   interval: z.enum(['month', 'year']),
 });
 
@@ -171,20 +170,20 @@ billingRouter.post('/checkout', async (c) => {
   //   - org: must be admin or owner of the org
   if (body.ownerType === 'user') {
     if (body.ownerId !== user.id) throw forbidden('Cannot start checkout for another user.');
-    // Pro and solo Consultant are billed to the user; Team needs an org.
+    // Pro is billed to the user; Team needs an org.
     if (body.plan === 'team') {
       throw validationFailed('Team plans must be billed to an organization.');
     }
   } else {
     await requireOrgRole(c.env, user, body.ownerId, 'admin');
-    if (body.plan === 'pro' || body.plan === 'consultant') {
-      throw validationFailed('Pro and Consultant plans must be billed to a user, not an organization.');
+    if (body.plan === 'pro') {
+      throw validationFailed('Pro plans must be billed to a user, not an organization.');
     }
   }
 
   const interval: Interval = body.interval;
-  // All self-serve checkout flows start at one seat. Consultants add seats
-  // via a separate post-purchase flow.
+  // Team is flat-priced with unlimited seats, so every self-serve checkout is
+  // quantity=1; Stripe quantity does not track seat usage.
   const quantity = 1;
 
   const priceId = resolvePriceId(c.env, body.plan, interval);

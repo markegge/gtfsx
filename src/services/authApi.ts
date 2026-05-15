@@ -8,8 +8,6 @@ export interface AuthedUser {
     | 'free'
     | 'pro'
     | 'team'
-    | 'consultant'
-    | 'consultant_firm'
     | 'enterprise';
   planStatus?: 'active' | 'past_due' | 'canceled' | 'trialing';
 }

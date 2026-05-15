@@ -168,13 +168,7 @@ function planFromSubscription(env: Env, sub: Stripe.Subscription): Plan | null {
   // ID against our env-var lookup. This avoids a second Stripe API round-trip
   // on every event and works without the product object being expanded.
   const basePlan = planFromPriceId(env, item.price.id);
-  if (!basePlan) return null;
-  // Consultant Firm vs Solo distinguished by owner_type, not the product. The
-  // Stripe Product is `consultant`; we map firm = subscription on an org.
-  if (basePlan === 'consultant' && sub.metadata?.owner_type === 'org') {
-    return 'consultant_firm';
-  }
-  if (isPlan(basePlan)) return basePlan;
+  if (basePlan && isPlan(basePlan)) return basePlan;
   return null;
 }
 

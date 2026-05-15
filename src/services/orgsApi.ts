@@ -12,8 +12,6 @@ export interface OrgSummary {
     | 'free'
     | 'pro'
     | 'team'
-    | 'consultant'
-    | 'consultant_firm'
     | 'enterprise';
   planStatus?: 'active' | 'past_due' | 'canceled' | 'trialing';
   memberCount: number;

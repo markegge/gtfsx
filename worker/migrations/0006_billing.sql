@@ -8,7 +8,7 @@
 --
 -- This migration is additive only. Existing user/org rows default to plan='free'.
 
--- Plan assignment on users (personal-owner billing: Free / Pro / Consultant solo).
+-- Plan assignment on users (personal-owner billing: Free / Pro).
 ALTER TABLE user ADD COLUMN plan TEXT NOT NULL DEFAULT 'free';
 ALTER TABLE user ADD COLUMN stripe_customer_id TEXT;
 ALTER TABLE user ADD COLUMN plan_status TEXT NOT NULL DEFAULT 'active';
@@ -16,20 +16,20 @@ ALTER TABLE user ADD COLUMN plan_status TEXT NOT NULL DEFAULT 'active';
 ALTER TABLE user ADD COLUMN plan_renewal_at INTEGER;
   -- unix ms; null on free
 ALTER TABLE user ADD COLUMN plan_seat_count INTEGER NOT NULL DEFAULT 1;
-  -- consultant solo: paid seat count (always 1 in v1)
+  -- paid seat count (Team is flat-priced; this stays 1 in v1)
 ALTER TABLE user ADD COLUMN plan_expires_at INTEGER;
   -- enterprise grants only: contract end; nightly cron downgrades on expiry
 
 CREATE INDEX user_plan_idx ON user (plan);
 CREATE INDEX user_stripe_customer_idx ON user (stripe_customer_id) WHERE stripe_customer_id IS NOT NULL;
 
--- Plan assignment on organizations (org-owned billing: Free / Team / Consultant Firm / Enterprise).
+-- Plan assignment on organizations (org-owned billing: Free / Team / Enterprise).
 ALTER TABLE organization ADD COLUMN plan TEXT NOT NULL DEFAULT 'free';
 ALTER TABLE organization ADD COLUMN stripe_customer_id TEXT;
 ALTER TABLE organization ADD COLUMN plan_status TEXT NOT NULL DEFAULT 'active';
 ALTER TABLE organization ADD COLUMN plan_renewal_at INTEGER;
 ALTER TABLE organization ADD COLUMN plan_seat_count INTEGER NOT NULL DEFAULT 1;
-  -- team / consultant_firm: paid seat count, drives Stripe quantity
+  -- Team is flat-priced with unlimited seats; held at 1 for forward compat
 ALTER TABLE organization ADD COLUMN plan_expires_at INTEGER;
 
 CREATE INDEX organization_plan_idx ON organization (plan);

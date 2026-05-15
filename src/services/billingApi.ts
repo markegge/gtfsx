@@ -6,8 +6,6 @@ export type Plan =
   | 'free'
   | 'pro'
   | 'team'
-  | 'consultant'
-  | 'consultant_firm'
   | 'enterprise';
 
 export type Interval = 'month' | 'year';
@@ -48,9 +46,7 @@ export interface OwnerBillingState {
 export interface CheckoutInput {
   ownerType: 'user' | 'org';
   ownerId: string;
-  // Self-serve checkout supports Pro, Team, and solo Consultant. Consultant
-  // Firm seats are added via a separate post-purchase flow.
-  plan: 'pro' | 'team' | 'consultant';
+  plan: 'pro' | 'team';
   interval: Interval;
 }
 

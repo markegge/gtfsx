@@ -35,19 +35,14 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
     features: ['Up to 3 saved feeds in the cloud', 'GTFS ZIP export (host anywhere)', 'Free forever', 'Community support'],
   },
   {
-    plan: 'pro', displayName: 'Pro', monthlyPriceUsd: 19, annualPriceUsd: 190, perSeat: false,
+    plan: 'pro', displayName: 'Pro', monthlyPriceUsd: 49, annualPriceUsd: 499, perSeat: false,
     tagline: 'For individual operators and consultants.',
     features: ['Up to 10 saved feeds', 'Publish 1 feed to a stable URL', 'Rider-facing embeds + mini-site', 'Demographic coverage analysis', 'Cost estimation analysis', 'Custom brand color', 'Email support'],
   },
   {
-    plan: 'team', displayName: 'Team', monthlyPriceUsd: 199, annualPriceUsd: 1990, perSeat: false,
-    tagline: 'For transit agencies with multiple staff.',
-    features: ['Unlimited saved feeds', 'Publish up to 5 feeds', 'Full analysis: Title VI + propensity heatmap', 'Team workspace (up to 10 seats)', 'Custom brand color + org logo', 'Email support'],
-  },
-  {
-    plan: 'consultant', displayName: 'Consultant', monthlyPriceUsd: 79, annualPriceUsd: 790, perSeat: true,
-    tagline: 'For consultants serving multiple agencies. Start solo, add seats later.',
-    features: ['Cross-org membership (unlimited client orgs)', 'Unlimited saved feeds', 'Publish up to 5 feeds per seat', 'Full analysis tools', 'Add more seats from your billing settings as your firm grows', 'Email support'],
+    plan: 'team', displayName: 'Team', monthlyPriceUsd: 199, annualPriceUsd: 1999, perSeat: false,
+    tagline: 'For transit agencies and consultants serving multiple clients.',
+    features: ['Unlimited saved feeds', 'Publish up to 5 feeds', 'Full analysis: Title VI + propensity heatmap', 'Unlimited team members in your organization', 'Cross-org membership (work in unlimited client orgs)', 'Custom brand color + org logo', 'Email support'],
   },
   {
     plan: 'enterprise', displayName: 'Enterprise', monthlyPriceUsd: null, annualPriceUsd: null, perSeat: false,
@@ -135,7 +130,7 @@ export function WelcomePlanPage() {
     if (!authChecked || !currentUser) return;
     if (!orgsLoaded) return;
     if (!directPlanParam) return;
-    if (directPlanParam !== 'pro' && directPlanParam !== 'team' && directPlanParam !== 'consultant') {
+    if (directPlanParam !== 'pro' && directPlanParam !== 'team') {
       setAutoTriggered(true);
       return;
     }
@@ -167,7 +162,7 @@ export function WelcomePlanPage() {
   }, [presetOwnerType, presetOwnerId, adminOrgs]);
 
   const ordered = useMemo(() => {
-    const order: Plan[] = ['free', 'pro', 'team', 'consultant', 'enterprise'];
+    const order: Plan[] = ['free', 'pro', 'team', 'enterprise'];
     return order
       .map((p) => plans.find((c) => c.plan === p))
       .filter((c): c is PlanCatalogEntry => !!c);
@@ -183,7 +178,7 @@ export function WelcomePlanPage() {
 
   // Kick off Stripe Checkout. The owner mapping is enforced server-side too,
   // but we resolve it here so the redirect happens in a single round-trip.
-  async function startPaidCheckout(plan: 'pro' | 'team' | 'consultant', orgId?: string) {
+  async function startPaidCheckout(plan: 'pro' | 'team', orgId?: string) {
     if (!currentUser) {
       navigate('/login?next=/upgrade');
       return;
@@ -233,7 +228,7 @@ export function WelcomePlanPage() {
       }
       return;
     }
-    void startPaidCheckout(plan as 'pro' | 'consultant');
+    void startPaidCheckout(plan as 'pro');
   }
 
   // Submit handler for the inline "Create your organization" form. Creates

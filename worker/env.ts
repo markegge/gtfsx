@@ -27,8 +27,6 @@ export interface Env {
   STRIPE_PRICE_PRO_ANNUAL?: string;
   STRIPE_PRICE_TEAM_MONTHLY?: string;
   STRIPE_PRICE_TEAM_ANNUAL?: string;
-  STRIPE_PRICE_CONSULTANT_MONTHLY?: string;
-  STRIPE_PRICE_CONSULTANT_ANNUAL?: string;
   STRIPE_PORTAL_CONFIG_ID?: string;
 
   // Secrets (wrangler secret put)
@@ -55,7 +53,7 @@ export interface AuthedUser {
   staff: boolean;
   // Personal-workspace plan + status, mirrored from user.plan / user.plan_status.
   // Updated by Stripe webhooks. Used for client-side paywall gating.
-  plan: 'free' | 'pro' | 'team' | 'consultant' | 'consultant_firm' | 'enterprise';
+  plan: 'free' | 'pro' | 'team' | 'enterprise';
   planStatus: 'active' | 'past_due' | 'canceled' | 'trialing';
 }
 

@@ -12,24 +12,24 @@ export type FeatureKey =
   | 'analysis_title_vi'    // Title VI equity analysis
   | 'analysis_propensity'  // propensity heatmap
   | 'org_workspace'        // create or be a member of an org
-  | 'cross_org_member'     // member of orgs you don't own (consultant capability)
+  | 'cross_org_member'     // member of orgs you don't own (e.g. consultants in client orgs)
   | 'org_logo'             // upload a custom org logo
   | 'brand_color'          // custom brand primary color
   | 'phone_support';       // SLA-backed phone support
 
 // Per-feature: which plans grant access. Free is excluded by absence.
 export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
-  managed_publishing:  ['pro', 'team', 'consultant', 'consultant_firm', 'enterprise'],
-  draft_links:         ['pro', 'team', 'consultant', 'consultant_firm', 'enterprise'],
-  mobility_db_submit:  ['pro', 'team', 'consultant', 'consultant_firm', 'enterprise'],
-  embeds:              ['pro', 'team', 'consultant', 'consultant_firm', 'enterprise'],
-  analysis_basic:      ['pro', 'team', 'consultant', 'consultant_firm', 'enterprise'],
-  analysis_title_vi:   ['team', 'consultant', 'consultant_firm', 'enterprise'],
-  analysis_propensity: ['team', 'consultant', 'consultant_firm', 'enterprise'],
-  org_workspace:       ['team', 'consultant', 'consultant_firm', 'enterprise'],
-  cross_org_member:    ['consultant', 'consultant_firm', 'enterprise'],
-  org_logo:            ['team', 'consultant', 'consultant_firm', 'enterprise'],
-  brand_color:         ['pro', 'team', 'consultant', 'consultant_firm', 'enterprise'],
+  managed_publishing:  ['pro', 'team', 'enterprise'],
+  draft_links:         ['pro', 'team', 'enterprise'],
+  mobility_db_submit:  ['pro', 'team', 'enterprise'],
+  embeds:              ['pro', 'team', 'enterprise'],
+  analysis_basic:      ['pro', 'team', 'enterprise'],
+  analysis_title_vi:   ['team', 'enterprise'],
+  analysis_propensity: ['team', 'enterprise'],
+  org_workspace:       ['team', 'enterprise'],
+  cross_org_member:    ['team', 'enterprise'],
+  org_logo:            ['team', 'enterprise'],
+  brand_color:         ['pro', 'team', 'enterprise'],
   phone_support:       ['enterprise'],
 };
 
@@ -39,7 +39,7 @@ export function planHasFeature(plan: Plan, feature: FeatureKey): boolean {
 
 // The smallest plan that unlocks a given feature — used by the upgrade modal
 // to suggest a target. Order matches the price ladder.
-const PLAN_ORDER: Plan[] = ['free', 'pro', 'team', 'consultant', 'consultant_firm', 'enterprise'];
+const PLAN_ORDER: Plan[] = ['free', 'pro', 'team', 'enterprise'];
 
 export function cheapestPlanFor(feature: FeatureKey): Plan {
   for (const plan of PLAN_ORDER) {
@@ -83,8 +83,8 @@ export const PLAN_CATALOG: PlanCatalogEntry[] = [
   {
     plan: 'pro',
     displayName: 'Pro',
-    monthlyPriceUsd: 19,
-    annualPriceUsd: 190,
+    monthlyPriceUsd: 49,
+    annualPriceUsd: 499,
     perSeat: false,
     tagline: 'For individual operators and consultants.',
     features: [
@@ -101,32 +101,17 @@ export const PLAN_CATALOG: PlanCatalogEntry[] = [
     plan: 'team',
     displayName: 'Team',
     monthlyPriceUsd: 199,
-    annualPriceUsd: 1990,
+    annualPriceUsd: 1999,
     perSeat: false,
-    tagline: 'For transit agencies with multiple staff.',
+    tagline: 'For transit agencies and consultants serving multiple clients.',
     features: [
       'Unlimited saved feeds',
       'Publish up to 5 feeds',
       'Full analysis: Title VI + propensity heatmap',
-      'Team workspace (up to 10 seats)',
+      'Unlimited team members in your organization',
+      'Cross-org membership (work in unlimited client orgs)',
       'Custom brand color + org logo',
       'Email support (1-2 business day target)',
-    ],
-  },
-  {
-    plan: 'consultant',
-    displayName: 'Consultant',
-    monthlyPriceUsd: 79,
-    annualPriceUsd: 790,
-    perSeat: true,
-    tagline: 'For consultants serving multiple agencies. Start solo, add seats later.',
-    features: [
-      'Cross-org membership (unlimited client orgs)',
-      'Unlimited saved feeds',
-      'Publish up to 5 feeds per seat',
-      'Full analysis tools',
-      'Add more seats from your billing settings as your firm grows',
-      'Email support',
     ],
   },
   {

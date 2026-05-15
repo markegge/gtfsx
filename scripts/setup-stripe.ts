@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Idempotently configure Stripe for GTFS Studio freemium per docs/FREEMIUM_PLAN.md.
-// Creates 4 Products, 6 Prices, the Customer Portal config, and registers the
+// Creates 3 Products, 4 Prices, the Customer Portal config, and registers the
 // webhook endpoint. Re-runnable; existing objects are reused and only the
 // signing secret on the webhook is fresh on a first-time create.
 //
@@ -78,15 +78,8 @@ const PRODUCTS: ProductSpec[] = [
     id: 'gtfsb_team',
     name: 'GTFS Studio Team',
     description:
-      'For transit agencies. Unlimited saved feeds, publish up to 5, full analysis tools (Title VI + propensity heatmap), team workspace with up to 10 seats.',
+      'For transit agencies and consultants. Unlimited saved feeds, publish up to 5, full analysis tools (Title VI + propensity heatmap), unlimited team members in your organization, and cross-org membership for consultants serving multiple clients.',
     metadata: { app_id: 'gtfsb_team', tier: 'team' },
-  },
-  {
-    id: 'gtfsb_consultant',
-    name: 'GTFS Studio Consultant',
-    description:
-      'For consultants serving multiple agencies. Cross-org membership, unlimited saved feeds, publish up to 5 per seat. Solo and firm billing share this product; firm subscribers add seats.',
-    metadata: { app_id: 'gtfsb_consultant', tier: 'consultant' },
   },
   {
     id: 'gtfsb_enterprise',
@@ -137,12 +130,10 @@ interface PriceSpec {
 }
 
 const PRICES: PriceSpec[] = [
-  { lookupKey: 'gtfsb_pro_monthly',        productId: 'gtfsb_pro',        envName: 'STRIPE_PRICE_PRO_MONTHLY',        unitAmount: 1900,   interval: 'month' },
-  { lookupKey: 'gtfsb_pro_annual',         productId: 'gtfsb_pro',        envName: 'STRIPE_PRICE_PRO_ANNUAL',         unitAmount: 19000,  interval: 'year'  },
-  { lookupKey: 'gtfsb_team_monthly',       productId: 'gtfsb_team',       envName: 'STRIPE_PRICE_TEAM_MONTHLY',       unitAmount: 19900,  interval: 'month' },
-  { lookupKey: 'gtfsb_team_annual',        productId: 'gtfsb_team',       envName: 'STRIPE_PRICE_TEAM_ANNUAL',        unitAmount: 199000, interval: 'year'  },
-  { lookupKey: 'gtfsb_consultant_monthly', productId: 'gtfsb_consultant', envName: 'STRIPE_PRICE_CONSULTANT_MONTHLY', unitAmount: 7900,   interval: 'month' },
-  { lookupKey: 'gtfsb_consultant_annual',  productId: 'gtfsb_consultant', envName: 'STRIPE_PRICE_CONSULTANT_ANNUAL',  unitAmount: 79000,  interval: 'year'  },
+  { lookupKey: 'gtfsb_pro_monthly',  productId: 'gtfsb_pro',  envName: 'STRIPE_PRICE_PRO_MONTHLY',  unitAmount: 4900,   interval: 'month' },
+  { lookupKey: 'gtfsb_pro_annual',   productId: 'gtfsb_pro',  envName: 'STRIPE_PRICE_PRO_ANNUAL',   unitAmount: 49900,  interval: 'year'  },
+  { lookupKey: 'gtfsb_team_monthly', productId: 'gtfsb_team', envName: 'STRIPE_PRICE_TEAM_MONTHLY', unitAmount: 19900,  interval: 'month' },
+  { lookupKey: 'gtfsb_team_annual',  productId: 'gtfsb_team', envName: 'STRIPE_PRICE_TEAM_ANNUAL',  unitAmount: 199900, interval: 'year'  },
 ];
 
 async function upsertPrice(spec: PriceSpec): Promise<Stripe.Price> {
@@ -176,7 +167,6 @@ const ourConfig = existingConfigs.data.find((c) => c.metadata?.app_id === `gtfsb
 
 const proPrices = PRICES.filter((p) => p.productId === 'gtfsb_pro').map((p) => priceIds[p.envName]);
 const teamPrices = PRICES.filter((p) => p.productId === 'gtfsb_team').map((p) => priceIds[p.envName]);
-const consultantPrices = PRICES.filter((p) => p.productId === 'gtfsb_consultant').map((p) => priceIds[p.envName]);
 
 const portalFeatures: Stripe.BillingPortal.ConfigurationCreateParams.Features = {
   customer_update: {
@@ -209,7 +199,6 @@ const portalFeatures: Stripe.BillingPortal.ConfigurationCreateParams.Features = 
     products: [
       { product: 'gtfsb_pro', prices: proPrices },
       { product: 'gtfsb_team', prices: teamPrices },
-      { product: 'gtfsb_consultant', prices: consultantPrices },
     ],
   },
 };

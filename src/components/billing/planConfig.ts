@@ -18,21 +18,21 @@ export type FeatureKey =
   | 'phone_support';
 
 export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
-  managed_publishing:  ['pro', 'team', 'consultant', 'consultant_firm', 'enterprise'],
-  draft_links:         ['pro', 'team', 'consultant', 'consultant_firm', 'enterprise'],
-  mobility_db_submit:  ['pro', 'team', 'consultant', 'consultant_firm', 'enterprise'],
-  embeds:              ['pro', 'team', 'consultant', 'consultant_firm', 'enterprise'],
-  analysis_basic:      ['pro', 'team', 'consultant', 'consultant_firm', 'enterprise'],
-  analysis_title_vi:   ['team', 'consultant', 'consultant_firm', 'enterprise'],
-  analysis_propensity: ['team', 'consultant', 'consultant_firm', 'enterprise'],
-  org_workspace:       ['team', 'consultant', 'consultant_firm', 'enterprise'],
-  cross_org_member:    ['consultant', 'consultant_firm', 'enterprise'],
-  org_logo:            ['team', 'consultant', 'consultant_firm', 'enterprise'],
-  brand_color:         ['pro', 'team', 'consultant', 'consultant_firm', 'enterprise'],
+  managed_publishing:  ['pro', 'team', 'enterprise'],
+  draft_links:         ['pro', 'team', 'enterprise'],
+  mobility_db_submit:  ['pro', 'team', 'enterprise'],
+  embeds:              ['pro', 'team', 'enterprise'],
+  analysis_basic:      ['pro', 'team', 'enterprise'],
+  analysis_title_vi:   ['team', 'enterprise'],
+  analysis_propensity: ['team', 'enterprise'],
+  org_workspace:       ['team', 'enterprise'],
+  cross_org_member:    ['team', 'enterprise'],
+  org_logo:            ['team', 'enterprise'],
+  brand_color:         ['pro', 'team', 'enterprise'],
   phone_support:       ['enterprise'],
 };
 
-const PLAN_ORDER: Plan[] = ['free', 'pro', 'team', 'consultant', 'consultant_firm', 'enterprise'];
+const PLAN_ORDER: Plan[] = ['free', 'pro', 'team', 'enterprise'];
 
 export function planHasFeature(plan: Plan | undefined | null, feature: FeatureKey): boolean {
   if (!plan) return false;
@@ -51,8 +51,6 @@ export function planDisplayName(plan: Plan): string {
     case 'free': return 'Free';
     case 'pro': return 'Pro';
     case 'team': return 'Team';
-    case 'consultant': return 'Consultant';
-    case 'consultant_firm': return 'Consultant Firm';
     case 'enterprise': return 'Enterprise';
   }
 }
@@ -94,7 +92,7 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   },
   cross_org_member: {
     title: 'Cross-org membership',
-    description: 'Built for consultants — work in multiple client orgs without the orgs paying for your seat.',
+    description: 'Built for consultants — work in multiple client orgs from one Team subscription, without the client orgs paying for your seat.',
   },
   org_logo: {
     title: 'Custom organization logo',

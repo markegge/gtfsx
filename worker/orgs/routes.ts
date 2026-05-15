@@ -297,7 +297,7 @@ orgsRouter.get('/', async (c) => {
     slug: r.slug,
     name: r.name,
     role: r.role,
-    plan: (r.plan ?? 'free') as 'free' | 'pro' | 'team' | 'consultant' | 'consultant_firm' | 'enterprise',
+    plan: (r.plan ?? 'free') as 'free' | 'pro' | 'team' | 'enterprise',
     planStatus: (r.plan_status ?? 'active') as 'active' | 'past_due' | 'canceled' | 'trialing',
     memberCount: r.member_count,
     projectCount: r.project_count,

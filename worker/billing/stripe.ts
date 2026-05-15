@@ -23,13 +23,6 @@ export function planFromPriceId(env: Env, priceId: string): Plan | null {
   if (priceId === env.STRIPE_PRICE_TEAM_MONTHLY || priceId === env.STRIPE_PRICE_TEAM_ANNUAL) {
     return 'team';
   }
-  if (
-    priceId === env.STRIPE_PRICE_CONSULTANT_MONTHLY
-    || priceId === env.STRIPE_PRICE_CONSULTANT_ANNUAL
-  ) {
-    // Caller distinguishes solo vs firm based on subscription owner_type.
-    return 'consultant';
-  }
   return null;
 }
 
@@ -59,10 +52,6 @@ export function resolvePriceId(env: Env, plan: Plan, interval: Interval): string
     pro_year: env.STRIPE_PRICE_PRO_ANNUAL,
     team_month: env.STRIPE_PRICE_TEAM_MONTHLY,
     team_year: env.STRIPE_PRICE_TEAM_ANNUAL,
-    consultant_month: env.STRIPE_PRICE_CONSULTANT_MONTHLY,
-    consultant_year: env.STRIPE_PRICE_CONSULTANT_ANNUAL,
-    consultant_firm_month: env.STRIPE_PRICE_CONSULTANT_MONTHLY,
-    consultant_firm_year: env.STRIPE_PRICE_CONSULTANT_ANNUAL,
   };
   const id = map[k];
   if (!id) {

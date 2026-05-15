@@ -347,7 +347,7 @@ export function OrgSettingsPage() {
 
         <PaywallOverlay
           feature="org_logo"
-          currentPlan={(matchingOrg as { plan?: 'free' | 'pro' | 'team' | 'consultant' | 'consultant_firm' | 'enterprise' } | null)?.plan ?? 'free'}
+          currentPlan={(matchingOrg as { plan?: 'free' | 'pro' | 'team' | 'enterprise' } | null)?.plan ?? 'free'}
           preview={false}
         >
           <BrandingSection

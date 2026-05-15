@@ -4,8 +4,11 @@ import { Avatar } from './Avatar';
 import { useEffect, useState } from 'react';
 import { getMyForumProfile, type ForumProfile } from '../../services/forumApi';
 
-// Shared chrome for /community/* pages — top strip with brand, search bar (TBD),
-// and the current user's avatar shortcut to their profile.
+// Matches the site-wide marketing header used on /about/, /docs/, /learn/*,
+// /docs/deep-links/. Keep the structure here in sync with those static pages
+// so the chrome looks identical when users cross between marketing pages and
+// the forum. Brand-color tokens use the same Tailwind classes the editor
+// already uses (coral / sand / cream / dark-brown / warm-gray).
 
 export function CommunityRoot({ children }: { children: React.ReactNode }) {
   const currentUser = useStore((s) => s.currentUser);
@@ -32,42 +35,75 @@ export function CommunityRoot({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-cream">
-      <header className="bg-white border-b border-sand">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link to="/community" className="font-heading font-bold text-base text-dark-brown hover:text-coral transition-colors">
-            GTFS Studio · Community
-          </Link>
-          <span className="text-[10px] font-bold uppercase tracking-wide bg-teal-light text-teal px-1.5 py-0.5 rounded">
-            New
+      <header className="sticky top-0 z-10 bg-white border-b border-sand h-14 flex items-center px-5 gap-4">
+        <Link to="/" className="inline-flex items-center gap-2.5 shrink-0">
+          <img src="/gtfs-studio-logo.svg" alt="" className="w-11 h-11 max-[720px]:w-9 max-[720px]:h-9" />
+          <span className="font-extrabold text-2xl text-coral tracking-tight max-[720px]:text-xl">
+            GTFS Studio
           </span>
-          <div className="flex-1" />
-          <Link
-            to="/"
-            className="text-xs text-warm-gray hover:text-coral transition-colors"
+        </Link>
+
+        <nav className="hidden min-[720px]:flex gap-1 ml-3">
+          <NavLink href="/about/">About</NavLink>
+          <NavLink href="/docs/">Docs</NavLink>
+          <NavLink href="/learn/gtfs/">Learn</NavLink>
+          <NavLink href="/docs/deep-links/">Integrations</NavLink>
+          <NavLink href="/community" active>Community</NavLink>
+        </nav>
+
+        <div className="ml-auto flex items-center gap-3">
+          <a
+            href="/"
+            className="hidden min-[720px]:inline-flex bg-coral text-white px-3.5 py-2 rounded-lg font-semibold text-sm hover:brightness-95 transition-[filter]"
           >
-            ← Back to Editor
-          </Link>
+            Open editor
+          </a>
           {currentUser ? (
-            <>
-              <Link to="/community/profile" className="hover:opacity-80" title="Your community profile">
-                <Avatar
-                  gravatarHash={me?.gravatarHash ?? null}
-                  displayName={me?.displayName ?? currentUser.displayName}
-                  size={28}
-                />
-              </Link>
-            </>
+            <Link
+              to="/community/profile"
+              className="inline-flex"
+              title={`${me?.displayName ?? currentUser.displayName} — your community profile`}
+            >
+              <Avatar
+                gravatarHash={me?.gravatarHash ?? null}
+                displayName={me?.displayName ?? currentUser.displayName}
+                size={36}
+              />
+            </Link>
           ) : (
             <button
               onClick={() => navigate(`/login?next=${encodeURIComponent(window.location.pathname)}`)}
-              className="px-3 py-1.5 rounded-md text-xs font-heading font-bold bg-coral text-white hover:bg-[#d4603a] transition-colors"
+              className="text-warm-gray text-sm font-semibold hover:text-dark-brown"
             >
               Sign in
             </button>
           )}
         </div>
       </header>
+
       <main className="max-w-4xl mx-auto px-4 py-6">{children}</main>
     </div>
+  );
+}
+
+function NavLink({ href, children, active = false }: { href: string; children: React.ReactNode; active?: boolean }) {
+  // External links (the static marketing pages) need a full page load —
+  // they're not part of the SPA's route table. Internal links (/community)
+  // go through the router.
+  const isExternal = !href.startsWith('/community');
+  const className = `text-sm font-semibold px-3 py-2 rounded-md transition-colors ${
+    active ? 'text-dark-brown bg-cream' : 'text-warm-gray hover:text-dark-brown hover:bg-cream'
+  }`;
+  if (isExternal) {
+    return (
+      <a href={href} className={className}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <Link to={href} className={className}>
+      {children}
+    </Link>
   );
 }

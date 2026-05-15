@@ -47,14 +47,14 @@ export function AppBrand({
     <div className="flex items-center gap-3 shrink-0">
       <button
         onClick={handleClick}
-        className="flex items-center gap-2 font-heading font-extrabold text-xl text-coral hover:opacity-80 transition-opacity whitespace-nowrap"
+        className="flex items-center gap-2.5 font-heading font-extrabold text-2xl text-coral hover:opacity-80 transition-opacity whitespace-nowrap"
         title={mode === 'editor' ? 'Start new project' : 'Home'}
       >
         <img
           src={`${import.meta.env.BASE_URL}gtfs-studio-logo.svg`}
           alt=""
-          width="40"
-          height="40"
+          width="44"
+          height="44"
           className="shrink-0"
         />
         GTFS Studio

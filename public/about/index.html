@@ -90,6 +90,11 @@
       <h2>Why this exists</h2>
       <p>Most existing GTFS tooling is either a command-line script aimed at engineers, a heavyweight desktop GIS application, or a hosted SaaS product that locks your data behind an account. None of those are a good fit for a planner who just wants to draw a route, lay down stops, type in a timetable, and walk away with a valid <code>gtfs.zip</code>. GTFS Studio fills that gap with an interactive map-based interface that mirrors how planners actually think about transit service.</p>
 
+      <h2>Making GTFS-Flex easy to publish</h2>
+      <p>A second, equally important motivation: an honest, agency-friendly editor for <a href="/learn/gtfs-flex/">GTFS-Flex</a>. Flex is the part of the GTFS spec that describes demand-responsive service — microtransit, dial-a-ride, deviated fixed-route, on-demand zones — and authoring it correctly today is hard. The result is that most agencies running flex service <strong>don't</strong> publish it: zone polygons, booking rules, pickup/drop-off windows, and the dozens of inter-related fields rarely make it into the operator's GTFS feed.</p>
+      <p>That gap is invisible to the agency but consequential for riders. Without flex data in the canonical feed, trip planners (Google Maps, Apple Maps, Transit, OpenTripPlanner deployments) silently drop demand-responsive options from their suggestions. Someone in a small town who could in principle ride a county dial-a-ride to a medical appointment never learns the service exists, because the app that planned their trip didn't have the data. The same is true for tourists arriving in a regional resort area, transit-dependent commuters connecting to a microtransit-served suburb, or anyone relying on a phone to navigate a system they don't already know.</p>
+      <p>GTFS Studio treats flex as a first-class feature, not an afterthought: draw zones on the map the same way you draw routes, configure booking rules and pickup windows in a structured form rather than hand-editing CSV, and validate the result against the spec before export. The goal is to make publishing flex data the obvious next step, not the heroic one.</p>
+
       <h2>Who it's for</h2>
       <ul>
         <li><strong>Small and mid-size transit agencies</strong> publishing or updating their own GTFS feed without a dedicated GIS team.</li>

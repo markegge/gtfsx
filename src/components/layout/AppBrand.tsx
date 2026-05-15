@@ -53,8 +53,8 @@ export function AppBrand({
         <img
           src={`${import.meta.env.BASE_URL}gtfs-studio-logo.svg`}
           alt=""
-          width="32"
-          height="32"
+          width="40"
+          height="40"
           className="shrink-0"
         />
         GTFS Studio

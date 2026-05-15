@@ -139,6 +139,7 @@
       "routes": [
         { "pattern": "staging.gtfsstudio.net", "custom_domain": true },
         { "pattern": "staging-feeds.gtfsstudio.net", "custom_domain": true },
+        { "pattern": "staging.gtfsstudio.com", "custom_domain": true },
         { "pattern": "staging.gtfsbuilder.net", "custom_domain": true },
         { "pattern": "staging-feeds.gtfsbuilder.net", "custom_domain": true }
       ]

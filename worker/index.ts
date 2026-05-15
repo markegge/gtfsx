@@ -73,13 +73,19 @@ export default {
     }
 
     // Vanity TLD redirect. gtfsstudio.com is owned so the brand isn't squatted;
-    // every request 301s to the canonical www.gtfsstudio.net.
+    // every request 301s to the canonical .net counterpart.
+    //   gtfsstudio.com        → www.gtfsstudio.net (bare → canonical landing)
+    //   www.gtfsstudio.com    → www.gtfsstudio.net
+    //   staging.gtfsstudio.com → staging.gtfsstudio.net (etc — any subdomain)
     if (
       url.hostname === 'gtfsstudio.com' ||
-      url.hostname === 'www.gtfsstudio.com'
+      url.hostname.endsWith('.gtfsstudio.com')
     ) {
+      const newHost = url.hostname === 'gtfsstudio.com'
+        ? 'www.gtfsstudio.net'
+        : url.hostname.replace(/\.gtfsstudio\.com$/, '.gtfsstudio.net');
       return Response.redirect(
-        `https://www.gtfsstudio.net${url.pathname}${url.search}`,
+        `https://${newHost}${url.pathname}${url.search}`,
         301,
       );
     }

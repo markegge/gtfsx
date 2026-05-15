@@ -1,6 +1,6 @@
 # Backend Status Snapshot
 
-**As of 2026-05-14.** Live operational picture of the backend and embeds. This is the doc you should re-read first when you come back after a break — and the doc you should update when you change deployed state.
+**As of 2026-05-15.** Live operational picture of the backend and embeds. This is the doc you should re-read first when you come back after a break — and the doc you should update when you change deployed state.
 
 The high-level overview is in [`REQUIREMENTS.md`](./REQUIREMENTS.md). The reference spec is in [`BACKEND_REQUIREMENTS.md`](./BACKEND_REQUIREMENTS.md). Provisioning instructions are in [`DEPLOY_BACKEND.md`](./DEPLOY_BACKEND.md). Embeds spec is in [`EMBEDS_REQUIREMENTS.md`](./EMBEDS_REQUIREMENTS.md).
 
@@ -13,6 +13,7 @@ The high-level overview is in [`REQUIREMENTS.md`](./REQUIREMENTS.md). The refere
 - **Production is DISABLED.** The Worker is deployed to `gtfsstudio.net` (worker version `59147bd4-3f6b-45fb-9dc7-eec845ac4b7e` as of 2026-05-11, ships the rail refactor); the kill switch (`BACKEND_ENABLED=false` in `wrangler.jsonc` + `VITE_BACKEND_ENABLED=false` baked into the SPA bundle) remains flipped from 2026-05-08 after a premature launch (4 user accounts had been created within 24 hours, including 2 strangers). Existing data is preserved; flip both flags to re-enable.
 - **NF-40a (argon2id)** is the only spec-level technical debt that should land before broad RTAP distribution. Tracked in `BACKEND_REQUIREMENTS.md` §8.1.
 - **Analytics (2026-05-14).** Cookieless page-view tracking is live: `POST /api/events/track` writes to the `event` table; `/admin/events` aggregates visits + page views grouped by inbound `?ref=` tag. No PII recorded. Beacon does not fire on prod until the kill switch is flipped (the frontend gates on `backendEnabled`). Migration 0007 is applied on both D1 databases.
+- **Domain rebrand (2026-05-15).** Product renamed GTFS Builder → GTFS Studio; primary domain moved gtfsbuilder.net → gtfsstudio.net. All five legacy hostnames (apex, www, feeds, staging, staging-feeds) remain bound to the Worker and 301 to their gtfsstudio.net equivalents (path + query preserved). Internal Cloudflare resource identifiers (Worker names `gtfs-builder` / `gtfs-builder-staging`, D1 db names, R2 bucket names) intentionally kept as-is. Runbook: `docs/DOMAIN_MIGRATION.md`. Phase 12 cleanup (remove legacy routes + redirect block) is deferred until traffic on the old domain decays — months from now.
 
 ---
 

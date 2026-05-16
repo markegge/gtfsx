@@ -11,7 +11,6 @@ import { UserMenu } from '../layout/UserMenu';
 import {
   createProject,
   deleteProject,
-  importProjects,
   listProjects,
   patchProject,
   transferProject,
@@ -20,14 +19,6 @@ import {
 } from '../../services/projectsApi';
 import { ApiError } from '../../services/authApi';
 import { roleAtLeast } from '../../services/orgsApi';
-import { db } from '../../db/dexie';
-
-interface LocalProjectOption {
-  id: string;
-  name: string;
-  snapshot: Record<string, unknown>;
-  hasData: boolean;
-}
 
 function formatDate(ms: number | null | undefined): string {
   if (!ms) return '—';
@@ -39,31 +30,6 @@ function formatDate(ms: number | null | undefined): string {
     hour: 'numeric',
     minute: '2-digit',
   });
-}
-
-async function gatherLocalProjects(): Promise<LocalProjectOption[]> {
-  try {
-    const projects = await db.projects.toArray();
-    const out: LocalProjectOption[] = [];
-    for (const p of projects) {
-      const data = await db.projectData.get(p.id);
-      if (!data) continue;
-      let snapshot: Record<string, unknown>;
-      try {
-        snapshot = JSON.parse(data.storeSnapshot) as Record<string, unknown>;
-      } catch {
-        continue;
-      }
-      const routes = Array.isArray(snapshot.routes) ? snapshot.routes.length : 0;
-      const stops = Array.isArray(snapshot.stops) ? snapshot.stops.length : 0;
-      const shapes = Array.isArray(snapshot.shapes) ? snapshot.shapes.length : 0;
-      if (routes === 0 && stops === 0 && shapes === 0) continue;
-      out.push({ id: p.id, name: p.name || 'Untitled Feed', snapshot, hasData: true });
-    }
-    return out;
-  } catch {
-    return [];
-  }
 }
 
 export function MyFeedsPage() {
@@ -81,11 +47,6 @@ export function MyFeedsPage() {
   const [listError, setListError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [includeArchived, setIncludeArchived] = useState(false);
-
-  const [localProjects, setLocalProjects] = useState<LocalProjectOption[]>([]);
-  const [importStatus, setImportStatus] = useState<string | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [importDismissed, setImportDismissed] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
   const [renameTarget, setRenameTarget] = useState<ProjectSummary | null>(null);
@@ -125,50 +86,6 @@ export function MyFeedsPage() {
     fetchList();
   }, [authChecked, currentUser, fetchList]);
 
-  useEffect(() => {
-    if (!currentUser) return;
-    gatherLocalProjects().then(setLocalProjects);
-  }, [currentUser]);
-
-  // Local IndexedDB drafts that don't match a server feed by id or name. The
-  // id check catches drafts whose IDB row was keyed by a server projectId
-  // (an autosave artifact from the server-backed editor route); the name
-  // check catches anonymous drafts the user later saved under the same name.
-  const importableLocal = useMemo(
-    () =>
-      localProjects.filter(
-        (lp) => !feedsProjects.some((fp) => fp.name === lp.name || fp.id === lp.id),
-      ),
-    [localProjects, feedsProjects],
-  );
-  const importableCount = importableLocal.length;
-
-  const handleImport = async () => {
-    if (importableLocal.length === 0) return;
-    setImporting(true);
-    setImportStatus(null);
-    try {
-      const items = importableLocal.map((lp) => ({
-        name: lp.name,
-        snapshot: lp.snapshot,
-      }));
-      const result = await importProjects(items);
-      const importedCount = result.imported.length;
-      const skippedCount = result.skipped.length;
-      const parts: string[] = [];
-      if (importedCount) parts.push(`Imported ${importedCount} feed${importedCount === 1 ? '' : 's'}`);
-      if (skippedCount) parts.push(`${skippedCount} skipped`);
-      setImportStatus(parts.join(' · ') || 'Done');
-      await fetchList();
-      setLocalProjects([]);
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Import failed';
-      setImportStatus(`Import failed: ${msg}`);
-    } finally {
-      setImporting(false);
-    }
-  };
-
   if (!authChecked) {
     return (
       <AuthLayout title="My Feeds">
@@ -181,8 +98,6 @@ export function MyFeedsPage() {
     navigate(`/login?next=${encodeURIComponent('/feeds')}`, { replace: true });
     return null;
   }
-
-  const visibleLocal = !importDismissed && importableCount > 0;
 
   return (
     <div className="min-h-full bg-cream">
@@ -230,33 +145,6 @@ export function MyFeedsPage() {
             </div>
           );
         })()}
-
-        {visibleLocal && (
-          <div className="mb-5 px-4 py-3 rounded-lg bg-coral-light text-coral border border-coral/30 text-sm flex items-center gap-3">
-            <div className="flex-1">
-              <div className="font-semibold">
-                We found {importableCount} local project{importableCount === 1 ? '' : 's'} on this device.
-              </div>
-              <div className="text-warm-gray">Import them to your account to access them from any device.</div>
-              {importStatus && <div className="mt-1 text-dark-brown">{importStatus}</div>}
-            </div>
-            <AuthButton
-              onClick={handleImport}
-              disabled={importing}
-              variant="primary"
-            >
-              {importing ? 'Importing…' : 'Import'}
-            </AuthButton>
-            <button
-              onClick={() => setImportDismissed(true)}
-              className="w-7 h-7 rounded-md text-warm-gray hover:text-coral hover:bg-white transition-colors"
-              aria-label="Dismiss"
-              title="Dismiss"
-            >
-              ×
-            </button>
-          </div>
-        )}
 
         <div className="flex items-center gap-4 mb-4 text-sm">
           <label className="flex items-center gap-2 cursor-pointer text-warm-gray">

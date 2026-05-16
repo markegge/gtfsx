@@ -75,9 +75,29 @@ async function loadDemoFeed() {
 
 function EditorRoute({ demo = false }: { demo?: boolean }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const authChecked = useStore((s) => s.authChecked);
   const currentUser = useStore((s) => s.currentUser);
+  const feedsProjects = useStore((s) => s.feedsProjects);
+
+  // If a signed-in user lands here with stale server-backed state in the
+  // store (e.g. they were just editing /feeds/<slug>, navigated back to /,
+  // and the store retains projectId/projectName/data from the previous
+  // ServerEditorRoute session) redirect them to the actual server route.
+  // Otherwise clicking Save would open SaveAsDialog and create a duplicate
+  // project — the exact scenario reported when a user saved, moved to an
+  // org, then came back to "continue editing."
+  useEffect(() => {
+    if (demo) return;
+    if (!backendEnabled || !authChecked || !currentUser) return;
+    const sid = useStore.getState().projectId;
+    if (!sid) return;
+    const match = feedsProjects.find((p) => p.id === sid);
+    if (match) {
+      navigate(`/feeds/${encodeURIComponent(match.slug)}`, { replace: true });
+    }
+  }, [demo, authChecked, currentUser, feedsProjects, navigate]);
 
   useEffect(() => {
     if (demo) {

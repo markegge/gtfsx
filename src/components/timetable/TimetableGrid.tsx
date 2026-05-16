@@ -268,32 +268,7 @@ export function TimetableGrid() {
     );
   }
 
-  if (orderedStops.length === 0) {
-    return (
-      <div className="flex flex-col gap-3">
-        {/* Direction toggle even when no stops */}
-        <div className="flex items-center gap-3 px-2">
-          <DirectionToggle directionId={directionId} onChange={setDirectionId} route={route} />
-          {calendars.length > 0 && (
-            <select
-              value={activeServiceId || ''}
-              onChange={(e) => setSelectedServiceId(e.target.value)}
-              className="px-2 py-1 border border-sand rounded-md text-xs bg-cream focus:outline-none focus:border-coral"
-            >
-              {calendars.map((cal) => (
-                <option key={cal.service_id} value={cal.service_id}>
-                  {cal._description || cal.service_id}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-        <div className="flex items-center justify-center h-32 text-warm-gray text-sm">
-          Add stops to this route{directionId === 1 ? ' (inbound direction)' : ''} first
-        </div>
-      </div>
-    );
-  }
+  const hasStops = orderedStops.length > 0;
 
   return (
     <div className="p-2 flex flex-col min-h-0 flex-1">
@@ -332,13 +307,15 @@ export function TimetableGrid() {
         <div className="flex-1" />
         <button
           onClick={() => setShowRepeatForm((v) => !v)}
-          className="px-3 py-1 border-2 border-dashed border-sand rounded-md text-xs font-semibold text-warm-gray hover:border-coral hover:text-coral transition-colors whitespace-nowrap"
+          disabled={!hasStops}
+          className="px-3 py-1 border-2 border-dashed border-sand rounded-md text-xs font-semibold text-warm-gray hover:border-coral hover:text-coral transition-colors whitespace-nowrap disabled:opacity-40 disabled:hover:border-sand disabled:hover:text-warm-gray"
         >
           Repeat Every...
         </button>
         <button
           onClick={handleAddTrip}
-          className="px-3 py-1 border-2 border-dashed border-sand rounded-md text-xs font-semibold text-warm-gray hover:border-coral hover:text-coral transition-colors whitespace-nowrap"
+          disabled={!hasStops}
+          className="px-3 py-1 border-2 border-dashed border-sand rounded-md text-xs font-semibold text-warm-gray hover:border-coral hover:text-coral transition-colors whitespace-nowrap disabled:opacity-40 disabled:hover:border-sand disabled:hover:text-warm-gray"
         >
           + Add Trip
         </button>
@@ -412,6 +389,24 @@ export function TimetableGrid() {
       )}
 
       <div className="overflow-auto flex-1 min-h-0">
+        {!hasStops ? (
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr>
+                <th className="sticky left-0 bg-cream px-3 py-2 text-left font-semibold text-warm-gray text-[11px] border-b border-sand z-10">
+                  Trip
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="px-3 py-6 text-center text-warm-gray text-sm">
+                  Add stops to this route{directionId === 1 ? ' (inbound direction)' : ''} first
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        ) : (
         <table className="w-full text-xs border-collapse min-w-[600px]">
           <thead>
             <tr>
@@ -525,6 +520,7 @@ export function TimetableGrid() {
             ))}
           </tbody>
         </table>
+        )}
       </div>
 
       {/* Duplicate trip prompt */}

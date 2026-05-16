@@ -7,6 +7,47 @@ import { generateId } from '../../services/idGenerator';
 import type { FareAttribute } from '../../types/gtfs';
 
 const FARE_TYPES = ['Regular', 'Reduced', 'Senior', 'Student', 'Free'] as const;
+type FareType = (typeof FARE_TYPES)[number];
+
+// GTFS spec has no fare_type field; we encode the type as a fare_id prefix
+// (e.g. "senior-fare1") so the choice survives export/import. "Regular" is
+// the default and stays prefix-less so feeds without typed fares look natural.
+const TYPE_PREFIXES: Record<Exclude<FareType, 'Regular'>, string> = {
+  Reduced: 'reduced',
+  Senior: 'senior',
+  Student: 'student',
+  Free: 'free',
+};
+
+function parseFareType(fareId: string): FareType {
+  const first = fareId.split('-')[0]?.toLowerCase() ?? '';
+  for (const [type, prefix] of Object.entries(TYPE_PREFIXES)) {
+    if (first === prefix) return type as FareType;
+  }
+  return 'Regular';
+}
+
+function applyTypePrefix(fareId: string, newType: FareType): string {
+  // Strip any existing recognized prefix first.
+  let suffix = fareId;
+  for (const prefix of Object.values(TYPE_PREFIXES)) {
+    if (fareId.startsWith(prefix + '-')) {
+      suffix = fareId.slice(prefix.length + 1);
+      break;
+    }
+  }
+  if (newType === 'Regular') return suffix;
+  return `${TYPE_PREFIXES[newType]}-${suffix}`;
+}
+
+function ensureUniqueFareId(base: string, existing: readonly string[], self: string): string {
+  if (base === self) return base;
+  if (!existing.includes(base)) return base;
+  for (let n = 2; ; n++) {
+    const cand = `${base}-${n}`;
+    if (!existing.includes(cand)) return cand;
+  }
+}
 
 const PAYMENT_METHODS: { value: 0 | 1; label: string }[] = [
   { value: 0, label: 'On board' },
@@ -27,6 +68,7 @@ export function FaresEditor() {
     routes,
     addFareAttribute,
     updateFareAttribute,
+    renameFareId,
     removeFareAttribute,
     addFareRule,
     removeFareRule,
@@ -128,27 +170,34 @@ export function FaresEditor() {
           <RailDivider />
           <RailSubHeading>Edit Fare</RailSubHeading>
 
-          {/* Fare type label */}
+          {/* Fare type — encoded as a fare_id prefix (see TYPE_PREFIXES). */}
           <div className="mb-3">
             <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
               Fare Type
             </label>
             <div className="flex flex-wrap gap-1.5">
               {FARE_TYPES.map((type) => {
-                // We encode fare type in fare_id prefix or a convention. Use a simple approach:
-                // check if fare_id contains a type hint
+                const currentType = parseFareType(selectedFare.fare_id);
+                const isSelected = type === currentType;
                 return (
                   <button
                     key={type}
                     onClick={() => {
-                      updateFareAttribute(selectedFare.fare_id, {
-                        fare_id: selectedFare.fare_id,
-                        price: type === 'Free' ? '0.00' : selectedFare.price,
-                      });
+                      if (isSelected) return;
+                      const desired = applyTypePrefix(selectedFare.fare_id, type);
+                      const otherIds = fareAttributes.map((f) => f.fare_id);
+                      const newId = ensureUniqueFareId(desired, otherIds, selectedFare.fare_id);
+                      if (newId !== selectedFare.fare_id) {
+                        renameFareId(selectedFare.fare_id, newId);
+                        setSelectedFareId(newId);
+                      }
+                      if (type === 'Free' && selectedFare.price !== '0.00') {
+                        updateFareAttribute(newId, { price: '0.00' });
+                      }
                     }}
                     className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors
-                      ${type === 'Free' && selectedFare.price === '0.00'
-                        ? 'bg-teal-light text-teal'
+                      ${isSelected
+                        ? 'bg-coral-light text-coral'
                         : 'bg-cream text-warm-gray hover:bg-sand'
                       }`}
                   >

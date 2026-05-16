@@ -6,6 +6,8 @@ export interface FareSlice {
   fareRules: FareRule[];
   addFareAttribute: (fare: FareAttribute) => void;
   updateFareAttribute: (fare_id: string, updates: Partial<FareAttribute>) => void;
+  /** Rename a fare_id and cascade the change to any referencing fare_rules. */
+  renameFareId: (oldId: string, newId: string) => void;
   removeFareAttribute: (fare_id: string) => void;
   setFareAttributes: (fares: FareAttribute[]) => void;
   addFareRule: (rule: FareRule) => void;
@@ -21,6 +23,16 @@ export const createFareSlice: StateCreator<FareSlice, [['zustand/immer', never]]
   updateFareAttribute: (fare_id, updates) => set((state) => {
     const idx = state.fareAttributes.findIndex((f) => f.fare_id === fare_id);
     if (idx !== -1) Object.assign(state.fareAttributes[idx], updates);
+  }),
+  renameFareId: (oldId, newId) => set((state) => {
+    if (oldId === newId) return;
+    const idx = state.fareAttributes.findIndex((f) => f.fare_id === oldId);
+    if (idx === -1) return;
+    if (state.fareAttributes.some((f) => f.fare_id === newId)) return; // refuse collision
+    state.fareAttributes[idx].fare_id = newId;
+    for (const r of state.fareRules) {
+      if (r.fare_id === oldId) r.fare_id = newId;
+    }
   }),
   removeFareAttribute: (fare_id) => set((state) => {
     state.fareAttributes = state.fareAttributes.filter((f) => f.fare_id !== fare_id);

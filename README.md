@@ -50,7 +50,7 @@ A web-based editor for creating, editing, analyzing, and publishing [GTFS](https
   - Today's-service banner, feed-expiry warning, per-project brand color, per-org logo. Mobile-responsive. Open Graph / Twitter cards.
 - Admin console at `/admin` for staff users (dashboard counters, paginated users / orgs, audit-log viewer with CSV export).
 
-**Status:** Backend is **live on staging** at [staging.gtfsstudio.net](https://staging.gtfsstudio.net) and **disabled on production** behind a kill-switch (`BACKEND_ENABLED=false` worker var + `VITE_BACKEND_ENABLED=false` build flag). The production editor is anonymous-and-local-only by design today.
+**Status:** Backend is **live on production** at [www.gtfsstudio.net](https://www.gtfsstudio.net) (re-enabled 2026-05-15 alongside live billing). Auth, projects, snapshots, draft links, publication, embeds, and Stripe checkout all available. Anonymous IndexedDB editing also still works for users who don't sign in.
 
 ## Tech stack
 
@@ -110,10 +110,8 @@ npx tsc -p tsconfig.worker.json --noEmit    # worker
 
 ## Deployment
 
-Deploys go to a single Cloudflare Worker with two environments:
-
-- **Staging:** `staging.gtfsstudio.net` + `staging-feeds.gtfsstudio.net` — deploy freely via `npx wrangler deploy --env staging`.
-- **Production:** `gtfsstudio.net` / `www.gtfsstudio.net` / `feeds.gtfsstudio.net` — deploy deliberately via `npx wrangler deploy --env=""`.
+- **Production:** `gtfsstudio.net` / `www.gtfsstudio.net` / `feeds.gtfsstudio.net` — auto-deployed by **Cloudflare Workers Builds** on every push to `main` (no separate promotion step).
+- **Staging:** `staging.gtfsstudio.net` + `staging-feeds.gtfsstudio.net` — parked, manual rehearsal env. Deploy via `npx wrangler deploy --env staging`.
 
 Full day-to-day cadence lives in [`docs/WORKFLOW.md`](./docs/WORKFLOW.md). First-time Cloudflare provisioning runbook (D1, KV, R2, Resend, Turnstile) is in [`docs/DEPLOY_BACKEND.md`](./docs/DEPLOY_BACKEND.md). Live operational state — including kill-switch positions and outstanding work — is in [`docs/BACKEND_STATUS.md`](./docs/BACKEND_STATUS.md).
 

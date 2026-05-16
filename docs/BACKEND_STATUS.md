@@ -14,7 +14,7 @@ The high-level overview is in [`REQUIREMENTS.md`](./REQUIREMENTS.md). The refere
   - `+ Create organization…` in the user menu now routes Free/Pro users to `/upgrade?feature=org_workspace` (plan picker, not auto-checkout) instead of opening the inline create form. Server-side gating was already correct; this closes the UX hole that let Free users create empty orgs.
   - `PaywallOverlay` reworked: `bg-white` card on `bg-cream/85` wash (was `bg-cream`-on-`bg-cream`, invisible), `items-start` instead of `items-center`, `h-full overflow-hidden` so the wash + card no longer extend off-screen.
 - **Snapshots rename (2026-05-15, post-launch).** What we used to call "versions" (point-in-time saves of editor state) are now uniformly **snapshots** — UI tab "Snapshots", API routes `/api/projects/:id/snapshots[...]`, DB table `feed_snapshot` (FK columns `snapshot_id` on `draft_link` / `publication` / `publication_history`), R2 path `projects/{id}/snapshots/{id}/...`, audit actions `project.create_snapshot` / `restore_snapshot` / `delete_snapshot` (legacy `*_version` strings still render in the audit log via a backward-compat lookup in `auditFormat.ts`), feature key `snapshot_history`. Done now to avoid terminology collision with GTFS spec's own `feed_version` field. Migration `0012_rename_version_to_snapshot.sql` applied on both staging and prod.
-- **Staging is also live and ahead of prod.** Editor at https://staging.gtfsstudio.net (worker version `25b35648-9cd2-436b-8c23-20726f7d1a9e`). Public feeds + embeds at https://staging-feeds.gtfsstudio.net. One published demo feed: `bozeman-demo`. Use as the rehearsal env for any future migration.
+- **Staging is parked (2026-05-16).** Worker, D1, R2, KV all still exist at `gtfs-builder-staging` / `staging.gtfsstudio.net`, but no longer auto-deployed (CF Workers Builds deploys prod only on push to main; the old GitHub Actions workflow that deployed staging was retired). Manual rehearsal still works via `npx wrangler deploy --env staging`; otherwise staging stays at whatever was last shipped.
 - **NF-40a (argon2id)** remains the only spec-level technical debt that should land before broad RTAP distribution. Tracked in `BACKEND_REQUIREMENTS.md` §8.1.
 - **Analytics.** Cookieless page-view tracking is live: `POST /api/events/track` writes to the `event` table; `/admin/events` aggregates visits + page views grouped by inbound `?ref=` tag. No PII recorded. Now firing on prod since the launch flip.
 - **Domain rebrand (2026-05-15).** Product renamed GTFS Builder → GTFS Studio; primary domain moved gtfsbuilder.net → gtfsstudio.net. All five legacy hostnames (apex, www, feeds, staging, staging-feeds) remain bound to the Worker and 301 to their gtfsstudio.net equivalents (path + query preserved). Internal Cloudflare resource identifiers (Worker names `gtfs-builder` / `gtfs-builder-staging`, D1 db names, R2 bucket names) intentionally kept as-is. Runbook: `docs/DOMAIN_MIGRATION.md`. Phase 12 cleanup (remove legacy routes + redirect block) is deferred until traffic on the old domain decays — months from now.
@@ -31,9 +31,11 @@ The high-level overview is in [`REQUIREMENTS.md`](./REQUIREMENTS.md). The refere
 - `.env` has `VITE_BACKEND_ENABLED=true`, `VITE_TURNSTILE_SITE_KEY`, `VITE_MAPBOX_TOKEN`. `.dev.vars` has `RESEND_API_KEY` + overridden `APP_ORIGIN` / `FEEDS_ORIGIN`. Both gitignored.
 - `scripts/dev-seed-user.ts` creates a pre-verified user in the local D1 for quick login without email.
 
-### Staging — LIVE
+### Staging — PARKED (2026-05-16)
 
-- Worker: `gtfs-builder-staging` (current version `25b35648-9cd2-436b-8c23-20726f7d1a9e`).
+Infra still exists (cheap insurance) but no longer auto-deployed. Use as a manual rehearsal env for risky changes before pushing to main.
+
+- Worker: `gtfs-builder-staging`.
 - Custom domains: `staging.gtfsstudio.net`, `staging-feeds.gtfsstudio.net`.
 - D1: `gtfs-builder-staging` (id `f62aa5db-329f-4a78-bf35-4b96f79d4392`). Migrations 0001–0012 applied.
 - KV: id `ceb1f063c83a4bec9306e66288a51dc8`.
@@ -42,7 +44,7 @@ The high-level overview is in [`REQUIREMENTS.md`](./REQUIREMENTS.md). The refere
 - Vars: `BACKEND_ENABLED=true`, `BILLING_ENABLED=true`, `HARD_LIMITS=false`, `MAPBOX_TOKEN=…`, plus Stripe **test-mode** Price IDs (`STRIPE_PRICE_PRO_*`, `STRIPE_PRICE_TEAM_*`) and `STRIPE_PORTAL_CONFIG_ID`.
 - Cron: `0 3 * * *` (account-deletion reaper + weekly metrics rollup).
 - First admin: `mark@eateggs.com` (staff=1). Two demo orgs (`flex-builder-demo-org`, `demo-org`) and one published demo feed (`bozeman-demo`).
-- Redeploy: `npm run build && wrangler deploy --env staging` (with `CLOUDFLARE_API_TOKEN` set from `~/proj/.env`).
+- Manual deploy: `npm run build && unset CLOUDFLARE_API_TOKEN && npx wrangler deploy --env staging`.
 
 ### Production — LIVE (re-enabled 2026-05-15)
 

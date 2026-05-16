@@ -12,14 +12,15 @@ For first-time Cloudflare provisioning (D1, KV, R2, secrets, Resend, Turnstile) 
 main = source of truth.   Stays deployable at all times.
 Feature branches = short-lived, branched off main, merged via --ff-only.
 
-Push to main          → CI deploys to staging.gtfsstudio.net  (auto)
-Tag a commit prod-*   → CI deploys to gtfsstudio.net          (deliberate)
+Push to main → Cloudflare Workers Builds auto-deploys gtfs-builder
+               (prod, gtfsstudio.net) within ~1 minute.
 
-Kill-switch flags (BACKEND_ENABLED + VITE_BACKEND_ENABLED) keep prod safe
-while main races ahead with backend features under development.
+Kill-switch flags (BACKEND_ENABLED + VITE_BACKEND_ENABLED) gate backend
+visibility. Flip the wrangler.jsonc value AND the CF Workers Builds
+build-env value in lockstep when changing prod's stance.
 ```
 
-There is no long-lived "develop" branch. Staging tracks `main` continuously; production only moves when you tag a commit `prod-YYYY-MM-DD` and push the tag. See "Deploying to production" below.
+There is no long-lived "develop" branch and no tag-driven promotion gate. Every push to `main` is a prod deploy. Staging (`gtfs-builder-staging` worker, `staging.gtfsstudio.net`) is parked — no longer auto-deployed; available as a manual rehearsal env via `wrangler deploy --env staging` for risky changes you want to validate before merging to main.
 
 ---
 
@@ -81,32 +82,26 @@ npx tsc -p tsconfig.worker.json --noEmit                      # worker typecheck
 
 ---
 
-## Deploying to staging
+## Manual staging deploys (optional)
 
-Free and reversible. Deploy to staging often — that's the whole point.
-
-**Automatic (default):** every push to `main` triggers `.github/workflows/deploy.yml` → the `staging` job. The build runs with `VITE_BACKEND_ENABLED=true` / `VITE_BILLING_ENABLED=true` and `wrangler deploy --env staging`. Watch it under the Actions tab.
-
-**Manual (when you can't push yet, or for hotfix iteration):**
+Staging (`gtfs-builder-staging` worker, `staging.gtfsstudio.net`, separate D1 / R2 / KV) is **not auto-deployed** — it sits parked at whatever was last shipped via `wrangler deploy --env staging`. Use it as an escape hatch when a change feels risky enough to want a rehearsal before pushing to main:
 
 ```bash
 npm run build
-source ~/proj/.env                       # exports CLOUDFLARE_API_TOKEN
+unset CLOUDFLARE_API_TOKEN     # OAuth has the right scopes
 npx wrangler deploy --env staging
 ```
 
-You can also re-run the staging deploy from `main` without a new commit via Actions → "Deploy" → Run workflow → `staging`.
-
-Visit https://staging.gtfsstudio.net (editor) and https://staging-feeds.gtfsstudio.net (feeds + embeds) to verify. Then iterate.
+Visit https://staging.gtfsstudio.net (editor) and https://staging-feeds.gtfsstudio.net (feeds + embeds) to verify. The staging worker has its own D1/R2/KV so writes don't affect prod. Staging uses test-mode Stripe.
 
 `wrangler tail gtfs-builder-staging` is your first stop when something looks off — the worker name (not the env flag) is the argument, and JSON output (`--format json`) is easier to grep.
 
 ### Schema migrations
 
-If your branch adds a `worker/migrations/000N_*.sql` file:
+If your branch adds a `worker/migrations/000N_*.sql` file, exercise it against staging before applying on prod:
 
 ```bash
-# Apply to staging
+unset CLOUDFLARE_API_TOKEN
 npx wrangler d1 migrations apply gtfs-builder-staging --remote --env staging
 ```
 
@@ -140,67 +135,56 @@ git push origin --delete feature/<branch>
 
 ## Deploying to production
 
-`main` is always deployable. Deploys to prod are **tag-driven** — pushing to `main` only updates staging. Production ships when you tag a commit `prod-YYYY-MM-DD[.N]` and push the tag, which triggers `.github/workflows/deploy.yml` → the `production` job.
+Every push to `main` triggers **Cloudflare Workers Builds**, which runs `npm run build` (with the `VITE_*` build-env vars set in the CF integration) and `npx wrangler deploy` against the `gtfs-builder` (prod) worker. New deployment is live within ~1 minute. Watch progress in the CF dashboard: Workers & Pages → gtfs-builder → Builds.
 
-### Promotion checklist
+There's no separate "promotion" step. The kill-switch flag pair is your brake — see `## The kill-switch flags` below.
 
-Before tagging, in order:
+### Pre-push checklist
 
-1. **Staging is healthy.** You've actually used staging.gtfsstudio.net for the work being shipped, not just verified it built. Eyeball `wrangler tail --env staging` for unexpected errors in the last session.
-2. **Migrations applied on prod first** (manual; staging-first). See "Schema migrations on prod" below.
-3. **Kill-switch flags reviewed.** If the commit being promoted relies on backend features, are `BACKEND_ENABLED` (wrangler.jsonc top-level) and `VITE_BACKEND_ENABLED` (workflow build env) flipped in sync? They're tied: the CI build of `production` uses the values in `.github/workflows/deploy.yml`; the worker reads `wrangler.jsonc`. Out-of-sync = SPA shows a feature the worker rejects, or vice versa.
-4. **Promote.** Tag and push:
+Before pushing to main:
 
+1. **Pass tests locally:**
+   ```bash
+   npx vitest run --fileParallelism=false
+   npx tsc -p tsconfig.app.json --noEmit
+   npx tsc -p tsconfig.worker.json --noEmit
+   ```
+2. **Migrations applied on prod first** (manual). Apply BEFORE pushing so the new worker doesn't hit a schema mismatch. See "Schema migrations on prod" below.
+3. **Kill-switch flag pair in sync.** `BACKEND_ENABLED` in `wrangler.jsonc` top-level vars matches `VITE_BACKEND_ENABLED` in CF Workers Builds → Settings → Builds → Variables and secrets. Out-of-sync = SPA shows a feature the worker rejects, or vice versa.
+4. **Push:**
    ```bash
    git checkout main
    git pull origin main
-   # Tag format: prod-YYYY-MM-DD, with .2, .3, … suffixes for same-day re-promotions.
-   git tag prod-$(date +%Y-%m-%d)
-   git push --tags
+   git push origin main
    ```
 
-   GitHub Actions builds with `VITE_BACKEND_ENABLED` / `VITE_BILLING_ENABLED` set in `.github/workflows/deploy.yml` (currently `true` since 2026-05-16) and runs `wrangler deploy --env=""`.
+   CF Workers Builds picks it up and deploys.
 
-5. **Verify the new build actually went live.** A green CI run does *not* guarantee the new asset manifest is the active version — observed 2026-05-16: CI logged `Current Version ID: X` but a follow-up version `Y` immediately became active with the *previous* asset manifest, and the new bundle URL returned the SPA-fallback HTML instead of the JS. Always confirm:
+5. **Verify the new build went live.** A "succeeded" build in CF doesn't always mean the new asset manifest is what users get — observed 2026-05-16: a follow-up worker version was created right after deploy and became active with the *previous* asset manifest, serving the SPA-fallback HTML for the new bundle URL. Always confirm:
 
    ```bash
    # Hash on the live site
    curl -sS https://www.gtfsstudio.net/ | grep -oE 'index-[a-zA-Z0-9_-]+\.js'
-   # Hash CI built (from the deploy job log)
-   gh run view <runId> --log | grep -oE 'dist/assets/index-[a-zA-Z0-9_-]+\.js' | head -1
+   # Compare against the hash in the CF dashboard → Builds → latest run logs.
    ```
 
-   They must match. If they don't, the deploy didn't take — fall back to the **Manual fallback** below from a clean `npm run build`, then retro-tag.
+   They must match. If they don't, fall back to the **Manual fallback** below.
 
 6. **Smoke-test in an incognito window:** homepage loads, anonymous IndexedDB editor saves/loads, GTFS export downloads. If backend is on, hit `/login` and confirm the sign-in form (not the "Backend coming soon" placeholder) renders — that's the proof `VITE_BACKEND_ENABLED` was actually baked into the served bundle.
-7. **Leave the tag in place.** It's your "last known good" anchor for rollback (`gh run rerun <runId>` or re-deploy from that SHA).
-
-If the build fails mid-promotion, delete the tag (`git tag -d prod-… && git push origin :refs/tags/prod-…`) and re-tag a fixed commit. Tags should always represent successful deploys.
-
-### Re-running prod manually
-
-Actions → "Deploy" → Run workflow → `production`. Runs against the workflow file's `main` head (workflow_dispatch always uses the default branch). To deploy a specific older commit to prod, re-tag that SHA with a new `prod-…` name and push.
-
-### Why tag-driven
-
-- "Push to main" auto-deploys staging only. You can race main ahead without touching prod.
-- Promoting prod is a deliberate, named act tied to a commit you can roll back to. No accidental prod shipments because someone merged a docs typo.
-- The tag is the audit trail; `git tag --list 'prod-*' --sort=-creatordate | head` shows recent deploys at a glance.
 
 ### Manual fallback
 
-If GitHub Actions is unavailable and you must ship now:
+If CF Workers Builds is broken or you need to ship a specific local SHA (without committing intermediate state):
 
 ```bash
 git checkout main
 git pull origin main
-# Match the build env to .github/workflows/deploy.yml's production job.
 VITE_BACKEND_ENABLED=true VITE_BILLING_ENABLED=true npm run build
 unset CLOUDFLARE_API_TOKEN   # OAuth has the right scopes; the env-file token may not
 npx wrangler deploy --env=""
 ```
 
-The `--env=""` is required: with multiple environments declared in `wrangler.jsonc`, omitting the flag emits an "ambiguous environment" warning. Pass an empty string to be explicit. After a manual deploy, retro-tag the SHA so the audit trail stays intact: `git tag prod-$(date +%Y-%m-%d) <sha> && git push --tags`.
+The `--env=""` is required: with multiple environments declared in `wrangler.jsonc` (`env.staging` is still present so manual staging deploys work), omitting the flag emits an "ambiguous environment" warning. Pass an empty string to be explicit.
 
 ### Schema migrations on prod
 
@@ -218,9 +202,9 @@ Two flags gate the backend visibility. Both default to off in `.env.example` and
 | Flag | Where | Effect when `false` |
 |---|---|---|
 | `BACKEND_ENABLED` | `wrangler.jsonc` top-level `vars` | Worker runs, but the var signals "do not expose new features." (Today this is informational; the worker doesn't yet refuse `/api/*` calls based on it.) |
-| `VITE_BACKEND_ENABLED` | `.env` (baked into the SPA at build time) | The SPA hides Sign in / Save / `/feeds*` / `/account` and renders `BackendDisabledPage` for those routes. The anonymous IndexedDB editor stays available. |
+| `VITE_BACKEND_ENABLED` | CF Workers Builds → gtfs-builder → Settings → Builds → Variables and secrets (baked into the SPA at build time on each push) | The SPA hides Sign in / Save / `/feeds*` / `/account` and renders `BackendDisabledPage` for those routes. The anonymous IndexedDB editor stays available. |
 
-To **disable backend on prod**: flip `BACKEND_ENABLED` to `"false"` in `wrangler.jsonc`, build with `VITE_BACKEND_ENABLED=false npm run build`, deploy.
+To **disable backend on prod**: flip `BACKEND_ENABLED` to `"false"` in `wrangler.jsonc` AND flip `VITE_BACKEND_ENABLED` to `"false"` in the CF Workers Builds dashboard, then push to main. The two have to move together — flipping only one ships a worker/SPA mismatch (silent at deploy, surfaces when a user tries to sign in).
 
 To **re-enable backend on prod**: flip both to `true`, ensure secrets (`RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`) and pending migrations are in place, deploy. Walk the `DEPLOY_BACKEND.md` §7 smoke-test in an incognito window.
 

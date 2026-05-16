@@ -17,6 +17,7 @@ import { FormField } from '../ui/FormField';
 import { useStore } from '../../store';
 import {
   fetchPlanCatalog,
+  openBillingPortal,
   startCheckout,
   type PlanCatalogEntry,
   type Plan,
@@ -206,8 +207,52 @@ export function WelcomePlanPage() {
 
   // Top-level click handler for each tier card. Dispatches into the
   // free/enterprise/team/other-paid branches.
-  function handlePick(plan: Plan) {
+  async function handlePick(plan: Plan) {
     if (plan === 'free') {
+      // "Switch to Free" from an active paid subscription is a
+      // cancellation, not a navigation — Stripe owns subscription
+      // lifecycle, so route through the Customer Portal where the user
+      // can confirm and cancel. Decide which owner's portal to open based
+      // on where the upgrade flow was launched: an org context (preset
+      // from /orgs/:slug/billing) wins, otherwise fall through to the
+      // user's personal subscription.
+      let portalOwnerType: 'user' | 'org' | null = null;
+      let portalOwnerId: string | null = null;
+      if (
+        presetOrg &&
+        presetOrg.plan &&
+        presetOrg.plan !== 'free' &&
+        presetOrg.plan !== 'enterprise'
+      ) {
+        portalOwnerType = 'org';
+        portalOwnerId = presetOrg.id;
+      } else if (onPaidPlan && currentUser) {
+        portalOwnerType = 'user';
+        portalOwnerId = currentUser.id;
+      }
+
+      if (portalOwnerType && portalOwnerId) {
+        setError(null);
+        setPendingPlan('free');
+        try {
+          const res = await openBillingPortal({
+            ownerType: portalOwnerType,
+            ownerId: portalOwnerId,
+            returnUrl: `${window.location.origin}/account/billing`,
+          });
+          window.location.href = res.url;
+          return;
+        } catch (e) {
+          setError(
+            e instanceof ApiError
+              ? e.message
+              : (e as Error)?.message ?? 'Could not open billing portal to cancel.',
+          );
+          setPendingPlan(null);
+          return;
+        }
+      }
+
       navigate(source === 'welcome' ? '/feeds?welcome=1' : '/feeds');
       return;
     }

@@ -30,4 +30,9 @@
     <priority>0.7</priority>
     <changefreq>monthly</changefreq>
   </url>
+  <url>
+    <loc>https://www.gtfsstudio.net/privacy-policy/</loc>
+    <priority>0.4</priority>
+    <changefreq>yearly</changefreq>
+  </url>
 </urlset>

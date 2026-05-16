@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Privacy Policy – GTFS Studio</title>
+    <meta name="description" content="What GTFS Studio collects, how we use it, who we share it with, and how to delete your data." />
+    <link rel="canonical" href="https://www.gtfsstudio.net/privacy-policy/" />
+    <meta property="og:title" content="Privacy Policy – GTFS Studio" />
+    <meta property="og:description" content="What GTFS Studio collects, how we use it, who we share it with, and how to delete your data." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://www.gtfsstudio.net/privacy-policy/" />
+    <meta name="robots" content="index,follow" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { width:44px; height:44px; }
+      .site-header .brand-name { font-weight:800; font-size:1.5rem; color:var(--accent); letter-spacing:-0.01em; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; transition:color 0.15s, background 0.15s; }
+      .site-header nav a:hover { color:var(--ink); background:var(--bg); }
+      .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .cta:hover { filter:brightness(0.95); }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a:hover { color:var(--ink); }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      .site-header .user-slot .user-avatar:hover { filter:brightness(0.95); }
+      @media (max-width: 720px) {
+        .site-header nav, .site-header .cta { display:none; }
+        .site-header .brand-name { font-size:1.25rem; }
+        .site-header .brand img { width:36px; height:36px; }
+      }
+      main { padding-top: 40px; padding-bottom: 60px; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; }
+      h2 { font-size: 1.4rem; margin-top: 2.2rem; }
+      h3 { font-size: 1.05rem; margin-top: 1.4rem; }
+      .lede { font-size: 1.05rem; color:var(--muted); }
+      .meta { color:var(--muted); font-size: 0.9rem; margin-bottom: 24px; }
+      a { color: var(--accent); }
+      ul { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code { background:#FFF; border:1px solid var(--rule); padding:1px 5px; border-radius:4px; font-size:0.88em; }
+      table { width:100%; border-collapse: collapse; margin: 12px 0; font-size: 0.95rem; }
+      th, td { text-align:left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+      th { color: var(--muted); font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; }
+      footer a { color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <a href="/" class="brand">
+        <img src="/gtfs-studio-logo.svg" alt="" />
+        <span class="brand-name">GTFS Studio</span>
+      </a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot">
+          <a href="/login">Sign in</a>
+        </div>
+      </div>
+    </header>
+    <main>
+      <h1>Privacy Policy</h1>
+      <p class="meta">Effective: 2026-05-16 · Last updated: 2026-05-16</p>
+      <p class="lede">GTFS Studio is a browser-based editor for creating, maintaining, and publishing GTFS transit feeds. This page describes what personal information we collect, how we use it, who we share it with, and the choices you have. It is written to match how the service actually behaves — not to maximize what we could collect.</p>
+
+      <h2>1. The short version</h2>
+      <ul>
+        <li>You can use the editor entirely anonymously. We don't require an account, and we don't track you across sites.</li>
+        <li>If you create an account, we collect your email, display name, and a hash of your password — never the password itself.</li>
+        <li>Feed content you save to the cloud is stored on Cloudflare infrastructure under your account and is visible only to you and any organization members you've granted access.</li>
+        <li>We share data with the small set of vendors we depend on to operate the service (listed below). We don't sell personal data and we don't share it with advertisers.</li>
+        <li>You can export everything we have on you at any time, and you can delete your account, which hard-purges your data after a 30-day grace window.</li>
+      </ul>
+
+      <h2>2. Who we are</h2>
+      <p>"GTFS Studio," "we," "us," and "our" refer to the operator of <a href="https://www.gtfsstudio.net">gtfsstudio.net</a> and its subdomains (<code>www.gtfsstudio.net</code>, <code>feeds.gtfsstudio.net</code>, <code>staging.gtfsstudio.net</code>). For privacy questions or requests, write to <a href="mailto:privacy@gtfsstudio.net">privacy@gtfsstudio.net</a>.</p>
+
+      <h2>3. What we collect and why</h2>
+
+      <h3>3.1 Anonymous editor use</h3>
+      <p>If you open the editor without an account, your work stays in your browser's IndexedDB. We do not transmit that content to our servers. The browser still loads map tiles from <a href="https://www.mapbox.com/legal/privacy">Mapbox</a>, which means Mapbox sees the IP address making those requests.</p>
+
+      <h3>3.2 Account information</h3>
+      <p>When you create an account we collect:</p>
+      <ul>
+        <li><strong>Email address</strong> — used to sign you in, send transactional emails (verify, magic link, password reset, organization invitations), and contact you about account or service changes.</li>
+        <li><strong>Display name</strong> — shown in the editor UI and on audit log entries for your own organizations.</li>
+        <li><strong>A hash of your password</strong> — produced via PBKDF2 with 600,000 iterations. We do not store, transmit, or log the password itself.</li>
+      </ul>
+
+      <h3>3.3 Session and security metadata</h3>
+      <p>When you sign in, we record:</p>
+      <ul>
+        <li>A random session token (stored client-side in an <code>HttpOnly</code>, <code>Secure</code>, <code>SameSite=Lax</code> cookie named <code>gb_session</code>) and the SHA-256 of that token on our side.</li>
+        <li>The IP address and User-Agent of the device that started the session.</li>
+        <li>Per-action audit events (signups, logins, project creates / publishes / deletions, organization changes, billing changes). Each event records the actor user id, the action, a metadata blob, the IP address, and a timestamp.</li>
+      </ul>
+      <p>This metadata exists for account security (so you can see active sessions and revoke them) and abuse review. We retain it for as long as your account is active.</p>
+
+      <h3>3.4 Feed content</h3>
+      <p>If you sign in and save a feed to the cloud, the feed's content (routes, stops, trips, shapes, calendar, fares, flex zones, etc.) is stored as a single gzipped JSON blob in Cloudflare R2 (object storage), with metadata in Cloudflare D1 (SQL). Access is gated by your session and any organization memberships you've granted. We do not look at your feed content except as needed for support work you've explicitly requested, or to investigate abuse reports.</p>
+
+      <h3>3.5 Aggregated, cookieless analytics</h3>
+      <p>We record page-view events to understand how the editor is used. Each event includes the URL pathname (no query string, no host), the country derived from your IP (via the <code>CF-IPCountry</code> header — we never store the IP itself in this table), an inbound <code>?ref=</code> tag if one was present at session start, and a random per-tab session id that is not persisted across tabs or visits. We do not set tracking cookies, fingerprint your device, or correlate page views across sessions.</p>
+
+      <h3>3.6 Billing information</h3>
+      <p>If you upgrade to a paid plan, payment is processed by <a href="https://stripe.com/privacy">Stripe</a>. Stripe collects your name, email, billing address, and payment method details directly — we never see or store your card number. We store the Stripe customer id, the subscription state (active / past due / canceled / trialing), the current plan, and the period dates so we can show your billing page and gate paid features.</p>
+
+      <h3>3.7 Bot protection</h3>
+      <p>The signup, login, and password-reset forms use <a href="https://www.cloudflare.com/application-services/products/turnstile/">Cloudflare Turnstile</a> to filter automated abuse. Turnstile collects browser signals (rendering details, mouse / touch behavior, IP address) to decide if a request looks human. It does not set persistent cross-site cookies.</p>
+
+      <h2>4. Cookies</h2>
+      <table>
+        <thead>
+          <tr><th>Cookie</th><th>Purpose</th><th>Lifetime</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>gb_session</code></td><td>Signed-in session token. <code>HttpOnly</code>, <code>Secure</code>, <code>SameSite=Lax</code>.</td><td>Up to 90 days; refreshed on use, idle-expires after 30 days.</td></tr>
+          <tr><td><code>gb_impersonator</code></td><td>Set only when a staff member impersonates a user for support. Lets them return to their own account.</td><td>Cleared when impersonation ends.</td></tr>
+        </tbody>
+      </table>
+      <p>We do not use analytics, advertising, or social-media cookies.</p>
+
+      <h2>5. Who we share data with</h2>
+      <p>We share the minimum necessary information with a small set of vendors that operate parts of the service. Each one is bound by its own privacy terms.</p>
+      <table>
+        <thead>
+          <tr><th>Vendor</th><th>What they receive</th><th>Why</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a></td><td>All HTTP traffic to the service — request URLs, headers, IPs. Stored feeds, D1 database, KV cache, edge logs.</td><td>Hosting, edge delivery, DDoS protection, the Workers runtime that serves the API.</td></tr>
+          <tr><td><a href="https://stripe.com/privacy">Stripe</a></td><td>Name, email, billing address, payment method (entered directly into Stripe Checkout). Subscription + invoice metadata.</td><td>Payments and subscription management.</td></tr>
+          <tr><td><a href="https://resend.com/legal/privacy-policy">Resend</a></td><td>Recipient email, sender, subject, and body of transactional emails (verify, magic link, password reset, organization invitations).</td><td>Outbound transactional email delivery.</td></tr>
+          <tr><td><a href="https://www.mapbox.com/legal/privacy">Mapbox</a></td><td>Your IP, requested map tile coordinates, browser User-Agent — sent directly from your browser, not via our servers.</td><td>Rendering the interactive map and route geocoding.</td></tr>
+          <tr><td><a href="https://www.cloudflare.com/application-services/products/turnstile/">Cloudflare Turnstile</a></td><td>Browser signals used to score human-ness on signup / login / reset.</td><td>Bot abuse prevention on authentication forms.</td></tr>
+        </tbody>
+      </table>
+      <p>We do not sell personal information. We do not share data with advertisers or data brokers. We will disclose information only when required by a valid legal process or to protect the rights, property, or safety of GTFS Studio, our users, or the public — and where the law allows, we will notify you first.</p>
+
+      <h2>6. Your rights</h2>
+      <p>Regardless of where you live, you can:</p>
+      <ul>
+        <li><strong>Access and export</strong> everything we have on you, as a ZIP archive, from <a href="/account">Account → Export my data</a>.</li>
+        <li><strong>Correct</strong> your display name or email from <a href="/account">Account</a>.</li>
+        <li><strong>Delete</strong> your account from <a href="/account">Account → Delete account</a>. Deletion soft-flags the account immediately (you're signed out, paid features stop, the email becomes reusable), and the row plus all R2 blobs are hard-purged after a 30-day grace window by a nightly job. Organization-owned data you don't personally own (e.g., feeds in an org you're a member of) is not deleted by your account deletion.</li>
+        <li><strong>Revoke active sessions</strong> for your account from <a href="/account">Account → Sessions</a>.</li>
+      </ul>
+      <p>If you are in the EU / UK, you also have the right to object to processing, restrict processing, and lodge a complaint with your local supervisory authority. If you are in California, you have additional rights under the CCPA / CPRA, including the right to know what we collect and to delete it; we do not "sell" or "share" personal information under those definitions.</p>
+      <p>To exercise any of these rights — including for a deleted account — write to <a href="mailto:privacy@gtfsstudio.net">privacy@gtfsstudio.net</a>.</p>
+
+      <h2>7. Data retention</h2>
+      <ul>
+        <li><strong>Active accounts:</strong> retained for as long as the account exists.</li>
+        <li><strong>Deleted accounts:</strong> hard-purged 30 days after deletion. Backups taken before the deletion may persist for up to 90 days before they age out.</li>
+        <li><strong>Audit events:</strong> retained while the actor account exists, then purged with it.</li>
+        <li><strong>Cookieless analytics events:</strong> retained for up to 12 months in aggregated form.</li>
+        <li><strong>Billing records (Stripe-side):</strong> retained by Stripe under their own retention rules, which may be longer than the above for tax / accounting reasons.</li>
+      </ul>
+
+      <h2>8. Security</h2>
+      <p>All traffic to <code>gtfsstudio.net</code> and its subdomains is served over TLS. Session cookies are <code>HttpOnly</code> + <code>Secure</code> + <code>SameSite=Lax</code> with a custom CSRF defense header required on state-changing requests. Passwords are stored as PBKDF2-SHA-256 hashes (600,000 iterations). Feed blobs and database rows are stored at rest on Cloudflare infrastructure. No system is perfectly secure — if you spot a vulnerability, please report it to <a href="mailto:security@gtfsstudio.net">security@gtfsstudio.net</a>.</p>
+
+      <h2>9. International transfers</h2>
+      <p>GTFS Studio is operated from the United States and uses Cloudflare's globally distributed network. If you access the service from outside the US, your data will be transferred to, and processed in, jurisdictions that may have different data-protection rules than your own. By using the service you consent to those transfers.</p>
+
+      <h2>10. Children</h2>
+      <p>GTFS Studio is not directed to children under 13 (or the equivalent minimum age in your jurisdiction), and we do not knowingly collect personal information from them. If you believe a child has provided personal information to us, write to <a href="mailto:privacy@gtfsstudio.net">privacy@gtfsstudio.net</a> and we will delete it.</p>
+
+      <h2>11. Changes to this policy</h2>
+      <p>We'll update this page when our practices change. Material changes (new vendor categories, new data collected, changes that affect your rights) will be flagged in-app and announced to signed-in users by email at least 14 days before they take effect. The "Last updated" date at the top will always reflect the most recent change.</p>
+
+      <h2>12. Contact</h2>
+      <p>Privacy questions or requests: <a href="mailto:privacy@gtfsstudio.net">privacy@gtfsstudio.net</a>.<br />Security reports: <a href="mailto:security@gtfsstudio.net">security@gtfsstudio.net</a>.<br />General support: <a href="mailto:hello@gtfsstudio.net">hello@gtfsstudio.net</a>.</p>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/privacy-policy/">Privacy</a>
+      <a href="/docs/deep-links/">Deep-link integration</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML =
+              '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

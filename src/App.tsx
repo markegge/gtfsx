@@ -20,7 +20,7 @@ import { AccountSettingsPage } from './components/auth/AccountSettingsPage';
 import { NotFoundPage } from './components/misc/NotFoundPage';
 import { BackendDisabledPage } from './components/misc/BackendDisabledPage';
 import { MyFeedsPage } from './components/feeds/MyFeedsPage';
-import { ConflictDialog } from './components/versions/ConflictDialog';
+import { ConflictDialog } from './components/snapshots/ConflictDialog';
 import { AdminDashboardPage } from './components/admin/AdminDashboardPage';
 import { AdminUsersPage } from './components/admin/AdminUsersPage';
 import { AdminUserDetailPage } from './components/admin/AdminUserDetailPage';
@@ -319,7 +319,7 @@ function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       {/* Global RT-breakage dialog — listens for `gb:rt-breakage` events from
-          the PublishPanel and confirms before publishing a version that would
+          the PublishPanel and confirms before publishing a snapshot that would
           break the project's registered GTFS-RT feed. */}
       <RtBreakageDialog />
     </BrowserRouter>

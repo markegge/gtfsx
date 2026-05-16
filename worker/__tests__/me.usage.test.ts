@@ -31,15 +31,15 @@ describe('/api/me/usage', () => {
     capture.restore();
   });
 
-  it('reflects the number of projects and versions', async () => {
+  it('reflects the number of projects and snapshots', async () => {
     const client = await loggedInClient('usage1@example.com');
 
     // Start: all zero.
     const initial = await client.json<{
-      user: { projects: number; versions: number; storageBytes: number };
+      user: { projects: number; snapshots: number; storageBytes: number };
     }>(await client.get('/api/me/usage'));
     expect(initial.user.projects).toBe(0);
-    expect(initial.user.versions).toBe(0);
+    expect(initial.user.snapshots).toBe(0);
     expect(initial.user.storageBytes).toBe(0);
 
     // Create two projects, push a working-state blob into one, and add a version.
@@ -62,14 +62,14 @@ describe('/api/me/usage', () => {
       'meta',
       JSON.stringify({ summary: {}, validationErrors: 0, validationWarnings: 0 }),
     );
-    const vRes = await client.post(`/api/projects/${a.id}/versions`, undefined, { body: form });
+    const vRes = await client.post(`/api/projects/${a.id}/snapshots`, undefined, { body: form });
     expect(vRes.status).toBe(200);
 
     const after = await client.json<{
-      user: { projects: number; versions: number; storageBytes: number };
+      user: { projects: number; snapshots: number; storageBytes: number };
     }>(await client.get('/api/me/usage'));
     expect(after.user.projects).toBe(2);
-    expect(after.user.versions).toBe(1);
+    expect(after.user.snapshots).toBe(1);
     expect(after.user.storageBytes).toBeGreaterThan(0);
   });
 

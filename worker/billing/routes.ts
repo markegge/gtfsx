@@ -75,7 +75,7 @@ billingRouter.get('/me', async (c) => {
     quotas: {
       projects: { used: usedProjects?.n ?? 0, limit: quotas.projects },
       publishedFeeds: { used: usedPublished, limit: quotas.publishedFeeds },
-      versionsPerProject: { limit: quotas.versionsPerProject },
+      snapshotsPerProject: { limit: quotas.snapshotsPerProject },
       blobBytes: { limit: quotas.blobBytes },
     },
   });
@@ -133,7 +133,7 @@ billingRouter.get('/orgs/:id', async (c) => {
     quotas: {
       projects: { used: usedProjects?.n ?? 0, limit: quotas.projects },
       publishedFeeds: { used: usedPublished, limit: quotas.publishedFeeds },
-      versionsPerProject: { limit: quotas.versionsPerProject },
+      snapshotsPerProject: { limit: quotas.snapshotsPerProject },
       blobBytes: { limit: quotas.blobBytes },
       seats: { used: membersRow?.n ?? 0, limit: seatsLimit },
     },

@@ -3,13 +3,13 @@ import { useStore } from '../../store';
 import { AuthButton } from '../auth/AuthButton';
 import { Badge } from '../ui/Badge';
 import {
-  fetchVersionState,
+  fetchSnapshotState,
   getPublicationHistory,
-  listVersions,
+  listSnapshots,
   publishProject,
   rollbackPublication,
   unpublishProject,
-  type ProjectVersion,
+  type ProjectSnapshot,
   type PublicationInfo,
 } from '../../services/projectsApi';
 import { ApiError } from '../../services/authApi';
@@ -28,14 +28,14 @@ function formatDate(ms: number | null | undefined): string {
   });
 }
 
-// Swap store to the given version's saved state, run the exporter, then restore.
+// Swap store to the given snapshot's saved state, run the exporter, then restore.
 // Auto-save may fire a redundant save of the restored state (harmless — same
 // bytes as what the server already holds).
-async function renderVersionZip(projectId: string, versionId: string): Promise<Blob> {
+async function renderSnapshotZip(projectId: string, snapshotId: string): Promise<Blob> {
   const snapshotBefore = buildSnapshot();
-  const versionState = await fetchVersionState(projectId, versionId);
+  const snapshotState = await fetchSnapshotState(projectId, snapshotId);
   try {
-    applySnapshotToStore(versionState);
+    applySnapshotToStore(snapshotState);
     return await exportGtfsZip();
   } finally {
     applySnapshotToStore(snapshotBefore);
@@ -58,8 +58,8 @@ interface RemovedIds {
 
 export function PublishPanel() {
   const projectId = useStore((s) => s.activeServerProjectId);
-  const versionList = useStore((s) => s.versionList);
-  const setVersionList = useStore((s) => s.setVersionList);
+  const snapshotList = useStore((s) => s.snapshotList);
+  const setSnapshotList = useStore((s) => s.setSnapshotList);
   const publicationHistory = useStore((s) => s.publicationHistory);
   const currentPublication = useStore((s) => s.currentPublication);
   const setPublicationHistory = useStore((s) => s.setPublicationHistory);
@@ -67,11 +67,11 @@ export function PublishPanel() {
 
   const [loading, setLoading] = useState(false);
   const [banner, setBanner] = useState<Banner | null>(null);
-  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
   const [ignoreWarnings, setIgnoreWarnings] = useState(false);
   const [busy, setBusy] = useState(false);
   const [unpublishConfirm, setUnpublishConfirm] = useState(false);
-  const [rtBreakage, setRtBreakage] = useState<{ removed: RemovedIds; versionId: string } | null>(
+  const [rtBreakage, setRtBreakage] = useState<{ removed: RemovedIds; snapshotId: string } | null>(
     null,
   );
   const [publishErrors, setPublishErrors] = useState<string[] | null>(null);
@@ -81,15 +81,15 @@ export function PublishPanel() {
     setLoading(true);
     setBanner(null);
     try {
-      const [versionsRes, historyRes] = await Promise.all([
-        listVersions(projectId),
+      const [snapshotsRes, historyRes] = await Promise.all([
+        listSnapshots(projectId),
         getPublicationHistory(projectId),
       ]);
-      setVersionList(versionsRes.versions);
+      setSnapshotList(snapshotsRes.snapshots);
       setPublicationHistory(historyRes.history);
       setCurrentPublication(historyRes.current);
-      if (!selectedVersionId && versionsRes.versions.length > 0) {
-        setSelectedVersionId(versionsRes.versions[0].id);
+      if (!selectedSnapshotId && snapshotsRes.snapshots.length > 0) {
+        setSelectedSnapshotId(snapshotsRes.snapshots[0].id);
       }
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Could not load publication info';
@@ -98,15 +98,15 @@ export function PublishPanel() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, setVersionList, setPublicationHistory, setCurrentPublication]);
+  }, [projectId, setSnapshotList, setPublicationHistory, setCurrentPublication]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  const selectedVersion = useMemo(
-    () => versionList.find((v) => v.id === selectedVersionId) ?? null,
-    [versionList, selectedVersionId],
+  const selectedSnapshot = useMemo(
+    () => snapshotList.find((v) => v.id === selectedSnapshotId) ?? null,
+    [snapshotList, selectedSnapshotId],
   );
 
   if (!projectId) {
@@ -118,16 +118,16 @@ export function PublishPanel() {
   }
 
   const handlePublish = async () => {
-    if (!selectedVersion || !projectId) return;
+    if (!selectedSnapshot || !projectId) return;
     setBusy(true);
     setBanner(null);
     setPublishErrors(null);
     setRtBreakage(null);
     try {
-      const zip = await renderVersionZip(projectId, selectedVersion.id);
+      const zip = await renderSnapshotZip(projectId, selectedSnapshot.id);
       const result = await publishProject(projectId, {
-        versionId: selectedVersion.id,
-        ignoreWarnings: selectedVersion.validationWarnings > 0 ? ignoreWarnings : undefined,
+        snapshotId: selectedSnapshot.id,
+        ignoreWarnings: selectedSnapshot.validationWarnings > 0 ? ignoreWarnings : undefined,
         zip,
       });
       setBanner({
@@ -141,7 +141,7 @@ export function PublishPanel() {
       if (err instanceof ApiError) {
         if (err.code === ('rt_breakage' as typeof err.code)) {
           const removed = (err.extra?.removed ?? {}) as RemovedIds;
-          setRtBreakage({ removed, versionId: selectedVersion.id });
+          setRtBreakage({ removed, snapshotId: selectedSnapshot.id });
         } else if (err.code === 'validation_failed') {
           const issues = (err.extra?.issues as unknown[]) ?? [];
           const errList: string[] = [err.message];
@@ -165,12 +165,12 @@ export function PublishPanel() {
 
   const handlePublishIgnoringRt = async () => {
     if (!rtBreakage || !projectId) return;
-    const versionId = rtBreakage.versionId;
+    const snapshotId = rtBreakage.snapshotId;
     setBusy(true);
     try {
-      const zip = await renderVersionZip(projectId, versionId);
+      const zip = await renderSnapshotZip(projectId, snapshotId);
       const result = await publishProject(projectId, {
-        versionId,
+        snapshotId,
         ignoreWarnings: ignoreWarnings || undefined,
         ignoreRtBreakage: true,
         zip,
@@ -208,19 +208,19 @@ export function PublishPanel() {
     }
   };
 
-  const handleRollback = async (versionId: string) => {
+  const handleRollback = async (snapshotId: string) => {
     if (!projectId) return;
     setBusy(true);
     setBanner(null);
     try {
       let result: { publication: PublicationInfo };
       try {
-        result = await rollbackPublication(projectId, versionId);
+        result = await rollbackPublication(projectId, snapshotId);
       } catch (err) {
-        // If no stored ZIP for that version, fall back to re-rendering + multipart.
+        // If no stored ZIP for that snapshot, fall back to re-rendering + multipart.
         if (err instanceof ApiError && err.code === 'validation_failed') {
-          const zip = await renderVersionZip(projectId, versionId);
-          result = await publishProject(projectId, { versionId, ignoreWarnings: true, zip });
+          const zip = await renderSnapshotZip(projectId, snapshotId);
+          result = await publishProject(projectId, { snapshotId, ignoreWarnings: true, zip });
         } else {
           throw err;
         }
@@ -248,13 +248,13 @@ export function PublishPanel() {
     }
   };
 
-  const currentPubVersionId = currentPublication?.versionId ?? null;
+  const currentPubSnapshotId = currentPublication?.snapshotId ?? null;
   const publishDisabled =
-    !selectedVersion ||
+    !selectedSnapshot ||
     busy ||
-    (selectedVersion.validationErrors ?? 0) > 0 ||
-    selectedVersion.id === currentPubVersionId ||
-    ((selectedVersion.validationWarnings ?? 0) > 0 && !ignoreWarnings);
+    (selectedSnapshot.validationErrors ?? 0) > 0 ||
+    selectedSnapshot.id === currentPubSnapshotId ||
+    ((selectedSnapshot.validationWarnings ?? 0) > 0 && !ignoreWarnings);
 
   return (
     <div className="flex-1 overflow-auto">
@@ -280,47 +280,47 @@ export function PublishPanel() {
 
         <section className="bg-white border border-sand rounded-xl p-4">
           <h3 className="font-heading font-bold text-base text-dark-brown mb-3">
-            Publish new version
+            Publish a snapshot
           </h3>
-          {versionList.length === 0 ? (
+          {snapshotList.length === 0 ? (
             <p className="text-sm text-warm-gray">
-              No saved versions yet. Save a version from the Versions tab first.
+              No saved snapshots yet. Save one from the Snapshots tab first.
             </p>
           ) : (
             <>
               <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-                Version
+                Snapshot
               </label>
               <select
-                value={selectedVersionId ?? ''}
+                value={selectedSnapshotId ?? ''}
                 onChange={(e) => {
-                  setSelectedVersionId(e.target.value);
+                  setSelectedSnapshotId(e.target.value);
                   setIgnoreWarnings(false);
                   setPublishErrors(null);
                 }}
                 className="w-full px-3 py-2 border-2 border-sand rounded-lg bg-cream text-sm text-dark-brown focus:outline-none focus:border-coral focus:bg-white mb-3"
               >
-                {versionList.map((v) => (
+                {snapshotList.map((v) => (
                   <option key={v.id} value={v.id}>
                     {(v.label || `untitled`) + ' — ' + formatDate(v.createdAt)}
-                    {v.id === currentPubVersionId ? ' · PUBLISHED' : ''}
+                    {v.id === currentPubSnapshotId ? ' · PUBLISHED' : ''}
                   </option>
                 ))}
               </select>
 
-              {selectedVersion && <VersionSummaryTable version={selectedVersion} />}
+              {selectedSnapshot && <SnapshotSummaryTable snapshot={selectedSnapshot} />}
 
-              {selectedVersion && selectedVersion.validationErrors > 0 && (
+              {selectedSnapshot && selectedSnapshot.validationErrors > 0 && (
                 <div className="mt-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
-                  This version has {selectedVersion.validationErrors} validation error
-                  {selectedVersion.validationErrors === 1 ? '' : 's'}. Fix them in the editor and
-                  save a new version before publishing.
+                  This snapshot has {selectedSnapshot.validationErrors} validation error
+                  {selectedSnapshot.validationErrors === 1 ? '' : 's'}. Fix them in the editor and
+                  save a new snapshot before publishing.
                 </div>
               )}
 
-              {selectedVersion &&
-                selectedVersion.validationErrors === 0 &&
-                selectedVersion.validationWarnings > 0 && (
+              {selectedSnapshot &&
+                selectedSnapshot.validationErrors === 0 &&
+                selectedSnapshot.validationWarnings > 0 && (
                   <label className="mt-3 flex items-start gap-2 text-xs text-warm-gray cursor-pointer">
                     <input
                       type="checkbox"
@@ -329,17 +329,17 @@ export function PublishPanel() {
                       className="mt-0.5"
                     />
                     <span>
-                      Publish despite {selectedVersion.validationWarnings} warning
-                      {selectedVersion.validationWarnings === 1 ? '' : 's'}.
+                      Publish despite {selectedSnapshot.validationWarnings} warning
+                      {selectedSnapshot.validationWarnings === 1 ? '' : 's'}.
                     </span>
                   </label>
                 )}
 
-              {selectedVersion &&
-                selectedVersion.id === currentPubVersionId &&
-                selectedVersion.validationErrors === 0 && (
+              {selectedSnapshot &&
+                selectedSnapshot.id === currentPubSnapshotId &&
+                selectedSnapshot.validationErrors === 0 && (
                   <div className="mt-3 px-3 py-2 rounded-md bg-cream border border-sand text-warm-gray text-xs">
-                    This version is already the current publication.
+                    This snapshot is already the current publication.
                   </div>
                 )}
 
@@ -363,7 +363,7 @@ export function PublishPanel() {
           )}
         </section>
 
-        <DraftLinksSection projectId={projectId} versionList={versionList} setBanner={setBanner} />
+        <DraftLinksSection projectId={projectId} snapshotList={snapshotList} setBanner={setBanner} />
 
         <section className="bg-white border border-sand rounded-xl p-4">
           <h3 className="font-heading font-bold text-base text-dark-brown mb-3">
@@ -378,16 +378,16 @@ export function PublishPanel() {
                   <tr>
                     <th className="px-2 py-2">When</th>
                     <th className="px-2 py-2">Action</th>
-                    <th className="px-2 py-2">Version</th>
+                    <th className="px-2 py-2">Snapshot</th>
                     <th className="px-2 py-2"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {publicationHistory.map((h) => {
                     const isRollbackable =
-                      h.versionId != null &&
-                      h.versionId !== currentPubVersionId &&
-                      versionList.some((v) => v.id === h.versionId);
+                      h.snapshotId != null &&
+                      h.snapshotId !== currentPubSnapshotId &&
+                      snapshotList.some((v) => v.id === h.snapshotId);
                     return (
                       <tr key={h.id} className="border-t border-sand">
                         <td className="px-2 py-2 text-warm-gray whitespace-nowrap">
@@ -397,14 +397,14 @@ export function PublishPanel() {
                           <HistoryActionBadge action={h.action} />
                         </td>
                         <td className="px-2 py-2 font-mono text-xs text-dark-brown">
-                          {h.versionId ? h.versionId.slice(0, 10) : '—'}
+                          {h.snapshotId ? h.snapshotId.slice(0, 10) : '—'}
                         </td>
                         <td className="px-2 py-2 text-right whitespace-nowrap">
-                          {isRollbackable && h.versionId && (
+                          {isRollbackable && h.snapshotId && (
                             <button
                               className="text-xs text-coral hover:underline"
                               disabled={busy}
-                              onClick={() => handleRollback(h.versionId as string)}
+                              onClick={() => handleRollback(h.snapshotId as string)}
                             >
                               Restore this publication
                             </button>
@@ -483,7 +483,7 @@ function CurrentPublicationView({
   onCopy,
   onUnpublish,
 }: {
-  pub: { versionId: string; publishedAt: number; canonicalUrl?: string };
+  pub: { snapshotId: string; publishedAt: number; canonicalUrl?: string };
   onCopy: (s: string) => void;
   onUnpublish: () => void;
 }) {
@@ -514,8 +514,8 @@ function CurrentPublicationView({
         </div>
       )}
       <div className="text-xs text-warm-gray">
-        Published {formatDate(pub.publishedAt)} · version{' '}
-        <span className="font-mono">{pub.versionId.slice(0, 10)}</span>
+        Published {formatDate(pub.publishedAt)} · snapshot{' '}
+        <span className="font-mono">{pub.snapshotId.slice(0, 10)}</span>
       </div>
       <div>
         <button
@@ -529,8 +529,8 @@ function CurrentPublicationView({
   );
 }
 
-function VersionSummaryTable({ version }: { version: ProjectVersion }) {
-  const s = version.summary ?? {};
+function SnapshotSummaryTable({ snapshot }: { snapshot: ProjectSnapshot }) {
+  const s = snapshot.summary ?? {};
   const rows: [string, string][] = [
     ['Routes', String((s.routeCount as number | undefined) ?? '—')],
     ['Stops', String((s.stopCount as number | undefined) ?? '—')],
@@ -553,13 +553,13 @@ function VersionSummaryTable({ version }: { version: ProjectVersion }) {
         ))}
       </div>
       <div className="mt-2 flex gap-1 flex-wrap">
-        {version.validationErrors > 0 && (
-          <Badge variant="error">{version.validationErrors} errors</Badge>
+        {snapshot.validationErrors > 0 && (
+          <Badge variant="error">{snapshot.validationErrors} errors</Badge>
         )}
-        {version.validationWarnings > 0 && (
-          <Badge variant="warning">{version.validationWarnings} warnings</Badge>
+        {snapshot.validationWarnings > 0 && (
+          <Badge variant="warning">{snapshot.validationWarnings} warnings</Badge>
         )}
-        {version.validationErrors === 0 && version.validationWarnings === 0 && (
+        {snapshot.validationErrors === 0 && snapshot.validationWarnings === 0 && (
           <Badge variant="success">Clean</Badge>
         )}
       </div>
@@ -599,7 +599,7 @@ function RtBreakageModal({
           GTFS-Realtime breakage detected
         </h3>
         <p className="text-sm text-warm-gray mb-4">
-          Publishing this version will remove or rename IDs that your registered GTFS-Realtime feed
+          Publishing this snapshot will remove or rename IDs that your registered GTFS-Realtime feed
           references. Downstream trip-update and vehicle-position consumers may break until your RT
           producer catches up.
         </p>
@@ -673,4 +673,4 @@ function ConfirmModal({
   );
 }
 
-export { renderVersionZip };
+export { renderSnapshotZip };

@@ -4,16 +4,16 @@ export function workingStateKey(projectId: string): string {
   return `projects/${projectId}/working-state.json.gz`;
 }
 
-export function versionStateKey(projectId: string, versionId: string): string {
-  return `projects/${projectId}/versions/${versionId}/state.json.gz`;
+export function snapshotStateKey(projectId: string, snapshotId: string): string {
+  return `projects/${projectId}/snapshots/${snapshotId}/state.json.gz`;
 }
 
-export function versionZipKey(projectId: string, versionId: string): string {
-  return `projects/${projectId}/versions/${versionId}/gtfs.zip`;
+export function snapshotZipKey(projectId: string, snapshotId: string): string {
+  return `projects/${projectId}/snapshots/${snapshotId}/gtfs.zip`;
 }
 
-export function publicationZipKey(projectId: string, versionId: string): string {
-  return `publications/${projectId}/${versionId}/gtfs.zip`;
+export function publicationZipKey(projectId: string, snapshotId: string): string {
+  return `publications/${projectId}/${snapshotId}/gtfs.zip`;
 }
 
 export function draftZipKey(projectId: string, tokenHash: string): string {

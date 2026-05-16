@@ -1,12 +1,12 @@
 // Per-user quota/usage computation. Feeds into /api/me and /api/me/usage —
 // small wrapper around COUNT(*) and SUM() queries against feed_project and
-// feed_version.
+// feed_snapshot.
 
 import type { Env } from '../env';
 
 export interface UsageCounts {
   projects: number;
-  versions: number;
+  snapshots: number;
   storageBytes: number;
 }
 
@@ -28,10 +28,10 @@ export async function computeUserUsage(env: Env, userId: string): Promise<UsageC
     .bind(userId)
     .first<{ n: number; working_bytes: number }>();
 
-  const versionRow = await env.DB.prepare(
+  const snapshotRow = await env.DB.prepare(
     `SELECT COUNT(*) AS n,
             COALESCE(SUM(zip_size), 0) AS zip_bytes
-       FROM feed_version v
+       FROM feed_snapshot v
        JOIN feed_project p ON p.id = v.project_id
        WHERE p.owner_type = 'user' AND p.owner_id = ? AND p.deleted_at IS NULL`,
   )
@@ -40,8 +40,8 @@ export async function computeUserUsage(env: Env, userId: string): Promise<UsageC
 
   return {
     projects: projectRow?.n ?? 0,
-    versions: versionRow?.n ?? 0,
-    storageBytes: (projectRow?.working_bytes ?? 0) + (versionRow?.zip_bytes ?? 0),
+    snapshots: snapshotRow?.n ?? 0,
+    storageBytes: (projectRow?.working_bytes ?? 0) + (snapshotRow?.zip_bytes ?? 0),
   };
 }
 
@@ -59,10 +59,10 @@ export async function computeOrgUsage(env: Env, orgId: string): Promise<UsageCou
     .bind(orgId)
     .first<{ n: number; working_bytes: number }>();
 
-  const versionRow = await env.DB.prepare(
+  const snapshotRow = await env.DB.prepare(
     `SELECT COUNT(*) AS n,
             COALESCE(SUM(zip_size), 0) AS zip_bytes
-       FROM feed_version v
+       FROM feed_snapshot v
        JOIN feed_project p ON p.id = v.project_id
        WHERE p.owner_type = 'org' AND p.owner_id = ? AND p.deleted_at IS NULL`,
   )
@@ -71,7 +71,7 @@ export async function computeOrgUsage(env: Env, orgId: string): Promise<UsageCou
 
   return {
     projects: projectRow?.n ?? 0,
-    versions: versionRow?.n ?? 0,
-    storageBytes: (projectRow?.working_bytes ?? 0) + (versionRow?.zip_bytes ?? 0),
+    snapshots: snapshotRow?.n ?? 0,
+    storageBytes: (projectRow?.working_bytes ?? 0) + (snapshotRow?.zip_bytes ?? 0),
   };
 }

@@ -137,10 +137,8 @@ Full day-to-day cadence lives in [`docs/WORKFLOW.md`](./docs/WORKFLOW.md). First
 | [`DEPLOY_BACKEND.md`](./docs/DEPLOY_BACKEND.md) | First-time provisioning runbook (D1 / KV / R2 / Resend / Turnstile / smoke-test). |
 | [`EMBEDS_REQUIREMENTS.md`](./docs/EMBEDS_REQUIREMENTS.md) | Embeds spec — architecture, shipped, queued. `EM-*` anchors. |
 | [`FLEX_ROADMAP.md`](./docs/FLEX_ROADMAP.md) | GTFS-Flex coverage tracker. |
-| [`RAIL_ELEGANCE_PLAN.md`](./docs/RAIL_ELEGANCE_PLAN.md) | Audit + corrective plan for the two-rail layout (2026-05). Most items shipped on the rail refactor. |
 | [`demand-dots-nationwide-plan.md`](./docs/demand-dots-nationwide-plan.md) | Demand-dot tile build pipeline + refresh cadence. |
 | [`Title VI Transit Service Analysis - Calculation Procedures Memo.md`](./docs/Title%20VI%20Transit%20Service%20Analysis%20-%20Calculation%20Procedures%20Memo.md) | Methodology for the Title VI equity analysis. |
-| [`wireframes.html`](./docs/wireframes.html) | Original UI sketches — historical reference. |
 
 ## Project structure
 

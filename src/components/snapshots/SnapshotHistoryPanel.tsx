@@ -4,12 +4,12 @@ import { AuthButton } from '../auth/AuthButton';
 import { FormField } from '../ui/FormField';
 import { Badge } from '../ui/Badge';
 import {
-  deleteVersion,
-  listVersions,
-  restoreVersion,
-  saveVersion,
-  type ProjectVersion,
-  type VersionSummary,
+  deleteSnapshot,
+  listSnapshots,
+  restoreSnapshot,
+  saveSnapshot,
+  type ProjectSnapshot,
+  type SnapshotSummary,
 } from '../../services/projectsApi';
 import { ApiError } from '../../services/authApi';
 import { runValidation } from '../../services/validation';
@@ -27,7 +27,7 @@ function formatDate(ms: number | null | undefined): string {
   });
 }
 
-function buildSummary(state: ReturnType<typeof useStore.getState>): VersionSummary {
+function buildSummary(state: ReturnType<typeof useStore.getState>): SnapshotSummary {
   const stats = calculateSystemStats(state);
 
   const serviceDays = new Set<string>();
@@ -66,33 +66,33 @@ function buildSummary(state: ReturnType<typeof useStore.getState>): VersionSumma
   };
 }
 
-export function VersionHistoryPanel() {
+export function SnapshotHistoryPanel() {
   const projectId = useStore((s) => s.activeServerProjectId);
-  const versionList = useStore((s) => s.versionList);
-  const setVersionList = useStore((s) => s.setVersionList);
+  const snapshotList = useStore((s) => s.snapshotList);
+  const setSnapshotList = useStore((s) => s.setSnapshotList);
   const setRestoredBanner = useStore((s) => s.setRestoredBanner);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSave, setShowSave] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [restoreTarget, setRestoreTarget] = useState<ProjectVersion | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<ProjectVersion | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<ProjectSnapshot | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProjectSnapshot | null>(null);
 
   const refresh = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await listVersions(projectId);
-      setVersionList(res.versions);
+      const res = await listSnapshots(projectId);
+      setSnapshotList(res.snapshots);
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Could not load versions';
+      const msg = err instanceof ApiError ? err.message : 'Could not load snapshots';
       setError(msg);
     } finally {
       setLoading(false);
     }
-  }, [projectId, setVersionList]);
+  }, [projectId, setSnapshotList]);
 
   useEffect(() => {
     refresh();
@@ -101,12 +101,12 @@ export function VersionHistoryPanel() {
   if (!projectId) {
     return (
       <div className="p-4 text-sm text-warm-gray">
-        Version history is only available for feeds saved to your account.
+        Snapshots are only available for feeds saved to your account.
       </div>
     );
   }
 
-  const handleSaveVersion = async (label: string) => {
+  const handleSaveSnapshot = async (label: string) => {
     setBusy(true);
     setError(null);
     try {
@@ -128,7 +128,7 @@ export function VersionHistoryPanel() {
         snapshot[key] = (state as unknown as Record<string, unknown>)[key];
       }
 
-      await saveVersion(projectId, {
+      await saveSnapshot(projectId, {
         label: label.trim() || undefined,
         summary,
         validationErrors: errors,
@@ -145,15 +145,15 @@ export function VersionHistoryPanel() {
     }
   };
 
-  const handleRestore = async (version: ProjectVersion) => {
+  const handleRestore = async (snapshot: ProjectSnapshot) => {
     setBusy(true);
     setError(null);
     try {
-      await restoreVersion(projectId, version.id);
+      await restoreSnapshot(projectId, snapshot.id);
       await loadProjectFromServer(projectId);
       setRestoreTarget(null);
       setRestoredBanner(
-        `Version ${version.label ? `"${version.label}"` : version.id.slice(0, 8)} restored — local changes have been replaced.`,
+        `Snapshot ${snapshot.label ? `"${snapshot.label}"` : snapshot.id.slice(0, 8)} restored — local changes have been replaced.`,
       );
       await refresh();
     } catch (err) {
@@ -164,11 +164,11 @@ export function VersionHistoryPanel() {
     }
   };
 
-  const handleDelete = async (version: ProjectVersion) => {
+  const handleDelete = async (snapshot: ProjectSnapshot) => {
     setBusy(true);
     setError(null);
     try {
-      await deleteVersion(projectId, version.id);
+      await deleteSnapshot(projectId, snapshot.id);
       setDeleteTarget(null);
       await refresh();
     } catch (err) {
@@ -182,7 +182,7 @@ export function VersionHistoryPanel() {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center justify-between px-4 py-2 border-b border-sand">
-        <div className="text-sm font-heading font-semibold text-dark-brown">Saved versions</div>
+        <div className="text-sm font-heading font-semibold text-dark-brown">Saved snapshots</div>
         <div className="flex items-center gap-2">
           <button
             onClick={refresh}
@@ -193,7 +193,7 @@ export function VersionHistoryPanel() {
             Refresh
           </button>
           <AuthButton onClick={() => setShowSave(true)} disabled={busy}>
-            Save version
+            Save snapshot
           </AuthButton>
         </div>
       </div>
@@ -205,11 +205,11 @@ export function VersionHistoryPanel() {
       )}
 
       <div className="flex-1 overflow-auto">
-        {loading && versionList.length === 0 ? (
+        {loading && snapshotList.length === 0 ? (
           <div className="p-4 text-sm text-warm-gray">Loading…</div>
-        ) : versionList.length === 0 ? (
+        ) : snapshotList.length === 0 ? (
           <div className="p-4 text-sm text-warm-gray">
-            No saved versions yet. Click "Save version" to snapshot the current feed.
+            No saved snapshots yet. Click "Save snapshot" to capture the current feed.
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -225,7 +225,7 @@ export function VersionHistoryPanel() {
               </tr>
             </thead>
             <tbody>
-              {versionList.map((v) => {
+              {snapshotList.map((v) => {
                 const summary = v.summary ?? {};
                 return (
                   <tr key={v.id} className="border-t border-sand">
@@ -271,12 +271,12 @@ export function VersionHistoryPanel() {
         )}
       </div>
 
-      {showSave && <SaveVersionDialog onSave={handleSaveVersion} onCancel={() => setShowSave(false)} busy={busy} />}
+      {showSave && <SaveSnapshotDialog onSave={handleSaveSnapshot} onCancel={() => setShowSave(false)} busy={busy} />}
 
       {restoreTarget && (
         <ConfirmModal
-          title="Restore this version?"
-          body={`This will replace your current working draft with "${restoreTarget.label || restoreTarget.id.slice(0, 8)}". Your current draft will be lost unless you save it as a version first.`}
+          title="Restore this snapshot?"
+          body={`This will replace your current working draft with "${restoreTarget.label || restoreTarget.id.slice(0, 8)}". Your current draft will be lost unless you save it as a snapshot first.`}
           confirmLabel="Restore"
           onCancel={() => setRestoreTarget(null)}
           onConfirm={() => handleRestore(restoreTarget)}
@@ -286,7 +286,7 @@ export function VersionHistoryPanel() {
 
       {deleteTarget && (
         <ConfirmModal
-          title="Delete version?"
+          title="Delete snapshot?"
           body={`"${deleteTarget.label || deleteTarget.id.slice(0, 8)}" will be permanently removed.`}
           confirmLabel="Delete"
           danger
@@ -299,7 +299,7 @@ export function VersionHistoryPanel() {
   );
 }
 
-function SaveVersionDialog({
+function SaveSnapshotDialog({
   onSave,
   onCancel,
   busy,
@@ -313,9 +313,9 @@ function SaveVersionDialog({
     <div className="fixed inset-0 flex items-center justify-center z-50">
       <div className="absolute inset-0 bg-black/20" onClick={onCancel} />
       <div className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-md mx-4">
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-2">Save version</h3>
+        <h3 className="font-heading font-bold text-lg text-dark-brown mb-2">Save snapshot</h3>
         <p className="text-sm text-warm-gray mb-3">
-          Snapshots the current feed. Versions are immutable once saved.
+          Captures the current feed state. Snapshots are immutable once saved.
         </p>
         <FormField
           label="Label (optional)"

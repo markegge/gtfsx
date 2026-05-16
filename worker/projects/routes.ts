@@ -20,7 +20,7 @@ import { getOrgMembership, roleAtLeast, type OrgRole } from '../orgs/routes';
 import { isValidSlug, slugify, uniqueSlug } from './slug';
 import {
   countProjects,
-  countVersions,
+  countSnapshots,
   enforceBlobSize,
   enforceQuota,
   getOwnerQuotas,
@@ -37,8 +37,8 @@ import {
   getFeedBlob,
   publicationZipKey,
   putFeedBlob,
-  versionStateKey,
-  versionZipKey,
+  snapshotStateKey,
+  snapshotZipKey,
   workingStateKey,
 } from './r2';
 
@@ -60,7 +60,7 @@ interface ProjectRow {
   brand_primary_color: string | null;
 }
 
-interface VersionRow {
+interface SnapshotRow {
   id: string;
   project_id: string;
   label: string | null;
@@ -109,7 +109,7 @@ function shapeProject(row: ProjectRow) {
   };
 }
 
-function shapeVersion(row: VersionRow) {
+function shapeSnapshot(row: SnapshotRow) {
   let summary: unknown = null;
   try {
     summary = JSON.parse(row.summary_json);
@@ -196,15 +196,15 @@ async function requireOwnedProject(
   throw notFound('Project not found');
 }
 
-async function requireOwnedVersion(env: Env, projectId: string, versionId: string): Promise<VersionRow> {
+async function requireOwnedSnapshot(env: Env, projectId: string, snapshotId: string): Promise<SnapshotRow> {
   const row = await env.DB.prepare(
     `SELECT id, project_id, label, created_by_user_id, state_r2_key, zip_r2_key, zip_size,
             summary_json, validation_errors, validation_warnings, created_at
-       FROM feed_version WHERE id = ? AND project_id = ?`,
+       FROM feed_snapshot WHERE id = ? AND project_id = ?`,
   )
-    .bind(versionId, projectId)
-    .first<VersionRow>();
-  if (!row) throw notFound('Version not found');
+    .bind(snapshotId, projectId)
+    .first<SnapshotRow>();
+  if (!row) throw notFound('Snapshot not found');
   return row;
 }
 
@@ -245,7 +245,7 @@ const importSchema = z.object({
   projects: z.array(importItemSchema).max(50),
 });
 
-const versionMetaSchema = z.object({
+const snapshotMetaSchema = z.object({
   label: z.string().trim().max(200).optional(),
   summary: z.record(z.string(), z.unknown()),
   validationErrors: z.number().int().nonnegative(),
@@ -351,19 +351,19 @@ projectsRouter.get('/', async (c) => {
     `SELECT p.id, p.slug, p.name, p.description, p.owner_type, p.owner_id,
             p.working_state_r2_key, p.working_state_version, p.working_state_size, p.working_state_updated_at,
             p.archived_at, p.deleted_at, p.created_at, p.updated_at, p.brand_primary_color,
-            (SELECT COUNT(*) FROM feed_version v WHERE v.project_id = p.id) AS version_count,
-            (SELECT MAX(v.created_at) FROM feed_version v WHERE v.project_id = p.id) AS last_version_created_at
+            (SELECT COUNT(*) FROM feed_snapshot v WHERE v.project_id = p.id) AS snapshot_count,
+            (SELECT MAX(v.created_at) FROM feed_snapshot v WHERE v.project_id = p.id) AS last_snapshot_created_at
        FROM feed_project p
        WHERE p.owner_type = ? AND p.owner_id = ? AND p.deleted_at IS NULL${archivedFilter}
        ORDER BY COALESCE(p.working_state_updated_at, p.updated_at) DESC`,
   )
     .bind(ownerType, ownerId)
-    .all<ProjectRow & { version_count: number; last_version_created_at: number | null }>();
+    .all<ProjectRow & { snapshot_count: number; last_snapshot_created_at: number | null }>();
 
   const projects = (rows.results ?? []).map((r) => ({
     ...shapeProject(r),
-    versionCount: r.version_count,
-    lastVersionCreatedAt: r.last_version_created_at,
+    snapshotCount: r.snapshot_count,
+    lastSnapshotCreatedAt: r.last_snapshot_created_at,
   }));
 
   const ownerQuotas = await getOwnerQuotas(c.env, ownerType, ownerId);
@@ -386,19 +386,19 @@ projectsRouter.get('/:id', async (c) => {
   const id = c.req.param('id');
   const { row, access } = await requireOwnedProject(c.env, user, id, 'viewer');
 
-  const versions = await c.env.DB.prepare(
+  const snapshots = await c.env.DB.prepare(
     `SELECT id, project_id, label, created_by_user_id, state_r2_key, zip_r2_key, zip_size,
             summary_json, validation_errors, validation_warnings, created_at
-       FROM feed_version WHERE project_id = ?
+       FROM feed_snapshot WHERE project_id = ?
        ORDER BY created_at DESC LIMIT 20`,
   )
     .bind(id)
-    .all<VersionRow>();
+    .all<SnapshotRow>();
 
   return c.json({
     ...shapeProject(row),
     access,
-    versions: (versions.results ?? []).map(shapeVersion),
+    snapshots: (snapshots.results ?? []).map(shapeSnapshot),
   });
 });
 
@@ -694,10 +694,11 @@ projectsRouter.put('/:id/working-state', async (c) => {
   return c.json({ workingStateVersion: row.working_state_version + 1 });
 });
 
-projectsRouter.post('/:id/versions', async (c) => {
+projectsRouter.post('/:id/snapshots', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');
   const { row } = await requireOwnedProject(c.env, user, id, 'editor');
+  await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history');
 
   let parsed: Record<string, string | File | (string | File)[]>;
   try {
@@ -721,15 +722,15 @@ projectsRouter.post('/:id/versions', async (c) => {
   } catch {
     throw validationFailed('Invalid meta JSON');
   }
-  const metaResult = versionMetaSchema.safeParse(metaObj);
+  const metaResult = snapshotMetaSchema.safeParse(metaObj);
   if (!metaResult.success) {
     throw validationFailed('Invalid meta', { issues: metaResult.error.issues });
   }
   const meta = metaResult.data;
 
   const ownerQuotas = await getOwnerQuotas(c.env, row.owner_type as OwnerType, row.owner_id);
-  const versionsUsed = await countVersions(c.env, row.id);
-  const { warning } = enforceQuota(c.env, 'versions', versionsUsed, ownerQuotas.versionsPerProject);
+  const snapshotsUsed = await countSnapshots(c.env, row.id);
+  const { warning } = enforceQuota(c.env, 'snapshots', snapshotsUsed, ownerQuotas.snapshotsPerProject);
   setQuotaWarningHeader(c, warning);
 
   const stateBuf = await (statePart as Blob).arrayBuffer();
@@ -737,8 +738,8 @@ projectsRouter.post('/:id/versions', async (c) => {
   if (stateSize === 0) throw validationFailed('Empty state file');
   enforceBlobSize(stateSize, ownerQuotas.blobBytes);
 
-  const versionId = ulid();
-  const stateKey = versionStateKey(row.id, versionId);
+  const snapshotId = ulid();
+  const stateKey = snapshotStateKey(row.id, snapshotId);
   await putFeedBlob(c.env, stateKey, stateBuf, {
     contentType: 'application/json',
     contentEncoding: 'gzip',
@@ -746,13 +747,13 @@ projectsRouter.post('/:id/versions', async (c) => {
 
   const now = Date.now();
   await c.env.DB.prepare(
-    `INSERT INTO feed_version
+    `INSERT INTO feed_snapshot
        (id, project_id, label, created_by_user_id, state_r2_key, zip_r2_key, zip_size,
         summary_json, validation_errors, validation_warnings, created_at)
      VALUES (?, ?, ?, ?, ?, '', 0, ?, ?, ?, ?)`,
   )
     .bind(
-      versionId,
+      snapshotId,
       row.id,
       meta.label ?? null,
       user.id,
@@ -766,16 +767,16 @@ projectsRouter.post('/:id/versions', async (c) => {
 
   await logAudit(c.env, {
     actorUserId: user.id,
-    subjectType: 'version',
-    subjectId: versionId,
-    action: 'project.create_version',
+    subjectType: 'snapshot',
+    subjectId: snapshotId,
+    action: 'project.create_snapshot',
     metadata: { projectId: row.id, label: meta.label ?? null, size: stateSize },
     ip: clientIp(c.req.raw),
   });
 
   return c.json({
-    version: {
-      id: versionId,
+    snapshot: {
+      id: snapshotId,
       label: meta.label ?? null,
       createdAt: now,
       summary: meta.summary,
@@ -785,48 +786,51 @@ projectsRouter.post('/:id/versions', async (c) => {
   });
 });
 
-projectsRouter.get('/:id/versions', async (c) => {
+projectsRouter.get('/:id/snapshots', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');
   const { row } = await requireOwnedProject(c.env, user, id, 'viewer');
+  await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history');
 
   const result = await c.env.DB.prepare(
     `SELECT id, project_id, label, created_by_user_id, state_r2_key, zip_r2_key, zip_size,
             summary_json, validation_errors, validation_warnings, created_at
-       FROM feed_version WHERE project_id = ? ORDER BY created_at DESC`,
+       FROM feed_snapshot WHERE project_id = ? ORDER BY created_at DESC`,
   )
     .bind(row.id)
-    .all<VersionRow>();
+    .all<SnapshotRow>();
 
   return c.json({
-    versions: (result.results ?? []).map(shapeVersion),
+    snapshots: (result.results ?? []).map(shapeSnapshot),
   });
 });
 
-projectsRouter.get('/:id/versions/:vid/state', async (c) => {
+projectsRouter.get('/:id/snapshots/:vid/state', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');
   const vid = c.req.param('vid');
   const { row } = await requireOwnedProject(c.env, user, id, 'viewer');
-  const version = await requireOwnedVersion(c.env, row.id, vid);
+  await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history');
+  const snapshot = await requireOwnedSnapshot(c.env, row.id, vid);
 
-  const object = await getFeedBlob(c.env, version.state_r2_key);
-  if (!object) throw notFound('Version state missing');
+  const object = await getFeedBlob(c.env, snapshot.state_r2_key);
+  if (!object) throw notFound('Snapshot state missing');
 
   c.header('Content-Type', 'application/json');
   const decompressed = object.body.pipeThrough(new DecompressionStream('gzip'));
   return c.body(decompressed);
 });
 
-projectsRouter.post('/:id/versions/:vid/restore', async (c) => {
+projectsRouter.post('/:id/snapshots/:vid/restore', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');
   const vid = c.req.param('vid');
   const { row } = await requireOwnedProject(c.env, user, id, 'editor');
-  const version = await requireOwnedVersion(c.env, row.id, vid);
+  await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history');
+  const snapshot = await requireOwnedSnapshot(c.env, row.id, vid);
 
-  const source = await getFeedBlob(c.env, version.state_r2_key);
-  if (!source) throw notFound('Version state missing');
+  const source = await getFeedBlob(c.env, snapshot.state_r2_key);
+  if (!source) throw notFound('Snapshot state missing');
   const buf = await source.arrayBuffer();
   const size = buf.byteLength;
 
@@ -859,34 +863,35 @@ projectsRouter.post('/:id/versions/:vid/restore', async (c) => {
     actorUserId: user.id,
     subjectType: 'project',
     subjectId: row.id,
-    action: 'project.restore_version',
-    metadata: { versionId: version.id },
+    action: 'project.restore_snapshot',
+    metadata: { snapshotId: snapshot.id },
     ip: clientIp(c.req.raw),
   });
 
   return c.json({ workingStateVersion: after?.working_state_version ?? row.working_state_version + 1 });
 });
 
-projectsRouter.delete('/:id/versions/:vid', async (c) => {
+projectsRouter.delete('/:id/snapshots/:vid', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');
   const vid = c.req.param('vid');
   const { row } = await requireOwnedProject(c.env, user, id, 'editor');
-  const version = await requireOwnedVersion(c.env, row.id, vid);
+  await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history');
+  const snapshot = await requireOwnedSnapshot(c.env, row.id, vid);
 
-  await deleteFeedBlob(c.env, version.state_r2_key);
-  if (version.zip_r2_key) {
-    await deleteFeedBlob(c.env, version.zip_r2_key);
+  await deleteFeedBlob(c.env, snapshot.state_r2_key);
+  if (snapshot.zip_r2_key) {
+    await deleteFeedBlob(c.env, snapshot.zip_r2_key);
   }
-  await c.env.DB.prepare(`DELETE FROM feed_version WHERE id = ? AND project_id = ?`)
-    .bind(version.id, row.id)
+  await c.env.DB.prepare(`DELETE FROM feed_snapshot WHERE id = ? AND project_id = ?`)
+    .bind(snapshot.id, row.id)
     .run();
 
   await logAudit(c.env, {
     actorUserId: user.id,
-    subjectType: 'version',
-    subjectId: version.id,
-    action: 'project.delete_version',
+    subjectType: 'snapshot',
+    subjectId: snapshot.id,
+    action: 'project.delete_snapshot',
     metadata: { projectId: row.id },
     ip: clientIp(c.req.raw),
   });
@@ -1052,13 +1057,13 @@ function base64ToBytes(b64: string): Uint8Array {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const publishJsonSchema = z.object({
-  versionId: z.string().min(1),
+  snapshotId: z.string().min(1),
   ignoreWarnings: z.boolean().optional(),
   ignoreRtBreakage: z.boolean().optional(),
 });
 
 const draftLinkCreateSchema = z.object({
-  versionId: z.string().min(1),
+  snapshotId: z.string().min(1),
   ttlDays: z.number().int().positive().max(365).optional(),
 });
 
@@ -1076,7 +1081,7 @@ const rtFeedsPutSchema = z.object({
 
 interface PublicationRow {
   project_id: string;
-  version_id: string;
+  snapshot_id: string;
   published_by_user_id: string | null;
   published_at: number;
   canonical_slug: string;
@@ -1085,7 +1090,7 @@ interface PublicationRow {
 
 async function loadPublication(env: Env, projectId: string): Promise<PublicationRow | null> {
   return env.DB.prepare(
-    `SELECT project_id, version_id, published_by_user_id, published_at, canonical_slug, zip_r2_key
+    `SELECT project_id, snapshot_id, published_by_user_id, published_at, canonical_slug, zip_r2_key
        FROM publication WHERE project_id = ?`,
   )
     .bind(projectId)
@@ -1096,10 +1101,10 @@ async function loadPublication(env: Env, projectId: string): Promise<Publication
 //
 // Two request shapes:
 //   1. multipart/form-data with `meta` (JSON) and `zip` (file) — used when the
-//      version row doesn't yet carry a rendered ZIP in R2 (the common case
+//      snapshot row doesn't yet carry a rendered ZIP in R2 (the common case
 //      today; Phase 2's snapshot path only stores state, not the ZIP).
-//   2. application/json with `{ versionId, ignoreWarnings?, ignoreRtBreakage? }`
-//      — used when the version row already has `zip_r2_key` populated.
+//   2. application/json with `{ snapshotId, ignoreWarnings?, ignoreRtBreakage? }`
+//      — used when the snapshot row already has `zip_r2_key` populated.
 projectsRouter.post('/:id/publish', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');
@@ -1119,7 +1124,7 @@ projectsRouter.post('/:id/publish', async (c) => {
   const projectQuotas = await getOwnerQuotas(c.env, project.owner_type as OwnerType, project.owner_id);
 
   const contentType = c.req.header('Content-Type') ?? '';
-  let versionId: string;
+  let snapshotId: string;
   let ignoreWarnings = false;
   let ignoreRtBreakage = false;
   let incomingZip: ArrayBuffer | null = null;
@@ -1143,7 +1148,7 @@ projectsRouter.post('/:id/publish', async (c) => {
     if (!metaResult.success) {
       throw validationFailed('Invalid meta', { issues: metaResult.error.issues });
     }
-    versionId = metaResult.data.versionId;
+    snapshotId = metaResult.data.snapshotId;
     ignoreWarnings = metaResult.data.ignoreWarnings ?? false;
     ignoreRtBreakage = metaResult.data.ignoreRtBreakage ?? false;
     incomingZip = await (zipPart as Blob).arrayBuffer();
@@ -1151,20 +1156,20 @@ projectsRouter.post('/:id/publish', async (c) => {
     enforceBlobSize(incomingZip.byteLength, projectQuotas.blobBytes);
   } else {
     const body = await parseJson(c, publishJsonSchema);
-    versionId = body.versionId;
+    snapshotId = body.snapshotId;
     ignoreWarnings = body.ignoreWarnings ?? false;
     ignoreRtBreakage = body.ignoreRtBreakage ?? false;
   }
 
-  const version = await requireOwnedVersion(c.env, project.id, versionId);
+  const snapshot = await requireOwnedSnapshot(c.env, project.id, snapshotId);
 
   // Validation gate: errors block publish unless ignoreWarnings=true.
   // (The flag is slightly misnamed — in practice it's "publish anyway" — but
   // matches the requirement spec's vocabulary and the frontend field name.)
-  if (version.validation_errors > 0 && !ignoreWarnings) {
+  if (snapshot.validation_errors > 0 && !ignoreWarnings) {
     throw validationFailed('Feed has validation errors. Fix them or pass ignoreWarnings=true to publish anyway.', {
-      validationErrors: version.validation_errors,
-      validationWarnings: version.validation_warnings,
+      validationErrors: snapshot.validation_errors,
+      validationWarnings: snapshot.validation_warnings,
     });
   }
 
@@ -1176,9 +1181,9 @@ projectsRouter.post('/:id/publish', async (c) => {
   )
     .bind(project.id)
     .first<{ n: number }>();
-  if (existing && (rtCount?.n ?? 0) > 0 && existing.version_id !== version.id && !ignoreRtBreakage) {
-    const prior = await requireOwnedVersion(c.env, project.id, existing.version_id);
-    const removed = await diffRemovedIds(c.env, prior.state_r2_key, version.state_r2_key);
+  if (existing && (rtCount?.n ?? 0) > 0 && existing.snapshot_id !== snapshot.id && !ignoreRtBreakage) {
+    const prior = await requireOwnedSnapshot(c.env, project.id, existing.snapshot_id);
+    const removed = await diffRemovedIds(c.env, prior.state_r2_key, snapshot.state_r2_key);
     if (!rtReportEmpty(removed)) {
       throw rtBreakage({
         removed: {
@@ -1192,17 +1197,17 @@ projectsRouter.post('/:id/publish', async (c) => {
   }
 
   // Copy the rendered ZIP into the publication slot in R2.
-  const pubKey = publicationZipKey(project.id, version.id);
+  const pubKey = publicationZipKey(project.id, snapshot.id);
   let publishedBytes = 0;
   if (incomingZip) {
     await putFeedBlob(c.env, pubKey, incomingZip, { contentType: 'application/zip' });
     publishedBytes = incomingZip.byteLength;
   } else {
-    // JSON path — require an existing rendered ZIP on the version row.
-    if (!version.zip_r2_key) {
-      throw validationFailed('This version has no rendered ZIP. Publish with multipart form instead.');
+    // JSON path — require an existing rendered ZIP on the snapshot row.
+    if (!snapshot.zip_r2_key) {
+      throw validationFailed('This snapshot has no rendered ZIP. Publish with multipart form instead.');
     }
-    const source = await getFeedBlob(c.env, version.zip_r2_key);
+    const source = await getFeedBlob(c.env, snapshot.zip_r2_key);
     if (!source) throw notFound('Rendered ZIP missing from storage');
     const buf = await source.arrayBuffer();
     publishedBytes = buf.byteLength;
@@ -1210,25 +1215,25 @@ projectsRouter.post('/:id/publish', async (c) => {
   }
 
   // Upsert publication + append history.
-  const wasRollback = existing && existing.version_id !== version.id;
+  const wasRollback = existing && existing.snapshot_id !== snapshot.id;
   await c.env.DB.prepare(
-    `INSERT INTO publication (project_id, version_id, published_by_user_id, published_at, canonical_slug, zip_r2_key)
+    `INSERT INTO publication (project_id, snapshot_id, published_by_user_id, published_at, canonical_slug, zip_r2_key)
      VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(project_id) DO UPDATE SET
-       version_id = excluded.version_id,
+       snapshot_id = excluded.snapshot_id,
        published_by_user_id = excluded.published_by_user_id,
        published_at = excluded.published_at,
        canonical_slug = excluded.canonical_slug,
        zip_r2_key = excluded.zip_r2_key`,
   )
-    .bind(project.id, version.id, user.id, now, project.slug, pubKey)
+    .bind(project.id, snapshot.id, user.id, now, project.slug, pubKey)
     .run();
 
   await c.env.DB.prepare(
-    `INSERT INTO publication_history (id, project_id, version_id, action, actor_user_id, created_at)
+    `INSERT INTO publication_history (id, project_id, snapshot_id, action, actor_user_id, created_at)
      VALUES (?, ?, ?, 'publish', ?, ?)`,
   )
-    .bind(ulid(), project.id, version.id, user.id, now)
+    .bind(ulid(), project.id, snapshot.id, user.id, now)
     .run();
 
   await logAudit(c.env, {
@@ -1236,7 +1241,7 @@ projectsRouter.post('/:id/publish', async (c) => {
     subjectType: 'publication',
     subjectId: project.id,
     action: 'project.publish',
-    metadata: { versionId: version.id, size: publishedBytes, rollback: !!wasRollback },
+    metadata: { snapshotId: snapshot.id, size: publishedBytes, rollback: !!wasRollback },
     ip: clientIp(c.req.raw),
   });
 
@@ -1261,7 +1266,7 @@ projectsRouter.post('/:id/publish', async (c) => {
   return c.json({
     publication: {
       projectId: project.id,
-      versionId: version.id,
+      snapshotId: snapshot.id,
       publishedAt: now,
       canonicalUrl,
     },
@@ -1285,10 +1290,10 @@ projectsRouter.post('/:id/unpublish', async (c) => {
     .bind(project.id)
     .run();
   await c.env.DB.prepare(
-    `INSERT INTO publication_history (id, project_id, version_id, action, actor_user_id, created_at)
+    `INSERT INTO publication_history (id, project_id, snapshot_id, action, actor_user_id, created_at)
      VALUES (?, ?, ?, 'unpublish', ?, ?)`,
   )
-    .bind(ulid(), project.id, existing.version_id, user.id, now)
+    .bind(ulid(), project.id, existing.snapshot_id, user.id, now)
     .run();
 
   await logAudit(c.env, {
@@ -1296,7 +1301,7 @@ projectsRouter.post('/:id/unpublish', async (c) => {
     subjectType: 'publication',
     subjectId: project.id,
     action: 'project.unpublish',
-    metadata: { versionId: existing.version_id },
+    metadata: { snapshotId: existing.snapshot_id },
     ip: clientIp(c.req.raw),
   });
 
@@ -1309,23 +1314,23 @@ projectsRouter.post('/:id/publish/rollback', async (c) => {
   const id = c.req.param('id');
   const { row: project } = await requireOwnedProject(c.env, user, id, 'editor');
   const body = await parseJson(c, publishJsonSchema);
-  const version = await requireOwnedVersion(c.env, project.id, body.versionId);
+  const snapshot = await requireOwnedSnapshot(c.env, project.id, body.snapshotId);
 
   // We require either (a) an already-published ZIP in the publication slot
-  // (i.e. we rolled off this version, now rolling back), or (b) a rendered
-  // ZIP on the version row. If neither, the client must use the multipart
+  // (i.e. we rolled off this snapshot, now rolling back), or (b) a rendered
+  // ZIP on the snapshot row. If neither, the client must use the multipart
   // publish endpoint instead.
-  const pubKey = publicationZipKey(project.id, version.id);
+  const pubKey = publicationZipKey(project.id, snapshot.id);
   const existingPubObj = await getFeedBlob(c.env, pubKey);
   let sourceKey: string | null = null;
   if (existingPubObj) {
     sourceKey = pubKey;
-  } else if (version.zip_r2_key) {
-    const versionObj = await getFeedBlob(c.env, version.zip_r2_key);
-    if (versionObj) sourceKey = version.zip_r2_key;
+  } else if (snapshot.zip_r2_key) {
+    const snapshotObj = await getFeedBlob(c.env, snapshot.zip_r2_key);
+    if (snapshotObj) sourceKey = snapshot.zip_r2_key;
   }
   if (!sourceKey) {
-    throw validationFailed('No rendered ZIP available for this version. Re-publish with a zip upload.');
+    throw validationFailed('No rendered ZIP available for this snapshot. Re-publish with a zip upload.');
   }
 
   if (sourceKey !== pubKey) {
@@ -1337,22 +1342,22 @@ projectsRouter.post('/:id/publish/rollback', async (c) => {
 
   const now = Date.now();
   await c.env.DB.prepare(
-    `INSERT INTO publication (project_id, version_id, published_by_user_id, published_at, canonical_slug, zip_r2_key)
+    `INSERT INTO publication (project_id, snapshot_id, published_by_user_id, published_at, canonical_slug, zip_r2_key)
      VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(project_id) DO UPDATE SET
-       version_id = excluded.version_id,
+       snapshot_id = excluded.snapshot_id,
        published_by_user_id = excluded.published_by_user_id,
        published_at = excluded.published_at,
        canonical_slug = excluded.canonical_slug,
        zip_r2_key = excluded.zip_r2_key`,
   )
-    .bind(project.id, version.id, user.id, now, project.slug, pubKey)
+    .bind(project.id, snapshot.id, user.id, now, project.slug, pubKey)
     .run();
   await c.env.DB.prepare(
-    `INSERT INTO publication_history (id, project_id, version_id, action, actor_user_id, created_at)
+    `INSERT INTO publication_history (id, project_id, snapshot_id, action, actor_user_id, created_at)
      VALUES (?, ?, ?, 'rollback', ?, ?)`,
   )
-    .bind(ulid(), project.id, version.id, user.id, now)
+    .bind(ulid(), project.id, snapshot.id, user.id, now)
     .run();
 
   await logAudit(c.env, {
@@ -1360,7 +1365,7 @@ projectsRouter.post('/:id/publish/rollback', async (c) => {
     subjectType: 'publication',
     subjectId: project.id,
     action: 'project.publish',
-    metadata: { versionId: version.id, rollback: true },
+    metadata: { snapshotId: snapshot.id, rollback: true },
     ip: clientIp(c.req.raw),
   });
 
@@ -1368,7 +1373,7 @@ projectsRouter.post('/:id/publish/rollback', async (c) => {
   return c.json({
     publication: {
       projectId: project.id,
-      versionId: version.id,
+      snapshotId: snapshot.id,
       publishedAt: now,
       canonicalUrl,
     },
@@ -1382,25 +1387,25 @@ projectsRouter.get('/:id/publish/history', async (c) => {
   const { row: project } = await requireOwnedProject(c.env, user, id, 'viewer');
 
   const history = await c.env.DB.prepare(
-    `SELECT id, version_id, action, actor_user_id, created_at
+    `SELECT id, snapshot_id, action, actor_user_id, created_at
        FROM publication_history
        WHERE project_id = ?
        ORDER BY created_at DESC`,
   )
     .bind(project.id)
-    .all<{ id: string; version_id: string | null; action: string; actor_user_id: string | null; created_at: number }>();
+    .all<{ id: string; snapshot_id: string | null; action: string; actor_user_id: string | null; created_at: number }>();
 
   const current = await loadPublication(c.env, project.id);
   return c.json({
     history: (history.results ?? []).map((r) => ({
       id: r.id,
-      versionId: r.version_id,
+      snapshotId: r.snapshot_id,
       action: r.action,
       actorUserId: r.actor_user_id,
       createdAt: r.created_at,
     })),
     current: current
-      ? { versionId: current.version_id, publishedAt: current.published_at }
+      ? { snapshotId: current.snapshot_id, publishedAt: current.published_at }
       : null,
   });
 });
@@ -1420,7 +1425,7 @@ projectsRouter.post('/:id/draft-links', async (c) => {
   const draftQuotas = await getOwnerQuotas(c.env, project.owner_type as OwnerType, project.owner_id);
 
   const contentType = c.req.header('Content-Type') ?? '';
-  let versionId: string;
+  let snapshotId: string;
   let ttlDays = 30;
   let incomingZip: ArrayBuffer | null = null;
 
@@ -1441,18 +1446,18 @@ projectsRouter.post('/:id/draft-links', async (c) => {
     try { metaObj = JSON.parse(metaPart); } catch { throw validationFailed('Invalid meta JSON'); }
     const metaResult = draftLinkCreateSchema.safeParse(metaObj);
     if (!metaResult.success) throw validationFailed('Invalid meta', { issues: metaResult.error.issues });
-    versionId = metaResult.data.versionId;
+    snapshotId = metaResult.data.snapshotId;
     ttlDays = metaResult.data.ttlDays ?? 30;
     incomingZip = await (zipPart as Blob).arrayBuffer();
     if (incomingZip.byteLength === 0) throw validationFailed('Empty zip');
     enforceBlobSize(incomingZip.byteLength, draftQuotas.blobBytes);
   } else {
     const body = await parseJson(c, draftLinkCreateSchema);
-    versionId = body.versionId;
+    snapshotId = body.snapshotId;
     ttlDays = body.ttlDays ?? 30;
   }
 
-  const version = await requireOwnedVersion(c.env, project.id, versionId);
+  const snapshot = await requireOwnedSnapshot(c.env, project.id, snapshotId);
 
   const token = generateToken();
   const tokenHash = await sha256Hex(token);
@@ -1461,10 +1466,10 @@ projectsRouter.post('/:id/draft-links', async (c) => {
   if (incomingZip) {
     await putFeedBlob(c.env, key, incomingZip, { contentType: 'application/zip' });
   } else {
-    if (!version.zip_r2_key) {
-      throw validationFailed('This version has no rendered ZIP. Create a draft link with multipart form instead.');
+    if (!snapshot.zip_r2_key) {
+      throw validationFailed('This snapshot has no rendered ZIP. Create a draft link with multipart form instead.');
     }
-    const source = await getFeedBlob(c.env, version.zip_r2_key);
+    const source = await getFeedBlob(c.env, snapshot.zip_r2_key);
     if (!source) throw notFound('Rendered ZIP missing from storage');
     const buf = await source.arrayBuffer();
     await putFeedBlob(c.env, key, buf, { contentType: 'application/zip' });
@@ -1472,10 +1477,10 @@ projectsRouter.post('/:id/draft-links', async (c) => {
 
   const expiresAt = now + ttlDays * 24 * 60 * 60 * 1000;
   await c.env.DB.prepare(
-    `INSERT INTO draft_link (token_hash, project_id, version_id, created_by_user_id, expires_at, revoked_at, created_at)
+    `INSERT INTO draft_link (token_hash, project_id, snapshot_id, created_by_user_id, expires_at, revoked_at, created_at)
      VALUES (?, ?, ?, ?, ?, NULL, ?)`,
   )
-    .bind(tokenHash, project.id, version.id, user.id, expiresAt, now)
+    .bind(tokenHash, project.id, snapshot.id, user.id, expiresAt, now)
     .run();
 
   await logAudit(c.env, {
@@ -1483,7 +1488,7 @@ projectsRouter.post('/:id/draft-links', async (c) => {
     subjectType: 'publication',
     subjectId: project.id,
     action: 'project.create_draft_link',
-    metadata: { versionId: version.id, expiresAt },
+    metadata: { snapshotId: snapshot.id, expiresAt },
     ip: clientIp(c.req.raw),
   });
 
@@ -1498,7 +1503,7 @@ projectsRouter.get('/:id/draft-links', async (c) => {
   const now = Date.now();
 
   const rows = await c.env.DB.prepare(
-    `SELECT token_hash, version_id, expires_at, created_at
+    `SELECT token_hash, snapshot_id, expires_at, created_at
        FROM draft_link
        WHERE project_id = ?
          AND revoked_at IS NULL
@@ -1506,12 +1511,12 @@ projectsRouter.get('/:id/draft-links', async (c) => {
        ORDER BY created_at DESC`,
   )
     .bind(project.id, now)
-    .all<{ token_hash: string; version_id: string; expires_at: number; created_at: number }>();
+    .all<{ token_hash: string; snapshot_id: string; expires_at: number; created_at: number }>();
 
   return c.json({
     links: (rows.results ?? []).map((r) => ({
       tokenHash: r.token_hash,
-      versionId: r.version_id,
+      snapshotId: r.snapshot_id,
       expiresAt: r.expires_at,
       createdAt: r.created_at,
     })),
@@ -1747,6 +1752,6 @@ projectsRouter.delete('/:id/rt-feeds/:rtId', async (c) => {
   return c.body(null, 204);
 });
 
-// Keep versionZipKey imported — future Phase 2 work will begin writing ZIPs
-// into version slots, at which point publish's JSON body path exercises it.
-void versionZipKey;
+// Keep snapshotZipKey imported — future Phase 2 work will begin writing ZIPs
+// into snapshot slots, at which point publish's JSON body path exercises it.
+void snapshotZipKey;

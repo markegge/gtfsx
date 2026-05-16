@@ -38,7 +38,7 @@ export interface OwnerBillingState {
   quotas: {
     projects: { used: number; limit: number };
     publishedFeeds: { used: number; limit: number };
-    versionsPerProject: { limit: number };
+    snapshotsPerProject: { limit: number };
     blobBytes: { limit: number };
   };
 }

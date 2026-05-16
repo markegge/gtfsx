@@ -42,7 +42,7 @@ export interface AuditEvent {
 
 export interface UserUsage {
   projects: number;
-  versions: number;
+  snapshots: number;
   storageBytes: number;
 }
 

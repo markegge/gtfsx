@@ -13,8 +13,8 @@ export interface ProjectSummary {
   archivedAt: number | null;
   createdAt: number;
   updatedAt: number;
-  versionCount?: number;
-  lastVersionCreatedAt?: number | null;
+  snapshotCount?: number;
+  lastSnapshotCreatedAt?: number | null;
   /** 6-char hex without leading "#"; null = use default coral. */
   brandPrimaryColor?: string | null;
 }
@@ -24,7 +24,7 @@ export interface ProjectQuota {
   warning: string | null;
 }
 
-export interface ProjectVersion {
+export interface ProjectSnapshot {
   id: string;
   label: string | null;
   createdAt: number;
@@ -32,10 +32,10 @@ export interface ProjectVersion {
   zipSize?: number;
   validationErrors: number;
   validationWarnings: number;
-  summary: VersionSummary | null;
+  summary: SnapshotSummary | null;
 }
 
-export interface VersionSummary {
+export interface SnapshotSummary {
   routeCount?: number;
   stopCount?: number;
   tripCount?: number;
@@ -47,7 +47,7 @@ export interface VersionSummary {
 }
 
 export interface ProjectDetail extends ProjectSummary {
-  versions: ProjectVersion[];
+  snapshots: ProjectSnapshot[];
 }
 
 export interface ListProjectsResponse {
@@ -242,16 +242,16 @@ export async function saveWorkingState(
   return (await res.json()) as { workingStateVersion: number };
 }
 
-export async function saveVersion(
+export async function saveSnapshot(
   projectId: string,
   input: {
     label?: string;
-    summary: VersionSummary;
+    summary: SnapshotSummary;
     validationErrors: number;
     validationWarnings: number;
     snapshot: Record<string, unknown>;
   },
-): Promise<{ version: ProjectVersion }> {
+): Promise<{ snapshot: ProjectSnapshot }> {
   const gz = await gzipString(JSON.stringify(input.snapshot));
   const file = new File([gz], 'state.json.gz', { type: 'application/json' });
   const meta = {
@@ -267,7 +267,7 @@ export async function saveVersion(
 
   let res: Response;
   try {
-    res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/versions`, {
+    res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/snapshots`, {
       method: 'POST',
       credentials: 'include',
       headers: { ...BASE_HEADERS },
@@ -277,23 +277,23 @@ export async function saveVersion(
     throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
   }
   if (!res.ok) throw await parseErrorResponse(res);
-  return (await res.json()) as { version: ProjectVersion };
+  return (await res.json()) as { snapshot: ProjectSnapshot };
 }
 
-export function listVersions(projectId: string): Promise<{ versions: ProjectVersion[] }> {
-  return requestJson<{ versions: ProjectVersion[] }>(
-    `/api/projects/${encodeURIComponent(projectId)}/versions`,
+export function listSnapshots(projectId: string): Promise<{ snapshots: ProjectSnapshot[] }> {
+  return requestJson<{ snapshots: ProjectSnapshot[] }>(
+    `/api/projects/${encodeURIComponent(projectId)}/snapshots`,
   );
 }
 
-export async function fetchVersionState(
+export async function fetchSnapshotState(
   projectId: string,
-  versionId: string,
+  snapshotId: string,
 ): Promise<Record<string, unknown>> {
   let res: Response;
   try {
     res = await fetch(
-      `/api/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/state`,
+      `/api/projects/${encodeURIComponent(projectId)}/snapshots/${encodeURIComponent(snapshotId)}/state`,
       {
         method: 'GET',
         credentials: 'include',
@@ -307,19 +307,19 @@ export async function fetchVersionState(
   return (await res.json()) as Record<string, unknown>;
 }
 
-export function restoreVersion(
+export function restoreSnapshot(
   projectId: string,
-  versionId: string,
+  snapshotId: string,
 ): Promise<{ workingStateVersion: number }> {
   return requestJson<{ workingStateVersion: number }>(
-    `/api/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/restore`,
+    `/api/projects/${encodeURIComponent(projectId)}/snapshots/${encodeURIComponent(snapshotId)}/restore`,
     { method: 'POST' },
   );
 }
 
-export function deleteVersion(projectId: string, versionId: string): Promise<void> {
+export function deleteSnapshot(projectId: string, snapshotId: string): Promise<void> {
   return requestJson<void>(
-    `/api/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}`,
+    `/api/projects/${encodeURIComponent(projectId)}/snapshots/${encodeURIComponent(snapshotId)}`,
     { method: 'DELETE' },
   );
 }
@@ -372,14 +372,14 @@ export async function importProjects(items: ImportProjectItem[]): Promise<Import
 
 export interface PublicationInfo {
   projectId: string;
-  versionId: string;
+  snapshotId: string;
   publishedAt: number;
   canonicalUrl: string;
 }
 
 export interface PublicationHistoryEntry {
   id: string;
-  versionId: string | null;
+  snapshotId: string | null;
   action: string;
   actorUserId: string | null;
   createdAt: number;
@@ -387,12 +387,12 @@ export interface PublicationHistoryEntry {
 
 export interface PublicationHistoryResponse {
   history: PublicationHistoryEntry[];
-  current: { versionId: string; publishedAt: number } | null;
+  current: { snapshotId: string; publishedAt: number } | null;
 }
 
 export interface DraftLinkInfo {
   tokenHash: string;
-  versionId: string;
+  snapshotId: string;
   expiresAt: number;
   createdAt: number;
 }
@@ -424,7 +424,7 @@ async function postFormData<T>(path: string, form: FormData): Promise<T> {
 }
 
 export interface PublishInput {
-  versionId: string;
+  snapshotId: string;
   ignoreWarnings?: boolean;
   ignoreRtBreakage?: boolean;
   zip?: Blob;
@@ -435,7 +435,7 @@ export async function publishProject(
   input: PublishInput,
 ): Promise<{ publication: PublicationInfo }> {
   const meta = {
-    versionId: input.versionId,
+    snapshotId: input.snapshotId,
     ignoreWarnings: input.ignoreWarnings,
     ignoreRtBreakage: input.ignoreRtBreakage,
   };
@@ -462,11 +462,11 @@ export function unpublishProject(projectId: string): Promise<void> {
 
 export function rollbackPublication(
   projectId: string,
-  versionId: string,
+  snapshotId: string,
 ): Promise<{ publication: PublicationInfo }> {
   return requestJson<{ publication: PublicationInfo }>(
     `/api/projects/${encodeURIComponent(projectId)}/publish/rollback`,
-    { method: 'POST', body: { versionId } },
+    { method: 'POST', body: { snapshotId } },
   );
 }
 
@@ -479,7 +479,7 @@ export function getPublicationHistory(
 }
 
 export interface CreateDraftLinkInput {
-  versionId: string;
+  snapshotId: string;
   ttlDays?: number;
   zip?: Blob;
 }
@@ -488,7 +488,7 @@ export async function createDraftLink(
   projectId: string,
   input: CreateDraftLinkInput,
 ): Promise<CreateDraftLinkResponse> {
-  const meta = { versionId: input.versionId, ttlDays: input.ttlDays };
+  const meta = { snapshotId: input.snapshotId, ttlDays: input.ttlDays };
   if (input.zip) {
     const form = new FormData();
     form.append('meta', JSON.stringify(meta));

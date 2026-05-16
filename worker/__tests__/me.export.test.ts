@@ -56,9 +56,9 @@ describe('/api/me/export', () => {
       'meta',
       JSON.stringify({ label: 'initial', summary: { routes: 1 }, validationErrors: 0, validationWarnings: 0 }),
     );
-    const versionRes = await client.post(`/api/projects/${proj.id}/versions`, undefined, { body: form });
-    const versionBody = await client.json<{ version: { id: string } }>(versionRes);
-    const versionId = versionBody.version.id;
+    const snapshotRes = await client.post(`/api/projects/${proj.id}/snapshots`, undefined, { body: form });
+    const snapshotBody = await client.json<{ snapshot: { id: string } }>(snapshotRes);
+    const snapshotId = snapshotBody.snapshot.id;
 
     // Now request the export.
     const res = await client.get('/api/me/export');
@@ -92,14 +92,14 @@ describe('/api/me/export', () => {
     const ws = JSON.parse(await wsFile!.async('string')) as { routes: { id: string }[] };
     expect(ws.routes[0].id).toBe('r1');
 
-    // projects/<slug>/versions/<vid>/state.json
-    const vStateFile = zip.file(`projects/${proj.slug}/versions/${versionId}/state.json`);
+    // projects/<slug>/snapshots/<vid>/state.json
+    const vStateFile = zip.file(`projects/${proj.slug}/snapshots/${snapshotId}/state.json`);
     expect(vStateFile).not.toBeNull();
     const vState = JSON.parse(await vStateFile!.async('string')) as { version: string };
     expect(vState.version).toBe('v1');
 
-    // projects/<slug>/versions/<vid>/summary.json
-    const summaryFile = zip.file(`projects/${proj.slug}/versions/${versionId}/summary.json`);
+    // projects/<slug>/snapshots/<vid>/summary.json
+    const summaryFile = zip.file(`projects/${proj.slug}/snapshots/${snapshotId}/summary.json`);
     expect(summaryFile).not.toBeNull();
   });
 

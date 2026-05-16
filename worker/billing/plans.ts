@@ -8,6 +8,7 @@ export type FeatureKey =
   | 'draft_links'          // POST /api/projects/:id/draft-links → public share URLs
   | 'mobility_db_submit'   // submit feed to Mobility Database
   | 'embeds'               // rider-facing embed widgets + mini-site
+  | 'snapshot_history'     // named snapshots + restore + delete
   | 'analysis_basic'       // demographic coverage + cost estimation
   | 'analysis_title_vi'    // Title VI equity analysis
   | 'analysis_propensity'  // propensity heatmap
@@ -23,6 +24,7 @@ export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
   draft_links:         ['pro', 'team', 'enterprise'],
   mobility_db_submit:  ['pro', 'team', 'enterprise'],
   embeds:              ['pro', 'team', 'enterprise'],
+  snapshot_history:    ['pro', 'team', 'enterprise'],
   analysis_basic:      ['pro', 'team', 'enterprise'],
   analysis_title_vi:   ['team', 'enterprise'],
   analysis_propensity: ['team', 'enterprise'],

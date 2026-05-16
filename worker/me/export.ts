@@ -173,10 +173,10 @@ export async function buildUserExport(env: Env, user: AuthedUser): Promise<Built
       }
     }
 
-    const versionRows = await env.DB.prepare(
+    const snapshotRows = await env.DB.prepare(
       `SELECT id, label, state_r2_key, zip_r2_key, zip_size, summary_json,
               validation_errors, validation_warnings, created_at, created_by_user_id
-         FROM feed_version WHERE project_id = ? ORDER BY created_at ASC`,
+         FROM feed_snapshot WHERE project_id = ? ORDER BY created_at ASC`,
     )
       .bind(p.id)
       .all<{
@@ -192,8 +192,8 @@ export async function buildUserExport(env: Env, user: AuthedUser): Promise<Built
         created_by_user_id: string | null;
       }>();
 
-    for (const v of versionRows.results ?? []) {
-      const vFolder = `${projectFolder}/versions/${v.id}`;
+    for (const v of snapshotRows.results ?? []) {
+      const vFolder = `${projectFolder}/snapshots/${v.id}`;
       zip.file(
         `${vFolder}/summary.json`,
         JSON.stringify(

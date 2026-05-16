@@ -24,20 +24,20 @@ import { renderLandingPage } from '../embeds/landing';
 
 interface PublicationRow {
   project_id: string;
-  version_id: string;
+  snapshot_id: string;
   published_at: number;
   canonical_slug: string;
   zip_r2_key: string;
   slug: string; // from feed_project
   name: string;
   description: string | null;
-  state_r2_key: string; // from feed_version (for sidecar)
+  state_r2_key: string; // from feed_snapshot (for sidecar)
 }
 
 interface DraftRow {
   token_hash: string;
   project_id: string;
-  version_id: string;
+  snapshot_id: string;
   expires_at: number;
   revoked_at: number | null;
   slug: string;
@@ -79,12 +79,12 @@ function etagMatches(ifNoneMatch: string | null, etag: string): boolean {
 
 async function loadPublication(env: Env, slug: string): Promise<PublicationRow | null> {
   return env.DB.prepare(
-    `SELECT pub.project_id, pub.version_id, pub.published_at, pub.canonical_slug, pub.zip_r2_key,
+    `SELECT pub.project_id, pub.snapshot_id, pub.published_at, pub.canonical_slug, pub.zip_r2_key,
             p.slug, p.name, p.description,
             v.state_r2_key
        FROM publication pub
        JOIN feed_project p ON p.id = pub.project_id
-       JOIN feed_version v ON v.id = pub.version_id AND v.project_id = pub.project_id
+       JOIN feed_snapshot v ON v.id = pub.snapshot_id AND v.project_id = pub.project_id
        WHERE pub.canonical_slug = ?
        LIMIT 1`,
   )
@@ -94,7 +94,7 @@ async function loadPublication(env: Env, slug: string): Promise<PublicationRow |
 
 async function loadDraft(env: Env, tokenHash: string): Promise<DraftRow | null> {
   return env.DB.prepare(
-    `SELECT d.token_hash, d.project_id, d.version_id, d.expires_at, d.revoked_at,
+    `SELECT d.token_hash, d.project_id, d.snapshot_id, d.expires_at, d.revoked_at,
             p.slug
        FROM draft_link d
        JOIN feed_project p ON p.id = d.project_id
@@ -266,7 +266,7 @@ async function serveCanonicalZip(request: Request, env: Env, slug: string): Prom
   const pub = await loadPublication(env, slug);
   if (!pub) return notFound();
 
-  const etag = `"${pub.version_id}"`;
+  const etag = `"${pub.snapshot_id}"`;
   const lastModified = httpDate(pub.published_at);
 
   const ifNoneMatch = request.headers.get('If-None-Match');
@@ -370,7 +370,7 @@ async function serveFeedInfo(env: Env, slug: string): Promise<Response> {
     description,
     feed_start_date: feedStart,
     feed_end_date: feedEnd,
-    version_id: pub.version_id,
+    snapshot_id: pub.snapshot_id,
     published_at: new Date(pub.published_at).toISOString(),
     zip_url: zipUrl,
     distribution,

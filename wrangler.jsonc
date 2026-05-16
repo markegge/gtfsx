@@ -64,17 +64,28 @@
     "AUTH_EMAIL_FROM": "GTFS Studio <noreply@gtfsstudio.net>",
     "APP_ORIGIN": "https://www.gtfsstudio.net",
     "FEEDS_ORIGIN": "https://feeds.gtfsstudio.net",
-    // Kill switch — disabled 2026-05-08 after premature launch. Flip to "true"
-    // and rebuild with `VITE_BACKEND_ENABLED=true` to re-enable. Existing user
-    // accounts and feed projects in D1/R2 are preserved while disabled.
-    "BACKEND_ENABLED": "false",
+    // Kill switch. Originally disabled 2026-05-08 after premature launch;
+    // re-enabled 2026-05-15 alongside live billing.
+    "BACKEND_ENABLED": "true",
+    // Billing path kill switch. Live since 2026-05-15.
+    "BILLING_ENABLED": "true",
     "HARD_LIMITS": "false",
     // Public Mapbox token — same as VITE_MAPBOX_TOKEN. Used by the embed
     // pages on feeds.gtfsstudio.net to render the system + per-route maps.
-    "MAPBOX_TOKEN": "pk.eyJ1IjoibWFya2VnZ2UiLCJhIjoiY2lrb245YWh3MHhtMXV4a21ld2R5Ymh0ciJ9.i0E2OrjPHLVtIRpN82tU5w"
+    "MAPBOX_TOKEN": "pk.eyJ1IjoibWFya2VnZ2UiLCJhIjoiY2lrb245YWh3MHhtMXV4a21ld2R5Ymh0ciJ9.i0E2OrjPHLVtIRpN82tU5w",
+    // Stripe live-mode price + portal config IDs (created 2026-05-15 via
+    // scripts/setup-stripe.ts --live). Test-mode equivalents live in env.staging.
+    "STRIPE_PRICE_PRO_MONTHLY": "price_1TXTFcJHDvzBbFH9B1BaGXCH",
+    "STRIPE_PRICE_PRO_ANNUAL": "price_1TXTFcJHDvzBbFH9YOIUkooo",
+    "STRIPE_PRICE_TEAM_MONTHLY": "price_1TXTFcJHDvzBbFH9e7adVXSl",
+    "STRIPE_PRICE_TEAM_ANNUAL": "price_1TXTFdJHDvzBbFH9wdClSu1F",
+    "STRIPE_PORTAL_CONFIG_ID": "bpc_1TXTFdJHDvzBbFH9qciNWCsV"
     // Secrets (set via `wrangler secret put`):
     //   RESEND_API_KEY
     //   MOBILITY_DATABASE_REFRESH_TOKEN  (already set)
+    //   TURNSTILE_SECRET_KEY
+    //   STRIPE_SECRET_KEY (live)
+    //   STRIPE_WEBHOOK_SIGNING_SECRET (live; webhook id we_1TXTFeJHDvzBbFH9o7SviqI4)
   },
   // Multiple hostname families are bound to this Worker:
   //   - gtfsstudio.net (canonical)
@@ -137,8 +148,6 @@
         "STRIPE_PRICE_PRO_ANNUAL": "price_1TVzRBJThEbTJMIVu3BX60VV",
         "STRIPE_PRICE_TEAM_MONTHLY": "price_1TVzRBJThEbTJMIVtvRTKzp3",
         "STRIPE_PRICE_TEAM_ANNUAL": "price_1TVzRBJThEbTJMIVFwUHn1Qh",
-        "STRIPE_PRICE_CONSULTANT_MONTHLY": "price_1TVzRCJThEbTJMIV7To01Kr1",
-        "STRIPE_PRICE_CONSULTANT_ANNUAL": "price_1TVzRCJThEbTJMIV8Rgt2yaZ",
         "STRIPE_PORTAL_CONFIG_ID": "bpc_1TVzRDJThEbTJMIVVFsRoSaM"
       },
       "routes": [

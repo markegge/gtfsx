@@ -5,10 +5,10 @@ import {
   createDraftLink,
   listDraftLinks,
   revokeDraftLink,
-  type ProjectVersion,
+  type ProjectSnapshot,
 } from '../../services/projectsApi';
 import { ApiError } from '../../services/authApi';
-import { renderVersionZip } from './PublishPanel';
+import { renderSnapshotZip } from './PublishPanel';
 
 function formatDate(ms: number | null | undefined): string {
   if (!ms) return '—';
@@ -30,13 +30,13 @@ type BannerKind = 'success' | 'error' | 'info';
 
 interface DraftLinksSectionProps {
   projectId: string;
-  versionList: ProjectVersion[];
+  snapshotList: ProjectSnapshot[];
   setBanner: (b: { kind: BannerKind; message: string; url?: string } | null) => void;
 }
 
 export function DraftLinksSection({
   projectId,
-  versionList,
+  snapshotList,
   setBanner,
 }: DraftLinksSectionProps) {
   const draftLinks = useStore((s) => s.draftLinks);
@@ -66,11 +66,11 @@ export function DraftLinksSection({
     refresh();
   }, [refresh]);
 
-  const handleCreate = async (versionId: string, ttlDays: number) => {
+  const handleCreate = async (snapshotId: string, ttlDays: number) => {
     setBusy(true);
     try {
-      const zip = await renderVersionZip(projectId, versionId);
-      const res = await createDraftLink(projectId, { versionId, ttlDays, zip });
+      const zip = await renderSnapshotZip(projectId, snapshotId);
+      const res = await createDraftLink(projectId, { snapshotId, ttlDays, zip });
       setJustCreated({ url: res.url, expiresAt: res.expiresAt });
       setShowCreate(false);
       await refresh();
@@ -113,13 +113,13 @@ export function DraftLinksSection({
         <AuthButton
           variant="secondary"
           onClick={() => setShowCreate(true)}
-          disabled={versionList.length === 0 || busy}
+          disabled={snapshotList.length === 0 || busy}
         >
           + Create draft link
         </AuthButton>
       </div>
       <p className="text-xs text-warm-gray mb-3">
-        Unlisted URL that points to a specific version. Share it for stakeholder review; revoke at
+        Unlisted URL that points to a specific snapshot. Share it for stakeholder review; revoke at
         any time.
       </p>
 
@@ -160,7 +160,7 @@ export function DraftLinksSection({
             <thead className="text-left text-[11px] font-bold uppercase tracking-wide text-warm-gray">
               <tr>
                 <th className="px-2 py-2">ID</th>
-                <th className="px-2 py-2">Version</th>
+                <th className="px-2 py-2">Snapshot</th>
                 <th className="px-2 py-2">Created</th>
                 <th className="px-2 py-2">Expires</th>
                 <th className="px-2 py-2"></th>
@@ -173,7 +173,7 @@ export function DraftLinksSection({
                     {l.tokenHash.slice(0, 8)}…
                   </td>
                   <td className="px-2 py-2 font-mono text-xs text-dark-brown">
-                    {l.versionId.slice(0, 10)}
+                    {l.snapshotId.slice(0, 10)}
                   </td>
                   <td className="px-2 py-2 text-warm-gray whitespace-nowrap">
                     {formatDate(l.createdAt)}
@@ -202,7 +202,7 @@ export function DraftLinksSection({
 
       {showCreate && (
         <CreateDraftDialog
-          versionList={versionList}
+          snapshotList={snapshotList}
           busy={busy}
           onCancel={() => setShowCreate(false)}
           onCreate={handleCreate}
@@ -225,17 +225,17 @@ export function DraftLinksSection({
 }
 
 function CreateDraftDialog({
-  versionList,
+  snapshotList,
   busy,
   onCancel,
   onCreate,
 }: {
-  versionList: ProjectVersion[];
+  snapshotList: ProjectSnapshot[];
   busy: boolean;
   onCancel: () => void;
-  onCreate: (versionId: string, ttlDays: number) => void;
+  onCreate: (snapshotId: string, ttlDays: number) => void;
 }) {
-  const [versionId, setVersionId] = useState<string>(versionList[0]?.id ?? '');
+  const [snapshotId, setSnapshotId] = useState<string>(snapshotList[0]?.id ?? '');
   const [ttlDays, setTtlDays] = useState(30);
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50">
@@ -243,14 +243,14 @@ function CreateDraftDialog({
       <div className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-md mx-4">
         <h3 className="font-heading font-bold text-lg text-dark-brown mb-3">Create draft link</h3>
         <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-          Version
+          Snapshot
         </label>
         <select
-          value={versionId}
-          onChange={(e) => setVersionId(e.target.value)}
+          value={snapshotId}
+          onChange={(e) => setSnapshotId(e.target.value)}
           className="w-full px-3 py-2 border-2 border-sand rounded-lg bg-cream text-sm text-dark-brown focus:outline-none focus:border-coral focus:bg-white mb-3"
         >
-          {versionList.map((v) => (
+          {snapshotList.map((v) => (
             <option key={v.id} value={v.id}>
               {v.label || 'untitled'} — {new Date(v.createdAt).toLocaleDateString()}
             </option>
@@ -281,8 +281,8 @@ function CreateDraftDialog({
             Cancel
           </AuthButton>
           <AuthButton
-            onClick={() => onCreate(versionId, ttlDays)}
-            disabled={busy || !versionId}
+            onClick={() => onCreate(snapshotId, ttlDays)}
+            disabled={busy || !snapshotId}
           >
             {busy ? 'Creating…' : 'Create link'}
           </AuthButton>

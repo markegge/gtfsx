@@ -11,9 +11,14 @@ const ACTION_LABELS: Record<string, string> = {
   'project.update': 'Updated project',
   'project.delete': 'Deleted project',
   'project.save_working_state': 'Saved draft',
-  'project.create_version': 'Saved version',
-  'project.restore_version': 'Restored version',
-  'project.delete_version': 'Deleted version',
+  'project.create_snapshot': 'Saved snapshot',
+  'project.restore_snapshot': 'Restored snapshot',
+  'project.delete_snapshot': 'Deleted snapshot',
+  // Legacy entries from before the version → snapshot rename (kept so old
+  // audit_event rows still render with a friendly label).
+  'project.create_version': 'Saved snapshot',
+  'project.restore_version': 'Restored snapshot',
+  'project.delete_version': 'Deleted snapshot',
   'project.publish': 'Published',
   'project.unpublish': 'Unpublished',
   'project.create_draft_link': 'Created draft link',

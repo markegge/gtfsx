@@ -49,18 +49,22 @@ export function PaywallOverlay({
     : `/login?next=${encodeURIComponent(`/upgrade?feature=${feature}`)}`;
 
   return (
-    <div className={`relative ${className}`}>
+    // `min-h-[420px]` keeps room for the card even when the wrapped child
+    // collapses to an empty state (Coverage/Title VI's "no data yet"); `h-full`
+    // still claims the parent's full height when one is defined (Costs panel,
+    // bottom-panel publish/embed) so the wash + card stay anchored at the top.
+    <div className={`relative h-full min-h-[420px] overflow-hidden ${className}`}>
       {preview && (
-        <div aria-hidden className="pointer-events-none select-none opacity-40 blur-[1.5px]">
+        <div aria-hidden className="pointer-events-none select-none opacity-40 blur-[1.5px] h-full overflow-hidden">
           {children}
         </div>
       )}
       <div
         className={`${
           preview ? 'absolute inset-0' : 'relative'
-        } flex items-center justify-center bg-cream/85 backdrop-blur-sm`}
+        } flex items-start justify-center bg-cream/85 backdrop-blur-sm overflow-y-auto`}
       >
-        <div className="m-6 max-w-md rounded-2xl border border-sand bg-cream p-6 shadow-lg">
+        <div className="m-6 max-w-md rounded-2xl border border-sand bg-white p-6 shadow-lg">
           <div className="mb-2 text-xs font-bold uppercase tracking-wide text-coral">
             {planDisplayName(target)} plan
           </div>

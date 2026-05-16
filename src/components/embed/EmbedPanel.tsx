@@ -11,13 +11,13 @@ const FEEDS_ORIGIN =
 
 interface PublicationInfo {
   slug: string;
-  versionId: string;
+  snapshotId: string;
 }
 
 /**
  * "Embed" tab in the bottom panel. Lets the agency copy iframe snippets
  * for the system map and per-route embeds. Only visible after a feed is
- * published — embeds read from the canonical published version.
+ * published — embeds read from the canonical published snapshot.
  */
 export function EmbedPanel() {
   const routes = useStore((s) => s.routes);
@@ -30,7 +30,7 @@ export function EmbedPanel() {
     : null;
 
   const pub: PublicationInfo | null =
-    project && currentPublication ? { slug: project.slug, versionId: currentPublication.versionId } : null;
+    project && currentPublication ? { slug: project.slug, snapshotId: currentPublication.snapshotId } : null;
 
   if (!pub || !project) {
     return (

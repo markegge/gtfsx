@@ -24,23 +24,23 @@ async function createProject(client: TestClient, name: string): Promise<{ id: st
   return client.json(await client.post('/api/projects', { name }));
 }
 
-async function createVersion(client: TestClient, projectId: string, state: unknown): Promise<{ version: { id: string } }> {
+async function createSnapshot(client: TestClient, projectId: string, state: unknown): Promise<{ snapshot: { id: string } }> {
   const form = new FormData();
   const stateBuf = await gzip(JSON.stringify(state));
   form.append('state', new Blob([stateBuf], { type: 'application/json' }), 'state.json.gz');
   form.append('meta', JSON.stringify({ summary: {}, validationErrors: 0, validationWarnings: 0 }));
-  return client.json(await client.post(`/api/projects/${projectId}/versions`, undefined, { body: form }));
+  return client.json(await client.post(`/api/projects/${projectId}/snapshots`, undefined, { body: form }));
 }
 
 async function publishMultipart(
   client: TestClient,
   projectId: string,
-  versionId: string,
+  snapshotId: string,
   zipBytes: Uint8Array,
   flags: { ignoreRtBreakage?: boolean } = {},
 ): Promise<Response> {
   const form = new FormData();
-  form.append('meta', JSON.stringify({ versionId, ...flags }));
+  form.append('meta', JSON.stringify({ snapshotId, ...flags }));
   form.append('zip', new Blob([zipBytes], { type: 'application/zip' }), 'gtfs.zip');
   return client.post(`/api/projects/${projectId}/publish`, undefined, { body: form });
 }
@@ -107,7 +107,7 @@ describe('/api/projects/:id/rt-feeds', () => {
   it('ID-stability: removing a stop_id → publish returns 409 rt_breakage; ignoreRtBreakage allows it', async () => {
     const client = await loggedInClient('rt3@example.com');
     const proj = await createProject(client, 'RT3');
-    const vOld = await createVersion(client, proj.id, {
+    const vOld = await createSnapshot(client, proj.id, {
       agencies: [{ agency_id: 'A' }],
       routes: [{ route_id: 'R1' }],
       stops: [{ stop_id: 'S1' }, { stop_id: 'S2' }],
@@ -115,7 +115,7 @@ describe('/api/projects/:id/rt-feeds', () => {
     });
     // Publish the baseline before registering the RT feed — this establishes
     // "currently published" state for the diff.
-    const pubRes1 = await publishMultipart(client, proj.id, vOld.version.id, new Uint8Array([0xde, 0xad]));
+    const pubRes1 = await publishMultipart(client, proj.id, vOld.snapshot.id, new Uint8Array([0xde, 0xad]));
     expect(pubRes1.status).toBe(200);
 
     // Now register an RT feed — subsequent publishes must ID-check.
@@ -124,21 +124,21 @@ describe('/api/projects/:id/rt-feeds', () => {
     });
 
     // New version drops S2.
-    const vNew = await createVersion(client, proj.id, {
+    const vNew = await createSnapshot(client, proj.id, {
       agencies: [{ agency_id: 'A' }],
       routes: [{ route_id: 'R1' }],
       stops: [{ stop_id: 'S1' }],
       trips: [{ trip_id: 'T1' }],
     });
 
-    const blocked = await publishMultipart(client, proj.id, vNew.version.id, new Uint8Array([0xbe, 0xef]));
+    const blocked = await publishMultipart(client, proj.id, vNew.snapshot.id, new Uint8Array([0xbe, 0xef]));
     expect(blocked.status).toBe(409);
     const body = await blocked.json() as { error: string; removed: { stops: string[] } };
     expect(body.error).toBe('rt_breakage');
     expect(body.removed.stops).toEqual(['S2']);
 
     const allowed = await publishMultipart(
-      client, proj.id, vNew.version.id, new Uint8Array([0xbe, 0xef]), { ignoreRtBreakage: true },
+      client, proj.id, vNew.snapshot.id, new Uint8Array([0xbe, 0xef]), { ignoreRtBreakage: true },
     );
     expect(allowed.status).toBe(200);
   });

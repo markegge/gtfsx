@@ -39,12 +39,17 @@ Migrations live in `worker/migrations/`:
 | File | Adds |
 |---|---|
 | `0001_auth.sql` | `user`, `credential`, `session`, `auth_token`, `audit_event`. |
-| `0002_projects.sql` | `organization`, `organization_membership`, `feed_project`, `feed_version`, `draft_link`. |
+| `0002_projects.sql` | `organization`, `organization_membership`, `feed_project`, `feed_snapshot` (originally `feed_version`; renamed in 0012), `draft_link`. |
 | `0003_distribution.sql` | `publication`, `publication_history`, `project_catalog_submission`, `project_rt_feed`. |
 | `0004_branding.sql` | `feed_project.brand_primary_color`. |
 | `0005_org_branding.sql` | `organization.brand_logo_r2_key` / `_content_type` / `_updated_at`. |
 | `0006_billing.sql` | `user.plan` / `_status` / `_renewal_at` and matching columns on `organization`; `subscription` table; Stripe customer ids. |
 | `0007_events.sql` | `event` table for cookieless page-view analytics (no PII). |
+| `0008_forum.sql` | Forum: `forum_thread`, `forum_post`, `forum_post_upvote`, `forum_subscription`, `forum_user_state`. |
+| `0009_consolidate_consultant.sql` | Migrate `plan='consultant'`/`'consultant_firm'` rows into `'pro'`/`'team'` after dropping the Consultant SKU. |
+| `0010_forum_images.sql` | Forum image attachments: `forum_image`. |
+| `0011_forum_categories_and_search.sql` | Forum categories + FTS5 `forum_search` virtual table. |
+| `0012_rename_version_to_snapshot.sql` | Rename `feed_version` → `feed_snapshot`; rename `version_id` → `snapshot_id` on `draft_link` / `publication` / `publication_history`. |
 
 Apply:
 

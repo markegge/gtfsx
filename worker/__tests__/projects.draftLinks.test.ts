@@ -23,22 +23,22 @@ async function createProject(client: TestClient, name: string): Promise<{ id: st
   return client.json(await client.post('/api/projects', { name }));
 }
 
-async function createVersion(client: TestClient, projectId: string): Promise<{ version: { id: string } }> {
+async function createSnapshot(client: TestClient, projectId: string): Promise<{ snapshot: { id: string } }> {
   const form = new FormData();
   const stateBuf = await gzip(JSON.stringify({}));
   form.append('state', new Blob([stateBuf], { type: 'application/json' }), 'state.json.gz');
   form.append('meta', JSON.stringify({ summary: {}, validationErrors: 0, validationWarnings: 0 }));
-  return client.json(await client.post(`/api/projects/${projectId}/versions`, undefined, { body: form }));
+  return client.json(await client.post(`/api/projects/${projectId}/snapshots`, undefined, { body: form }));
 }
 
 async function createDraftLink(
   client: TestClient,
   projectId: string,
-  versionId: string,
+  snapshotId: string,
   zipBytes: Uint8Array,
 ): Promise<{ url: string; token: string; tokenHash: string; expiresAt: number }> {
   const form = new FormData();
-  form.append('meta', JSON.stringify({ versionId, ttlDays: 7 }));
+  form.append('meta', JSON.stringify({ snapshotId, ttlDays: 7 }));
   form.append('zip', new Blob([zipBytes], { type: 'application/zip' }), 'gtfs.zip');
   return client.json(await client.post(`/api/projects/${projectId}/draft-links`, undefined, { body: form }));
 }
@@ -56,10 +56,10 @@ describe('/api/projects/:id/draft-links', () => {
   it('create draft link → public URL returns the ZIP with noindex + attachment headers', async () => {
     const client = await loggedInClient('dl1@example.com');
     const proj = await createProject(client, 'DraftFeed');
-    const v = await createVersion(client, proj.id);
+    const v = await createSnapshot(client, proj.id);
     const zipBytes = new TextEncoder().encode('draft-zip-contents');
 
-    const link = await createDraftLink(client, proj.id, v.version.id, zipBytes);
+    const link = await createDraftLink(client, proj.id, v.snapshot.id, zipBytes);
     expect(link.url).toContain(`/${proj.slug}/draft/`);
     expect(link.token).toBeTruthy();
     expect(link.expiresAt).toBeGreaterThan(Date.now());
@@ -78,8 +78,8 @@ describe('/api/projects/:id/draft-links', () => {
   it('revoke draft link → public URL returns 410 Gone', async () => {
     const client = await loggedInClient('dl2@example.com');
     const proj = await createProject(client, 'RevokeFeed');
-    const v = await createVersion(client, proj.id);
-    const link = await createDraftLink(client, proj.id, v.version.id, new Uint8Array([7, 7]));
+    const v = await createSnapshot(client, proj.id);
+    const link = await createDraftLink(client, proj.id, v.snapshot.id, new Uint8Array([7, 7]));
 
     const del = await client.delete(`/api/projects/${proj.id}/draft-links/${link.tokenHash}`);
     expect(del.status).toBe(204);
@@ -92,10 +92,10 @@ describe('/api/projects/:id/draft-links', () => {
   it('list draft links returns tokenHash only — never the cleartext token', async () => {
     const client = await loggedInClient('dl3@example.com');
     const proj = await createProject(client, 'ListFeed');
-    const v = await createVersion(client, proj.id);
-    const link = await createDraftLink(client, proj.id, v.version.id, new Uint8Array([1]));
+    const v = await createSnapshot(client, proj.id);
+    const link = await createDraftLink(client, proj.id, v.snapshot.id, new Uint8Array([1]));
 
-    const list = await client.json<{ links: { tokenHash: string; versionId: string }[] }>(
+    const list = await client.json<{ links: { tokenHash: string; snapshotId: string }[] }>(
       await client.get(`/api/projects/${proj.id}/draft-links`),
     );
     expect(list.links.length).toBe(1);
@@ -108,8 +108,8 @@ describe('/api/projects/:id/draft-links', () => {
   it('unknown token returns 404, mismatched slug returns 404', async () => {
     const client = await loggedInClient('dl4@example.com');
     const proj = await createProject(client, 'MismatchFeed');
-    const v = await createVersion(client, proj.id);
-    const link = await createDraftLink(client, proj.id, v.version.id, new Uint8Array([1, 2]));
+    const v = await createSnapshot(client, proj.id);
+    const link = await createDraftLink(client, proj.id, v.snapshot.id, new Uint8Array([1, 2]));
 
     const missing = await SELF.fetch(`http://feeds.test/${proj.slug}/draft/not-a-real-token.zip`);
     expect(missing.status).toBe(404);

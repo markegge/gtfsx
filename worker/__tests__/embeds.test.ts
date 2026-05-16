@@ -6,6 +6,7 @@ import { SELF } from 'cloudflare:test';
 import { makeClient, type TestClient } from './_client';
 import {
   applyMigrations,
+  env as testEnv,
   gzip,
   resetDb,
   seedUser,
@@ -98,15 +99,15 @@ async function createPublishedProject(client: TestClient, name: string): Promise
   );
 
   const stateBuf = await gzip(JSON.stringify(makeFeedState()));
-  const versionForm = new FormData();
-  versionForm.append('state', new Blob([stateBuf], { type: 'application/json' }), 'state.json.gz');
-  versionForm.append('meta', JSON.stringify({ summary: {}, validationErrors: 0, validationWarnings: 0 }));
-  const version = await client.json<{ version: { id: string } }>(
-    await client.post(`/api/projects/${proj.id}/versions`, undefined, { body: versionForm }),
+  const snapshotForm = new FormData();
+  snapshotForm.append('state', new Blob([stateBuf], { type: 'application/json' }), 'state.json.gz');
+  snapshotForm.append('meta', JSON.stringify({ summary: {}, validationErrors: 0, validationWarnings: 0 }));
+  const snapshot = await client.json<{ snapshot: { id: string } }>(
+    await client.post(`/api/projects/${proj.id}/snapshots`, undefined, { body: snapshotForm }),
   );
 
   const publishForm = new FormData();
-  publishForm.append('meta', JSON.stringify({ versionId: version.version.id }));
+  publishForm.append('meta', JSON.stringify({ snapshotId: snapshot.snapshot.id }));
   publishForm.append('zip', new Blob([new Uint8Array([1, 2, 3])], { type: 'application/zip' }), 'gtfs.zip');
   await client.post(`/api/projects/${proj.id}/publish`, undefined, { body: publishForm });
 
@@ -204,6 +205,9 @@ describe('embed routes', () => {
     const orgRes = await client.json<{ organization: { id: string; slug: string } }>(
       await client.post('/api/orgs', { slug: 'logo-org', name: 'Logo Org' }),
     );
+    await testEnv.DB.prepare('UPDATE organization SET plan = ? WHERE id = ?')
+      .bind('team', orgRes.organization.id)
+      .run();
     const proj = await client.json<{ id: string; slug: string }>(
       await client.post('/api/projects', {
         name: 'LogoEmbed',
@@ -239,14 +243,14 @@ describe('embed routes', () => {
 
     // Publish so the embed has data, then verify the embed HTML embeds the logo.
     const stateBuf = await gzip(JSON.stringify(makeFeedState()));
-    const versionForm = new FormData();
-    versionForm.append('state', new Blob([stateBuf], { type: 'application/json' }), 'state.json.gz');
-    versionForm.append('meta', JSON.stringify({ summary: {}, validationErrors: 0, validationWarnings: 0 }));
-    const version = await client.json<{ version: { id: string } }>(
-      await client.post(`/api/projects/${proj.id}/versions`, undefined, { body: versionForm }),
+    const snapshotForm = new FormData();
+    snapshotForm.append('state', new Blob([stateBuf], { type: 'application/json' }), 'state.json.gz');
+    snapshotForm.append('meta', JSON.stringify({ summary: {}, validationErrors: 0, validationWarnings: 0 }));
+    const snapshot = await client.json<{ snapshot: { id: string } }>(
+      await client.post(`/api/projects/${proj.id}/snapshots`, undefined, { body: snapshotForm }),
     );
     const publishForm = new FormData();
-    publishForm.append('meta', JSON.stringify({ versionId: version.version.id }));
+    publishForm.append('meta', JSON.stringify({ snapshotId: snapshot.snapshot.id }));
     publishForm.append('zip', new Blob([new Uint8Array([1, 2, 3])], { type: 'application/zip' }), 'gtfs.zip');
     await client.post(`/api/projects/${proj.id}/publish`, undefined, { body: publishForm });
 
@@ -270,14 +274,14 @@ describe('embed routes', () => {
 
     // Publish so the embed has something to render.
     const stateBuf = await gzip(JSON.stringify(makeFeedState()));
-    const versionForm = new FormData();
-    versionForm.append('state', new Blob([stateBuf], { type: 'application/json' }), 'state.json.gz');
-    versionForm.append('meta', JSON.stringify({ summary: {}, validationErrors: 0, validationWarnings: 0 }));
-    const version = await client.json<{ version: { id: string } }>(
-      await client.post(`/api/projects/${proj.id}/versions`, undefined, { body: versionForm }),
+    const snapshotForm = new FormData();
+    snapshotForm.append('state', new Blob([stateBuf], { type: 'application/json' }), 'state.json.gz');
+    snapshotForm.append('meta', JSON.stringify({ summary: {}, validationErrors: 0, validationWarnings: 0 }));
+    const snapshot = await client.json<{ snapshot: { id: string } }>(
+      await client.post(`/api/projects/${proj.id}/snapshots`, undefined, { body: snapshotForm }),
     );
     const publishForm = new FormData();
-    publishForm.append('meta', JSON.stringify({ versionId: version.version.id }));
+    publishForm.append('meta', JSON.stringify({ snapshotId: snapshot.snapshot.id }));
     publishForm.append('zip', new Blob([new Uint8Array([1, 2, 3])], { type: 'application/zip' }), 'gtfs.zip');
     await client.post(`/api/projects/${proj.id}/publish`, undefined, { body: publishForm });
 

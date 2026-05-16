@@ -8,6 +8,7 @@ export type FeatureKey =
   | 'draft_links'
   | 'mobility_db_submit'
   | 'embeds'
+  | 'snapshot_history'
   | 'analysis_basic'
   | 'analysis_title_vi'
   | 'analysis_propensity'
@@ -22,6 +23,7 @@ export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
   draft_links:         ['pro', 'team', 'enterprise'],
   mobility_db_submit:  ['pro', 'team', 'enterprise'],
   embeds:              ['pro', 'team', 'enterprise'],
+  snapshot_history:     ['pro', 'team', 'enterprise'],
   analysis_basic:      ['pro', 'team', 'enterprise'],
   analysis_title_vi:   ['team', 'enterprise'],
   analysis_propensity: ['team', 'enterprise'],
@@ -73,6 +75,10 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   embeds: {
     title: 'Rider-facing embeds and mini-site',
     description: 'Drop schedules, route maps, and stop times into any website with copy-paste embed snippets.',
+  },
+  snapshot_history: {
+    title: 'Named snapshots',
+    description: 'Keep a history of named snapshots and restore any prior state with one click.',
   },
   analysis_basic: {
     title: 'Demographic coverage and cost estimation',

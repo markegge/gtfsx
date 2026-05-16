@@ -88,16 +88,53 @@ export async function listProjects() {
 // Auto-save setup
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
-export function setupAutoSave() {
-  return useStore.subscribe((state, prevState) => {
-    // Check if any data changed (not just UI state)
-    const dataChanged = DATA_KEYS.some((key) => state[key] !== prevState[key]);
-    if (!dataChanged) return;
+// Idempotent: every editor route mounts with `useEffect(() => setupAutoSave())`,
+// but only the first call wires the store subscription. Subsequent calls
+// (e.g. ServerEditorRoute mounting after SaveAsDialog navigates away from
+// EditorRoute, before EditorRoute's cleanup fully runs in some race
+// scenarios) hand back the same unsubscribe so we never end up with two
+// subscriptions writing to IndexedDB on every keystroke.
+let activeUnsub: (() => void) | null = null;
+let activeRefs = 0;
 
-    state.markDirty();
-    if (saveTimeout) clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-      saveProject().catch(console.error);
-    }, 1000);
-  });
+export function setupAutoSave(): () => void {
+  activeRefs += 1;
+  if (!activeUnsub) {
+    activeUnsub = useStore.subscribe((state, prevState) => {
+      // Check if any data changed (not just UI state)
+      const dataChanged = DATA_KEYS.some((key) => state[key] !== prevState[key]);
+      if (!dataChanged) return;
+
+      state.markDirty();
+      if (saveTimeout) clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => {
+        // Skip the IndexedDB write when the editor is on a server-backed
+        // project. The server is the source of truth there (saveProjectNow
+        // handles persistence); writing to IDB only pollutes the "local feeds
+        // available for import" list with copies of feeds that already live
+        // on the server, which used to cause duplicate imports on /feeds.
+        if (useStore.getState().activeServerProjectId) return;
+        saveProject().catch(console.error);
+      }, 1000);
+    });
+  }
+  // Return a per-caller unsubscribe handle. Only when the last caller
+  // releases do we actually tear down the underlying store subscription.
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    activeRefs -= 1;
+    if (activeRefs <= 0) {
+      activeRefs = 0;
+      if (activeUnsub) {
+        activeUnsub();
+        activeUnsub = null;
+      }
+      if (saveTimeout) {
+        clearTimeout(saveTimeout);
+        saveTimeout = null;
+      }
+    }
+  };
 }

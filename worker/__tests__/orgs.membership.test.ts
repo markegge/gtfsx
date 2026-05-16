@@ -34,6 +34,9 @@ async function addMember(orgId: string, userId: string, role: 'owner' | 'admin' 
 async function createOrg(client: TestClient, slug: string, name: string): Promise<string> {
   const res = await client.post('/api/orgs', { slug, name });
   const body = await client.json<{ organization: { id: string } }>(res);
+  await testEnv.DB.prepare('UPDATE organization SET plan = ? WHERE id = ?')
+    .bind('team', body.organization.id)
+    .run();
   return body.organization.id;
 }
 

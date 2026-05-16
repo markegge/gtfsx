@@ -32,9 +32,9 @@ export async function renderStopEmbed(
 
   const url = new URL(request.url);
   const ifNoneMatch = request.headers.get('If-None-Match');
-  const etag = `"${feed.versionId}-stop-${stopId}"`;
+  const etag = `"${feed.snapshotId}-stop-${stopId}"`;
   if (ifNoneMatch && ifNoneMatch.includes(etag)) {
-    const headers = embedHeaders(feed.versionId, feed.publishedAt);
+    const headers = embedHeaders(feed.snapshotId, feed.publishedAt);
     headers.set('ETag', etag);
     return new Response(null, { status: 304, headers });
   }
@@ -173,7 +173,7 @@ export async function renderStopEmbed(
     brandColor: feed.brandPrimaryColor,
     body: await body,
   });
-  const headers = embedHeaders(feed.versionId, feed.publishedAt);
+  const headers = embedHeaders(feed.snapshotId, feed.publishedAt);
   headers.set('ETag', etag);
   return new Response(String(html5), { status: 200, headers });
 }

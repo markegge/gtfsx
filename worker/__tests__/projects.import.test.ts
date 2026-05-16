@@ -14,8 +14,8 @@ import {
 } from './_setup';
 import { ulid } from 'ulidx';
 
-async function loggedInClient(email: string) {
-  const user = await seedUser({ email });
+async function loggedInClient(email: string, plan: 'free' | 'pro' | 'team' | 'enterprise' = 'team') {
+  const user = await seedUser({ email, plan });
   const client = makeClient();
   await client.post('/auth/login', { email: user.email, password: user.password });
   return { client, userId: user.id };
@@ -73,11 +73,11 @@ describe('/api/projects/import', () => {
   });
 
   it('partial import when the user is already near their quota', async () => {
-    const { client, userId } = await loggedInClient('import3@example.com');
+    const { client, userId } = await loggedInClient('import3@example.com', 'pro');
 
-    // Seed 19 projects directly so the user has 1 slot left.
+    // Pro tier has projects=10. Seed 9 so the user has 1 slot left.
     const now = Date.now();
-    for (let i = 0; i < 19; i += 1) {
+    for (let i = 0; i < 9; i += 1) {
       await dbRun(
         `INSERT INTO feed_project (id, slug, name, description, owner_type, owner_id,
            working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,

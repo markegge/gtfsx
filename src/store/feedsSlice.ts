@@ -1,23 +1,23 @@
 import type { StateCreator } from 'zustand';
-import type { ProjectSummary, ProjectVersion } from '../services/projectsApi';
+import type { ProjectSummary, ProjectSnapshot } from '../services/projectsApi';
 
 export interface PublicationEntry {
   id: string;
-  versionId: string | null;
+  snapshotId: string | null;
   action: string;
   actorUserId: string | null;
   createdAt: number;
 }
 
 export interface PublicationCurrent {
-  versionId: string;
+  snapshotId: string;
   publishedAt: number;
   canonicalUrl?: string;
 }
 
 export interface DraftLinkEntry {
   tokenHash: string;
-  versionId: string;
+  snapshotId: string;
   expiresAt: number;
   createdAt: number;
 }
@@ -28,7 +28,7 @@ export interface FeedsSlice {
   feedsLoaded: boolean;
   activeServerProjectId: string | null;
   workingStateVersion: number;
-  versionList: ProjectVersion[];
+  snapshotList: ProjectSnapshot[];
   restoredBanner: string | null;
   publicationHistory: PublicationEntry[];
   currentPublication: PublicationCurrent | null;
@@ -38,7 +38,7 @@ export interface FeedsSlice {
   removeFeedProject: (projectId: string) => void;
   setActiveServerProject: (projectId: string | null) => void;
   setWorkingStateVersion: (version: number) => void;
-  setVersionList: (versions: ProjectVersion[]) => void;
+  setSnapshotList: (snapshots: ProjectSnapshot[]) => void;
   setRestoredBanner: (msg: string | null) => void;
   setPublicationHistory: (history: PublicationEntry[]) => void;
   setCurrentPublication: (current: PublicationCurrent | null) => void;
@@ -56,7 +56,7 @@ export const createFeedsSlice: StateCreator<
   feedsLoaded: false,
   activeServerProjectId: null,
   workingStateVersion: 0,
-  versionList: [],
+  snapshotList: [],
   restoredBanner: null,
   publicationHistory: [],
   currentPublication: null,
@@ -86,7 +86,7 @@ export const createFeedsSlice: StateCreator<
       state.activeServerProjectId = projectId;
       if (projectId === null) {
         state.workingStateVersion = 0;
-        state.versionList = [];
+        state.snapshotList = [];
         state.publicationHistory = [];
         state.currentPublication = null;
         state.draftLinks = [];
@@ -98,9 +98,9 @@ export const createFeedsSlice: StateCreator<
       state.workingStateVersion = version;
     }),
 
-  setVersionList: (versions) =>
+  setSnapshotList: (snapshots) =>
     set((state) => {
-      state.versionList = versions;
+      state.snapshotList = snapshots;
     }),
 
   setRestoredBanner: (msg) =>

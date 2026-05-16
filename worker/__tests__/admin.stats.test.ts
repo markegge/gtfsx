@@ -26,7 +26,7 @@ interface Stats {
   users: { total: number; active: number; pending_verification: number; disabled: number; deleted_soft: number };
   organizations: { total: number };
   projects: { total: number; byOwnerType: { user: number; org: number } };
-  versions: { total: number };
+  snapshots: { total: number };
   publications: { total: number };
   signups: { last7d: number; last30d: number; allTime: number };
   activeUsers: { last24h: number; last7d: number; last30d: number };
@@ -60,7 +60,7 @@ describe('/api/admin/stats', () => {
     expect(body.projects.total).toBe(0);
     expect(body.projects.byOwnerType.user).toBe(0);
     expect(body.projects.byOwnerType.org).toBe(0);
-    expect(body.versions.total).toBe(0);
+    expect(body.snapshots.total).toBe(0);
     expect(body.publications.total).toBe(0);
     expect(body.trend.newUsersByWeek.length).toBe(8);
     expect(body.trend.newProjectsByWeek.length).toBe(8);
@@ -109,7 +109,7 @@ describe('/api/admin/stats', () => {
     expect(body.users.deleted_soft).toBe(1);
   });
 
-  it('counts orgs, projects, versions, publications', async () => {
+  it('counts orgs, projects, snapshots, publications', async () => {
     const { client, user: staff } = await staffClient();
 
     // Seed an org, a user-owned project, an org-owned project, a version, a publication.
@@ -133,12 +133,12 @@ describe('/api/admin/stats', () => {
     );
     const vId = ulid();
     await dbRun(
-      `INSERT INTO feed_version (id, project_id, state_r2_key, zip_r2_key, zip_size, summary_json, created_at)
+      `INSERT INTO feed_snapshot (id, project_id, state_r2_key, zip_r2_key, zip_size, summary_json, created_at)
        VALUES (?, ?, 's', 'z', 10, '{}', ?)`,
       vId, pU, now,
     );
     await dbRun(
-      `INSERT INTO publication (project_id, version_id, published_at, canonical_slug, zip_r2_key)
+      `INSERT INTO publication (project_id, snapshot_id, published_at, canonical_slug, zip_r2_key)
        VALUES (?, ?, ?, 'p1', 'z')`,
       pU, vId, now,
     );
@@ -149,7 +149,7 @@ describe('/api/admin/stats', () => {
     expect(body.projects.total).toBe(2);
     expect(body.projects.byOwnerType.user).toBe(1);
     expect(body.projects.byOwnerType.org).toBe(1);
-    expect(body.versions.total).toBe(1);
+    expect(body.snapshots.total).toBe(1);
     expect(body.publications.total).toBe(1);
   });
 

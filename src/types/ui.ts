@@ -14,7 +14,7 @@ export type BottomPanelTab =
   | 'timetable'
   | 'service-summary'
   | 'validation'
-  | 'versions'
+  | 'snapshots'
   | 'publish'
   | 'embed'
   | 'audit';

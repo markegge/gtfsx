@@ -33,9 +33,9 @@ export async function renderLandingPage(
 
   const url = new URL(request.url);
   const ifNoneMatch = request.headers.get('If-None-Match');
-  const etag = `"${feed.versionId}-landing"`;
+  const etag = `"${feed.snapshotId}-landing"`;
   if (ifNoneMatch && ifNoneMatch.includes(etag)) {
-    const headers = landingHeaders(feed.versionId, feed.publishedAt);
+    const headers = landingHeaders(feed.snapshotId, feed.publishedAt);
     return new Response(null, { status: 304, headers });
   }
 
@@ -130,13 +130,13 @@ export async function renderLandingPage(
     brandColor: feed.brandPrimaryColor,
     body: await body,
   });
-  return new Response(String(html5), { status: 200, headers: landingHeaders(feed.versionId, feed.publishedAt) });
+  return new Response(String(html5), { status: 200, headers: landingHeaders(feed.snapshotId, feed.publishedAt) });
 }
 
-function landingHeaders(versionId: string, publishedAt: number): Headers {
+function landingHeaders(snapshotId: string, publishedAt: number): Headers {
   const h = new Headers();
   h.set('Content-Type', 'text/html; charset=utf-8');
-  h.set('ETag', `"${versionId}-landing"`);
+  h.set('ETag', `"${snapshotId}-landing"`);
   h.set('Last-Modified', new Date(publishedAt).toUTCString());
   // Canonical, indexable; frame-ancestors 'none' to prevent clickjacking
   // of this top-level destination (embeds use 'frame-ancestors *').

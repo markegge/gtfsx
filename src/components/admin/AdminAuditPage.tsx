@@ -11,7 +11,7 @@ import {
 } from '../../services/adminApi';
 import { ApiError } from '../../services/authApi';
 
-const SUBJECT_TYPES = ['', 'user', 'org', 'project', 'version', 'publication', 'session'];
+const SUBJECT_TYPES = ['', 'user', 'org', 'project', 'snapshot', 'publication', 'session'];
 
 function toEpochOrUndef(datetimeLocal: string): number | undefined {
   if (!datetimeLocal) return undefined;

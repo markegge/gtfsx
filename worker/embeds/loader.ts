@@ -4,11 +4,11 @@ import type { FeedState, LoadedEmbedFeed } from './types';
 
 interface PublicationRow {
   project_id: string;
-  version_id: string;
+  snapshot_id: string;
   published_at: number;
 }
 
-interface VersionRow {
+interface SnapshotRow {
   state_r2_key: string;
 }
 
@@ -32,7 +32,7 @@ interface OrgLogoRow {
  */
 export async function loadEmbedFeed(env: Env, slug: string): Promise<LoadedEmbedFeed | null> {
   const pub = await env.DB.prepare(
-    `SELECT p.project_id, p.version_id, p.published_at
+    `SELECT p.project_id, p.snapshot_id, p.published_at
        FROM publication p
        JOIN feed_project fp ON fp.id = p.project_id
       WHERE p.canonical_slug = ? AND fp.deleted_at IS NULL`,
@@ -42,10 +42,10 @@ export async function loadEmbedFeed(env: Env, slug: string): Promise<LoadedEmbed
 
   if (!pub) return null;
 
-  const [version, project] = await Promise.all([
-    env.DB.prepare(`SELECT state_r2_key FROM feed_version WHERE id = ?`)
-      .bind(pub.version_id)
-      .first<VersionRow>(),
+  const [snapshot, project] = await Promise.all([
+    env.DB.prepare(`SELECT state_r2_key FROM feed_snapshot WHERE id = ?`)
+      .bind(pub.snapshot_id)
+      .first<SnapshotRow>(),
     env.DB.prepare(
       `SELECT name, brand_primary_color, owner_type, owner_id FROM feed_project WHERE id = ?`,
     )
@@ -53,7 +53,7 @@ export async function loadEmbedFeed(env: Env, slug: string): Promise<LoadedEmbed
       .first<ProjectRow>(),
   ]);
 
-  if (!version || !project) return null;
+  if (!snapshot || !project) return null;
 
   let brandLogoUrl: string | null = null;
   if (project.owner_type === 'org') {
@@ -69,7 +69,7 @@ export async function loadEmbedFeed(env: Env, slug: string): Promise<LoadedEmbed
     }
   }
 
-  const blob = await getFeedBlob(env, version.state_r2_key);
+  const blob = await getFeedBlob(env, snapshot.state_r2_key);
   if (!blob) return null;
 
   // The blob is gzipped JSON. Decompress + parse.
@@ -79,7 +79,7 @@ export async function loadEmbedFeed(env: Env, slug: string): Promise<LoadedEmbed
   try {
     parsed = JSON.parse(text) as Partial<FeedState>;
   } catch {
-    console.error('[embeds] feed JSON parse failed', { slug, versionId: pub.version_id });
+    console.error('[embeds] feed JSON parse failed', { slug, snapshotId: pub.snapshot_id });
     return null;
   }
 
@@ -98,7 +98,7 @@ export async function loadEmbedFeed(env: Env, slug: string): Promise<LoadedEmbed
   return {
     slug,
     projectId: pub.project_id,
-    versionId: pub.version_id,
+    snapshotId: pub.snapshot_id,
     publishedAt: pub.published_at,
     projectName: project.name,
     brandPrimaryColor: project.brand_primary_color,

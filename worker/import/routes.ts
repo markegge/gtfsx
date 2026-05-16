@@ -3,7 +3,7 @@ import type { AppContext, Env } from '../env';
 import { clientIp, rateLimit } from '../util/rateLimit';
 import { getMobilityDbAccessToken } from '../distribution/mobility';
 
-// Deep-link feed import endpoint. Spec: docs/DEEP_LINK_SPEC.md.
+// Deep-link feed import endpoint.
 //
 // Two entry paths:
 //   GET /api/import/fetch?url=<URL>
@@ -283,8 +283,7 @@ importRouter.get('/fetch', async (c) => {
       targetUrl = validateTargetUrl(resolved);
       sourceLabel = 'mobilitydb';
     } else if (source === 'transitland') {
-      // transit.land integration deferred until an API key is provisioned —
-      // see DEEP_LINK_SPEC.md §3.3.
+      // transit.land integration deferred until an API key is provisioned.
       throw importError(
         501,
         'transitland_not_configured',

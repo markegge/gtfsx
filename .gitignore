@@ -22,6 +22,9 @@ streamline_test.zip
 # Stripe setup-script output (contains webhook signing secret)
 .stripe-config-*.json
 
+# D1 production backups (contain PII — emails, hashed credentials)
+backups/
+
 # Playwright MCP run artifacts (console logs, snapshots from test sessions)
 .playwright-mcp/
 

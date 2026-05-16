@@ -220,7 +220,7 @@ export interface WeeklyMetrics {
   users: number;
   orgs: number;
   projects: number;
-  versions: number;
+  snapshots: number;
   publications: number;
   signups7d: number;
   signups30d: number;
@@ -237,11 +237,11 @@ export async function summarizeWeeklyMetrics(env: Env): Promise<WeeklyMetrics> {
   const d7 = now - 7 * 24 * 60 * 60 * 1000;
   const d30 = now - 30 * 24 * 60 * 60 * 1000;
 
-  const [users, orgs, projects, versions, publications, signups7d, signups30d] = await Promise.all([
+  const [users, orgs, projects, snapshots, publications, signups7d, signups30d] = await Promise.all([
     scalarCount(env, `SELECT COUNT(*) AS n FROM user WHERE deleted_at IS NULL`),
     scalarCount(env, `SELECT COUNT(*) AS n FROM organization WHERE deleted_at IS NULL`),
     scalarCount(env, `SELECT COUNT(*) AS n FROM feed_project WHERE deleted_at IS NULL`),
-    scalarCount(env, `SELECT COUNT(*) AS n FROM feed_version`),
+    scalarCount(env, `SELECT COUNT(*) AS n FROM feed_snapshot`),
     scalarCount(env, `SELECT COUNT(*) AS n FROM publication`),
     scalarCount(env, `SELECT COUNT(*) AS n FROM user WHERE created_at >= ?`, d7),
     scalarCount(env, `SELECT COUNT(*) AS n FROM user WHERE created_at >= ?`, d30),
@@ -251,7 +251,7 @@ export async function summarizeWeeklyMetrics(env: Env): Promise<WeeklyMetrics> {
     users,
     orgs,
     projects,
-    versions,
+    snapshots,
     publications,
     signups7d,
     signups30d,
@@ -264,7 +264,7 @@ export async function summarizeWeeklyMetrics(env: Env): Promise<WeeklyMetrics> {
 
   console.log(
     `[metrics] users=${metrics.users} orgs=${metrics.orgs} projects=${metrics.projects} ` +
-      `versions=${metrics.versions} publications=${metrics.publications} ` +
+      `snapshots=${metrics.snapshots} publications=${metrics.publications} ` +
       `signups(7d/30d)=${metrics.signups7d}/${metrics.signups30d}`,
   );
   return metrics;

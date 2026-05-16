@@ -5,6 +5,8 @@ import { ApiError } from '../../services/authApi';
 import { createProject, saveWorkingState } from '../../services/projectsApi';
 import { buildSnapshot, setCurrentWorkingStateVersion } from '../../db/serverPersistence';
 import { roleAtLeast } from '../../services/orgsApi';
+import { db } from '../../db/dexie';
+import { LAST_PROJECT_KEY } from '../../db/persistence';
 
 export function SaveAsDialog({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
@@ -35,6 +37,11 @@ export function SaveAsDialog({ onClose }: { onClose: () => void }) {
     e.preventDefault();
     setError(null);
     setBusy(true);
+    // Capture the anonymous-draft projectId BEFORE we overwrite it with the
+    // server's. After a successful save we drop that IDB row so the same
+    // draft doesn't reappear as a "local feed available for import" on the
+    // /feeds dashboard (which used to surface it as a phantom duplicate).
+    const previousProjectId = useStore.getState().projectId;
     try {
       const ownerArg: { type: 'user' } | { type: 'org'; id: string } = owner === 'user'
         ? { type: 'user' }
@@ -56,6 +63,20 @@ export function SaveAsDialog({ onClose }: { onClose: () => void }) {
       setActiveServerProject(project.id);
       upsertFeedProject({ ...project, workingStateVersion });
       markSaved();
+
+      // Anonymous draft is now promoted to a server-backed project. Drop the
+      // IDB rows + the localStorage pointer so it doesn't linger.
+      if (previousProjectId && previousProjectId !== project.id) {
+        try {
+          await db.projects.delete(previousProjectId);
+          await db.projectData.delete(previousProjectId);
+          if (localStorage.getItem(LAST_PROJECT_KEY) === previousProjectId) {
+            localStorage.removeItem(LAST_PROJECT_KEY);
+          }
+        } catch {
+          // Non-fatal — the next visit's import filter still de-dupes by name+id.
+        }
+      }
 
       // Sync the workspace switcher to the chosen destination so the header
       // chip + "current workspace" indicator match the feed's actual owner.

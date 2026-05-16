@@ -376,17 +376,17 @@ function darkenHex(hex: string): string {
   return `${adj(m[1])}${adj(m[2])}${adj(m[3])}`;
 }
 
-export function embedHeaders(versionId: string, publishedAt: number): Headers {
+export function embedHeaders(snapshotId: string, publishedAt: number): Headers {
   const h = new Headers();
   h.set('Content-Type', 'text/html; charset=utf-8');
-  h.set('ETag', `"${versionId}"`);
+  h.set('ETag', `"${snapshotId}"`);
   h.set('Last-Modified', new Date(publishedAt).toUTCString());
   // Embeds are publicly framable.
   h.set('Content-Security-Policy', "frame-ancestors *;");
   // Don't outrank the host page in search.
   h.set('X-Robots-Tag', 'noindex');
   // Tile + edge cache: short browser TTL, longer at the edge; republish
-  // invalidates by version_id changing the ETag.
+  // invalidates by snapshot_id changing the ETag.
   h.set('Cache-Control', 'public, max-age=300, s-maxage=3600');
   h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   return h;

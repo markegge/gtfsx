@@ -42,7 +42,7 @@ export async function resetDb(): Promise<void> {
     'project_catalog_submission',
     'project_rt_feed',
     'draft_link',
-    'feed_version',
+    'feed_snapshot',
     'feed_project',
     'organization_membership',
     'organization',
@@ -83,6 +83,12 @@ export async function seedUser(opts: {
   displayName?: string;
   status?: 'pending_verification' | 'active' | 'disabled' | 'deleted_soft';
   staff?: boolean;
+  /**
+   * Defaults to `'team'` so tests exercise paid features (snapshots, publish,
+   * embeds, org operations, etc.) without each one having to opt in. Pass
+   * `'free'` explicitly when testing paywall enforcement.
+   */
+  plan?: 'free' | 'pro' | 'team' | 'enterprise';
 } = {}): Promise<SeededUser> {
   const id = ulid();
   const email = opts.email ?? `user-${id.toLowerCase()}@example.com`;
@@ -90,13 +96,14 @@ export async function seedUser(opts: {
   const displayName = opts.displayName ?? 'Test User';
   const status = opts.status ?? 'active';
   const staff = opts.staff ? 1 : 0;
+  const plan = opts.plan ?? 'team';
   const now = Date.now();
 
   await testEnv.DB.prepare(
-    `INSERT INTO user (id, email, display_name, status, staff, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO user (id, email, display_name, status, staff, plan, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(id, email, displayName, status, staff, now, now)
+    .bind(id, email, displayName, status, staff, plan, now, now)
     .run();
 
   const passwordHash = await hashPassword(password);

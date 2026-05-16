@@ -12,7 +12,7 @@ export interface AdminStats {
   };
   organizations: { total: number };
   projects: { total: number; byOwnerType: { user: number; org: number } };
-  versions: { total: number };
+  snapshots: { total: number };
   publications: { total: number };
   signups: { last7d: number; last30d: number; allTime: number };
   activeUsers: { last24h: number; last7d: number; last30d: number };

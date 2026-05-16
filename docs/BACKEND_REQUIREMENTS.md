@@ -18,9 +18,9 @@ Reference spec for the account / project / publication / distribution backend. T
 | `organization_membership` | Many-to-many user↔org with a per-org role. **Many-to-many is critical for consultants** working across multiple agencies. |
 | `feed_project` | The editing artifact — one feed. Owned by a user or organization (`owner_type` + `owner_id`). Slug unique per owner. Includes per-project `brand_primary_color`. |
 | `project_membership` *(future)* | Per-project access inside an org without org-wide visibility — granted use case is a consultant retained for a single agency feed (BE-95). |
-| `feed_version` | Immutable snapshot. Two R2 blobs (gzipped JSON state + rendered ZIP) plus a metadata row with the version summary (BE-46). |
-| `draft_link` | Unguessable token (hashed at rest) pointing at a specific feed version, time-limited and revocable. |
-| `publication` | "Version X of project Y is live at canonical URL." At most one published version per project at any moment. |
+| `feed_snapshot` | Immutable point-in-time snapshot of an editor state. Two R2 blobs (gzipped JSON state + rendered ZIP) plus a metadata row with the summary (BE-46). |
+| `draft_link` | Unguessable token (hashed at rest) pointing at a specific snapshot, time-limited and revocable. |
+| `publication` | "Snapshot X of project Y is live at canonical URL." At most one published snapshot per project at any moment. |
 | `publication_history` | Append-only list of publish/unpublish/rollback events. |
 | `project_catalog_submission` | Opt-in record per (project, catalog) for Mobility DB / transit.land. Stores the external feed id. |
 | `project_rt_feed` | Registered external GTFS-RT feed URLs (BE-87). Metadata only — we don't proxy. |
@@ -119,7 +119,7 @@ Anonymous → signed-in migration (BE-43): on first sign-in, the local IndexedDB
 - **BE-60**: One click on any saved version generates `feeds.*/<slug>/draft/<token>.zip` with an unguessable 192-bit token (hashed at rest).
 - **BE-61**: `X-Robots-Tag: noindex`; feeds-origin `robots.txt` disallows `/draft/`.
 - **BE-62**: Default 30-day expiry; renewable; revocable.
-- **BE-63**: Each draft URL points to a specific `feed_version` so the bytes don't change once shared.
+- **BE-63**: Each draft URL points to a specific `feed_snapshot` so the bytes don't change once shared.
 - **BE-64**: `Cache-Control: private, max-age=300`; downloadable filename derived from slug + draft date.
 
 ### 5.2 Canonical publication

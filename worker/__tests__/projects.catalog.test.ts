@@ -23,12 +23,12 @@ async function createProject(client: TestClient, name: string): Promise<{ id: st
   return client.json(await client.post('/api/projects', { name }));
 }
 
-async function createVersion(client: TestClient, projectId: string): Promise<{ version: { id: string } }> {
+async function createSnapshot(client: TestClient, projectId: string): Promise<{ snapshot: { id: string } }> {
   const form = new FormData();
   const stateBuf = await gzip(JSON.stringify({}));
   form.append('state', new Blob([stateBuf], { type: 'application/json' }), 'state.json.gz');
   form.append('meta', JSON.stringify({ summary: {}, validationErrors: 0, validationWarnings: 0 }));
-  return client.json(await client.post(`/api/projects/${projectId}/versions`, undefined, { body: form }));
+  return client.json(await client.post(`/api/projects/${projectId}/snapshots`, undefined, { body: form }));
 }
 
 describe('/api/projects/:id/catalog-submissions', () => {
@@ -82,7 +82,7 @@ describe('/api/projects/:id/catalog-submissions', () => {
   it('auto-submits to mobility_db on publish when opted in', async () => {
     const client = await loggedInClient('cat4@example.com');
     const proj = await createProject(client, 'Cat4');
-    const v = await createVersion(client, proj.id);
+    const v = await createSnapshot(client, proj.id);
     await client.post(`/api/projects/${proj.id}/catalog-submissions`, { catalog: 'mobility_db' });
 
     // Intercept the outbound Mobility DB fetch (leave Resend capture in place).
@@ -105,7 +105,7 @@ describe('/api/projects/:id/catalog-submissions', () => {
     });
 
     const form = new FormData();
-    form.append('meta', JSON.stringify({ versionId: v.version.id }));
+    form.append('meta', JSON.stringify({ snapshotId: v.snapshot.id }));
     form.append('zip', new Blob([new Uint8Array([1])], { type: 'application/zip' }), 'g.zip');
     const pubRes = await client.post(`/api/projects/${proj.id}/publish`, undefined, { body: form });
     expect(pubRes.status).toBe(200);

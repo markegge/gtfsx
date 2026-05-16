@@ -67,7 +67,7 @@ export function RtBreakageDialog() {
             This will break your GTFS-Realtime feed
           </Dialog.Title>
           <Dialog.Description className="text-sm text-warm-gray mb-4">
-            Your real-time feed references IDs that are being removed in this version. Once you
+            Your real-time feed references IDs that are being removed in this snapshot. Once you
             publish, downstream apps will keep receiving RT updates for IDs that no longer match
             your schedule — vehicles won't appear on maps, predictions will drop, and alerts may
             silently point at nothing.

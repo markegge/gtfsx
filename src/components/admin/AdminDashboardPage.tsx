@@ -207,7 +207,7 @@ export function AdminDashboardPage() {
               label="Publications"
               value={stats.publications.total}
               accent="purple"
-              sub={[{ label: 'Feed versions', value: stats.versions.total }]}
+              sub={[{ label: 'Feed snapshots', value: stats.snapshots.total }]}
             />
           </div>
 

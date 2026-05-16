@@ -108,7 +108,7 @@ export interface FeedState {
 export interface LoadedEmbedFeed {
   slug: string;
   projectId: string;
-  versionId: string;
+  snapshotId: string;
   publishedAt: number;
   projectName: string;
   // 6-char hex (no leading #) or null. Drives the embed accent CSS var.

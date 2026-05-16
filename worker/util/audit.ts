@@ -6,7 +6,7 @@ import type { Env } from '../env';
 
 export interface AuditInput {
   actorUserId?: string | null;
-  subjectType: 'user' | 'session' | 'project' | 'org' | 'version' | 'publication' | 'forum_thread' | 'forum_post' | 'forum_image';
+  subjectType: 'user' | 'session' | 'project' | 'org' | 'snapshot' | 'publication' | 'forum_thread' | 'forum_post' | 'forum_image';
   subjectId?: string | null;
   action: string;
   metadata?: Record<string, unknown>;

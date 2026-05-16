@@ -52,18 +52,18 @@ describe('/api/projects CRUD', () => {
     }>(listRes);
     expect(list.projects.map((p) => p.name).sort()).toEqual(['Feed A', 'Feed B']);
     expect(list.quota.projects.used).toBe(2);
-    expect(list.quota.projects.limit).toBe(20);
+    expect(list.quota.projects.limit).toBe(500); // team tier default in tests
   });
 
-  it('GET /api/projects/:id returns the project plus an empty versions array', async () => {
+  it('GET /api/projects/:id returns the project plus an empty snapshots array', async () => {
     const { client } = await loggedInClient('crud3@example.com');
     const created = await client.json<{ id: string }>(
       await client.post('/api/projects', { name: 'Solo' }),
     );
     const getRes = await client.get(`/api/projects/${created.id}`);
-    const body = await client.json<{ id: string; versions: unknown[] }>(getRes);
+    const body = await client.json<{ id: string; snapshots: unknown[] }>(getRes);
     expect(body.id).toBe(created.id);
-    expect(body.versions).toEqual([]);
+    expect(body.snapshots).toEqual([]);
   });
 
   it('PATCH updates name and slug; slug collisions return 409', async () => {

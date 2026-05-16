@@ -79,7 +79,7 @@ Annual prices = ~10× monthly (2 months free). Display monthly price prominently
 
 - The free editor (anonymous IndexedDB) is preserved as a separate path. It is not a "tier" so much as a fallback; sign-up converts the local feed to a Free account feed.
 - "Cloud-saved feed" = `feed_project` row in D1 + R2 working state blob. The free tier limits the count of these per owner.
-- Managed publishing = creating a `publication` row pointing at a `feed_version`, which makes `feeds.*/<slug>/gtfs.zip` resolve to the version's rendered ZIP and exposes embeds at `feeds.*/<slug>/`. Free tier never gets a `publication` row.
+- Managed publishing = creating a `publication` row pointing at a `feed_snapshot`, which makes `feeds.*/<slug>/gtfs.zip` resolve to the snapshot's rendered ZIP and exposes embeds at `feeds.*/<slug>/`. Free tier never gets a `publication` row.
 - "Self-hosted" publishing means: download the ZIP via export, host wherever (state DOT clearinghouse, GitHub Pages, own server, Mobility Database direct upload). The editor and exporter make no distinction.
 
 ---

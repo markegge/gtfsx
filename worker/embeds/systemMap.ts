@@ -15,9 +15,9 @@ export async function renderSystemMapEmbed(
   if (!feed) return new Response('Feed not found', { status: 404 });
 
   const ifNoneMatch = request.headers.get('If-None-Match');
-  const etag = `"${feed.versionId}-system"`;
+  const etag = `"${feed.snapshotId}-system"`;
   if (ifNoneMatch && ifNoneMatch.includes(etag)) {
-    const headers = embedHeaders(feed.versionId, feed.publishedAt);
+    const headers = embedHeaders(feed.snapshotId, feed.publishedAt);
     headers.set('ETag', etag);
     return new Response(null, { status: 304, headers });
   }
@@ -84,7 +84,7 @@ export async function renderSystemMapEmbed(
     body: await body,
   });
 
-  const headers = embedHeaders(feed.versionId, feed.publishedAt);
+  const headers = embedHeaders(feed.snapshotId, feed.publishedAt);
   headers.set('ETag', etag);
   return new Response(String(html5), { status: 200, headers });
 }

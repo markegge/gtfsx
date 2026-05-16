@@ -4,7 +4,7 @@ import { useStore } from '../../store';
 import { TimetableGrid } from '../timetable/TimetableGrid';
 import { ServiceSummary } from '../timetable/ServiceSummary';
 import { ValidationPanel } from '../validation/ValidationPanel';
-import { VersionHistoryPanel } from '../versions/VersionHistoryPanel';
+import { SnapshotHistoryPanel } from '../snapshots/SnapshotHistoryPanel';
 import { PublishWithDistribution } from '../distribution/PublishWithDistribution';
 import { EmbedPanel } from '../embed/EmbedPanel';
 import { ProjectAuditPanel } from '../audit/ProjectAuditPanel';
@@ -88,7 +88,7 @@ export function BottomPanel() {
         <span className="text-xs text-warm-gray">{bottomPanelOpen ? '▼' : '▲'}</span>
         {(
           activeServerProjectId
-            ? (['timetable', 'service-summary', 'validation', 'versions', 'publish', 'embed', 'audit'] as const)
+            ? (['timetable', 'service-summary', 'validation', 'snapshots', 'publish', 'embed', 'audit'] as const)
             : (['timetable', 'service-summary', 'validation'] as const)
         ).map((tab) => {
           const labels: Record<string, string> = {
@@ -96,7 +96,7 @@ export function BottomPanel() {
             stops: 'Stops',
             'service-summary': 'Service Summary',
             validation: 'Validation',
-            versions: 'Versions',
+            snapshots: 'Snapshots',
             publish: 'Share & Publish',
             embed: 'Embed',
             audit: 'Activity',
@@ -143,7 +143,11 @@ export function BottomPanel() {
           {bottomPanelTab === 'timetable' && <TimetableGrid />}
           {bottomPanelTab === 'service-summary' && <ServiceSummary />}
           {bottomPanelTab === 'validation' && <ValidationPanel />}
-          {bottomPanelTab === 'versions' && activeServerProjectId && <VersionHistoryPanel />}
+          {bottomPanelTab === 'snapshots' && activeServerProjectId && (
+            <PaywallOverlay feature="snapshot_history" currentPlan={editorPlan}>
+              <SnapshotHistoryPanel />
+            </PaywallOverlay>
+          )}
           {bottomPanelTab === 'publish' && activeServerProjectId && (
             <PaywallOverlay feature="managed_publishing" currentPlan={editorPlan}>
               <PublishWithDistribution />

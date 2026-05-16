@@ -130,20 +130,25 @@ export function MyFeedsPage() {
     gatherLocalProjects().then(setLocalProjects);
   }, [currentUser]);
 
-  const importableCount = useMemo(
+  // Local IndexedDB drafts that don't match a server feed by id or name. The
+  // id check catches drafts whose IDB row was keyed by a server projectId
+  // (an autosave artifact from the server-backed editor route); the name
+  // check catches anonymous drafts the user later saved under the same name.
+  const importableLocal = useMemo(
     () =>
       localProjects.filter(
         (lp) => !feedsProjects.some((fp) => fp.name === lp.name || fp.id === lp.id),
-      ).length,
+      ),
     [localProjects, feedsProjects],
   );
+  const importableCount = importableLocal.length;
 
   const handleImport = async () => {
-    if (localProjects.length === 0) return;
+    if (importableLocal.length === 0) return;
     setImporting(true);
     setImportStatus(null);
     try {
-      const items = localProjects.map((lp) => ({
+      const items = importableLocal.map((lp) => ({
         name: lp.name,
         snapshot: lp.snapshot,
       }));
@@ -418,7 +423,7 @@ function FeedCard({
           <span className="mx-2">·</span>
           Edited {formatDate(lastEdited)}
           <span className="mx-2">·</span>
-          {project.versionCount ?? 0} version{(project.versionCount ?? 0) === 1 ? '' : 's'}
+          {project.snapshotCount ?? 0} snapshot{(project.snapshotCount ?? 0) === 1 ? '' : 's'}
         </div>
         {project.description && (
           <div className="text-sm text-warm-gray mt-1 line-clamp-2">{project.description}</div>
@@ -673,7 +678,7 @@ function MoveFeedDialog({
         <h3 className="font-heading font-bold text-lg text-dark-brown mb-1">Move feed</h3>
         <p className="text-xs text-warm-gray mb-4">
           Move <span className="font-semibold text-dark-brown">{project.name}</span> to a different
-          workspace. Versions, working state, and any active publication move with it.
+          workspace. Snapshots, working state, and any active publication move with it.
         </p>
         {options.length === 0 ? (
           <div className="px-3 py-2 mb-3 rounded-md bg-cream text-sm text-warm-gray">

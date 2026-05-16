@@ -269,9 +269,9 @@ export function AccountBillingPage() {
                 unbounded={state.quotas.publishedFeeds.limit >= 9999}
               />
               <div className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="text-warm-gray">Versions per feed (limit)</span>
+                <span className="text-warm-gray">Snapshots per feed (limit)</span>
                 <span className="font-semibold text-brown">
-                  {state.quotas.versionsPerProject.limit >= 9999 ? 'Unlimited' : state.quotas.versionsPerProject.limit.toLocaleString()}
+                  {state.quotas.snapshotsPerProject.limit >= 9999 ? 'Unlimited' : state.quotas.snapshotsPerProject.limit.toLocaleString()}
                 </span>
               </div>
               <div className="flex items-baseline justify-between gap-3 text-sm">

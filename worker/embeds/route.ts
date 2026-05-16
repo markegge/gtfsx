@@ -30,9 +30,9 @@ export async function renderRouteEmbed(
   const url = new URL(request.url);
   const requestedTab = url.searchParams.get('service');
   const ifNoneMatch = request.headers.get('If-None-Match');
-  const etagBase = `"${feed.versionId}-${routeId}-${requestedTab ?? 'auto'}"`;
+  const etagBase = `"${feed.snapshotId}-${routeId}-${requestedTab ?? 'auto'}"`;
   if (ifNoneMatch && ifNoneMatch.includes(etagBase)) {
-    const headers = embedHeaders(feed.versionId, feed.publishedAt);
+    const headers = embedHeaders(feed.snapshotId, feed.publishedAt);
     headers.set('ETag', etagBase);
     return new Response(null, { status: 304, headers });
   }
@@ -122,7 +122,7 @@ export async function renderRouteEmbed(
     body: await body,
   });
 
-  const headers = embedHeaders(feed.versionId, feed.publishedAt);
+  const headers = embedHeaders(feed.snapshotId, feed.publishedAt);
   headers.set('ETag', etagBase);
   return new Response(String(html5), { status: 200, headers });
 }

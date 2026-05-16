@@ -97,7 +97,7 @@ interface AdminStats {
   users: { total: number; active: number; pending_verification: number; disabled: number; deleted_soft: number };
   organizations: { total: number };
   projects: { total: number; byOwnerType: { user: number; org: number } };
-  versions: { total: number };
+  snapshots: { total: number };
   publications: { total: number };
   signups: { last7d: number; last30d: number; allTime: number };
   activeUsers: { last24h: number; last7d: number; last30d: number };
@@ -147,9 +147,9 @@ async function computeStats(env: Env): Promise<AdminStats> {
     else if (r.owner_type === 'org') projects.byOwnerType.org = r.n;
   }
 
-  // Versions.
-  const verRow = await env.DB.prepare(`SELECT COUNT(*) AS n FROM feed_version`).first<{ n: number }>();
-  const versions = { total: verRow?.n ?? 0 };
+  // Snapshots.
+  const snapRow = await env.DB.prepare(`SELECT COUNT(*) AS n FROM feed_snapshot`).first<{ n: number }>();
+  const snapshots = { total: snapRow?.n ?? 0 };
 
   // Publications live.
   const pubRow = await env.DB.prepare(`SELECT COUNT(*) AS n FROM publication`).first<{ n: number }>();
@@ -217,7 +217,7 @@ async function computeStats(env: Env): Promise<AdminStats> {
     newProjectsByWeek: bucketCounts(projectTrendRows.results ?? []),
   };
 
-  return { users, organizations, projects, versions, publications, signups, activeUsers, trend };
+  return { users, organizations, projects, snapshots, publications, signups, activeUsers, trend };
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────

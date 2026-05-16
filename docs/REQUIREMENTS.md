@@ -269,7 +269,7 @@ Specced in [`BACKEND_REQUIREMENTS.md`](./BACKEND_REQUIREMENTS.md) §5–6 and [`
 
 - ✅ "Get review link" generates `feeds.*/<slug>/draft/<token>.zip` with an unguessable 192-bit token (hashed at rest). 30-day default expiry, renewable, revocable.
 - ✅ `X-Robots-Tag: noindex`; feeds-origin `robots.txt` disallows `/draft/`.
-- ✅ Each draft URL points to a specific `feed_version` so the bytes don't change once a link is shared.
+- ✅ Each draft URL points to a specific `feed_snapshot` so the bytes don't change once a link is shared.
 
 ### 4.3 Catalog submissions and distribution metadata
 
@@ -409,7 +409,5 @@ Read these when you need the deep version of a particular surface:
 | [`FLEX_ROADMAP.md`](./FLEX_ROADMAP.md) | GTFS-Flex coverage tracker — shipped / partial / open / deferred per spec field. |
 | [`demand-dots-nationwide-plan.md`](./demand-dots-nationwide-plan.md) | Build pipeline + decisions for the demand-dot tile archive. |
 | [`Title VI Transit Service Analysis - Calculation Procedures Memo.md`](./Title%20VI%20Transit%20Service%20Analysis%20-%20Calculation%20Procedures%20Memo.md) | Methodology for the Title VI equity analysis. |
-| [`RAIL_ELEGANCE_PLAN.md`](./RAIL_ELEGANCE_PLAN.md) | Audit + corrective plan for the two-rail editor layout. Most items shipped on 2026-05-11 in the rail refactor; remaining polish items still tracked there. |
-| [`wireframes.html`](./wireframes.html) | Original UI sketches — historical reference. Predates the two-rail shell. |
 
 The previous `BACKEND_IMPLEMENTATION_PLAN.md` was retired in 2026-05 — Phases 1–5 are fully shipped, the live operational picture moved into `BACKEND_STATUS.md`, and the remaining outstanding items (NF-40a argon2id, transit.land submission, hard-mode quotas, Phase 7 embed sub-phases, etc.) are tracked in `BACKEND_STATUS.md` §"Outstanding work" or `EMBEDS_REQUIREMENTS.md` §3.

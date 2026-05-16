@@ -26,6 +26,15 @@ function daysUntil(ms: number): number {
   return Math.max(0, Math.round(diff / (24 * 60 * 60 * 1000)));
 }
 
+// Construct an editor deep-link that opens /import on the current origin with
+// the draft ZIP URL as the source. Anyone with the URL can preview the feed
+// in an anonymous editor session — no account required, same TTL as the ZIP
+// link itself (revocation flows through automatically since the editor proxy
+// will get a 410 when fetching the underlying draft URL).
+function toEditorDeepLink(zipUrl: string): string {
+  return `${window.location.origin}/import?url=${encodeURIComponent(zipUrl)}`;
+}
+
 type BannerKind = 'success' | 'error' | 'info';
 
 interface DraftLinksSectionProps {
@@ -125,8 +134,12 @@ export function DraftLinksSection({
 
       {justCreated && (
         <div className="mb-3 px-3 py-3 rounded-lg bg-coral-light border border-coral/30 text-sm">
-          <div className="font-semibold text-coral mb-1">Link created — copy it now</div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="font-semibold text-coral mb-2">Link created — copy it now</div>
+
+          <div className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
+            ZIP download
+          </div>
+          <div className="flex items-center gap-2 flex-wrap mb-2">
             <code className="text-xs font-mono text-dark-brown bg-white px-2 py-1 rounded break-all flex-1">
               {justCreated.url}
             </code>
@@ -134,7 +147,22 @@ export function DraftLinksSection({
               onClick={() => copy(justCreated.url)}
               className="text-xs px-2 py-1 rounded-md bg-coral text-white hover:bg-[#d4603a]"
             >
-              Copy link
+              Copy
+            </button>
+          </div>
+
+          <div className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
+            Open in editor
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <code className="text-xs font-mono text-dark-brown bg-white px-2 py-1 rounded break-all flex-1">
+              {toEditorDeepLink(justCreated.url)}
+            </code>
+            <button
+              onClick={() => copy(toEditorDeepLink(justCreated.url))}
+              className="text-xs px-2 py-1 rounded-md bg-coral text-white hover:bg-[#d4603a]"
+            >
+              Copy
             </button>
             <button
               onClick={() => setJustCreated(null)}
@@ -143,9 +171,11 @@ export function DraftLinksSection({
               Done
             </button>
           </div>
-          <div className="text-xs text-warm-gray mt-1">
-            Expires in {daysUntil(justCreated.expiresAt)} days. This is the only time the full URL
-            will be shown — revoke and regenerate if you lose it.
+
+          <div className="text-xs text-warm-gray mt-2">
+            Both URLs expire in {daysUntil(justCreated.expiresAt)} days and share the same revocation —
+            killing the draft link kills the editor preview too. This is the only time the full URLs
+            will be shown; revoke and regenerate if you lose them.
           </div>
         </div>
       )}

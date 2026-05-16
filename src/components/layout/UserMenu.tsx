@@ -82,20 +82,35 @@ export function UserMenu() {
             <Popover.Content
               align="end"
               sideOffset={8}
-              className="bg-white rounded-xl shadow-lg border border-sand p-2 w-44 z-50 flex flex-col gap-2"
+              className="bg-white rounded-xl shadow-lg border border-sand p-2 w-56 z-50"
             >
               <button
                 onClick={() => navigate('/login')}
-                className="w-full px-3 py-2 rounded-md text-sm font-heading font-bold bg-coral text-white hover:bg-[#d4603a] transition-colors"
+                className="w-full text-left px-3 py-2 rounded-md hover:bg-cream transition-colors"
               >
-                Sign in
+                <div className="text-sm font-heading font-bold text-coral">Sign in</div>
+                <div className="text-[11px] text-warm-gray">Existing users</div>
               </button>
               <button
                 onClick={() => navigate('/signup')}
-                className="w-full px-3 py-2 rounded-md text-sm font-heading font-bold bg-teal text-white hover:bg-[#22847a] transition-colors"
+                className="w-full text-left px-3 py-2 rounded-md hover:bg-cream transition-colors"
               >
-                Sign up
+                <div className="text-sm font-heading font-bold text-teal">Sign up</div>
+                <div className="text-[11px] text-warm-gray">Create a new account</div>
               </button>
+              <div className="border-t border-sand my-1" />
+              <button
+                onClick={() => navigate('/pricing')}
+                className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
+              >
+                Pricing &amp; plans
+              </button>
+              <a
+                href="/about/"
+                className="block w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
+              >
+                About
+              </a>
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>

@@ -19,10 +19,27 @@ export function FlexLayer() {
 
   const combinedGeojson = useMemo(() => {
     // Exclude the zone currently being edited in draw (draw renders it instead)
-    // and any zone tied to a route that's been hidden via the routes pane.
+    // and any zone whose associated route is hidden via the routes pane.
+    // Link first by explicit zone.routeId; fall back to matching zone.name
+    // against route_short_name / route_long_name, since legacy zones and
+    // some import paths leave routeId unset.
     const hiddenSet = new Set(hiddenRouteIds);
+    const hiddenNameSet = new Set<string>();
+    for (const r of routes) {
+      if (!hiddenSet.has(r.route_id)) continue;
+      const short = (r.route_short_name || '').trim();
+      const long = (r.route_long_name || '').trim();
+      if (short) hiddenNameSet.add(short);
+      if (long) hiddenNameSet.add(long);
+    }
+    const isHidden = (z: typeof flexZones[number]): boolean => {
+      if (z.routeId && hiddenSet.has(z.routeId)) return true;
+      const name = (z.name || '').trim();
+      if (name && hiddenNameSet.has(name)) return true;
+      return false;
+    };
     const zones = flexZones.filter(
-      (z) => z.id !== editingFlexZoneId && !(z.routeId && hiddenSet.has(z.routeId)),
+      (z) => z.id !== editingFlexZoneId && !isHidden(z),
     );
     if (zones.length === 0) return featureCollection([]) as GeoJSON.FeatureCollection;
     const routesById = new Map(routes.map((r) => [r.route_id, r]));

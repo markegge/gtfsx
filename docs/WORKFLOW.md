@@ -159,10 +159,21 @@ Before tagging, in order:
    git push --tags
    ```
 
-   GitHub Actions builds with `VITE_BACKEND_ENABLED=false` / `VITE_BILLING_ENABLED=false` (matching today's prod kill-switch state) and runs `wrangler deploy --env=""`.
+   GitHub Actions builds with `VITE_BACKEND_ENABLED` / `VITE_BILLING_ENABLED` set in `.github/workflows/deploy.yml` (currently `true` since 2026-05-16) and runs `wrangler deploy --env=""`.
 
-5. **Smoke-test in an incognito window:** homepage loads, anonymous IndexedDB editor saves/loads, GTFS export downloads.
-6. **Leave the tag in place.** It's your "last known good" anchor for rollback (`gh run rerun <runId>` or re-deploy from that SHA).
+5. **Verify the new build actually went live.** A green CI run does *not* guarantee the new asset manifest is the active version — observed 2026-05-16: CI logged `Current Version ID: X` but a follow-up version `Y` immediately became active with the *previous* asset manifest, and the new bundle URL returned the SPA-fallback HTML instead of the JS. Always confirm:
+
+   ```bash
+   # Hash on the live site
+   curl -sS https://www.gtfsstudio.net/ | grep -oE 'index-[a-zA-Z0-9_-]+\.js'
+   # Hash CI built (from the deploy job log)
+   gh run view <runId> --log | grep -oE 'dist/assets/index-[a-zA-Z0-9_-]+\.js' | head -1
+   ```
+
+   They must match. If they don't, the deploy didn't take — fall back to the **Manual fallback** below from a clean `npm run build`, then retro-tag.
+
+6. **Smoke-test in an incognito window:** homepage loads, anonymous IndexedDB editor saves/loads, GTFS export downloads. If backend is on, hit `/login` and confirm the sign-in form (not the "Backend coming soon" placeholder) renders — that's the proof `VITE_BACKEND_ENABLED` was actually baked into the served bundle.
+7. **Leave the tag in place.** It's your "last known good" anchor for rollback (`gh run rerun <runId>` or re-deploy from that SHA).
 
 If the build fails mid-promotion, delete the tag (`git tag -d prod-… && git push origin :refs/tags/prod-…`) and re-tag a fixed commit. Tags should always represent successful deploys.
 
@@ -183,8 +194,9 @@ If GitHub Actions is unavailable and you must ship now:
 ```bash
 git checkout main
 git pull origin main
-VITE_BACKEND_ENABLED=false VITE_BILLING_ENABLED=false npm run build
-source ~/proj/.env
+# Match the build env to .github/workflows/deploy.yml's production job.
+VITE_BACKEND_ENABLED=true VITE_BILLING_ENABLED=true npm run build
+unset CLOUDFLARE_API_TOKEN   # OAuth has the right scopes; the env-file token may not
 npx wrangler deploy --env=""
 ```
 

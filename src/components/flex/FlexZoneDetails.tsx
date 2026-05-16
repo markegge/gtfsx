@@ -285,7 +285,7 @@ export function FlexZoneDetails({ zone }: Props) {
             onChange={(e) => setBooking('message', e.target.value || undefined)}
             placeholder="Rider message (e.g. &quot;Call at least 1 hour before pickup.&quot;)"
             rows={2}
-            className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple resize-none"
+            className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple resize-y min-h-[3.5rem]"
           />
         </div>
       </div>

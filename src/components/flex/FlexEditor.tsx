@@ -313,9 +313,9 @@ export function FlexEditor() {
                       <button
                         onClick={() => handleEditZone(zone)}
                         className="px-2 py-1 text-[11px] font-semibold text-warm-gray hover:text-purple hover:bg-purple-50 rounded transition-colors"
-                        title="Edit zone shape"
+                        title="Edit zone shape on the map"
                       >
-                        Edit
+                        Edit Shape
                       </button>
                       <button
                         onClick={() => {

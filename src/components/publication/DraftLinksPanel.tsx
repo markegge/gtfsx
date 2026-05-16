@@ -56,6 +56,7 @@ export function DraftLinksSection({
   const [justCreated, setJustCreated] = useState<{ url: string; expiresAt: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!projectId) return;
@@ -106,10 +107,15 @@ export function DraftLinksSection({
     }
   };
 
-  const copy = async (text: string) => {
+  const copy = async (text: string, key: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      setBanner({ kind: 'info', message: 'Link copied.' });
+      setCopiedKey(key);
+      // 1.5s is long enough for the user to register the change without
+      // making the button feel sticky on the next click.
+      setTimeout(() => {
+        setCopiedKey((prev) => (prev === key ? null : prev));
+      }, 1500);
     } catch {
       setBanner({ kind: 'error', message: 'Could not copy — copy manually.' });
     }
@@ -144,10 +150,12 @@ export function DraftLinksSection({
               {justCreated.url}
             </code>
             <button
-              onClick={() => copy(justCreated.url)}
-              className="text-xs px-2 py-1 rounded-md bg-coral text-white hover:bg-[#d4603a]"
+              onClick={() => copy(justCreated.url, 'zip')}
+              className={`text-xs px-2 py-1 rounded-md text-white transition-colors ${
+                copiedKey === 'zip' ? 'bg-teal' : 'bg-coral hover:bg-[#d4603a]'
+              }`}
             >
-              Copy
+              {copiedKey === 'zip' ? 'Copied!' : 'Copy'}
             </button>
           </div>
 
@@ -159,10 +167,12 @@ export function DraftLinksSection({
               {toEditorDeepLink(justCreated.url)}
             </code>
             <button
-              onClick={() => copy(toEditorDeepLink(justCreated.url))}
-              className="text-xs px-2 py-1 rounded-md bg-coral text-white hover:bg-[#d4603a]"
+              onClick={() => copy(toEditorDeepLink(justCreated.url), 'editor')}
+              className={`text-xs px-2 py-1 rounded-md text-white transition-colors ${
+                copiedKey === 'editor' ? 'bg-teal' : 'bg-coral hover:bg-[#d4603a]'
+              }`}
             >
-              Copy
+              {copiedKey === 'editor' ? 'Copied!' : 'Copy'}
             </button>
             <button
               onClick={() => setJustCreated(null)}

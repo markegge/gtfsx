@@ -550,7 +550,7 @@ orgsRouter.post('/:id/logo', async (c) => {
   // Admins + owners can manage branding.
   await requireOrgRole(c.env, user, id, 'admin');
   // Custom org logo is a Team+ feature.
-  await requireOwnerFeature(c.env, 'org', id, 'org_logo');
+  await requireOwnerFeature(c.env, 'org', id, 'org_logo', user);
 
   const form = await c.req.formData().catch(() => null);
   if (!form) throw validationFailed('multipart/form-data body required');

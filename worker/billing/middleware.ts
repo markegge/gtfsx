@@ -39,8 +39,13 @@ export async function requireOwnerFeature(
   ownerType: OwnerType,
   ownerId: string,
   feature: FeatureKey,
+  actor?: { staff?: boolean },
 ): Promise<Plan> {
   const plan = await getOwnerPlan(env, ownerType, ownerId);
+  // Staff users bypass feature paywalls so admin support work + internal
+  // testing in free-plan workspaces aren't blocked. Quota gates still apply
+  // (see requirePublishAccess) — this is feature-binary access only.
+  if (actor?.staff) return plan;
   if (!planHasFeature(plan, feature)) {
     throw paywall({ feature, currentPlan: plan, upgradeTo: cheapestPlanFor(feature) });
   }
@@ -50,8 +55,13 @@ export async function requireOwnerFeature(
 // Feature gate that operates against the authenticated user's personal plan
 // (for routes whose subject isn't tied to a project — e.g. /api/me-scoped
 // analysis on local-only data).
-export async function requireUserFeature(env: Env, userId: string, feature: FeatureKey): Promise<Plan> {
-  return requireOwnerFeature(env, 'user', userId, feature);
+export async function requireUserFeature(
+  env: Env,
+  userId: string,
+  feature: FeatureKey,
+  actor?: { staff?: boolean },
+): Promise<Plan> {
+  return requireOwnerFeature(env, 'user', userId, feature, actor);
 }
 
 // ─── Combined feature + quota gates for managed publishing ──────────────────
@@ -63,14 +73,14 @@ export async function requirePublishAccess(
   env: Env,
   ownerType: OwnerType,
   ownerId: string,
-  opts?: { isNewPublication?: boolean },
+  opts?: { isNewPublication?: boolean; actor?: { staff?: boolean } },
 ): Promise<Plan> {
-  const plan = await requireOwnerFeature(env, ownerType, ownerId, 'managed_publishing');
+  const plan = await requireOwnerFeature(env, ownerType, ownerId, 'managed_publishing', opts?.actor);
   // Always check headroom — re-publish vs first-publish is decided by the
   // caller via opts.isNewPublication. The publish route does the lookup itself
   // and only passes isNewPublication=true if no existing publication exists,
   // which avoids a double DB roundtrip for the common re-publish path.
-  if (opts?.isNewPublication) {
+  if (opts?.isNewPublication && !opts?.actor?.staff) {
     const used = await countPublishedFeeds(env, ownerType, ownerId);
     const limit = PLAN_QUOTAS[plan].publishedFeeds;
     if (used >= limit) {
@@ -87,8 +97,9 @@ export async function requireDraftLinkAccess(
   env: Env,
   ownerType: OwnerType,
   ownerId: string,
+  actor?: { staff?: boolean },
 ): Promise<Plan> {
-  return requireOwnerFeature(env, ownerType, ownerId, 'draft_links');
+  return requireOwnerFeature(env, ownerType, ownerId, 'draft_links', actor);
 }
 
 // ─── Seat enforcement for org memberships ───────────────────────────────────

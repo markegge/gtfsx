@@ -422,7 +422,7 @@ projectsRouter.patch('/:id', async (c) => {
   if (body.brandPrimaryColor !== undefined) {
     // Custom brand color is a paid-tier feature. Clearing it (null) is always OK.
     if (body.brandPrimaryColor !== null) {
-      await requireOwnerFeature(c.env, current.owner_type as OwnerType, current.owner_id, 'brand_color');
+      await requireOwnerFeature(c.env, current.owner_type as OwnerType, current.owner_id, 'brand_color', user);
     }
     updates.push('brand_primary_color = ?');
     binds.push(body.brandPrimaryColor === null ? null : body.brandPrimaryColor.toLowerCase());
@@ -698,7 +698,7 @@ projectsRouter.post('/:id/snapshots', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');
   const { row } = await requireOwnedProject(c.env, user, id, 'editor');
-  await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history');
+  await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history', user);
 
   let parsed: Record<string, string | File | (string | File)[]>;
   try {
@@ -790,7 +790,7 @@ projectsRouter.get('/:id/snapshots', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');
   const { row } = await requireOwnedProject(c.env, user, id, 'viewer');
-  await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history');
+  await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history', user);
 
   const result = await c.env.DB.prepare(
     `SELECT id, project_id, label, created_by_user_id, state_r2_key, zip_r2_key, zip_size,
@@ -810,7 +810,7 @@ projectsRouter.get('/:id/snapshots/:vid/state', async (c) => {
   const id = c.req.param('id');
   const vid = c.req.param('vid');
   const { row } = await requireOwnedProject(c.env, user, id, 'viewer');
-  await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history');
+  await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history', user);
   const snapshot = await requireOwnedSnapshot(c.env, row.id, vid);
 
   const object = await getFeedBlob(c.env, snapshot.state_r2_key);
@@ -826,7 +826,7 @@ projectsRouter.post('/:id/snapshots/:vid/restore', async (c) => {
   const id = c.req.param('id');
   const vid = c.req.param('vid');
   const { row } = await requireOwnedProject(c.env, user, id, 'editor');
-  await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history');
+  await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history', user);
   const snapshot = await requireOwnedSnapshot(c.env, row.id, vid);
 
   const source = await getFeedBlob(c.env, snapshot.state_r2_key);
@@ -876,7 +876,7 @@ projectsRouter.delete('/:id/snapshots/:vid', async (c) => {
   const id = c.req.param('id');
   const vid = c.req.param('vid');
   const { row } = await requireOwnedProject(c.env, user, id, 'editor');
-  await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history');
+  await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history', user);
   const snapshot = await requireOwnedSnapshot(c.env, row.id, vid);
 
   await deleteFeedBlob(c.env, snapshot.state_r2_key);
@@ -1118,7 +1118,7 @@ projectsRouter.post('/:id/publish', async (c) => {
     c.env,
     project.owner_type as OwnerType,
     project.owner_id,
-    { isNewPublication: !existingPublication },
+    { isNewPublication: !existingPublication, actor: user },
   );
 
   const projectQuotas = await getOwnerQuotas(c.env, project.owner_type as OwnerType, project.owner_id);
@@ -1420,7 +1420,7 @@ projectsRouter.post('/:id/draft-links', async (c) => {
 
   // Draft links are a managed-hosting feature (paid tier only) — see
   // FREEMIUM_PLAN.md §6.
-  await requireDraftLinkAccess(c.env, project.owner_type as OwnerType, project.owner_id);
+  await requireDraftLinkAccess(c.env, project.owner_type as OwnerType, project.owner_id, user);
 
   const draftQuotas = await getOwnerQuotas(c.env, project.owner_type as OwnerType, project.owner_id);
 
@@ -1564,7 +1564,7 @@ projectsRouter.post('/:id/catalog-submissions', async (c) => {
   const id = c.req.param('id');
   const { row: project } = await requireOwnedProject(c.env, user, id, 'editor');
   // Mobility Database / transit.land submission is a paid feature.
-  await requireOwnerFeature(c.env, project.owner_type as OwnerType, project.owner_id, 'mobility_db_submit');
+  await requireOwnerFeature(c.env, project.owner_type as OwnerType, project.owner_id, 'mobility_db_submit', user);
   const body = await parseJson(c, catalogCreateSchema);
   const now = Date.now();
 

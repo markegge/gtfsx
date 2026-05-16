@@ -50,7 +50,7 @@ function generateServiceArea(
 export function FlexEditor() {
   const {
     shapes, routes, trips, hiddenRouteIds,
-    flexZones, removeFlexZone,
+    flexZones, removeFlexZone, updateFlexZone, updateRoute,
     mapMode, setMapMode, editingFlexZoneId, setEditingFlexZoneId,
   } = useStore();
   const [generating, setGenerating] = useState(false);
@@ -59,6 +59,25 @@ export function FlexEditor() {
   const [expandedZoneId, setExpandedZoneId] = useState<string | null>(null);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [confirmDeleteZoneId, setConfirmDeleteZoneId] = useState<string | null>(null);
+  // Inline-rename state for the zone name. Keyed by zone id so only one row
+  // is in edit mode at a time.
+  const [renamingZoneId, setRenamingZoneId] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState('');
+
+  // Renaming the zone also syncs the paired auto-generated route so the
+  // routes pane stays consistent with what the user sees in the flex panel.
+  const commitRename = (zone: FlexZone) => {
+    const next = nameDraft.trim();
+    setRenamingZoneId(null);
+    if (!next || next === zone.name) return;
+    updateFlexZone(zone.id, { name: next });
+    if (zone.routeId && routes.some((r) => r.route_id === zone.routeId)) {
+      updateRoute(zone.routeId, {
+        route_short_name: next,
+        route_long_name: `${next} (Flex)`,
+      });
+    }
+  };
   // Persists only for the current session — the ref is re-initialized on reload.
   const skipDeleteConfirmRef = useRef(false);
 
@@ -289,7 +308,33 @@ export function FlexEditor() {
                     style={{ backgroundColor: 'rgba(124,58,237,0.2)' }}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-dark-brown truncate">{zone.name}</p>
+                    {renamingZoneId === zone.id ? (
+                      <input
+                        autoFocus
+                        value={nameDraft}
+                        onChange={(e) => setNameDraft(e.target.value)}
+                        onBlur={() => commitRename(zone)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                          if (e.key === 'Escape') {
+                            setNameDraft(zone.name);
+                            setRenamingZoneId(null);
+                          }
+                        }}
+                        className="text-sm font-medium text-dark-brown w-full px-1.5 py-0.5 bg-white border-2 border-purple-300 rounded outline-none focus:border-purple"
+                      />
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setNameDraft(zone.name);
+                          setRenamingZoneId(zone.id);
+                        }}
+                        className="text-sm font-medium text-dark-brown truncate w-full text-left hover:text-purple transition-colors"
+                        title="Rename service area"
+                      >
+                        {zone.name}
+                      </button>
+                    )}
                     <p className="text-[11px] text-warm-gray">
                       {Array.isArray(zone.stopIds) && zone.stopIds.length >= 0 && !zone.geojson.features.length
                         ? `${zone.stopIds.length} stop${zone.stopIds.length !== 1 ? 's' : ''}`

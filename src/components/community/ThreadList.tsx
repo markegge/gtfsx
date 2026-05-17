@@ -101,7 +101,7 @@ function ThreadRow({ t }: { t: ForumThread }) {
   return (
     <Link
       to={`/community/${encodeURIComponent(t.categoryId)}/${encodeURIComponent(t.id)}-${t.slug}`}
-      className="flex items-center gap-3 px-4 py-3 hover:bg-cream/40 transition-colors"
+      className="flex items-start gap-3 px-4 py-3 hover:bg-cream/40 transition-colors"
     >
       <Avatar gravatarHash={t.author.gravatarHash} displayName={t.author.displayName} size={32} />
       <div className="flex-1 min-w-0">
@@ -111,7 +111,12 @@ function ThreadRow({ t }: { t: ForumThread }) {
           {t.solvedPostId && <span className="text-[10px] uppercase tracking-wide text-teal shrink-0">Solved</span>}
           <span className="truncate">{t.title}</span>
         </div>
-        <div className="text-xs text-warm-gray truncate">
+        {t.opExcerpt && (
+          <div className="text-xs text-warm-gray mt-0.5 line-clamp-2">
+            {t.opExcerpt}
+          </div>
+        )}
+        <div className="text-xs text-warm-gray mt-1">
           {t.author.displayName} · {t.postCount} repl{t.postCount === 1 ? 'y' : 'ies'} · {relativeTime(t.lastPostAt)}
         </div>
       </div>

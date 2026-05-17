@@ -78,6 +78,9 @@ export interface ForumThread {
   pinned: boolean;
   locked: boolean;
   solvedPostId: string | null;
+  /** Plaintext preview of the OP body. Set by the threads-list endpoint;
+   *  empty/undefined elsewhere. */
+  opExcerpt?: string;
 }
 
 export interface ForumPost {

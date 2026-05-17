@@ -66,6 +66,10 @@ export interface ThreadDto {
   pinned: boolean;
   locked: boolean;
   solvedPostId: string | null;
+  /** Plaintext preview of the OP body — populated by the threads-list
+   *  endpoint, omitted elsewhere to keep the single-thread / search /
+   *  profile payloads compact. */
+  opExcerpt?: string;
 }
 
 export interface PostDto {

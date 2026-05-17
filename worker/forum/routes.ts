@@ -90,7 +90,7 @@ async function parseJson<T extends z.ZodTypeAny>(c: { req: { json: () => Promise
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function threadDto(row: ThreadRow, author: AuthorDto): ThreadDto {
+function threadDto(row: ThreadRow, author: AuthorDto, opExcerpt?: string): ThreadDto {
   return {
     id: row.id,
     categoryId: row.category_id,
@@ -104,7 +104,33 @@ function threadDto(row: ThreadRow, author: AuthorDto): ThreadDto {
     pinned: row.pinned === 1,
     locked: row.locked === 1,
     solvedPostId: row.solved_post_id,
+    ...(opExcerpt !== undefined ? { opExcerpt } : {}),
   };
+}
+
+/**
+ * Strip markdown to a single line of readable plaintext suitable for a
+ * preview snippet under a thread title in the category posts list. Removes
+ * code fences, headings, list markers, link syntax, emphasis markers, and
+ * table separator rows; collapses whitespace; truncates with an ellipsis.
+ */
+function excerptFromMarkdown(md: string, maxLen = 200): string {
+  const text = md
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`\n]*`/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^>\s?/gm, '')
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/^\d+\.\s+/gm, '')
+    .replace(/^\s*\|?[\s:-]*\|[\s:|-]*\s*$/gm, '')
+    .replace(/\|/g, ' ')
+    .replace(/[*_~]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen).replace(/\s+\S*$/, '') + '…';
 }
 
 function postDto(
@@ -314,8 +340,33 @@ forumRouter.get('/threads', async (c) => {
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
 
+  // Fetch the OP body for each thread in one round-trip. The OP is the
+  // earliest non-deleted forum_post for the thread; the correlated-subquery
+  // form is cheap because (thread_id, created_at) is well-indexed and we're
+  // bounded by `limit` threads.
+  const excerpts = new Map<string, string>();
+  if (page.length > 0) {
+    const placeholders = page.map(() => '?').join(',');
+    const opStmt = `SELECT p.thread_id, p.body_md
+                      FROM forum_post p
+                     WHERE p.deleted_at IS NULL
+                       AND p.thread_id IN (${placeholders})
+                       AND p.created_at = (
+                         SELECT MIN(p2.created_at)
+                           FROM forum_post p2
+                          WHERE p2.thread_id = p.thread_id
+                            AND p2.deleted_at IS NULL
+                       )`;
+    const opRes = await c.env.DB.prepare(opStmt)
+      .bind(...page.map((r) => r.id))
+      .all<{ thread_id: string; body_md: string }>();
+    for (const r of opRes.results ?? []) {
+      excerpts.set(r.thread_id, excerptFromMarkdown(r.body_md ?? ''));
+    }
+  }
+
   const authors = await Promise.all(page.map((r) => userAuthorDto(c.env, r.author_user_id)));
-  const threads = page.map((r, i) => threadDto(r, authors[i]));
+  const threads = page.map((r, i) => threadDto(r, authors[i], excerpts.get(r.id) ?? ''));
   const nextCursor = hasMore && page.length > 0
     ? `${page[page.length - 1].last_post_at}_${page[page.length - 1].id}`
     : null;

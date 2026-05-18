@@ -234,22 +234,16 @@ export function UserMenu() {
               (() => {
                 const activeOrg = userOrgs.find((o) => o.id === activeWorkspace.orgId);
                 if (!activeOrg) return null;
+                // Org settings + billing live on the same page now — single
+                // entry, with the plan badge on the right.
                 return (
-                  <>
-                    <button
-                      onClick={() => navigate(`/orgs/${encodeURIComponent(activeOrg.slug)}`)}
-                      className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
-                    >
-                      Organization settings
-                    </button>
-                    <button
-                      onClick={() => navigate(`/orgs/${encodeURIComponent(activeOrg.slug)}/billing`)}
-                      className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors flex items-center justify-between gap-2"
-                    >
-                      <span>Org billing & seats</span>
-                      {activeOrg.plan && activeOrg.plan !== 'free' && <PlanBadge plan={activeOrg.plan} />}
-                    </button>
-                  </>
+                  <button
+                    onClick={() => navigate(`/orgs/${encodeURIComponent(activeOrg.slug)}`)}
+                    className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors flex items-center justify-between gap-2"
+                  >
+                    <span>Organization settings &amp; billing</span>
+                    {activeOrg.plan && activeOrg.plan !== 'free' && <PlanBadge plan={activeOrg.plan} />}
+                  </button>
                 );
               })()}
             {currentUser.staff && (

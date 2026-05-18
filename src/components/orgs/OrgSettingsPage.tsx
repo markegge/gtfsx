@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../store';
 import { AuthLayout } from '../auth/AuthLayout';
 import { AuthButton } from '../auth/AuthButton';
@@ -29,6 +29,15 @@ import {
   type OrgRole,
 } from '../../services/orgsApi';
 import { PaywallOverlay } from '../billing/PaywallOverlay';
+import { PlanBadge } from '../billing/PlanBadge';
+import { UsageMeter } from '../billing/UsageMeter';
+import { TestModeBanner } from '../billing/TestModeBanner';
+import {
+  fetchOrgBilling,
+  openBillingPortal,
+  type OrgBillingState,
+} from '../../services/billingApi';
+import { billingEnabled } from '../../utils/featureFlags';
 
 function formatDate(ms: number | null | undefined): string {
   if (!ms) return '—';
@@ -42,6 +51,8 @@ function formatDate(ms: number | null | undefined): string {
 export function OrgSettingsPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const currentUser = useStore((s) => s.currentUser);
   const authChecked = useStore((s) => s.authChecked);
   const hydrateAuth = useStore((s) => s.hydrateAuth);
@@ -66,6 +77,18 @@ export function OrgSettingsPage() {
   const [showDelete, setShowDelete] = useState(false);
   const [leaveTarget, setLeaveTarget] = useState<OrgMember | null>(null);
   const [removeTarget, setRemoveTarget] = useState<OrgMember | null>(null);
+
+  // ─── Billing state (merged in from the former OrgBillingPage) ─────────────
+  const [billing, setBilling] = useState<OrgBillingState | null>(null);
+  const [billingError, setBillingError] = useState<string | null>(null);
+  const [openingPortal, setOpeningPortal] = useState(false);
+  const [confirmingPlan, setConfirmingPlan] = useState(false);
+  const billingSectionRef = useRef<HTMLElement | null>(null);
+  // /orgs/:slug/billing (legacy URL kept alive for Stripe portal returnUrl +
+  // existing internal links) and #billing both scroll the merged page down
+  // to the Plan & billing section instead of rendering a separate page.
+  const scrollToBillingOnLoad =
+    location.pathname.endsWith('/billing') || location.hash === '#billing';
 
   useEffect(() => {
     if (!authChecked) hydrateAuth();
@@ -134,6 +157,88 @@ export function OrgSettingsPage() {
   useEffect(() => {
     refreshInvitations();
   }, [refreshInvitations]);
+
+  // ─── Billing fetch + checkout-success polling (merged from OrgBillingPage)
+  const refreshBilling = useCallback(async () => {
+    if (!matchingOrg) return null;
+    try {
+      const data = await fetchOrgBilling(matchingOrg.id);
+      setBilling(data);
+      setBillingError(null);
+      return data;
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'unauthenticated') {
+        navigate(`/login?next=/orgs/${slug ?? ''}`);
+        return null;
+      }
+      setBillingError((e as Error)?.message ?? 'Could not load org billing.');
+      return null;
+    }
+  }, [matchingOrg, navigate, slug]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (orgsLoaded && matchingOrg) void refreshBilling();
+  }, [orgsLoaded, matchingOrg, refreshBilling]);
+
+  // After Stripe Checkout, poll until the webhook flips the org off 'free'
+  // (or ~20s cap), then drop the ?checkout=success param.
+  const checkoutFlag = searchParams.get('checkout');
+  useEffect(() => {
+    if (checkoutFlag !== 'success' || !matchingOrg) return;
+    setConfirmingPlan(true);
+    let attempts = 0;
+    let cancelled = false;
+    const clearIntent = () => {
+      const next = new URLSearchParams(searchParams);
+      next.delete('checkout');
+      next.delete('session_id');
+      setSearchParams(next, { replace: true });
+    };
+    const id = window.setInterval(async () => {
+      if (cancelled) return;
+      attempts += 1;
+      const fresh = await refreshBilling();
+      const settled = fresh && fresh.plan !== 'free';
+      if (settled || attempts >= 10) {
+        window.clearInterval(id);
+        setConfirmingPlan(false);
+        clearIntent();
+      }
+    }, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkoutFlag, matchingOrg, refreshBilling]);
+
+  // Scroll to the billing section once the org loads (legacy /billing URL or
+  // an explicit #billing hash). One-shot — re-renders shouldn't re-scroll.
+  const didScrollToBilling = useRef(false);
+  useEffect(() => {
+    if (!scrollToBillingOnLoad || didScrollToBilling.current) return;
+    if (!detail || !billing) return;
+    didScrollToBilling.current = true;
+    requestAnimationFrame(() => {
+      billingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [scrollToBillingOnLoad, detail, billing]);
+
+  async function handleManagePortal() {
+    if (!matchingOrg) return;
+    setOpeningPortal(true);
+    try {
+      const result = await openBillingPortal({
+        ownerType: 'org',
+        ownerId: matchingOrg.id,
+      });
+      window.location.href = result.url;
+    } catch (e) {
+      setBillingError((e as Error)?.message ?? 'Could not open billing portal.');
+      setOpeningPortal(false);
+    }
+  }
 
   if (!authChecked || (loading && !loadError)) {
     return (
@@ -358,6 +463,123 @@ export function OrgSettingsPage() {
             }}
           />
         </PaywallOverlay>
+
+        <section
+          id="billing"
+          ref={billingSectionRef}
+          className="bg-white border border-sand rounded-2xl p-6 mb-5 scroll-mt-20"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-heading font-bold text-lg text-dark-brown">Plan &amp; billing</h2>
+          </div>
+
+          <TestModeBanner />
+
+          {checkoutFlag === 'success' && (
+            <div className="mb-3 rounded-lg border border-teal bg-teal-light/40 p-3 text-sm text-teal flex items-center gap-3">
+              {confirmingPlan && (
+                <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-teal border-t-transparent" />
+              )}
+              <span>
+                {confirmingPlan
+                  ? 'Thanks — Stripe confirms payment. Waiting for the subscription to activate…'
+                  : `Your organization is now on ${billing?.plan ?? 'its new'} plan.`}
+              </span>
+            </div>
+          )}
+          {billingError && (
+            <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {billingError}
+            </div>
+          )}
+
+          {!billing ? (
+            <p className="text-sm text-warm-gray">Loading…</p>
+          ) : (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <PlanBadge plan={billing.plan} size="md" />
+                    <span className="text-xs font-bold uppercase tracking-wide text-warm-gray">
+                      {billing.planStatus}
+                    </span>
+                  </div>
+                  <div className="text-sm text-warm-gray">
+                    {billing.plan === 'free' && 'No subscription on file — upgrade to invite teammates and publish feeds.'}
+                    {billing.plan !== 'free' && billing.planRenewalAt && (
+                      <>Next renewal: <span className="font-semibold text-brown">{formatDate(billing.planRenewalAt)}</span></>
+                    )}
+                    {billing.plan === 'enterprise' && billing.planExpiresAt && (
+                      <> · Contract ends: <span className="font-semibold text-brown">{formatDate(billing.planExpiresAt)}</span></>
+                    )}
+                  </div>
+                  <div className="mt-1 text-sm text-warm-gray">
+                    Seats: <span className="font-semibold text-brown">
+                      {billing.plan === 'team' || billing.plan === 'enterprise'
+                        ? `${billing.quotas.seats.used} (unlimited)`
+                        : `${billing.quotas.seats.used} / ${billing.planSeatCount}`}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {billing.hasStripeCustomer && isAdmin && (
+                    <AuthButton
+                      variant="secondary"
+                      onClick={handleManagePortal}
+                      disabled={openingPortal || !billingEnabled}
+                    >
+                      {openingPortal ? 'Opening…' : 'Manage billing'}
+                    </AuthButton>
+                  )}
+                  {isAdmin && billing.plan === 'free' && matchingOrg && (
+                    <AuthButton
+                      onClick={() => navigate(`/upgrade?ownerType=org&ownerId=${matchingOrg.id}`)}
+                      disabled={!billingEnabled}
+                    >
+                      Upgrade to Team
+                    </AuthButton>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-heading font-bold text-sm text-dark-brown mb-2">Workspace usage</h3>
+                <div className="space-y-3">
+                  <UsageMeter
+                    label="Saved feeds"
+                    used={billing.quotas.projects.used}
+                    limit={billing.quotas.projects.limit}
+                    unbounded={billing.quotas.projects.limit >= 9999}
+                  />
+                  <UsageMeter
+                    label="Published feeds"
+                    used={billing.quotas.publishedFeeds.used}
+                    limit={billing.quotas.publishedFeeds.limit}
+                    unbounded={billing.quotas.publishedFeeds.limit >= 9999}
+                  />
+                  <UsageMeter
+                    label="Seats"
+                    used={billing.quotas.seats.used}
+                    limit={billing.quotas.seats.limit}
+                    unbounded={billing.quotas.seats.limit >= 9999}
+                  />
+                </div>
+              </div>
+
+              {!isAdmin && (
+                <p className="text-xs text-warm-gray">
+                  Only owners and admins can change the org's plan or open the billing portal.
+                </p>
+              )}
+              {!billingEnabled && (
+                <p className="text-xs text-amber-700">
+                  Billing actions are temporarily disabled in this environment.
+                </p>
+              )}
+            </div>
+          )}
+        </section>
 
         <section className="bg-white border border-sand rounded-2xl p-6 mb-5">
           <div className="flex items-center justify-between mb-4">

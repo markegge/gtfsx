@@ -35,7 +35,6 @@ import { AcceptInvitationPage } from './components/orgs/AcceptInvitationPage';
 import { RtBreakageDialog } from './components/distribution/RtBreakageDialog';
 import { PricingPage } from './components/billing/PricingPage';
 import { AccountBillingPage } from './components/billing/AccountBillingPage';
-import { OrgBillingPage } from './components/billing/OrgBillingPage';
 import { WelcomePlanPage } from './components/billing/WelcomePlanPage';
 import { backendEnabled } from './utils/featureFlags';
 import { captureRefFromUrl, trackPageview } from './services/trackBeacon';
@@ -320,7 +319,11 @@ function App() {
         <Route path="/feeds/:slug" element={<ServerEditorRoute />} />
         <Route path="/feeds/*" element={<Navigate to="/feeds" replace />} />
         <Route path="/orgs/accept" element={<AcceptInvitationPage />} />
-        <Route path="/orgs/:slug/billing" element={<OrgBillingPage />} />
+        {/* /orgs/:slug/billing → same page as /orgs/:slug, scrolled to the
+            billing section. Kept alive so Stripe portal returnUrl + the
+            checkout success_url + the worker's /api/billing/portal route
+            keep landing on a valid URL. */}
+        <Route path="/orgs/:slug/billing" element={<OrgSettingsPage />} />
         <Route path="/orgs/:slug" element={<OrgSettingsPage />} />
         <Route path="/admin" element={<AdminDashboardPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />

@@ -16,6 +16,7 @@ import { createFlexSlice, type FlexSlice } from './flexSlice';
 import { createAuthSlice, type AuthSlice } from './authSlice';
 import { createFeedsSlice, type FeedsSlice } from './feedsSlice';
 import { createOrgsSlice, type OrgsSlice } from './orgsSlice';
+import { createTransferSlice, type TransferSlice } from './transferSlice';
 
 export type AppStore = AgencySlice &
   CalendarSlice &
@@ -32,7 +33,8 @@ export type AppStore = AgencySlice &
   FlexSlice &
   AuthSlice &
   FeedsSlice &
-  OrgsSlice;
+  OrgsSlice &
+  TransferSlice;
 
 export const useStore = create<AppStore>()(
   immer((...a) => ({
@@ -54,6 +56,8 @@ export const useStore = create<AppStore>()(
     ...(createFeedsSlice as any)(...a),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...(createOrgsSlice as any)(...a),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...(createTransferSlice as any)(...a),
   }))
 );
 

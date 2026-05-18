@@ -27,6 +27,14 @@ export const createStopSlice: StateCreator<StopSlice, [['zustand/immer', never]]
 
     // Remove route-stop associations
     (state as any).routeStops = fullState.routeStops.filter((rs) => rs.stop_id !== stop_id);
+
+    // Remove transfers referencing this stop on either side
+    if ((state as any).transfers) {
+      (state as any).transfers = (state as any).transfers.filter(
+        (t: { from_stop_id: string; to_stop_id: string }) =>
+          t.from_stop_id !== stop_id && t.to_stop_id !== stop_id,
+      );
+    }
   }),
   setStops: (stops) => set((state) => { state.stops = stops; }),
 });

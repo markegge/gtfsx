@@ -3,7 +3,7 @@ import Papa from 'papaparse';
 import length from '@turf/length';
 import { lineString } from '@turf/helpers';
 import { useStore } from '../store';
-import type { Agency, Calendar, CalendarDate, Route, Shape, ShapePoint, Stop, Trip, StopTime, FeedInfo, RouteStop, FareAttribute, FareRule } from '../types/gtfs';
+import type { Agency, Calendar, CalendarDate, Route, Shape, ShapePoint, Stop, Trip, StopTime, FeedInfo, RouteStop, FareAttribute, FareRule, Transfer } from '../types/gtfs';
 import type { FlexZone, BookingRule } from '../store/flexSlice';
 
 /** Populate shape_dist_traveled from the lat/lon geometry. Mirrors
@@ -43,6 +43,7 @@ export async function importGtfsZip(file: File): Promise<{
   routeStops: RouteStop[];
   fareAttributes: FareAttribute[];
   fareRules: FareRule[];
+  transfers: Transfer[];
   flexZones: FlexZone[];
   warnings: string[];
 }> {
@@ -280,6 +281,20 @@ export async function importGtfsZip(file: File): Promise<{
         destination_id: row.destination_id || undefined,
         contains_id: row.contains_id || undefined,
       }))
+    : [];
+
+  // Transfers
+  const transfersText = await readFile('transfers.txt');
+  const transfers: Transfer[] = transfersText
+    ? parseCSV<any>(transfersText)
+        .filter((row) => row.from_stop_id && row.to_stop_id)
+        .map((row) => ({
+          from_stop_id: String(row.from_stop_id),
+          to_stop_id: String(row.to_stop_id),
+          transfer_type: (num(row.transfer_type) as 0 | 1 | 2 | 3),
+          min_transfer_time: row.min_transfer_time !== undefined && row.min_transfer_time !== ''
+            ? num(row.min_transfer_time) : undefined,
+        }))
     : [];
 
   // Build routeStops from stop_times: for each route, find unique stops in order
@@ -553,7 +568,7 @@ export async function importGtfsZip(file: File): Promise<{
     agencies, calendars, calendarDates,
     routes: routesWithoutFlex, shapes, stops,
     trips: tripsWithoutFlex, stopTimes, feedInfo,
-    routeStops, fareAttributes, fareRules,
+    routeStops, fareAttributes, fareRules, transfers,
     flexZones, warnings,
   };
 }
@@ -607,6 +622,7 @@ export function loadImportIntoStore(data: Awaited<ReturnType<typeof importGtfsZi
   store.setRouteStops(data.routeStops);
   store.setFareAttributes(data.fareAttributes);
   store.setFareRules(data.fareRules);
+  store.setTransfers(data.transfers);
   store.setFlexZones(data.flexZones);
 }
 

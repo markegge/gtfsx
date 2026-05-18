@@ -9,6 +9,12 @@ export interface UISlice {
   stopPlacementMode: StopPlacementMode;
   stopPlacementDirection: 0 | 1;
   timetableDirectionId: 0 | 1;
+  /** Advanced toggle on the timetable: when true, each stop cell exposes
+   *  separate arrival and departure inputs so users can author dwell time at
+   *  intermediate stops (ferry layovers, rail station holds, etc.). When
+   *  false (default), the cell collapses to a single time and the editor
+   *  keeps arrival_time === departure_time on commit. */
+  timetableSplitArrDep: boolean;
   selectedRouteId: string | null;
   selectedStopId: string | null;
   selectedTripId: string | null;
@@ -42,6 +48,7 @@ export interface UISlice {
   setStopPlacementMode: (mode: StopPlacementMode) => void;
   setStopPlacementDirection: (dir: 0 | 1) => void;
   setTimetableDirectionId: (dir: 0 | 1) => void;
+  setTimetableSplitArrDep: (v: boolean) => void;
   selectRoute: (id: string | null) => void;
   selectStop: (id: string | null) => void;
   selectTrip: (id: string | null) => void;
@@ -68,6 +75,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   stopPlacementMode: 'snap_to_route',
   stopPlacementDirection: 0,
   timetableDirectionId: 0,
+  timetableSplitArrDep: false,
   selectedRouteId: null,
   selectedStopId: null,
   selectedTripId: null,
@@ -127,6 +135,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setStopPlacementMode: (mode) => set((state) => { state.stopPlacementMode = mode; }),
   setStopPlacementDirection: (dir) => set((state) => { state.stopPlacementDirection = dir; }),
   setTimetableDirectionId: (dir) => set((state) => { state.timetableDirectionId = dir; }),
+  setTimetableSplitArrDep: (v) => set((state) => { state.timetableSplitArrDep = v; }),
   selectRoute: (id) => set((state) => { state.selectedRouteId = id; }),
   selectStop: (id) => set((state) => { state.selectedStopId = id; }),
   selectTrip: (id) => set((state) => { state.selectedTripId = id; }),

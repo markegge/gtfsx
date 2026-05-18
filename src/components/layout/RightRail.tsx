@@ -9,6 +9,7 @@ import { StopList } from '../stops/StopList';
 import { StopEditPanel } from '../stops/StopEditPanel';
 import { CreateStopPanel } from '../stops/CreateStopPanel';
 import { FaresEditor } from '../fares/FaresEditor';
+import { TransfersEditor } from '../transfers/TransfersEditor';
 import { CostSummary } from '../costs/CostSummary';
 import { CoveragePanel } from '../coverage/CoveragePanel';
 import { TitleVIPanel } from '../titlevi/TitleVIPanel';
@@ -31,6 +32,7 @@ const SECTION_TITLES: Record<SidebarSection, string> = {
   routes: 'Routes',
   stops: 'Stops',
   fares: 'Fares',
+  transfers: 'Transfers',
   timetable: 'Timetable',
   flex: 'Flex Zones & Rules',
   costs: 'Costs',
@@ -44,6 +46,7 @@ const SECTION_GROUP: Record<SidebarSection, string | null> = {
   calendar: null,
   routes: 'Fixed Route Service',
   stops: 'Fixed Route Service',
+  transfers: 'Fixed Route Service',
   flex: 'GTFS-Flex',
   costs: 'Analysis',
   coverage: 'Analysis',
@@ -64,6 +67,8 @@ function PanelBody({ section }: { section: SidebarSection }) {
       return <StopList />;
     case 'fares':
       return <FaresEditor />;
+    case 'transfers':
+      return <TransfersEditor />;
     case 'timetable':
       return <TimetableSidebar />;
     case 'flex':

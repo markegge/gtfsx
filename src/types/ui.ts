@@ -4,6 +4,7 @@ export type SidebarSection =
   | 'routes'
   | 'stops'
   | 'fares'
+  | 'transfers'
   | 'timetable'
   | 'flex'
   | 'costs'

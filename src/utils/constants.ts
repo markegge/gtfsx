@@ -47,3 +47,20 @@ export const US_TIMEZONES = [
   'America/Anchorage',
   'Pacific/Honolulu',
 ];
+
+/** Common North American timezones used for per-stop overrides on
+ *  multi-timezone feeds (e.g. ferry systems that cross between Pacific and
+ *  Alaska time, or terminals on either side of the US/Canada border). */
+export const COMMON_STOP_TIMEZONES = [
+  '',                       // Inherit from agency
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'America/Anchorage',
+  'America/Vancouver',
+  'America/Edmonton',
+  'America/Toronto',
+  'America/Halifax',
+  'Pacific/Honolulu',
+];

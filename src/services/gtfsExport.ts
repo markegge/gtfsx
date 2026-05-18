@@ -326,6 +326,11 @@ export async function exportGtfsZip(): Promise<Blob> {
     zip.file('fare_rules.txt', toCSV(allFareRules));
   }
 
+  // transfers.txt
+  if (state.transfers.length > 0) {
+    zip.file('transfers.txt', toCSV(state.transfers.map(stripUIFields)));
+  }
+
   // feed_info.txt — recommended per the GTFS spec (MobilityData's validator
   // raises a `missing_recommended_file` warning when absent). When the user
   // hasn't filled out feed info explicitly, synthesize the three required

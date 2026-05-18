@@ -22,6 +22,7 @@ export function RouteTripsTab() {
   const trips = useStore((s) => s.trips);
   const stopTimes = useStore((s) => s.stopTimes);
   const calendars = useStore((s) => s.calendars);
+  const updateTrip = useStore((s) => s.updateTrip);
 
   if (!route) return null;
 
@@ -59,6 +60,7 @@ export function RouteTripsTab() {
                 <th className="text-left px-2.5 py-1.5 font-semibold">Service</th>
                 <th className="text-left px-2.5 py-1.5 font-semibold">Start</th>
                 <th className="text-left px-2.5 py-1.5 font-semibold">End</th>
+                <th className="text-left px-2.5 py-1.5 font-semibold" title="Vehicle blocking — group consecutive trips on the same vehicle">Block</th>
               </tr>
             </thead>
             <tbody>
@@ -75,6 +77,19 @@ export function RouteTripsTab() {
                   </td>
                   <td className="px-2.5 py-1.5 font-mono text-warm-gray tabular-nums">
                     {fmtTime(end)}
+                  </td>
+                  <td className="px-1.5 py-1">
+                    <input
+                      defaultValue={trip.block_id || ''}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v !== (trip.block_id || '')) {
+                          updateTrip(trip.trip_id, { block_id: v || undefined });
+                        }
+                      }}
+                      placeholder="—"
+                      className="w-20 px-1.5 py-0.5 text-xs border border-transparent hover:border-sand focus:border-coral focus:bg-white rounded bg-transparent font-mono"
+                    />
                   </td>
                 </tr>
               ))}

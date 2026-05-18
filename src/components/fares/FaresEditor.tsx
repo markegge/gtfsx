@@ -66,15 +66,31 @@ export function FaresEditor() {
     fareAttributes,
     fareRules,
     routes,
+    stops,
     addFareAttribute,
     updateFareAttribute,
     renameFareId,
     removeFareAttribute,
     addFareRule,
     removeFareRule,
+    removeFareRuleAt,
   } = useStore();
 
+  // Distinct non-empty zone_ids used by any stop. Origin/destination fare
+  // rules reference these IDs (per the GTFS-Fares v1 spec).
+  const zoneIds: string[] = [];
+  const seenZones = new Set<string>();
+  for (const s of stops) {
+    if (s.zone_id && !seenZones.has(s.zone_id)) {
+      seenZones.add(s.zone_id);
+      zoneIds.push(s.zone_id);
+    }
+  }
+  zoneIds.sort();
+
   const [selectedFareId, setSelectedFareId] = useState<string | null>(null);
+  const [pendingOrigin, setPendingOrigin] = useState('');
+  const [pendingDest, setPendingDest] = useState('');
 
   const handleAddFare = () => {
     const fare: FareAttribute = {
@@ -332,6 +348,95 @@ export function FaresEditor() {
                   ))}
               </select>
             </div>
+          )}
+
+          {/* Origin / Destination zone rules (GTFS-Fares v1). For
+              point-to-point pricing — used by ferries, intercity rail. */}
+          <RailDivider />
+          <RailSubHeading>Zone-pair Rules</RailSubHeading>
+
+          {zoneIds.length === 0 ? (
+            <div className="mb-3 p-3 rounded-lg bg-cream text-[12px] text-warm-gray">
+              Set a Fare Zone ID on at least one stop (in the Stops panel) to
+              create origin / destination price rules. Use this for ferry or
+              long-distance services where the fare depends on the port pair,
+              not the route.
+            </div>
+          ) : (
+            <>
+              {(() => {
+                const odRules = fareRules
+                  .map((r, idx) => ({ rule: r, idx }))
+                  .filter(({ rule }) =>
+                    rule.fare_id === selectedFare.fare_id &&
+                    (rule.origin_id || rule.destination_id),
+                  );
+                return (
+                  <div className="space-y-1 mb-3">
+                    {odRules.length === 0 && (
+                      <p className="text-[12px] text-warm-gray">
+                        No zone-pair rules yet — this fare applies route-wide.
+                      </p>
+                    )}
+                    {odRules.map(({ rule, idx }) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between px-3 py-2 bg-cream rounded-lg text-sm"
+                      >
+                        <span className="text-dark-brown font-mono text-[12px]">
+                          {rule.origin_id || '*'} → {rule.destination_id || '*'}
+                        </span>
+                        <button
+                          onClick={() => removeFareRuleAt(idx)}
+                          className="text-warm-gray hover:text-red-500 text-xs font-bold transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              <div className="grid grid-cols-[1fr_1fr_auto] gap-2 mb-3">
+                <select
+                  value={pendingOrigin}
+                  onChange={(e) => setPendingOrigin(e.target.value)}
+                  className="px-2 py-1.5 border border-sand rounded-md text-xs bg-cream"
+                >
+                  <option value="">From zone…</option>
+                  {zoneIds.map((z) => (
+                    <option key={z} value={z}>{z}</option>
+                  ))}
+                </select>
+                <select
+                  value={pendingDest}
+                  onChange={(e) => setPendingDest(e.target.value)}
+                  className="px-2 py-1.5 border border-sand rounded-md text-xs bg-cream"
+                >
+                  <option value="">To zone…</option>
+                  {zoneIds.map((z) => (
+                    <option key={z} value={z}>{z}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => {
+                    if (!pendingOrigin && !pendingDest) return;
+                    addFareRule({
+                      fare_id: selectedFare.fare_id,
+                      origin_id: pendingOrigin || undefined,
+                      destination_id: pendingDest || undefined,
+                    });
+                    setPendingOrigin('');
+                    setPendingDest('');
+                  }}
+                  disabled={!pendingOrigin && !pendingDest}
+                  className="px-3 py-1.5 bg-coral text-white rounded-md text-xs font-bold hover:bg-[#d4603a] disabled:opacity-40"
+                >
+                  Add
+                </button>
+              </div>
+            </>
           )}
 
           {/* Delete */}

@@ -145,6 +145,79 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     }
   }
 
+  // Suspicious overnight times — GTFS allows hours > 24 for service that
+  // crosses midnight, but a time past 48:00 is almost always a typo.
+  for (const st of state.stopTimes) {
+    for (const field of ['arrival_time', 'departure_time'] as const) {
+      const t = st[field];
+      if (!t) continue;
+      const h = Number(t.split(':')[0]);
+      if (Number.isFinite(h) && h >= 48) {
+        messages.push(msg(
+          'warning',
+          `Trip "${st.trip_id}" ${field} "${t}" is past 48:00 — verify this isn't a typo (overnight services rarely exceed 30:00).`,
+          'trip', st.trip_id,
+        ));
+        break; // one warning per stop_time row is enough
+      }
+    }
+  }
+
+  // Departure must be >= arrival on every stop_time row. The single-time
+  // entry mode keeps them equal automatically; this catches typos in the
+  // advanced separate-time mode (and bad imports).
+  for (const st of state.stopTimes) {
+    if (st.arrival_time && st.departure_time) {
+      const a = st.arrival_time.split(':').map(Number);
+      const d = st.departure_time.split(':').map(Number);
+      const aSec = (a[0] || 0) * 3600 + (a[1] || 0) * 60 + (a[2] || 0);
+      const dSec = (d[0] || 0) * 3600 + (d[1] || 0) * 60 + (d[2] || 0);
+      if (dSec < aSec) {
+        messages.push(msg(
+          'error',
+          `Trip "${st.trip_id}" stop "${st.stop_id}": departure_time ${st.departure_time} is before arrival_time ${st.arrival_time}.`,
+          'trip', st.trip_id,
+        ));
+      }
+    }
+  }
+
+  // Transfer reference checks
+  for (const t of state.transfers) {
+    if (!stopIdSet.has(t.from_stop_id)) {
+      messages.push(msg('error', `Transfer references non-existent from_stop_id "${t.from_stop_id}"`, 'transfer'));
+    }
+    if (!stopIdSet.has(t.to_stop_id)) {
+      messages.push(msg('error', `Transfer references non-existent to_stop_id "${t.to_stop_id}"`, 'transfer'));
+    }
+    if (t.transfer_type === 2 && (t.min_transfer_time === undefined || t.min_transfer_time < 0)) {
+      messages.push(msg(
+        'error',
+        `Transfer ${t.from_stop_id} → ${t.to_stop_id} has transfer_type=2 but is missing min_transfer_time.`,
+        'transfer',
+      ));
+    }
+  }
+
+  // Parent station integrity: a parent_station must point to a location_type=1 stop
+  const stationIds = new Set(state.stops.filter((s) => s.location_type === 1).map((s) => s.stop_id));
+  for (const s of state.stops) {
+    if (!s.parent_station) continue;
+    if (!stopIdSet.has(s.parent_station)) {
+      messages.push(msg(
+        'error',
+        `Stop "${s.stop_name || s.stop_id}" references non-existent parent_station "${s.parent_station}".`,
+        'stop', s.stop_id,
+      ));
+    } else if (!stationIds.has(s.parent_station)) {
+      messages.push(msg(
+        'error',
+        `Stop "${s.stop_name || s.stop_id}" parent_station "${s.parent_station}" is not a Station (location_type=1).`,
+        'stop', s.stop_id,
+      ));
+    }
+  }
+
   // Shapes must have real shape_dist_traveled values (not all-zero). Zero on
   // a non-first point next to different lat/lon coordinates trips GTFS
   // validators with `equal_shape_distance_diff_coordinates`. The exporter

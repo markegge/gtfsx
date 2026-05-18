@@ -13,6 +13,10 @@ export interface FareSlice {
   addFareRule: (rule: FareRule) => void;
   updateFareRule: (index: number, updates: Partial<FareRule>) => void;
   removeFareRule: (fare_id: string, route_id?: string) => void;
+  /** Remove a fare rule by its index in the array. Used by editors that
+   *  manipulate origin/destination rules where (fare_id, route_id) isn't a
+   *  unique key. */
+  removeFareRuleAt: (index: number) => void;
   setFareRules: (rules: FareRule[]) => void;
 }
 
@@ -49,6 +53,11 @@ export const createFareSlice: StateCreator<FareSlice, [['zustand/immer', never]]
     state.fareRules = state.fareRules.filter(
       (r) => !(r.fare_id === fare_id && r.route_id === route_id)
     );
+  }),
+  removeFareRuleAt: (index) => set((state) => {
+    if (index >= 0 && index < state.fareRules.length) {
+      state.fareRules.splice(index, 1);
+    }
   }),
   setFareRules: (rules) => set((state) => { state.fareRules = rules; }),
 });

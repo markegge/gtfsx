@@ -149,3 +149,15 @@ export interface RouteStop {
   stop_sequence: number;
   _snapped: boolean;
 }
+
+export interface Transfer {
+  from_stop_id: string;
+  to_stop_id: string;
+  /**
+   * 0 = recommended transfer (default), 1 = timed transfer (vehicle waits),
+   * 2 = min_transfer_time required, 3 = transfer not possible.
+   */
+  transfer_type: 0 | 1 | 2 | 3;
+  /** Seconds required to make the transfer. Required when transfer_type=2. */
+  min_transfer_time?: number;
+}

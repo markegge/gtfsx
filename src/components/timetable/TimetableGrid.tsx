@@ -42,6 +42,11 @@ export function TimetableGrid() {
   const directionId = useStore((s) => s.timetableDirectionId);
   const setDirectionId = useStore((s) => s.setTimetableDirectionId);
 
+  // Advanced: when true, every stop cell shows two inputs (arr / dep) so
+  // dwell time can be authored. Persisted in the UI slice.
+  const splitArrDep = useStore((s) => s.timetableSplitArrDep);
+  const setSplitArrDep = useStore((s) => s.setTimetableSplitArrDep);
+
   // Service pattern selector state
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
 
@@ -305,6 +310,18 @@ export function TimetableGrid() {
           {routeTrips.length} trips
         </span>
         <div className="flex-1" />
+        <label
+          className="flex items-center gap-1.5 text-[11px] text-warm-gray cursor-pointer select-none whitespace-nowrap"
+          title="Show separate arrival and departure inputs for each stop. Use this for services with dwell time at intermediate stops (e.g. ferries, long-distance rail)."
+        >
+          <input
+            type="checkbox"
+            checked={splitArrDep}
+            onChange={(e) => setSplitArrDep(e.target.checked)}
+            className="accent-coral"
+          />
+          Arr / Dep
+        </label>
         <button
           onClick={() => setShowRepeatForm((v) => !v)}
           disabled={!hasStops}
@@ -456,37 +473,75 @@ export function TimetableGrid() {
                   return orderedStops.map((stop, stopIdx) => {
                     const st = findStopTime(trip.trip_id, stop.stop_id);
                     const isTimepoint = timepointStopIds.has(stop.stop_id);
+                    // Shared commit callback factory. In single-time mode,
+                    // both fields move together; in split mode the caller
+                    // names which field to update and we preserve the other.
+                    const commit = (field: 'both' | 'arrival_time' | 'departure_time', normalized: string) => {
+                      if (!normalized) {
+                        // Blanking either side blanks both — partial timing
+                        // (only arrival or only departure) is invalid for
+                        // intermediate stops in practice and is a spec
+                        // violation for first/last stops.
+                        setStopTime(trip.trip_id, stop.stop_id, stopIdx, { arrival_time: '', departure_time: '' });
+                        return;
+                      }
+                      let updates: Partial<typeof st & { arrival_time: string; departure_time: string }>;
+                      if (field === 'both') {
+                        updates = { arrival_time: normalized, departure_time: normalized };
+                      } else if (field === 'arrival_time') {
+                        // First time entered? mirror to departure so cells
+                        // collapse cleanly when the user later turns the
+                        // toggle off. If departure already exists, leave it.
+                        const dep = st?.departure_time || normalized;
+                        updates = { arrival_time: normalized, departure_time: dep };
+                      } else {
+                        const arr = st?.arrival_time || normalized;
+                        updates = { arrival_time: arr, departure_time: normalized };
+                      }
+                      setStopTime(trip.trip_id, stop.stop_id, stopIdx, updates);
+                      // Auto-rename trip if it's a new trip with placeholder name
+                      if (trip.trip_id.includes('_new')) {
+                        const rName = route?.route_short_name || route?.route_long_name || '';
+                        const sIdx = getServiceIndex(trip.service_id, calendars);
+                        const existingIds = new Set(useStore.getState().trips.map((t) => t.trip_id));
+                        const newId = uniqueTripId(generateTripName(rName, normalized, sIdx), existingIds);
+                        renameTripId(trip.trip_id, newId);
+                      }
+                    };
+
                     return (
                       <td
                         key={stop.stop_id}
                         className={`px-1 py-0.5 border-b border-[#F5F0EB] ${isTimepoint ? 'bg-coral/10' : ''}`}
                       >
-                        <TimeCell
-                          value={st?.arrival_time || st?.departure_time || ''}
-                          onCommit={(normalized) => {
-                            if (normalized) {
-                              setStopTime(trip.trip_id, stop.stop_id, stopIdx, { arrival_time: normalized, departure_time: normalized });
-                              // Auto-rename trip if it's a new trip with placeholder name
-                              if (trip.trip_id.includes('_new')) {
-                                const rName = route?.route_short_name || route?.route_long_name || '';
-                                const sIdx = getServiceIndex(trip.service_id, calendars);
-                                const existingIds = new Set(useStore.getState().trips.map((t) => t.trip_id));
-                                const newId = uniqueTripId(generateTripName(rName, normalized, sIdx), existingIds);
-                                renameTripId(trip.trip_id, newId);
-                              }
-                            } else {
-                              setStopTime(trip.trip_id, stop.stop_id, stopIdx, { arrival_time: '', departure_time: '' });
-                            }
-                          }}
-                          inputRef={(el) => {
-                            const key = cellKey(tripIdx, stopIdx);
-                            if (el) cellRefs.current.set(key, el);
-                            else cellRefs.current.delete(key);
-                          }}
-                          onKeyDown={(e) => handleKeyDown(e, tripIdx, stopIdx)}
-                          isTimepoint={isTimepoint}
-                          timeError={errors[stopIdx]}
-                        />
+                        {splitArrDep ? (
+                          <SplitTimeCell
+                            arrival={st?.arrival_time || ''}
+                            departure={st?.departure_time || ''}
+                            onCommitArrival={(n) => commit('arrival_time', n)}
+                            onCommitDeparture={(n) => commit('departure_time', n)}
+                            inputRef={(el) => {
+                              const key = cellKey(tripIdx, stopIdx);
+                              if (el) cellRefs.current.set(key, el);
+                              else cellRefs.current.delete(key);
+                            }}
+                            onKeyDown={(e) => handleKeyDown(e, tripIdx, stopIdx)}
+                            timeError={errors[stopIdx]}
+                          />
+                        ) : (
+                          <TimeCell
+                            value={st?.arrival_time || st?.departure_time || ''}
+                            onCommit={(normalized) => commit('both', normalized)}
+                            inputRef={(el) => {
+                              const key = cellKey(tripIdx, stopIdx);
+                              if (el) cellRefs.current.set(key, el);
+                              else cellRefs.current.delete(key);
+                            }}
+                            onKeyDown={(e) => handleKeyDown(e, tripIdx, stopIdx)}
+                            isTimepoint={isTimepoint}
+                            timeError={errors[stopIdx]}
+                          />
+                        )}
                       </td>
                     );
                   });
@@ -645,9 +700,48 @@ function TimeCell({
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
       placeholder="--:--"
-      className={`w-14 px-1.5 py-1 text-xs rounded border hover:border-sand focus:border-coral focus:outline-none bg-transparent tabular-nums
+      className={`w-20 px-1.5 py-1 text-xs rounded border hover:border-sand focus:border-coral focus:outline-none bg-transparent tabular-nums
         ${invalid || timeError ? 'border-red-400 bg-red-50' : 'border-transparent'}`}
     />
+  );
+}
+
+/** Two stacked time inputs (arrival on top, departure below) used when the
+ *  Arr / Dep toggle is on. Layout matches TimeCell width so column widths
+ *  don't reflow when the toggle flips. */
+function SplitTimeCell({
+  arrival,
+  departure,
+  onCommitArrival,
+  onCommitDeparture,
+  inputRef: externalRef,
+  onKeyDown,
+  timeError,
+}: {
+  arrival: string;
+  departure: string;
+  onCommitArrival: (normalized: string) => void;
+  onCommitDeparture: (normalized: string) => void;
+  inputRef?: (el: HTMLInputElement | null) => void;
+  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  timeError?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <TimeCell
+        value={arrival}
+        onCommit={onCommitArrival}
+        inputRef={externalRef}
+        onKeyDown={onKeyDown}
+        isTimepoint={false}
+        timeError={timeError}
+      />
+      <TimeCell
+        value={departure}
+        onCommit={onCommitDeparture}
+        isTimepoint={false}
+      />
+    </div>
   );
 }
 

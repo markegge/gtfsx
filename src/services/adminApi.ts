@@ -28,6 +28,8 @@ export interface AdminUserRow {
   displayName: string;
   status: UserStatus;
   staff: boolean;
+  plan: 'free' | 'pro' | 'team' | 'enterprise';
+  planStatus: 'active' | 'past_due' | 'canceled' | 'trialing';
   createdAt: number;
   lastSessionAt: number | null;
   projectCount: number;

@@ -260,6 +260,8 @@ interface UserListRow {
   display_name: string;
   status: AuthedUser['status'];
   staff: number;
+  plan: AuthedUser['plan'] | null;
+  plan_status: AuthedUser['planStatus'] | null;
   created_at: number;
   last_session_at: number | null;
   project_count: number;
@@ -288,7 +290,7 @@ adminRouter.get('/users', async (c) => {
 
   // Fetch pageSize+1 to know whether there's a next page.
   const rowsRes = await c.env.DB.prepare(
-    `SELECT u.id, u.email, u.display_name, u.status, u.staff, u.created_at,
+    `SELECT u.id, u.email, u.display_name, u.status, u.staff, u.plan, u.plan_status, u.created_at,
             (SELECT MAX(last_used_at) FROM session s WHERE s.user_id = u.id) AS last_session_at,
             (SELECT COUNT(*) FROM feed_project p
                 WHERE p.owner_type = 'user' AND p.owner_id = u.id AND p.deleted_at IS NULL) AS project_count
@@ -310,6 +312,8 @@ adminRouter.get('/users', async (c) => {
     displayName: r.display_name,
     status: r.status,
     staff: r.staff === 1,
+    plan: r.plan ?? 'free',
+    planStatus: r.plan_status ?? 'active',
     createdAt: r.created_at,
     lastSessionAt: r.last_session_at,
     projectCount: r.project_count,

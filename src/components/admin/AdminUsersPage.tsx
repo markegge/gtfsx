@@ -175,6 +175,7 @@ export function AdminUsersPage() {
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Plan</th>
               <th className="px-4 py-3">Staff</th>
               <th className="px-4 py-3">Created</th>
               <th className="px-4 py-3">Last session</th>
@@ -185,14 +186,14 @@ export function AdminUsersPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-warm-gray">
+                <td colSpan={9} className="px-4 py-8 text-center text-warm-gray">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-warm-gray">
+                <td colSpan={9} className="px-4 py-8 text-center text-warm-gray">
                   No users match.
                 </td>
               </tr>
@@ -211,6 +212,9 @@ export function AdminUsersPage() {
                   <td className="px-4 py-3 text-dark-brown">{u.displayName || '—'}</td>
                   <td className="px-4 py-3">
                     <StatusPill status={u.status} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <PlanPill plan={u.plan} planStatus={u.planStatus} />
                   </td>
                   <td className="px-4 py-3">
                     {u.staff && (
@@ -325,6 +329,46 @@ export function UserRowActions({
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+// Mirrors StatusPill's visual weight. Color signals tier (gray free / coral
+// pro / teal team / dark-brown enterprise); a small grey suffix calls out
+// non-active plan_status (past_due, canceled, trialing) so a delinquent
+// pro subscriber doesn't visually look the same as a current one.
+function PlanPill({
+  plan,
+  planStatus,
+}: {
+  plan: AdminUserRow['plan'];
+  planStatus: AdminUserRow['planStatus'];
+}) {
+  const styles: Record<AdminUserRow['plan'], string> = {
+    free: 'bg-cream text-warm-gray border border-sand',
+    pro: 'bg-coral-light text-coral',
+    team: 'bg-teal-light text-teal',
+    enterprise: 'bg-dark-brown text-white',
+  };
+  const statusSuffix: Record<AdminUserRow['planStatus'], string | null> = {
+    active: null,
+    past_due: 'past due',
+    canceled: 'canceled',
+    trialing: 'trial',
+  };
+  const suffix = statusSuffix[planStatus];
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${styles[plan]}`}
+      >
+        {plan}
+      </span>
+      {suffix && (
+        <span className="text-[10px] uppercase tracking-wide text-warm-gray">
+          {suffix}
+        </span>
+      )}
+    </span>
   );
 }
 

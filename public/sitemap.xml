@@ -1,37 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://www.gtfsstudio.net/</loc>
+    <loc>https://www.gtfsx.com/</loc>
     <priority>1.0</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://www.gtfsstudio.net/about/</loc>
+    <loc>https://www.gtfsx.com/about/</loc>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://www.gtfsstudio.net/docs/</loc>
+    <loc>https://www.gtfsx.com/docs/</loc>
     <priority>0.9</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://www.gtfsstudio.net/learn/gtfs/</loc>
+    <loc>https://www.gtfsx.com/learn/gtfs/</loc>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://www.gtfsstudio.net/learn/gtfs-flex/</loc>
+    <loc>https://www.gtfsx.com/learn/gtfs-flex/</loc>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://www.gtfsstudio.net/docs/deep-links/</loc>
+    <loc>https://www.gtfsx.com/docs/deep-links/</loc>
     <priority>0.7</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://www.gtfsstudio.net/privacy-policy/</loc>
+    <loc>https://www.gtfsx.com/privacy-policy/</loc>
     <priority>0.4</priority>
     <changefreq>yearly</changefreq>
   </url>

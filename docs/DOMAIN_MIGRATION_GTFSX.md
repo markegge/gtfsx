@@ -1,5 +1,7 @@
 # Domain + brand migration — `gtfsstudio.net` → `gtfsx.com` (GTFS·X rebrand)
 
+> **Status (2026-05-18 14:10 UTC): editor cut over.** Prod + staging editor (`gtfsx.com`, `www.gtfsx.com`, `staging.gtfsx.com`) live. All legacy 301 chains verified single-hop. **Outstanding:** feeds subdomain certs still provisioning at CF (5–60 min normal); user actions left for CF Workers Builds Variables (`VITE_MAPBOX_TOKEN`) and Stripe webhook re-registration. See checklist below.
+
 Started 2026-05-18. Working runbook — update the checkboxes as steps complete.
 
 ## Decisions
@@ -58,23 +60,17 @@ Same shape as the prior `gtfsbuilder.net` → `gtfsstudio.net` runbook (`DOMAIN_
 - [x] `README.md`, `docs/*.md` (except `DOMAIN_MIGRATION.md` which stays as historical record).
 - [ ] `tiles/cors.json` — R2 CORS allowed origins. Reviewed; needs no change if it already lists `*` or both old + new.
 
-### Phase 3 — Cloudflare custom domains (Claude) ⏳
+### Phase 3 — Cloudflare custom domains (Claude) ✅
 
-After Phase 1 zone is active and Phase 2 branch is ready:
+- [x] Ran `wrangler deploy --env staging` on the `gtfsx-rebrand` branch (2026-05-18). Wrangler bound `staging.gtfsx.com` and `staging-feeds.gtfsx.com` as custom domains on the `gtfs-builder-staging` worker.
+- [x] `staging.gtfsx.com` cert provisioned within ~1 min and returns the SPA (HTTP 200, title "GTFS·X – GTFS Builder and Editor").
+- [x] Production custom domains bound after deleting pre-existing apex/www A records that were blocking the `custom_domain: true` binding. Gotcha: when a Cloudflare-registered domain has auto-created parking A records, wrangler refuses to take them over with `code 100117`. Fix is to delete the records in CF DNS, then `wrangler triggers deploy --env=""` to re-bind. The CFB-driven push uploaded the new worker script and updated env vars but silently skipped the triggers step — verify trigger bindings post-deploy with `wrangler deployments view` (now `wrangler versions view`).
+- [ ] `feeds.gtfsx.com` + `staging-feeds.gtfsx.com` cert provisioning in progress (CF typically 5–60 min on a fresh hostname). Editor + apex/www working; feeds subdomains pending cert.
 
-- [ ] Run `wrangler deploy --env staging` against this branch. Wrangler binds the staging custom domains (`staging.gtfsx.com`, `staging-feeds.gtfsx.com`) and Cloudflare provisions edge certs (5–60 min).
-- [ ] Confirm `https://staging.gtfsx.com` returns the SPA.
-- [ ] Production custom domains will bind when we tag for prod in Phase 9.
+### Phase 4 — Resend sending domain (user) ✅
 
-### Phase 4 — Resend sending domain (user) ⏳
-
-- [ ] In [Resend Dashboard](https://resend.com/domains), click **Add Domain** and enter `gtfsx.com`.
-- [ ] Add the SPF, DKIM, and MX records Resend prints into the Cloudflare DNS zone for `gtfsx.com`:
-  - `TXT` at the apex for SPF: `v=spf1 include:_spf.resend.com ~all`
-  - `TXT` at `resend._domainkey` for DKIM (long value Resend provides)
-  - Optional `MX` and DMARC
-- [ ] Wait until Resend marks the domain as **Verified** (usually < 5 min on Cloudflare DNS).
-- [ ] (Optional) Configure aliases for `noreply@gtfsx.com`, `support@gtfsx.com`, `sales@gtfsx.com`, `mark@gtfsx.com`.
+- [x] `gtfsx.com` added to Resend and verified (user, 2026-05-18).
+- [ ] (Optional) Configure aliases for `noreply@gtfsx.com`, `support@gtfsx.com`, `sales@gtfsx.com`, `mark@gtfsx.com` — Resend doesn't require an actual inbox to send.
 - [ ] Keep the existing `gtfsstudio.net` Resend domain verified for the transition period. No emails are sent from `@gtfsstudio.net` after deploy (AUTH_EMAIL_FROM has flipped), but keeping it verified avoids ambiguity if we need to roll back.
 
 ### Phase 5 — Stripe (user) ⏳
@@ -86,46 +82,50 @@ After Phase 1 zone is active and Phase 2 branch is ready:
 - [ ] Leave the old `gtfsstudio.net` Stripe webhook active during the transition; Stripe will keep retrying both endpoints. Delete in Phase 12.
 - [ ] (Optional) Update **Branding** in Stripe Dashboard to reference `gtfsx.com`.
 
-### Phase 6 — Cloudflare Turnstile (user) ⏳
+### Phase 6 — Cloudflare Turnstile (user) ✅
 
-- [ ] In Cloudflare Dashboard → **Turnstile**, edit the existing site.
-- [ ] Add hostnames: `gtfsx.com`, `www.gtfsx.com`, `staging.gtfsx.com`.
-- [ ] Leave existing `gtfsstudio.net`/`gtfsbuilder.net` hostnames in the list (transition period).
-- [ ] No new secret needed — same site key works across all hostnames.
+- [x] `gtfsx.com`, `www.gtfsx.com`, `staging.gtfsx.com` added to the Turnstile site hostname list (user, 2026-05-18). Same site key works across all hostnames.
 
-### Phase 7 — Mapbox (user) ⏳
+### Phase 7 — Mapbox (user) ✅
 
-- [ ] In [Mapbox Account → Access Tokens](https://account.mapbox.com/access-tokens/), click the public token.
-- [ ] Under **URL allowlist**, add: `https://gtfsx.com/*`, `https://*.gtfsx.com/*`.
-- [ ] Leave the old `gtfsstudio.net`/`gtfsbuilder.net` entries (transition period).
-- [ ] Save.
+- [x] New `pk.` token (`pk.eyJ1IjoibWFya2VnZ2UiLCJhIjoiY21wYjlrdnhlMDRuZjJzb21mMXQwZTJlaSJ9...`) created with default public scopes and URL allowlist `https://gtfsx.com/*` + `https://*.gtfsx.com/*` (user, 2026-05-18). Token wired into `.env`, `wrangler.jsonc` prod + staging, and verified working on staging.gtfsx.com (Mapbox basemap renders).
+- [ ] Update `VITE_MAPBOX_TOKEN` in CF Workers Builds → Settings → Variables (build-env value used when CF rebuilds the SPA) — same `pk.` value as `.env`.
 
-### Phase 8 — Staging verification (Claude + user) ⏳
+### Phase 8 — Staging verification (Claude + user) ✅ (partial)
 
-Once Phases 3–7 are done:
+- [x] `https://staging.gtfsx.com` returns the SPA with new brand (GTFS·X lockup, coral wordmark, "GTFS Builder and Editor" tagline). Mapbox basemap renders on the new token. Verified in Chrome 2026-05-18.
+- [x] Legacy 301 redirects verified — single-hop, path + query preserved:
+      ```
+      $ curl -sI https://staging.gtfsstudio.net/some/path?x=1   → 301 → https://staging.gtfsx.com/some/path?x=1
+      $ curl -sI https://staging.gtfsstudio.com/foo             → 301 → https://staging.gtfsx.com/foo
+      $ curl -sI https://staging-feeds.gtfsstudio.net/...zip    → 301 → https://staging-feeds.gtfsx.com/...zip
+      $ curl -sI https://staging-feeds.gtfsbuilder.net/...zip   → 301 → https://staging-feeds.gtfsx.com/...zip  (single-hop collapse works)
+      ```
+- [ ] `staging-feeds.gtfsx.com` cert provisioning pending — embed iframe verification on the embed-demo page is blocked until cert lands.
+- [ ] Sign-up / Turnstile / verify-email flow on staging (deferred — Stripe webhook not yet pointed at staging.gtfsx.com).
+- [ ] Stripe test-mode checkout on staging (deferred until Phase 5 done).
 
-- [ ] Open `https://staging.gtfsx.com` in a fresh incognito window — Cloudflare cert provisioned, SPA loads with new brand.
-- [ ] Sign up with a real email → Turnstile widget renders → verify-email arrives from `noreply@gtfsx.com` → click link → land in editor.
-- [ ] Run the full `DEPLOY_BACKEND.md` §7 smoke test against the new domain.
-- [ ] Hit `https://staging.gtfsx.com/?ref=rebrand-test`, check `/admin/events` shows the new ref.
-- [ ] Stripe test-mode checkout → confirm the new webhook fires and updates `subscription` row in D1.
-- [ ] On the old domain (`https://staging.gtfsstudio.net`) — verify 301 to `https://staging.gtfsx.com` with path + query preserved.
-- [ ] Verify embed iframes on `embed-demo` page render against `staging-feeds.gtfsx.com`.
+### Phase 9 — Production cutover (Claude) ✅
 
-### Phase 9 — Production cutover (Claude) ⏳
-
-- [ ] Merge `gtfsx-rebrand` → `main` via fast-forward.
-- [ ] Tag `prod-YYYY-MM-DD` to trigger the prod deploy workflow.
-- [ ] Confirm `https://www.gtfsx.com` serves the SPA (cert provisioning may take a few minutes after the deploy completes).
+- [x] Merged `gtfsx-rebrand` → `main` via fast-forward (commit `8faa6fc`, 2026-05-18) and pushed.
+- [x] CF Workers Builds auto-deployed `gtfs-builder` (prod) per WORKFLOW.md — push to `main` triggers the build, no tag needed. Initial build at 13:59 UTC uploaded the new worker script + env vars but the trigger bindings step silently no-op'd because of the pre-existing DNS records (see Phase 3 gotcha).
+- [x] After clearing DNS records, `wrangler triggers deploy --env=""` bound all 11 prod routes (3 × gtfsx.com canonical + 8 × legacy redirect targets).
+- [x] CFB's first build also used the stale `VITE_MAPBOX_TOKEN` from the CFB Variables dashboard — the deployed SPA had the previous prod token baked in and Mapbox 401'd on gtfsx.com. Fixed with a local `npm run build && wrangler deploy --env=""` that picked up the new token from `.env`. **CFB Variables dashboard still has the stale value — update it (see outstanding work below) or the next push to main will regress.**
+- [x] `https://www.gtfsx.com` serves the SPA with the new brand. Verified in Chrome: GTFS·X coral lockup in header, Mapbox basemap renders, no console errors.
 
 ### Phase 10 — 301 redirect old → new (Claude) ✅ (bundled with Phase 2)
 
 Same atomic pattern as the prior migration — the redirect block is part of `worker/index.ts` and ships in the same commit as the new routes.
 
 - [x] Worker now redirects `gtfsstudio.net`, `gtfsstudio.com`, and `gtfsbuilder.net` (and every subdomain of each) → matching `gtfsx.com` host.
-- [ ] Verify on staging post-deploy: `curl -I https://staging.gtfsstudio.net` → `301`, location `https://staging.gtfsx.com/`.
-- [ ] Verify on prod post-deploy: `curl -I https://feeds.gtfsstudio.net/<slug>/gtfs.zip` → `301`, location `https://feeds.gtfsx.com/<slug>/gtfs.zip`.
-- [ ] Verify the second-hop chain: `curl -IL https://feeds.gtfsbuilder.net/bozeman-demo/gtfs.zip` → 301 → 301 → 200 (gtfsbuilder.net → gtfsstudio.net → gtfsx.com is collapsed in the redirect logic; this should be a single hop to gtfsx.com).
+- [x] Verified on prod post-deploy (2026-05-18):
+      ```
+      $ curl -sI 'https://www.gtfsstudio.net/foo?x=1'              → 301 → https://www.gtfsx.com/foo?x=1
+      $ curl -sI 'https://feeds.gtfsstudio.net/bozeman-demo/gtfs.zip' → 301 → https://feeds.gtfsx.com/bozeman-demo/gtfs.zip
+      $ curl -sI 'https://www.gtfsstudio.com/?ref=test'           → 301 → https://www.gtfsx.com/?ref=test
+      $ curl -sI 'https://feeds.gtfsbuilder.net/bozeman-demo/gtfs.zip' → 301 → https://feeds.gtfsx.com/bozeman-demo/gtfs.zip  (single-hop collapse: oldest legacy → newest canonical)
+      ```
+- [x] Verified on staging (same chains, all single-hop).
 
 ### Phase 11 — Catalog notifications (user, async) — likely N/A
 

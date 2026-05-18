@@ -727,7 +727,7 @@ function SplitTimeCell({
   timeError?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-row items-center gap-1">
       <TimeCell
         value={arrival}
         onCommit={onCommitArrival}
@@ -736,6 +736,7 @@ function SplitTimeCell({
         isTimepoint={false}
         timeError={timeError}
       />
+      <span className="text-warm-gray text-[10px] shrink-0">→</span>
       <TimeCell
         value={departure}
         onCommit={onCommitDeparture}

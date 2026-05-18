@@ -49,11 +49,22 @@ export const createAuthSlice: StateCreator<
     }
   },
 
-  setCurrentUser: (user) =>
+  setCurrentUser: (user) => {
+    // Login / signup / magic-link consume / verify-email all funnel through
+    // setCurrentUser without going through hydrateAuth, so without this
+    // refresh the workspace switcher would keep showing the anonymous
+    // session's (empty) org list until the user navigated to a page that
+    // explicitly calls loadOrgs. Re-fetch whenever the signed-in user id
+    // changes (including null → set).
+    const prevId = get().currentUser?.id ?? null;
     set((state) => {
       state.currentUser = user;
       state.authChecked = true;
-    }),
+    });
+    if (user && user.id !== prevId) {
+      get().loadOrgs().catch(() => {});
+    }
+  },
 
   clearAuth: () => {
     set((state) => {

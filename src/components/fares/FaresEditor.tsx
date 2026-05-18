@@ -358,9 +358,9 @@ export function FaresEditor() {
           {zoneIds.length === 0 ? (
             <div className="mb-3 p-3 rounded-lg bg-cream text-[12px] text-warm-gray">
               Set a Fare Zone ID on at least one stop (in the Stops panel) to
-              create origin / destination price rules. Use this for ferry or
-              long-distance services where the fare depends on the port pair,
-              not the route.
+              create origin / destination price rules. Use this when the fare
+              depends on which stops a rider boards and alights at, not on
+              the route they take.
             </div>
           ) : (
             <>

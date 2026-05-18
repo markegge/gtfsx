@@ -216,11 +216,16 @@ orgsRouter.post('/', async (c) => {
 
   const now = Date.now();
   const id = ulid();
+  // Staff orgs land on team so internal demo / support orgs aren't blocked
+  // by the "paid plan required to add members" gate on day one. Real users
+  // still get free until they go through Stripe Checkout.
+  const initialPlan: 'free' | 'team' = user.staff ? 'team' : 'free';
   try {
     await c.env.DB.prepare(
-      `INSERT INTO organization (id, slug, name, created_at) VALUES (?, ?, ?, ?)`,
+      `INSERT INTO organization (id, slug, name, created_at, plan, plan_status)
+       VALUES (?, ?, ?, ?, ?, 'active')`,
     )
-      .bind(id, body.slug, body.name, now)
+      .bind(id, body.slug, body.name, now, initialPlan)
       .run();
   } catch (err) {
     // Race with the uniqueness check — surface as 409.
@@ -239,7 +244,7 @@ orgsRouter.post('/', async (c) => {
     subjectType: 'org',
     subjectId: id,
     action: 'org.create',
-    metadata: { slug: body.slug, name: body.name },
+    metadata: { slug: body.slug, name: body.name, plan: initialPlan, byStaff: user.staff },
     ip: clientIp(c.req.raw),
   });
 
@@ -257,6 +262,8 @@ orgsRouter.post('/', async (c) => {
           brand_logo_updated_at: null,
         }),
         role: 'owner' as OrgRole,
+        plan: initialPlan,
+        planStatus: 'active' as const,
       },
     },
     201,

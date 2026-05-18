@@ -626,6 +626,7 @@ function TimeCell({
   onKeyDown,
   isTimepoint: _isTimepoint,
   timeError,
+  compact,
 }: {
   value: string; // stored arrival_time (HH:MM:SS or raw)
   onCommit: (normalized: string) => void;
@@ -633,6 +634,8 @@ function TimeCell({
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
   isTimepoint: boolean;
   timeError?: boolean;
+  /** Narrower variant used inside SplitTimeCell where two cells share a column. */
+  compact?: boolean;
 }) {
   const [localValue, setLocalValue] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
@@ -700,7 +703,7 @@ function TimeCell({
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
       placeholder="--:--"
-      className={`w-20 px-1.5 py-1 text-xs rounded border hover:border-sand focus:border-coral focus:outline-none bg-transparent tabular-nums
+      className={`${compact ? 'w-12 px-1' : 'w-20 px-1.5'} py-1 text-xs rounded border hover:border-sand focus:border-coral focus:outline-none bg-transparent tabular-nums
         ${invalid || timeError ? 'border-red-400 bg-red-50' : 'border-transparent'}`}
     />
   );
@@ -727,7 +730,7 @@ function SplitTimeCell({
   timeError?: boolean;
 }) {
   return (
-    <div className="flex flex-row items-center gap-1">
+    <div className="flex flex-row items-center gap-0.5">
       <TimeCell
         value={arrival}
         onCommit={onCommitArrival}
@@ -735,12 +738,14 @@ function SplitTimeCell({
         onKeyDown={onKeyDown}
         isTimepoint={false}
         timeError={timeError}
+        compact
       />
-      <span className="text-warm-gray text-[10px] shrink-0">→</span>
+      <span className="text-warm-gray text-[9px] shrink-0">→</span>
       <TimeCell
         value={departure}
         onCommit={onCommitDeparture}
         isTimepoint={false}
+        compact
       />
     </div>
   );

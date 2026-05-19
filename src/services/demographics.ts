@@ -51,16 +51,29 @@ export async function fetchCensusData(
   stateFips: string,
   countyFips: string,
 ): Promise<BlockGroupData[]> {
+  // Census ACS5 began requiring an API key for unauthenticated requests in
+  // 2026. Key is shipped in the bundle (Census treats it as a per-app
+  // rate-limit token, not a strict secret); empty means we'll likely 401.
+  const key = import.meta.env.VITE_CENSUS_API_KEY ?? '';
+  const keyParam = key ? `&key=${encodeURIComponent(key)}` : '';
+
   const [centroids, censusRes] = await Promise.all([
     fetchTractCentroids(stateFips),
     fetch(
       `https://api.census.gov/data/2022/acs/acs5` +
         `?get=B01003_001E,B25001_001E,B08301_001E,B03002_001E,B03002_003E` +
-        `&for=block%20group:*&in=state:${stateFips}&in=county:${countyFips}&in=tract:*`,
+        `&for=block%20group:*&in=state:${stateFips}&in=county:${countyFips}&in=tract:*` +
+        keyParam,
     ),
   ]);
 
-  if (!censusRes.ok) throw new Error(`Census API request failed: ${censusRes.status}`);
+  if (!censusRes.ok) {
+    const body = await censusRes.text().catch(() => '');
+    throw new Error(
+      `Census API request failed: ${censusRes.status}` +
+        (body ? ` — ${body.slice(0, 200)}` : ''),
+    );
+  }
 
   const rows: string[][] = await censusRes.json();
   const header = rows[0];

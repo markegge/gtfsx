@@ -16,7 +16,6 @@ const SETUP: NavItem[] = [
 const FIXED_ROUTE: NavItem[] = [
   { key: 'routes', label: 'Routes', tile: 'tile-coral' },
   { key: 'stops', label: 'Stops', tile: 'tile-coral' },
-  { key: 'transfers', label: 'Transfers', tile: 'tile-coral' },
 ];
 const FLEX: NavItem[] = [
   { key: 'flex', label: 'Flex Zones', tile: 'tile-purple' },
@@ -124,15 +123,6 @@ const ICON_PATHS: Record<SidebarSection, ReactNode> = {
       <path d="M14.5 20c0-2 1.5-3.5 3.5-3.5s3.5 1.5 3.5 3.5" />
     </>
   ),
-  // Transfers — two crossing arrows
-  transfers: (
-    <>
-      <path d="M4 7h12l-3-3" />
-      <path d="M20 17H8l3 3" />
-    </>
-  ),
-  // Timetable, agency-fallback for any future sections — empty (no icon).
-  timetable: null,
 };
 
 const TILE_COLORS: Record<NavItem['tile'], string> = {
@@ -159,7 +149,6 @@ interface ItemCounts {
   calendars: number;
   routes: number;
   stops: number;
-  transfers: number;
   flex: number;
 }
 
@@ -172,9 +161,8 @@ function useItemCounts(): ItemCounts {
   const calendars = useStore((s) => s.calendars.length);
   const routes = useStore((s) => s.routes.length);
   const stops = useStore((s) => s.stops.length);
-  const transfers = useStore((s) => s.transfers.length);
   const flex = useStore((s) => s.flexZones.length);
-  return { agencyValid, fares, calendars, routes, stops, transfers, flex };
+  return { agencyValid, fares, calendars, routes, stops, flex };
 }
 
 function countFor(key: SidebarSection, c: ItemCounts): number | null {
@@ -189,8 +177,6 @@ function countFor(key: SidebarSection, c: ItemCounts): number | null {
       return c.routes;
     case 'stops':
       return c.stops;
-    case 'transfers':
-      return c.transfers;
     case 'flex':
       return c.flex;
     default:

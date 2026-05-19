@@ -25,7 +25,15 @@ export function ValidationPanel() {
       if (m.entity_id) state.selectStop(m.entity_id);
     }
     else if (m.entity_type === 'trip' || m.entity_type === 'stop_time') {
-      state.setSidebarSection('timetable');
+      // Timetable lives in the bottom panel now; the right rail no longer
+      // hosts it. Surface the bottom panel on the timetable tab and try
+      // to pre-select the relevant route so the grid opens with rows.
+      state.setBottomPanelOpen(true);
+      state.setBottomPanelTab('timetable');
+      if (m.entity_id) {
+        const trip = state.trips.find((t) => t.trip_id === m.entity_id);
+        if (trip?.route_id) state.selectRoute(trip.route_id);
+      }
     }
   };
 

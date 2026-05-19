@@ -23,6 +23,11 @@ export interface UISlice {
   editingShapeId: string | null;
   editingFlexZoneId: string | null;
   editingStopId: string | null;
+  // service_id of the calendar (service pattern) currently in the detail
+  // view. Mirrors editingRouteId — when set + the Calendars section is
+  // active, the right rail renders the detail form with a breadcrumb back
+  // to the list.
+  editingCalendarServiceId: string | null;
   // When true, RightRail renders the CreateStopPanel sub-panel instead of
   // the section body. Origin is implied by sidebarSection + editingRouteId.
   creatingStop: boolean;
@@ -57,6 +62,7 @@ export interface UISlice {
   setEditingShapeId: (id: string | null) => void;
   setEditingFlexZoneId: (id: string | null) => void;
   setEditingStopId: (id: string | null) => void;
+  setEditingCalendarServiceId: (id: string | null) => void;
   setCreatingStop: (creating: boolean) => void;
   setMapStopFilter: (filter: { matched: string[] } | null) => void;
   setSnapToRoad: (v: boolean) => void;
@@ -84,6 +90,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   editingShapeId: null,
   editingFlexZoneId: null,
   editingStopId: null,
+  editingCalendarServiceId: null,
   creatingStop: false,
   mapStopFilter: null,
   snapToRoad: true,
@@ -122,6 +129,8 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     // flow — switching nav sections discards them so the new section's body
     // renders.
     state.editingStopId = null;
+    // Same logic as editingStopId: leaving Calendars discards the open detail.
+    if (section !== 'calendar') state.editingCalendarServiceId = null;
     state.creatingStop = false;
     // Filter overlay on the map is only relevant while the Stops panel is
     // active; clear it when navigating elsewhere so other sections see the
@@ -144,6 +153,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setEditingShapeId: (id) => set((state) => { state.editingShapeId = id; }),
   setEditingFlexZoneId: (id) => set((state) => { state.editingFlexZoneId = id; }),
   setEditingStopId: (id) => set((state) => { state.editingStopId = id; }),
+  setEditingCalendarServiceId: (id) => set((state) => { state.editingCalendarServiceId = id; }),
   setCreatingStop: (creating) => set((state) => {
     state.creatingStop = creating;
     // Entering creating mode clears any open edit-stop sub-panel so the

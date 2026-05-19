@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import { DayToggle } from '../ui/DayToggle';
@@ -88,11 +88,27 @@ export function CalendarEditor() {
   const {
     calendars, addCalendar, updateCalendar, removeCalendar,
     calendarDates, addCalendarDate, removeCalendarDate,
+    editingCalendarServiceId, setEditingCalendarServiceId,
   } = useStore();
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
 
-  const selected = selectedServiceId ? calendars.find((c) => c.service_id === selectedServiceId) : null;
-  const selectedDates = selectedServiceId ? calendarDates.filter((cd) => cd.service_id === selectedServiceId) : [];
+  // If the editingCalendarServiceId points at a calendar that no longer
+  // exists (deleted from elsewhere), drop the stale reference so we fall
+  // back to the list view rather than rendering an empty detail.
+  useEffect(() => {
+    if (
+      editingCalendarServiceId &&
+      !calendars.some((c) => c.service_id === editingCalendarServiceId)
+    ) {
+      setEditingCalendarServiceId(null);
+    }
+  }, [editingCalendarServiceId, calendars, setEditingCalendarServiceId]);
+
+  const selected = editingCalendarServiceId
+    ? calendars.find((c) => c.service_id === editingCalendarServiceId) ?? null
+    : null;
+  const selectedDates = editingCalendarServiceId
+    ? calendarDates.filter((cd) => cd.service_id === editingCalendarServiceId)
+    : [];
 
   const holidaysInRange = useMemo(() => {
     if (!selected) return [];
@@ -123,7 +139,9 @@ export function CalendarEditor() {
       end_date: '20991231',
       _description: 'Weekdays',
     });
-    setSelectedServiceId(id);
+    // Drop straight into the detail view for the newly created pattern,
+    // same flow as RouteList's handleAdd → setEditingRouteId.
+    setEditingCalendarServiceId(id);
   };
 
   if (calendars.length === 0) {
@@ -157,48 +175,56 @@ export function CalendarEditor() {
   // Holiday warning nudge
   const showHolidayWarning = selected && isWeekdayService(selected) && selectedDates.length === 0;
 
+  // List view — shown when no service pattern is selected. Clicking a card
+  // navigates into the detail view via the store (mirrors Routes), so the
+  // header gets a Calendars › <name> breadcrumb instead of a stacked
+  // list+form layout.
+  if (!selected) {
+    return (
+      <div>
+        <div className="flex flex-col gap-2 mb-3">
+          {calendars.map((cal) => (
+            <button
+              key={cal.service_id}
+              onClick={() => setEditingCalendarServiceId(cal.service_id)}
+              className="text-left p-3 rounded-lg transition-colors bg-cream hover:bg-sand"
+            >
+              <div className="flex justify-between items-center mb-1">
+                <span className="font-heading font-bold text-sm text-dark-brown">
+                  {cal._description || cal.service_id}
+                </span>
+                <span className="text-[11px] text-teal font-semibold">Active</span>
+              </div>
+              <div className="flex gap-1">
+                {['M','T','W','Th','F','Sa','Su'].map((d, i) => {
+                  const days = [cal.monday, cal.tuesday, cal.wednesday, cal.thursday, cal.friday, cal.saturday, cal.sunday];
+                  return (
+                    <span key={d} className={`w-5 h-5 rounded-full text-[9px] font-bold flex items-center justify-center
+                      ${days[i] ? 'bg-coral text-white' : 'bg-sand text-warm-gray'}`}>
+                      {d}
+                    </span>
+                  );
+                })}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={handleAdd}
+          className="w-full flex items-center gap-1.5 px-3 py-2 border-2 border-dashed border-sand rounded-lg text-sm font-semibold text-warm-gray hover:border-coral hover:text-coral hover:bg-coral-light transition-colors"
+        >
+          + Add Service Pattern
+        </button>
+      </div>
+    );
+  }
+
+  // Detail view — the existing edit form for the selected pattern.
   return (
     <div>
-      {/* Pattern list */}
-      <div className="flex flex-col gap-2 mb-3">
-        {calendars.map((cal) => (
-          <button
-            key={cal.service_id}
-            onClick={() => setSelectedServiceId(cal.service_id)}
-            className={`text-left p-3 rounded-lg transition-colors
-              ${selectedServiceId === cal.service_id ? 'bg-coral-light' : 'bg-cream hover:bg-sand'}`}
-          >
-            <div className="flex justify-between items-center mb-1">
-              <span className="font-heading font-bold text-sm text-dark-brown">
-                {cal._description || cal.service_id}
-              </span>
-              <span className="text-[11px] text-teal font-semibold">Active</span>
-            </div>
-            <div className="flex gap-1">
-              {['M','T','W','Th','F','Sa','Su'].map((d, i) => {
-                const days = [cal.monday, cal.tuesday, cal.wednesday, cal.thursday, cal.friday, cal.saturday, cal.sunday];
-                return (
-                  <span key={d} className={`w-5 h-5 rounded-full text-[9px] font-bold flex items-center justify-center
-                    ${days[i] ? 'bg-coral text-white' : 'bg-sand text-warm-gray'}`}>
-                    {d}
-                  </span>
-                );
-              })}
-            </div>
-          </button>
-        ))}
-      </div>
-
-      <button
-        onClick={handleAdd}
-        className="w-full flex items-center gap-1.5 px-3 py-2 border-2 border-dashed border-sand rounded-lg text-sm font-semibold text-warm-gray hover:border-coral hover:text-coral hover:bg-coral-light transition-colors"
-      >
-        + Add Service Pattern
-      </button>
-
-      {/* Selected pattern editor */}
       {selected && (
-        <div className="mt-4 pt-4 border-t border-sand">
+        <div>
           <FormField
             label="Description"
             value={selected._description || ''}
@@ -328,7 +354,7 @@ export function CalendarEditor() {
           <button
             onClick={() => {
               removeCalendar(selected.service_id);
-              setSelectedServiceId(null);
+              setEditingCalendarServiceId(null);
             }}
             className="mt-4 text-xs text-red-400 hover:text-red-600"
           >

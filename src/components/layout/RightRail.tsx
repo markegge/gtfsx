@@ -8,12 +8,10 @@ import { requestDeleteRoute } from '../routes/requestDeleteRoute';
 import { StopList } from '../stops/StopList';
 import { StopEditPanel } from '../stops/StopEditPanel';
 import { CreateStopPanel } from '../stops/CreateStopPanel';
-import { FaresEditor } from '../fares/FaresEditor';
-import { TransfersEditor } from '../transfers/TransfersEditor';
+import { FaresPanel } from '../fares/FaresPanel';
 import { CostSummary } from '../costs/CostSummary';
 import { CoveragePanel } from '../coverage/CoveragePanel';
 import { TitleVIPanel } from '../titlevi/TitleVIPanel';
-import { TimetableSidebar } from '../timetable/TimetableSidebar';
 import { FlexEditor } from '../flex/FlexEditor';
 import { PaywallOverlay } from '../billing/PaywallOverlay';
 import { useEditorPlan } from '../billing/useEditorPlan';
@@ -31,9 +29,7 @@ const SECTION_TITLES: Record<SidebarSection, string> = {
   calendar: 'Calendars',
   routes: 'Routes',
   stops: 'Stops',
-  fares: 'Fares',
-  transfers: 'Transfers',
-  timetable: 'Timetable',
+  fares: 'Fares & Transfers',
   flex: 'Flex Zones & Rules',
   costs: 'Costs',
   coverage: 'Coverage',
@@ -46,12 +42,10 @@ const SECTION_GROUP: Record<SidebarSection, string | null> = {
   calendar: null,
   routes: 'Fixed Route Service',
   stops: 'Fixed Route Service',
-  transfers: 'Fixed Route Service',
   flex: 'GTFS-Flex',
   costs: 'Analysis',
   coverage: 'Analysis',
   titlevi: 'Analysis',
-  timetable: null,
 };
 
 function PanelBody({ section }: { section: SidebarSection }) {
@@ -66,11 +60,7 @@ function PanelBody({ section }: { section: SidebarSection }) {
     case 'stops':
       return <StopList />;
     case 'fares':
-      return <FaresEditor />;
-    case 'transfers':
-      return <TransfersEditor />;
-    case 'timetable':
-      return <TimetableSidebar />;
+      return <FaresPanel />;
     case 'flex':
       return <FlexEditor />;
     case 'costs':
@@ -384,6 +374,46 @@ function CreateStopHeader() {
   );
 }
 
+function CalendarDetailHeader() {
+  const calendar = useStore((s) =>
+    s.calendars.find((c) => c.service_id === s.editingCalendarServiceId) ?? null,
+  );
+  const setEditingCalendarServiceId = useStore((s) => s.setEditingCalendarServiceId);
+  const setRightRailOpen = useStore((s) => s.setRightRailOpen);
+
+  if (!calendar) return null;
+  const title = calendar._description || calendar.service_id;
+
+  return (
+    <div className="border-b border-sand bg-white shrink-0">
+      <div className="px-5 pt-3 flex items-center gap-2">
+        <div className="flex-1 min-w-0 text-[13px] text-warm-gray">
+          <button
+            onClick={() => setEditingCalendarServiceId(null)}
+            className="hover:text-coral transition-colors"
+          >
+            Calendars
+          </button>
+          <span className="opacity-50 mx-1.5">›</span>
+          <span className="text-dark-brown font-semibold truncate">{title}</span>
+        </div>
+        <button
+          onClick={() => setRightRailOpen(false)}
+          className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
+          title="Close editor"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="px-5 pt-1 pb-3">
+        <h2 className="font-heading font-extrabold text-xl text-dark-brown leading-tight truncate">
+          {title}
+        </h2>
+      </div>
+    </div>
+  );
+}
+
 function GenericHeader({ section }: { section: SidebarSection }) {
   const setRightRailOpen = useStore((s) => s.setRightRailOpen);
   const title = SECTION_TITLES[section] ?? 'Configuration';
@@ -417,6 +447,7 @@ export function RightRail() {
   const rightRailOpen = useStore((s) => s.rightRailOpen);
   const editingRouteId = useStore((s) => s.editingRouteId);
   const editingStopId = useStore((s) => s.editingStopId);
+  const editingCalendarServiceId = useStore((s) => s.editingCalendarServiceId);
   const creatingStop = useStore((s) => s.creatingStop);
   const mapMode = useStore((s) => s.mapMode);
   const storedWidth = useStore((s) => s.rightRailWidth);
@@ -496,6 +527,7 @@ export function RightRail() {
   }
 
   const inRouteDetail = section === 'routes' && !!editingRouteId;
+  const inCalendarDetail = section === 'calendar' && !!editingCalendarServiceId;
   const editingStop = !!editingStopId;
   const creatingNewStop = !!creatingStop;
 
@@ -524,7 +556,9 @@ export function RightRail() {
           ? <StopEditHeader />
           : inRouteDetail
             ? <RouteDetailHeader />
-            : <GenericHeader section={section} />}
+            : inCalendarDetail
+              ? <CalendarDetailHeader />
+              : <GenericHeader section={section} />}
       <div className="flex-1 overflow-y-auto">
         <div className="p-5">
           {creatingNewStop

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Service calendars — GTFS·X</title>
+    <meta name="description" content="Build calendar.txt and calendar_dates.txt in GTFS·X: day-of-week toggles, date ranges, holiday exceptions, the bulk US-holiday add tool, and calendar_dates-only services for one-off events." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/service-calendars/" />
+    <meta property="og:title" content="Service calendars — GTFS·X" />
+    <meta property="og:description" content="Define calendar.txt patterns and calendar_dates.txt exceptions for a GTFS feed." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/service-calendars/" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Editor panels</div>
+      <h1>Service calendars</h1>
+      <p class="lede">Service calendars describe which days your service actually runs. The Calendars panel writes <code>calendar.txt</code> (weekly patterns within a date range) and <code>calendar_dates.txt</code> (holiday exceptions and one-off changes). Most agencies need two or three patterns — Weekday, Saturday, Sunday — plus a list of holidays that get the Sunday schedule.</p>
+
+      <figure>
+        <img src="/assets/docs/service-calendars-hero.png" alt="GTFS·X editor with the Calendars panel selected, showing weekly service patterns." loading="lazy" />
+        <figcaption>The Calendars panel. Each service pattern has its day-of-week toggles, date range, and a list of exception dates.</figcaption>
+      </figure>
+
+      <h2 id="weekly-patterns">Weekly patterns</h2>
+      <p>Each row in <code>calendar.txt</code> is a service pattern with a service_id, a date range, and seven day-of-week toggles. In the editor, click <strong>Add Service</strong>, give it a service_id (use a stable name like <code>WKDY</code>, <code>SAT</code>, <code>SUN</code> — these get embedded in trip records and rider URLs), set the start and end dates, and toggle which days the service runs.</p>
+      <p>Typical patterns:</p>
+      <ul>
+        <li><strong>Weekday</strong> — Mon–Fri checked, Sat/Sun off.</li>
+        <li><strong>Saturday</strong> — Sat only.</li>
+        <li><strong>Sunday and major holidays</strong> — Sun only. Add the holidays via exception dates (below).</li>
+        <li><strong>Limited holiday service</strong> — used by some agencies for Thanksgiving / Christmas Day when even Sunday service doesn't run. None of the seven day toggles checked; the service runs only on dates that are explicitly added via <code>calendar_dates.txt</code> (see "Exception-only services" below).</li>
+      </ul>
+      <p>Date ranges should bracket the live period of your schedule. A feed with stale <code>end_date</code>s gets flagged by validators and rejected by some catalogs. Re-publish with refreshed dates when the schedule pickup happens.</p>
+
+      <h2 id="exceptions">Holiday exceptions</h2>
+      <p>Click into a service pattern and use the <strong>Exception dates</strong> table to add either:</p>
+      <ul>
+        <li><strong>Service added</strong> (<code>exception_type=1</code>) — service runs on this date even though the weekly pattern says it wouldn't. Used for "Sunday service operates on Thanksgiving" added to the Sunday pattern.</li>
+        <li><strong>Service removed</strong> (<code>exception_type=2</code>) — service does <em>not</em> run on this date even though the weekly pattern says it would. Used for "no Weekday service on Christmas Day" added to the Weekday pattern.</li>
+      </ul>
+      <p>For US agencies, the <strong>Add US Holidays</strong> button bulk-adds Memorial Day, July 4, Labor Day, Thanksgiving, Christmas Day, and New Year's Day as exceptions to the selected service pattern within its date range. Pick whether each holiday is a remove (no service) or add (run Sunday service), depending on your operating policy.</p>
+
+      <h2 id="exception-only">Exception-only services</h2>
+      <p>For one-off events (a parade route, a holiday shuttle, an emergency replacement schedule) that don't follow a weekly pattern, create a service with all seven day toggles off. Then add explicit "service added" exception dates for the dates the service runs. The pattern is fully driven by <code>calendar_dates.txt</code> — no weekly rule at all. Valid GTFS, supported by most consumers.</p>
+
+      <h2 id="when-to-split">When to split a calendar</h2>
+      <p>A common modeling question: when does a service variation deserve its own service pattern vs. being squeezed into an existing one with exceptions?</p>
+      <ul>
+        <li><strong>Same days, same trips, occasional skip</strong> → one service pattern, exception removes.</li>
+        <li><strong>Different trip set on certain days</strong> (e.g. summer schedule, reduced winter schedule) → separate service patterns with different date ranges.</li>
+        <li><strong>School-year vs. summer</strong> → two distinct service patterns, usually with non-overlapping date ranges.</li>
+        <li><strong>Snow-day backup schedule</strong> → often modeled as a separate service that's triggered manually rather than scheduled in advance. Some agencies leave this out of the static GTFS entirely and surface it through GTFS-Realtime alerts.</li>
+      </ul>
+
+      <h2 id="gotchas">Edge cases and gotchas</h2>
+      <ul>
+        <li><strong>Service IDs are referenced everywhere.</strong> Trips, frequencies, fare rules, and Flex zones all point to a <code>service_id</code>. Renaming or deleting a service cascades; the editor handles the references but external scripts that hardcode service IDs will break.</li>
+        <li><strong>Date format is <code>YYYYMMDD</code></strong> (no dashes) in the underlying CSV. The editor presents a date picker; if you hand-edit, mind the format.</li>
+        <li><strong>Overlapping service patterns are valid but confusing.</strong> A trip can reference only one service pattern. If "weekday" and "Friday-only" overlap on the same date, every trip needs to belong to exactly one, not both.</li>
+        <li><strong>Don't leave stale services around after a pickup.</strong> When the schedule changes, retire the old service patterns (let their end_date pass and clean them out at the next refresh) rather than just bumping the end_date forward — old trips can still reference them and confuse downstream consumers.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/timetables-and-trips/">Timetables &amp; trips</a> — every trip references a service_id from here.</li>
+          <li><a href="/docs/agency-setup/">Agency setup</a> — the timezone in agency.txt defines how these calendar dates are interpreted.</li>
+          <li><a href="/docs/validation/">Validation</a> — the validator flags stale date ranges and orphan service IDs.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

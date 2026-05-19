@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Stops — GTFS·X</title>
+    <meta name="description" content="Place and edit GTFS stops with snap-to-route curbside offset, freehand placement for park-and-rides, duplicate detection, drag-to-reorder, and wheelchair-boarding metadata." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/stops/" />
+    <meta property="og:title" content="Stops — GTFS·X" />
+    <meta property="og:description" content="Snap-to-route stop placement, freehand mode for off-route stops, duplicate handling." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/stops/" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Editor panels</div>
+      <h1>Stops</h1>
+      <p class="lede">With a route selected, click along the route line to drop stops. By default each stop snaps to the nearest point on the route and renders offset to the right side of the line — mimicking the curbside convention riders actually experience. Place an off-route stop (park-and-ride, transfer center, off-street terminal) by toggling freehand mode.</p>
+
+      <figure>
+        <img src="/assets/docs/stops-hero.png" alt="GTFS·X editor with the Stops panel and demo feed's stops rendered on the map." loading="lazy" />
+        <figcaption>The Stops panel. The badge on the sidebar shows total stop count; the right pane lists every stop with its name and attributes.</figcaption>
+      </figure>
+
+      <h2 id="snap-to-route">Snap-to-route placement</h2>
+      <p>Open the Routes panel, click a route, and click <strong>Add stops</strong>. Then click along the route on the map. Each click drops a stop that snaps to the nearest point on the route line and renders offset to the right side (the curbside convention for North American right-of-the-road traffic). The snap means stops always sit on the route geometry — you don't have to worry about whether your click was perfectly on the line.</p>
+      <p>Stops are added in click order; they're given sequential <code>stop_sequence</code> values when the trip is constructed. Reorder them later by dragging the stop list in the sidebar — useful when you realize the route runs in the opposite direction from how you placed the stops.</p>
+
+      <h2 id="freehand">Freehand stop placement</h2>
+      <p>Some stops aren't on a route line — park-and-rides served off the main alignment, transfer centers off-street, the end-of-line at a terminal. Toggle <strong>Freehand</strong> in the stop placement toolbar and click anywhere. The stop drops at that exact lat/lon with no snap.</p>
+      <p>Freehand stops can still be assigned to a route — the editor maintains the route ↔ stop association through <code>route_stops</code> records — they just don't sit on the route's polyline. Trip planners handle this fine; the polyline is for display, the stop locations are what matter for boarding.</p>
+
+      <h2 id="duplicates">Duplicate detection</h2>
+      <p>If you click near an existing stop (within ~30 m), the editor prompts: "There's already a stop here, reuse it?" Accept the prompt — a stop served by multiple routes should be a single record in <code>stops.txt</code>, not several. Trip planners use stop identity for transfer routing; duplicating stops breaks that.</p>
+      <p>The typical pattern: when adding stops to a second route that shares stops with the first, click <em>close to</em> the existing stops to get the reuse prompt for each. If you accidentally end up with two stops at the same intersection, use the Stops panel to find both, then delete the duplicate (the editor will warn you if any trips reference the one you're deleting and lets you reassign first).</p>
+
+      <h2 id="attributes">Stop attributes</h2>
+      <p>Click a stop in the sidebar list to edit its properties:</p>
+      <ul>
+        <li><strong><code>stop_name</code></strong> — the public-facing name riders see ("Main &amp; 5th", "Downtown Transit Center"). Keep it short and direction-agnostic; "Main &amp; 5th NB" for direction is fine but redundant with the direction picker in most apps.</li>
+        <li><strong><code>stop_code</code></strong> — the public stop ID a rider would tap into a "next departures" text-message service or look up on a sign. Often a 4–5 digit number. Optional but useful for paratransit booking and rider-facing tools.</li>
+        <li><strong><code>stop_desc</code></strong> — longer description. Rarely shown; skip unless the stop has a non-obvious location ("on the west side of the depot building").</li>
+        <li><strong><code>wheelchair_boarding</code></strong> — 0 (unknown), 1 (accessible), 2 (not accessible). Strongly recommended — trip planners use this to filter trips for riders requesting an accessible journey.</li>
+        <li><strong><code>parent_station</code></strong> — links a platform-level stop to its parent station (subway / rail systems mostly). The editor accepts the value on import and preserves it on export but doesn't have a rich UI for editing the station hierarchy yet.</li>
+        <li><strong><code>zone_id</code></strong> — fare zone the stop belongs to. Edit from the Fares panel rather than here.</li>
+      </ul>
+
+      <h2 id="reordering">Reordering stops along a route</h2>
+      <p>Drag stops in the sidebar list to reorder them. The new order updates every trip on that route — <code>stop_sequence</code> is recomputed. If trips reference different subsets of stops (a short-turn variant that skips downtown), reorder doesn't break those; the editor preserves which stops each trip touches.</p>
+
+      <h2 id="gotchas">Edge cases and gotchas</h2>
+      <ul>
+        <li><strong>One stop, multiple routes.</strong> A bus stop served by routes 5 and 12 should be one record in <code>stops.txt</code> with both routes' trips visiting it. The duplicate-detection prompt is what keeps this clean.</li>
+        <li><strong>Wheelchair accessibility default is "unknown", not "yes".</strong> Leaving the field at 0 communicates "we haven't verified this stop," which is honest and useful. Only set 1 when the stop has been actually surveyed.</li>
+        <li><strong>Stop IDs are immutable from the rider's perspective.</strong> Riders memorize <code>stop_code</code>s for SMS departure lookups; downstream apps cache <code>stop_id</code>. Don't renumber stops between feed updates if you can avoid it.</li>
+        <li><strong>The curbside offset is a render trick, not a coordinate.</strong> The stop's <code>stop_lat</code> / <code>stop_lon</code> stay on the route centerline; the editor just draws it offset. Trip planners may render it differently.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/routes-and-shapes/">Routes &amp; shapes</a> — draw the route before placing stops.</li>
+          <li><a href="/docs/timetables-and-trips/">Timetables &amp; trips</a> — stop times reference the stops you placed here.</li>
+          <li><a href="/docs/fares/">Fares</a> — zone-based fares assign <code>zone_id</code> to stops.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

@@ -4,53 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
-    <title>GTFS·X Documentation – How to Build a GTFS Feed</title>
-    <meta name="description" content="Step-by-step documentation for GTFS·X. Learn how to draw routes, place stops, build timetables, define fares, configure GTFS-Flex zones and booking rules, validate, and export a standards-compliant GTFS ZIP." />
+    <title>GTFS·X documentation</title>
+    <meta name="description" content="GTFS·X documentation: editor panels, analysis tools (cost, demographic coverage, Title VI), publishing, and import/export. The hub for everything in the editor." />
     <link rel="canonical" href="https://www.gtfsx.com/docs/" />
-    <meta property="og:title" content="GTFS·X Documentation" />
-    <meta property="og:description" content="A complete guide to building a GTFS feed in the browser — routes, stops, timetables, fares, GTFS-Flex, and export." />
+    <meta property="og:title" content="GTFS·X documentation" />
+    <meta property="og:description" content="Hub for GTFS·X documentation — editor panels, analysis tools, publishing, and more." />
     <meta property="og:type" content="article" />
     <meta property="og:url" content="https://www.gtfsx.com/docs/" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
     <style>
-      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; }
-      * { box-sizing: border-box; }
-      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
-      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
-      /* ─── site header (matches the editor) ─── */
-      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
-      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
-      .site-header .brand img { height:36px; width:auto; }
-      .site-header .brand-name { font-weight:800; font-size:1.5rem; color:var(--accent); letter-spacing:-0.01em; }
-      .site-header nav { display:flex; gap:4px; margin-left:12px; }
-      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; transition:color 0.15s, background 0.15s; }
-      .site-header nav a:hover { color:var(--ink); background:var(--bg); }
-      .site-header nav a.active { color:var(--ink); background:var(--bg); }
-      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
-      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
-      .site-header .cta:hover { filter:brightness(0.95); }
-      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
-      .site-header .user-slot a:hover { color:var(--ink); }
-      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
-      .site-header .user-slot .user-avatar:hover { filter:brightness(0.95); }
-      @media (max-width: 720px) {
-        .site-header nav, .site-header .cta { display:none; }
-        .site-header .brand-name { font-size:1.25rem; }
-        .site-header .brand img { height:30px; width:auto; }
-      }
-      main { padding-top: 40px; padding-bottom: 60px; }
-      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; }
-      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
-      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
-      .lede { font-size: 1.15rem; color:var(--muted); }
-      .toc { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 24px 0; }
-      .toc h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; }
-      .toc ol { margin: 0; padding-left: 1.2rem; }
-      a { color: var(--accent); }
-      ul { padding-left: 1.2rem; }
-      li { margin: 0.3rem 0; }
-      code { background:#fff; border:1px solid var(--rule); padding:1px 6px; border-radius:4px; font-size:0.9em; }
-      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; }
-      footer a { color: var(--muted); }
+      main { max-width: 880px; padding-top: 40px; }
+      .clusters { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 24px 0 40px; }
+      @media (max-width: 720px) { .clusters { grid-template-columns: 1fr; } }
+      .cluster { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; }
+      .cluster h3 { margin-top: 0; font-size: 1.05rem; color: var(--ink); }
+      .cluster ul { margin: 8px 0 0; padding-left: 1.2rem; }
+      .cluster li { margin: 0.4rem 0; }
+      .cluster a { font-weight: 600; }
+      .cluster .desc { color: var(--muted); font-weight: 400; font-size:0.92em; display:block; margin-top:2px; }
+      .cluster .tier-badge { font-size:0.65rem; padding:1px 7px; margin-left:6px; }
     </style>
     <script type="application/ld+json">
     {
@@ -87,70 +59,69 @@
       </div>
     </header>
     <main>
-      <h1>GTFS·X Documentation</h1>
-      <p class="lede">A walkthrough of every part of GTFS·X, ordered the way you'll actually use them. If you've never authored a GTFS feed before, start with <a href="/learn/gtfs/">What is GTFS?</a> first, then come back here.</p>
+      <h1>GTFS·X documentation</h1>
+      <p class="lede">A practitioner-direct guide to every part of GTFS·X. If this is your first GTFS feed, start with <a href="/learn/gtfs/">What is GTFS?</a> and the <a href="/docs/quick-start/">Quick start</a>, then come back here when you need a specific answer.</p>
 
-      <div class="toc">
-        <h2>On this page</h2>
-        <ol>
-          <li><a href="#agency">Agency setup</a></li>
-          <li><a href="#calendar">Service calendars</a></li>
-          <li><a href="#routes">Routes &amp; shapes</a></li>
-          <li><a href="#stops">Stops</a></li>
-          <li><a href="#timetable">Timetables &amp; trips</a></li>
-          <li><a href="#fares">Fares</a></li>
-          <li><a href="#flex">GTFS-Flex zones &amp; booking rules</a></li>
-          <li><a href="#validation">Validation</a></li>
-          <li><a href="#export">Export &amp; import</a></li>
-          <li><a href="#coverage">Coverage &amp; demographic analysis</a></li>
-        </ol>
+      <div class="clusters">
+        <div class="cluster">
+          <h3>Foundations</h3>
+          <ul>
+            <li><a href="/docs/quick-start/">Quick start</a><span class="desc">A 7-step path from a blank canvas to an exportable feed.</span></li>
+            <li><a href="/docs/account-and-cloud-sync/">Accounts and cloud sync</a><span class="desc">Anonymous vs signed-in, what Save does, tier limits, deletion.</span></li>
+            <li><a href="/learn/gtfs/">What is GTFS?</a><span class="desc">Primer on the spec for anyone new to it.</span></li>
+            <li><a href="/learn/gtfs-flex/">What is GTFS-Flex?</a><span class="desc">Primer on the demand-responsive spec extension.</span></li>
+          </ul>
+        </div>
+
+        <div class="cluster">
+          <h3>Editor panels</h3>
+          <ul>
+            <li><a href="/docs/agency-setup/">Agency setup</a><span class="desc">Agency records, multi-agency feeds, timezones.</span></li>
+            <li><a href="/docs/service-calendars/">Service calendars</a><span class="desc">Weekly patterns, holidays, exception dates.</span></li>
+            <li><a href="/docs/routes-and-shapes/">Routes &amp; shapes</a><span class="desc">Drawing routes, snap-to-road, shape variants.</span></li>
+            <li><a href="/docs/stops/">Stops</a><span class="desc">Snap-to-route placement, duplicates, attributes.</span></li>
+            <li><a href="/docs/timetables-and-trips/">Timetables &amp; trips</a><span class="desc">Schedule grid, headway-based service.</span></li>
+            <li><a href="/docs/fares/">Fares</a><span class="desc">Flat and zone-based fares; v2 round-trip support.</span></li>
+            <li><a href="/docs/transfers/">Transfers</a><span class="desc">transfers.txt routing rules. Edited from the Fares panel.</span></li>
+            <li><a href="/docs/flex-zones-and-booking-rules/">Flex zones &amp; booking rules</a><span class="desc">Demand-responsive zones, booking rules, windows.</span></li>
+          </ul>
+        </div>
+
+        <div class="cluster">
+          <h3>Validation &amp; I/O</h3>
+          <ul>
+            <li><a href="/docs/validation/">Validation</a><span class="desc">Inline error/warning model, what blocks export.</span></li>
+            <li><a href="/docs/import-and-export/">Import &amp; export</a><span class="desc">Standards-compliant ZIP in and out.</span></li>
+            <li><a href="/docs/service-summary/">Service summary</a><span class="desc">Revenue hours, trip counts, peak vehicles, service span.</span></li>
+            <li><a href="/docs/deep-links/">Deep-link integration</a><span class="desc">Open a feed from a URL — for embeds and shared workflows.</span></li>
+          </ul>
+        </div>
+
+        <div class="cluster">
+          <h3>Analysis tools</h3>
+          <ul>
+            <li><a href="/docs/cost-estimation/">Cost estimation</a><span class="tier-badge pro">Pro</span><span class="desc">Revenue hours, peak vehicles, weekly and annual cost.</span></li>
+            <li><a href="/docs/demographic-coverage/">Demographic coverage</a><span class="tier-badge pro">Pro</span><span class="desc">Population, households, workers near your service.</span></li>
+            <li><a href="/docs/title-vi-analysis/">Title VI analysis</a><span class="tier-badge team">Team</span><span class="desc">Equity comparison aligned with FTA Circular 4702.1B.</span></li>
+            <li><a href="/docs/rider-propensity/">Rider propensity</a><span class="tier-badge pro">Pro</span><span class="desc">Nationwide Demand Dots layer for service planning.</span></li>
+          </ul>
+        </div>
+
+        <div class="cluster">
+          <h3>Publishing &amp; distribution</h3>
+          <ul>
+            <li><a href="/docs/hosted-publishing/">Hosted publishing</a><span class="tier-badge pro">Pro</span><span class="desc">Stable feed URL at <code>feeds.gtfsx.com/&lt;slug&gt;/gtfs.zip</code>.</span></li>
+            <li><a href="/docs/rider-mini-site/">Rider mini-site</a><span class="tier-badge pro">Pro</span><span class="desc">Auto-generated rider landing page for every published feed.</span></li>
+            <li><a href="/docs/embed-widgets/">Embed widgets</a><span class="tier-badge pro">Pro</span><span class="desc">System map and per-route schedules as iframes.</span></li>
+          </ul>
+        </div>
       </div>
-
-      <h2 id="agency">1. Agency setup</h2>
-      <p>Every GTFS feed needs at least one agency record (<code>agency.txt</code>). In the Agency panel, enter your agency name, public-facing URL, timezone, and optional contact details. Multiple agencies are supported for joint feeds (for example, a city operator plus a regional partner) — each route is then assigned to a specific agency.</p>
-
-      <h2 id="calendar">2. Service calendars</h2>
-      <p>Service calendars (<code>calendar.txt</code>) define which days of the week service runs and over what date range. Toggle the day-of-week boxes for each service pattern (typical patterns include Weekday, Saturday, Sunday) and set a start and end date. For holidays and one-off changes, add exception dates (<code>calendar_dates.txt</code>) — you can either add service on a date that wouldn't normally have it, or remove service for a holiday. The bulk-add tool covers common US federal holidays in one click.</p>
-
-      <h2 id="routes">3. Routes &amp; shapes</h2>
-      <p>Routes are defined <strong>before</strong> stops in this tool. The reasoning: alignment is the single most consequential design decision for a transit service, so it should be locked in before you start placing stops or building schedules. To create a route, click "New route", fill in the short name, long name, color, and route type (bus, rail, ferry, etc.), then draw the route on the map.</p>
-
-      <h3>Drawing modes</h3>
-      <ul>
-        <li><strong>Snap-to-road</strong> (default): your line follows the road network using the Mapbox Map Matching API. Best for fixed-route bus and most rail.</li>
-        <li><strong>Freehand</strong>: draw exactly where you click. Useful for off-road segments, ferry routes, or sketching alignments that don't yet have a road.</li>
-      </ul>
-      <p>Edit shapes by dragging vertices, inserting new points, or deleting points. Multiple shape variants per route are supported — typically you'll want one for each direction of travel.</p>
-
-      <h2 id="stops">4. Stops</h2>
-      <p>With a route selected, click along the route line to drop stops. By default each stop snaps to the nearest point on the route line and is rendered visually offset to the right side of the line, mimicking real-world curbside placement. To place a stop that isn't on any route (a park &amp; ride, a transfer center, an off-street terminal), toggle freehand stop mode.</p>
-      <p>If you click near an existing stop, GTFS·X will prompt you to reuse that stop instead of creating a duplicate. This is the right behavior — a stop served by multiple routes should be a single record in <code>stops.txt</code>.</p>
-      <p>Reorder stops along a route by dragging them in the sidebar list. Stop attributes (name, code, wheelchair boarding, parent station) are edited in the property panel.</p>
-
-      <h2 id="timetable">5. Timetables &amp; trips</h2>
-      <p>The timetable editor is a grid: each row is a trip, each column is a stop, and each cell is an arrival/departure time. Create a trip, set its headsign and direction, assign it to a service pattern, then enter the time at the first stop. Intermediate stop times can be auto-interpolated from the route geometry and an assumed average speed, then refined per cell.</p>
-      <p>For repeating service, use "Duplicate trip with offset" to spawn a new trip every N minutes — much faster than typing a full weekday schedule by hand. For headway-based service (every 10 minutes from 6am to 9pm, no scheduled times), use the frequency editor instead, which writes <code>frequencies.txt</code>.</p>
-
-      <h2 id="fares">6. Fares</h2>
-      <p>Fares are <strong>strongly encouraged</strong>. Trip planners and rider-facing apps depend on accurate fare data, and a feed without fares is materially less useful for the people consuming it. GTFS·X will surface a persistent reminder if no fare data is defined.</p>
-      <p>The simplest setup is a single flat fare assigned to all routes. For zone-based systems, define fare zones on the map, assign stops to zones, and create a zone-to-zone fare matrix. Multiple fare types (regular, reduced, senior, student) are supported via separate <code>fare_attributes.txt</code> records.</p>
-
-      <h2 id="flex">7. GTFS-Flex zones &amp; booking rules</h2>
-      <p>For demand-responsive service (microtransit, dial-a-ride, deviated fixed-route), draw polygon zones on the map for each flex service area. Each zone gets pickup and drop-off windows instead of fixed stop times, plus an associated set of booking rules: how far in advance riders must book, what the booking phone number or URL is, what message text to display in trip planners, and so on. See the <a href="/learn/gtfs-flex/">GTFS-Flex overview</a> for more on what this spec extension covers and when to use it.</p>
-
-      <h2 id="validation">8. Validation</h2>
-      <p>Validation runs continuously as you edit — errors and warnings appear inline next to the affected entity, and a summary panel lists everything outstanding. Errors block export (these are spec violations that would make the feed unusable). Warnings allow export but are flagged for your attention (for example: a route with no fare assigned, or a service pattern with no holiday exceptions). Click any validation message to jump directly to the editor section that owns it.</p>
-
-      <h2 id="export">9. Export &amp; import</h2>
-      <p>Export produces a standards-compliant GTFS ZIP containing all required files plus any optional files that have data. Empty optional files are not exported. Import accepts any GTFS ZIP — required files are parsed into the editor; non-standard files are preserved on round-trip but flagged in the import summary.</p>
-
-      <h2 id="coverage">10. Coverage &amp; demographic analysis</h2>
-      <p>The coverage panel overlays US Census ACS data on the map and reports population, demographics, and equity indicators within a configurable buffer of your stops and routes. This is useful for Title VI equity analysis, federal grant applications, and answering basic service-planning questions like "how many people live within a quarter-mile of this proposed route?"</p>
     </main>
     <footer>
       <a href="/">Editor</a>
       <a href="/about/">About</a>
       <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
       <a href="/learn/gtfs/">What is GTFS?</a>
       <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
       <a href="/docs/deep-links/">Deep-link integration</a>
@@ -169,6 +140,29 @@
             slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
           })
           .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+    <script>
+      // Backward-compat: if someone hits /docs#agency / #routes / etc. from an
+      // old external link, redirect to the split-out page. This is the
+      // cheapest substitute for an external 301 chain.
+      (function () {
+        var map = {
+          'agency': '/docs/agency-setup/',
+          'calendar': '/docs/service-calendars/',
+          'routes': '/docs/routes-and-shapes/',
+          'stops': '/docs/stops/',
+          'timetable': '/docs/timetables-and-trips/',
+          'fares': '/docs/fares/',
+          'flex': '/docs/flex-zones-and-booking-rules/',
+          'validation': '/docs/validation/',
+          'export': '/docs/import-and-export/',
+          'coverage': '/docs/demographic-coverage/',
+        };
+        var hash = window.location.hash.replace('#', '');
+        if (hash && map[hash]) {
+          window.location.replace(map[hash]);
+        }
       })();
     </script>
   </body>

@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Embed widgets — GTFS·X</title>
+    <meta name="description" content="Embeddable system map and per-route schedule widgets for any published GTFS·X feed. Single iframe per widget, updates automatically when you re-publish." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/embed-widgets/" />
+    <meta property="og:title" content="Embed widgets — GTFS·X" />
+    <meta property="og:description" content="Embeddable transit schedules and maps as single-iframe widgets. Updates automatically when the feed is re-published." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/embed-widgets/" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --sand:#FBF6EE; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
+      .site-header nav a:hover, .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      @media (max-width: 720px) { .site-header nav, .site-header .cta { display:none; } .site-header .brand img { height:30px; } }
+      main { padding-top: 24px; padding-bottom: 60px; }
+      .crumbs { color:var(--muted); font-size:0.9rem; margin: 0 0 12px; }
+      .crumbs a { color:var(--muted); text-decoration:none; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      .tier-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; vertical-align:middle; }
+      .tier-badge.pro { background:#FBEEDF; color:#9A4F00; border:1px solid #F0D1A0; }
+      a { color: var(--accent); }
+      ul, ol { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code, kbd { background:var(--sand); padding: 1px 6px; border-radius:4px; font-size:0.9em; }
+      pre { background:var(--sand); border:1px solid var(--rule); border-radius:6px; padding:14px 16px; overflow-x:auto; font-size:0.9em; line-height:1.45; }
+      pre code { background:none; padding:0; border:0; font-size:1em; }
+      figure { margin: 1.4rem 0; }
+      figure img { width:100%; max-width:1200px; height:auto; border:1px solid var(--rule); border-radius:8px; display:block; }
+      figcaption { color:var(--muted); font-size:0.9rem; margin-top:6px; }
+      .see-also { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 36px 0 0; }
+      .see-also h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; font-size:1.1rem; }
+      .see-also ul { margin: 8px 0 0; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; margin-top:32px; }
+      footer a { color: var(--muted); text-decoration:none; }
+      footer a:hover { color:var(--accent); }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Publishing &amp; distribution</div>
+      <h1>Embed widgets <span class="tier-badge pro">Pro</span></h1>
+      <p class="lede">Drop an interactive system map or per-route schedule into your agency's existing website with a single <code>&lt;iframe&gt;</code>. The widget reads directly from your published GTFS feed and updates the next time you publish — so the website stops drifting away from the bus.</p>
+
+      <figure>
+        <img src="/assets/docs/embed-widgets-demo-page.png" alt="Demo agency website with GTFS·X embed widgets — system map and per-route schedules — rendered inside a pretend transit-agency CMS page." loading="lazy" />
+        <figcaption>The <a href="/embed-demo/">embed demo page</a> showing the widgets on a pretend agency website. Each map and schedule is a single iframe.</figcaption>
+      </figure>
+
+      <h2 id="what-it-is">What it is</h2>
+      <p>A published GTFS·X feed exposes three iframe-friendly widgets:</p>
+      <ul>
+        <li><strong>System map</strong> — interactive Mapbox map showing every route and stop, with a clickable route list.</li>
+        <li><strong>Route schedule</strong> — schedule table for a single route, with a tab to switch service patterns (Weekday / Saturday / etc.) and a per-route map.</li>
+        <li><strong>Stop departures</strong> — name, location, and upcoming arrivals for a single stop. (Less commonly used; covered below.)</li>
+      </ul>
+      <p>Each widget is a server-rendered page that responds to the iframe's width and embeds the feed data — no JavaScript snippet to install, no separate API key, no CMS plugin. Paste an iframe tag, you're done.</p>
+
+      <h2 id="when-to-use-it">When to use it</h2>
+      <ul>
+        <li>The agency already has a website (WordPress, Squarespace, county-CMS, hand-rolled) and needs to surface the schedule there without rebuilding the whole site.</li>
+        <li>A rider-facing landing page on a partner property — a downtown business association, a university transportation page, a chamber-of-commerce visitor guide — wants to show the routes that serve them.</li>
+        <li>Internal stakeholder pages that need to show the current schedule in context (a board portal, a project page for a service-change proposal). The iframe always reflects the latest published feed.</li>
+      </ul>
+
+      <h2 id="embed-codes">Embed codes</h2>
+      <p>Replace <code>your-slug</code> below with your project slug, and <code>1234</code> with a real route ID or stop ID from your feed.</p>
+
+      <h3>System map</h3>
+<pre><code>&lt;iframe
+  src="https://feeds.gtfsx.com/your-slug/embed/system-map"
+  width="100%"
+  height="600"
+  loading="lazy"
+  title="Your Agency system map"&gt;
+&lt;/iframe&gt;</code></pre>
+
+      <h3>Single route</h3>
+<pre><code>&lt;iframe
+  src="https://feeds.gtfsx.com/your-slug/embed/route/1234"
+  width="100%"
+  height="700"
+  loading="lazy"
+  title="Route 1234 schedule"&gt;
+&lt;/iframe&gt;</code></pre>
+
+      <h3>Single stop</h3>
+<pre><code>&lt;iframe
+  src="https://feeds.gtfsx.com/your-slug/embed/stop/1234"
+  width="100%"
+  height="500"
+  loading="lazy"
+  title="Stop 1234 departures"&gt;
+&lt;/iframe&gt;</code></pre>
+
+      <p>For real working examples, see the <a href="/embed-demo/">embed demo</a> — it pulls live from the staging Bozeman feed and is the source of the iframe snippets above.</p>
+
+      <h2 id="getting-snippets">Getting the snippets from the editor</h2>
+      <p>You don't have to hand-construct the iframe tags. In the editor, click <strong>Embed</strong> in the footer (next to Timetable, Service Summary, Validation, Snapshots, Share &amp; Publish). The Embed tab lists:</p>
+      <ul>
+        <li>The system-map snippet with a one-click <strong>Copy</strong> button.</li>
+        <li>One snippet per route, sorted by short name, each with its own Copy button.</li>
+        <li>A brand-color picker that applies to every embed under this feed (active tabs, accent colors).</li>
+      </ul>
+      <p>The widgets are only available once the feed is published — see <a href="/docs/hosted-publishing/">Hosted publishing</a> if the Embed tab is hidden or empty.</p>
+
+      <h2 id="customization">Customization</h2>
+      <ul>
+        <li><strong>Brand color</strong> — a single hex color set per project, applied to every widget. Defaults to the GTFS·X coral.</li>
+        <li><strong>Width and height</strong> — iframe attributes. Use <code>width="100%"</code> for a responsive embed; pick a fixed height (~500–700px works for most routes; long schedules will scroll internally).</li>
+        <li><strong>Service pre-selection</strong> — append <code>?service=&lt;service_id&gt;</code> to the route URL to pre-select a specific service pattern (otherwise the widget picks today's service automatically).</li>
+        <li><strong>Title attribute</strong> — set <code>title="…"</code> on the iframe for accessibility. The widgets don't auto-set this because they don't know what page they're being embedded into.</li>
+      </ul>
+
+      <h2 id="gotchas">Gotchas</h2>
+      <ul>
+        <li><strong>Map height matters.</strong> The system-map widget assumes ~500px of vertical room. At &lt;300px the map becomes hard to interact with. Pick a height that gives riders enough room to pan and zoom.</li>
+        <li><strong>Schedules don't paginate.</strong> A route with 200 trips renders 200 rows — the iframe will get an internal scrollbar. For high-frequency service, consider switching the GTFS representation to <code>frequencies.txt</code>.</li>
+        <li><strong>CSP / sandbox attributes.</strong> If your CMS injects an aggressive <code>sandbox=""</code> on iframes, the widget's interactive map won't load. Allow <code>allow-scripts allow-same-origin</code> at minimum.</li>
+        <li><strong>Cross-origin iframes are isolated.</strong> The widget can't access cookies or storage on the host page, and the host page can't directly call into the widget. If you need that level of integration, hit the underlying GTFS ZIP and render your own UI.</li>
+        <li><strong>No realtime data.</strong> Widgets reflect the static GTFS schedule. GTFS-Realtime updates (arrivals, alerts, vehicle positions) aren't surfaced. For real-time arrivals at a stop, use a separate tool that consumes your GTFS-RT feed.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/hosted-publishing/">Hosted publishing</a> — required for embeds to work.</li>
+          <li><a href="/docs/rider-mini-site/">Rider mini-site</a> — same data, full-page rather than embedded.</li>
+          <li><a href="/embed-demo/">Embed demo page</a> — a live example of the widgets in a pretend agency site.</li>
+        </ul>
+      </div>
+      <!--
+        Punch list for embed-widget improvements (not user-visible). Captured during the docs pass:
+        - Embed demo only shows two of the three widgets (no stop embed visible). Add a stop-embed example to /embed-demo so docs can link directly.
+        - No copy-to-clipboard fallback for older browsers in the editor's Embed tab; "Copy" silently no-ops on Safari < 13.
+        - Cross-route embed (e.g. "all routes serving downtown" or "transfer hub view") not yet supported — common ask from CBDs and stations.
+        - No way to surface GTFS-Realtime alerts in the widget today. Consider piping the alerts feed through to the system map header.
+        - Widget brand color is per-project; no per-widget override. Consider exposing as a query param (`?color=...`) so a partner property can match its own brand without changing the feed-wide default.
+        - Document Sanity/Wagtail/HubL CMSs explicitly — currently the demo page only mentions WordPress / Squarespace / Wix.
+      -->
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

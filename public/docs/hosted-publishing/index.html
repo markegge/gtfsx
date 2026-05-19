@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Hosted publishing — GTFS·X</title>
+    <meta name="description" content="Publish your GTFS feed to a stable URL at feeds.gtfsx.com so trip planners, regulators, and riders can consume it. Includes draft preview links and update workflow." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/hosted-publishing/" />
+    <meta property="og:title" content="Hosted publishing — GTFS·X" />
+    <meta property="og:description" content="Publish a GTFS feed to a stable URL at feeds.gtfsx.com, with draft preview links and a rider-facing mini-site." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/hosted-publishing/" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --sand:#FBF6EE; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; transition:color 0.15s, background 0.15s; }
+      .site-header nav a:hover { color:var(--ink); background:var(--bg); }
+      .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .cta:hover { filter:brightness(0.95); }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a:hover { color:var(--ink); }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      @media (max-width: 720px) {
+        .site-header nav, .site-header .cta { display:none; }
+        .site-header .brand img { height:30px; width:auto; }
+      }
+      main { padding-top: 24px; padding-bottom: 60px; }
+      .crumbs { color:var(--muted); font-size:0.9rem; margin: 0 0 12px; }
+      .crumbs a { color:var(--muted); text-decoration:none; }
+      .crumbs a:hover { color:var(--accent); }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      .tier-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; vertical-align:middle; }
+      .tier-badge.pro { background:#FBEEDF; color:#9A4F00; border:1px solid #F0D1A0; }
+      .tier-badge.team { background:#EADFFD; color:#5B2E91; border:1px solid #C9B1F0; }
+      .tier-badge.enterprise { background:#DCE9FA; color:#1F4D88; border:1px solid #A8C0E2; }
+      a { color: var(--accent); }
+      ul { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code, kbd { background:var(--sand); padding: 1px 6px; border-radius:4px; font-size:0.9em; }
+      figure { margin: 1.4rem 0; }
+      figure img { width:100%; max-width:1200px; height:auto; border:1px solid var(--rule); border-radius:8px; display:block; }
+      figcaption { color:var(--muted); font-size:0.9rem; margin-top:6px; }
+      .placeholder { background:var(--sand); border:1px dashed var(--rule); border-radius:8px; padding:24px; text-align:center; color:var(--muted); font-size:0.9rem; }
+      .see-also { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 36px 0 0; }
+      .see-also h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; font-size:1.1rem; }
+      .see-also ul { margin: 8px 0 0; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; margin-top:32px; }
+      footer a { color: var(--muted); text-decoration:none; }
+      footer a:hover { color:var(--accent); }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/">
+        <img src="/gtfsx-lockup.svg" alt="GTFS·X" />
+      </a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot">
+          <a href="/login">Sign in</a>
+        </div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Publishing &amp; distribution</div>
+      <h1>Hosted publishing <span class="tier-badge pro">Pro</span></h1>
+      <p class="lede">Publish your feed to a stable URL at <code>feeds.gtfsx.com/&lt;slug&gt;/gtfs.zip</code>. That URL is what you hand to Google Transit, the Mobility Database, trip planners, and your own riders — and it keeps working when you re-publish.</p>
+
+      <h2 id="what-it-is">What it is</h2>
+      <p>"Hosted publishing" means GTFS·X stores your feed and serves it from a fixed URL that doesn't change between versions. Every time you publish, the canonical URL updates atomically: trip planners get the new schedule on their next fetch without you mailing anyone a new link.</p>
+      <p>For each published project you get four things:</p>
+      <ul>
+        <li><strong>Canonical feed URL</strong> — <code>https://feeds.gtfsx.com/&lt;slug&gt;/gtfs.zip</code>. Stable, public, ETag- and Last-Modified-aware so well-behaved consumers don't re-download unchanged feeds.</li>
+        <li><strong>Sidecar metadata</strong> — <code>https://feeds.gtfsx.com/&lt;slug&gt;/feed_info.json</code> with publisher name, service dates, and last-modified timestamp. Useful for catalog ingestors and monitoring scripts.</li>
+        <li><strong>Rider-facing mini-site</strong> — <code>https://feeds.gtfsx.com/&lt;slug&gt;/</code> renders an auto-generated landing page with a system map, today's service, and a route list. See <a href="/docs/rider-mini-site/">Rider mini-site</a>.</li>
+        <li><strong>Embed widgets</strong> — iframe-friendly URLs for the system map and per-route schedules, so the same data appears on your agency's main website. See <a href="/docs/embed-widgets/">Embed widgets</a>.</li>
+      </ul>
+
+      <h2 id="how-to-publish">How to publish a feed</h2>
+      <p>Open the feed in the editor and click <strong>Share &amp; Publish</strong> in the footer (next to Timetable / Service Summary / Validation). The publish flow needs a signed-in account on the Pro or Team plan — anonymous drafts can be exported as ZIP but not hosted.</p>
+      <ol>
+        <li><strong>Pick a slug.</strong> The default is derived from the feed name (e.g. "Sunny Valley Transit" → <code>sunny-valley-transit</code>). You can edit it before the first publish: lowercase letters, digits, and hyphens, up to 63 characters, must start with a letter or digit. The slug is the part of the URL that doesn't change between updates, so pick something a regulator wouldn't be embarrassed by.</li>
+        <li><strong>Confirm what's included.</strong> Publishing snapshots the current state of the project: every file the editor would produce on Export GTFS goes into the published ZIP. Validation errors block publishing; warnings don't.</li>
+        <li><strong>Click Publish.</strong> Within a few seconds the canonical URL serves the new ZIP. Re-publishing later replaces the served ZIP atomically; consumers hitting the URL never see a half-written file.</li>
+      </ol>
+      <figure>
+        <img src="/assets/docs/hosted-publishing-share-tab.png" alt="The Share & Publish tab in the GTFS·X editor footer, showing the Current publication state, Publish a snapshot, and Share for review controls." loading="lazy" />
+        <figcaption>The Share &amp; Publish tab in the editor footer (signed-in user, Sunny Valley feed). Each card maps to one step of the publish flow.</figcaption>
+      </figure>
+
+      <h2 id="updates">Updating a published feed</h2>
+      <p>There's no separate "update" action: when you click Publish on a feed that already has a canonical slug, the new snapshot replaces the old one at the same URL. Cache headers tell consumers the feed is fresh for one hour and revalidate after that, so most ingestors will pick up your change within a day even if they don't poll aggressively. Trip planners that pull on their own cadence (Google Maps, Apple Maps) will follow their own schedule.</p>
+      <p>The previous snapshot stays in storage (the editor's Snapshots tab is where you can browse and roll back), but only the latest snapshot is served at the canonical URL. There's no public history of past versions.</p>
+
+      <h2 id="drafts">Draft preview links</h2>
+      <p>Before publishing a change to riders, you'll often want a stakeholder to look at it — a board member, an agency director, a partner operator. Draft preview links solve that without exposing your work-in-progress at the canonical URL.</p>
+      <p>From the same Share &amp; Publish tab, generate a draft link. You get back an unlisted URL like <code>https://feeds.gtfsx.com/&lt;slug&gt;/draft/&lt;token&gt;.zip</code> that serves the current working snapshot without overwriting the published version. Defaults to expiring in 30 days (configurable up to one year), and you can revoke a link before it expires from the same tab.</p>
+      <p>Draft URLs are marked <code>X-Robots-Tag: noindex</code> and aren't listed anywhere, but they're not authenticated — anyone with the link can fetch the ZIP. Treat them like an unlisted YouTube video: fine for "share with a few people," not fine for confidential data.</p>
+
+      <h2 id="not-included">What's not included</h2>
+      <p>Publishing gives you the URL. Getting that URL into the trip planners and catalogs that riders actually use is still on you. The agency-side submissions GTFS·X does <em>not</em> do for you:</p>
+      <ul>
+        <li><strong>Google Maps (Transit Partners).</strong> Apply at <a href="https://transitpartners.google.com/" rel="external">transitpartners.google.com</a>. Google requires a stable feed URL (which is what publishing gives you) plus an agency contact and ToS acceptance. Approval takes weeks.</li>
+        <li><strong>Apple Maps.</strong> Submit through <a href="https://mapsconnect.apple.com/" rel="external">Maps Connect</a>. Similar shape to Google: stable URL plus agency contact.</li>
+        <li><strong>The Mobility Database.</strong> <a href="https://database.mobilitydata.org/" rel="external">database.mobilitydata.org</a> — community catalog used by OpenTripPlanner deployments, Transit app, researchers, and basically anyone who isn't Google or Apple. Submission is a short form.</li>
+        <li><strong>NTD P-50 form.</strong> If your agency reports to the National Transit Database, your feed URL goes on the <a href="https://www.transit.dot.gov/ntd" rel="external">NTD</a> P-50 form during the reporting cycle.</li>
+      </ul>
+      <p>You only have to do each of these once. After that the catalogs poll your URL on their own.</p>
+
+      <h2 id="tier-limits">Tier limits and pricing</h2>
+      <p>Hosted publishing is part of the Pro and Team plans:</p>
+      <ul>
+        <li><strong>Free</strong> — no published feeds. You can still export a GTFS ZIP and host it yourself; the editor doesn't care where the feed lives.</li>
+        <li><strong>Pro ($49/mo)</strong> — one published feed per account, plus the mini-site and embeds tied to that feed.</li>
+        <li><strong>Team ($199/mo)</strong> — up to five published feeds per organization, useful if you operate multiple services under one administrative roof (a county transit authority running a fixed-route system and a separate microtransit service, for example).</li>
+        <li><strong>Enterprise</strong> — uncapped; pricing on application.</li>
+      </ul>
+      <p>See <a href="/pricing/">pricing</a> for the full feature comparison.</p>
+
+      <h2 id="gotchas">Edge cases and gotchas</h2>
+      <ul>
+        <li><strong>Slugs are not custom domains.</strong> Everything serves from <code>feeds.gtfsx.com</code>. CNAME-ing your own domain to a published feed isn't supported. The slug under <code>feeds.gtfsx.com/</code> is the canonical URL.</li>
+        <li><strong>Slug changes break inbound links.</strong> You can change a slug after first publish (the URL is mutable in the same way a project name is mutable), but the old slug stops serving the moment you change it. If a catalog has already ingested the old URL, you'll need to re-submit. Pick a good slug the first time.</li>
+        <li><strong>Reserved slugs.</strong> A handful of paths are reserved for embed and metadata URLs (<code>/embed/</code>, <code>/draft/</code>, <code>/gtfs.zip</code>, <code>/feed_info.json</code>). You can't use those as a project slug.</li>
+        <li><strong>No version pinning.</strong> The canonical URL always serves the latest published snapshot. If a downstream consumer needs to lock to a specific version, give them a draft preview link instead — that URL is tied to a specific snapshot and won't change when you re-publish.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/rider-mini-site/">Rider mini-site</a> — what the rider-facing landing page shows.</li>
+          <li><a href="/docs/embed-widgets/">Embed widgets</a> — putting the schedule and map on your agency's website.</li>
+          <li><a href="/docs/account-and-cloud-sync/">Accounts and cloud sync</a> — how saving and publishing relate.</li>
+          <li><a href="/docs/validation/">Validation</a> — what blocks a publish.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

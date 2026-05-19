@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Rider mini-site — GTFS·X</title>
+    <meta name="description" content="An auto-generated rider-facing landing page for every published GTFS·X feed: system map, today's service, route list, and contact info, with light branding." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/rider-mini-site/" />
+    <meta property="og:title" content="Rider mini-site — GTFS·X" />
+    <meta property="og:description" content="Auto-generated rider landing page for every published feed: map, today's service, routes, contact." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/rider-mini-site/" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --sand:#FBF6EE; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
+      .site-header nav a:hover, .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      @media (max-width: 720px) { .site-header nav, .site-header .cta { display:none; } .site-header .brand img { height:30px; } }
+      main { padding-top: 24px; padding-bottom: 60px; }
+      .crumbs { color:var(--muted); font-size:0.9rem; margin: 0 0 12px; }
+      .crumbs a { color:var(--muted); text-decoration:none; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      .tier-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; vertical-align:middle; }
+      .tier-badge.pro { background:#FBEEDF; color:#9A4F00; border:1px solid #F0D1A0; }
+      a { color: var(--accent); }
+      ul, ol { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code, kbd { background:var(--sand); padding: 1px 6px; border-radius:4px; font-size:0.9em; }
+      figure { margin: 1.4rem 0; }
+      figure img { width:100%; max-width:1200px; height:auto; border:1px solid var(--rule); border-radius:8px; display:block; }
+      figcaption { color:var(--muted); font-size:0.9rem; margin-top:6px; }
+      .see-also { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 36px 0 0; }
+      .see-also h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; font-size:1.1rem; }
+      .see-also ul { margin: 8px 0 0; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; margin-top:32px; }
+      footer a { color: var(--muted); text-decoration:none; }
+      footer a:hover { color:var(--accent); }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Publishing &amp; distribution</div>
+      <h1>Rider mini-site <span class="tier-badge pro">Pro</span></h1>
+      <p class="lede">Every published GTFS·X feed gets an auto-generated rider-facing landing page at <code>feeds.gtfsx.com/&lt;slug&gt;/</code>. System map, today's service, route list, contact info — the essentials a rider needs to ride. No template work, no separate CMS, no extra invoice.</p>
+
+      <figure>
+        <img src="/assets/docs/rider-mini-site-landing.png" alt="Rider mini-site for a published GTFS·X feed, showing agency name, contact, today's service banner, system map, and route list." loading="lazy" />
+        <figcaption>The auto-generated mini-site for a published demo feed. The page reads directly from the feed and updates the next time you publish.</figcaption>
+      </figure>
+
+      <h2 id="what-it-is">What it is</h2>
+      <p>For most small and rural agencies, "the website" is an afterthought — a static page on the county or operator site that lists a phone number and a PDF of the schedule. Riders deserve better; staff don't have time. The mini-site is the cheapest possible escape from that bind: as long as you maintain the GTFS feed in GTFS·X and click Publish, the rider-facing page stays current automatically.</p>
+
+      <h2 id="whats-on-it">What's on it</h2>
+      <ul>
+        <li><strong>Agency name and contact.</strong> Pulled from <code>agency.txt</code> — name, public URL, phone. If the URL is set, it's linked from the page header.</li>
+        <li><strong>Service status banner.</strong> "Today is Monday — Weekday service" / "Today is Sunday — Sunday service" / "Today is Thursday — No service today." Reads from the calendar to tell riders what's running before they look at the map.</li>
+        <li><strong>Feed expiry warning.</strong> If <code>feed_info.feed_end_date</code> is within 14 days, the page surfaces a banner telling riders the schedule is about to expire. If it's already past, the banner reports how many days ago. (Surface area for fixing this is the editor's Calendars panel.)</li>
+        <li><strong>System map.</strong> An interactive Mapbox map showing every route and stop, color-coded from the GTFS route colors. Riders can pan, zoom, and click a stop to see schedule details.</li>
+        <li><strong>Route list.</strong> Each route as a clickable pill with the route's short name, long name, and color. Clicking opens the per-route detail (map + schedule for that route alone).</li>
+        <li><strong>Schedule view.</strong> Per-route schedule tables for each service pattern, with a tab to switch between (Weekday / Saturday / Sunday / holiday calendar). Generated server-side from <code>stop_times.txt</code>.</li>
+        <li><strong>Open Graph + structured data.</strong> Linking the mini-site from social media renders a clean preview card (agency name, route count, stop count). Search engines see schema.org/TransitFeed markup for indexing.</li>
+      </ul>
+
+      <h2 id="branding">Branding</h2>
+      <p>The mini-site supports light branding, set on the project in the editor's <strong>Share &amp; Publish</strong> tab:</p>
+      <ul>
+        <li><strong>Brand color</strong> — a single hex value. Used for the page accent color (active tabs, links, button backgrounds). Defaults to the GTFS·X coral if unset.</li>
+        <li><strong>Logo</strong> — an organization logo URL (Team plan and above). Renders next to the agency name in the page header.</li>
+      </ul>
+      <p>What isn't supported today:</p>
+      <ul>
+        <li><strong>Custom CSS or HTML.</strong> The template is fixed; brand color and logo are the only knobs.</li>
+        <li><strong>Custom domain (CNAME).</strong> The mini-site serves from <code>feeds.gtfsx.com/&lt;slug&gt;/</code>. If you want a vanity URL, link or redirect from your own site.</li>
+        <li><strong>Service alerts.</strong> The site reads the feed only; GTFS-Realtime alerts aren't surfaced. For a detour or disruption announcement, you'll still need a separate channel (Twitter, agency website banner, signage).</li>
+        <li><strong>Pagination on very long schedules.</strong> A 200-trip route renders 200 rows; if you have an extreme-frequency timetable, consider switching to a frequency-based representation in <code>frequencies.txt</code>.</li>
+      </ul>
+
+      <h2 id="how-to-publish">How to publish a mini-site</h2>
+      <p>You don't publish a mini-site directly — you publish a feed, and the mini-site is generated automatically. See <a href="/docs/hosted-publishing/">Hosted publishing</a> for the publish flow. The URL pattern is always:</p>
+      <ul>
+        <li><strong>Mini-site:</strong> <code>https://feeds.gtfsx.com/&lt;slug&gt;/</code></li>
+        <li><strong>Per-route page:</strong> <code>https://feeds.gtfsx.com/&lt;slug&gt;/route/&lt;route_id&gt;</code></li>
+        <li><strong>Underlying GTFS:</strong> <code>https://feeds.gtfsx.com/&lt;slug&gt;/gtfs.zip</code></li>
+      </ul>
+
+      <h2 id="who-it-isnt-for">Who it isn't for</h2>
+      <p>The mini-site is intentionally minimal. If your agency needs a fully designed website with riders' stories, board pages, project pages, ADA accessibility docs, news posts, and a press kit, the mini-site doesn't replace that — it's a rider-data surface, not a full content platform. Use the mini-site as the live-schedule canonical, and link to it from a richer site elsewhere.</p>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/hosted-publishing/">Hosted publishing</a> — how feeds get on <code>feeds.gtfsx.com</code> in the first place.</li>
+          <li><a href="/docs/embed-widgets/">Embed widgets</a> — the same data as iframes you can drop into your own site.</li>
+          <li><a href="/docs/agency-setup/">Agency setup</a> — where the agency name, URL, and phone come from.</li>
+          <li><a href="/docs/service-calendars/">Service calendars</a> — what drives the "today is…" banner.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

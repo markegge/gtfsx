@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Transfers — GTFS·X</title>
+    <meta name="description" content="Model transfers.txt in GTFS·X: recommended / timed (vehicle waits) / minimum time / not possible. Cross-platform rail, bus-to-bus at a hub, mode-change transfers. Edited from the Fares panel's Transfers tab." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/transfers/" />
+    <meta property="og:title" content="Transfers — GTFS·X" />
+    <meta property="og:description" content="transfers.txt routing rules: recommended, timed, min-time, not-possible." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/transfers/" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Editor panels</div>
+      <h1>Transfers</h1>
+      <p class="lede"><code>transfers.txt</code> tells trip planners how to chain trips together at a connection: whether the connection is recommended, whether the next vehicle holds for the arriving one, how much time is needed to make it. Edit it from the <strong>Transfers</strong> tab inside the Fares panel. Most agencies don't need any transfer rules at all; the few who do are usually modeling a specific connection that defaults to "no transfer possible" without one.</p>
+
+      <figure>
+        <img src="/assets/docs/transfers-hero.png" alt="GTFS·X editor with the Fares & Transfers panel, Transfers tab selected, showing the empty state." loading="lazy" />
+        <figcaption>The Transfers tab inside the Fares panel. Empty state shown — most agencies leave it empty.</figcaption>
+      </figure>
+
+      <h2 id="when-to-use">When you actually need this</h2>
+      <p>By default, trip planners infer transfers from geography — if two stops are within walking distance, they assume riders can transfer between them with the default walking time. The default is usually right. You only need an entry in <code>transfers.txt</code> when the default is wrong or insufficient:</p>
+      <ul>
+        <li><strong>Cross-platform rail transfer</strong> at a busy station where the spec's default walk-time is too generous. Adding a "minimum_time = 90 seconds" entry tells the planner to use that instead of the default.</li>
+        <li><strong>Timed bus-to-bus connection at a transit hub</strong> where the connecting vehicle holds for the inbound one. Without a "timed transfer" entry the planner can't guarantee the connection.</li>
+        <li><strong>Connection that's possible but discouraged</strong> (across a parking lot, requires crossing a freeway exit ramp). A "minimum_time = 5 minutes" entry makes the planner prefer alternatives.</li>
+        <li><strong>Connection that looks possible but isn't</strong> (the inbound platform doesn't connect to the outbound platform without leaving fare-paid area). A "not possible" entry tells the planner not to suggest it.</li>
+        <li><strong>Same-stop ferry connection</strong> where the vessel turns around with a documented load/unload buffer (BC Ferries' 45-minute pattern at terminal stops, for example). Modeled as a same-stop transfer with <code>min_transfer_time</code>.</li>
+      </ul>
+
+      <h2 id="transfer-types">The four transfer types</h2>
+      <ul>
+        <li><strong>0 — Recommended.</strong> The planner can suggest this transfer normally. Default if you don't say otherwise; mostly redundant with omitting the entry.</li>
+        <li><strong>1 — Timed (vehicle waits).</strong> The receiving vehicle holds at the stop for the arriving one. Use only when there's an actual operational agreement to hold; sketching this in without dispatcher coordination just means missed connections.</li>
+        <li><strong>2 — Minimum time required.</strong> Riders need <code>min_transfer_time</code> seconds to walk between the two stops. Required field when type=2.</li>
+        <li><strong>3 — Not possible.</strong> The transfer can't be made. Suppresses the suggestion entirely.</li>
+      </ul>
+
+      <h2 id="how-to-author">Authoring in the editor</h2>
+      <p>Open the Fares panel and click the <strong>Transfers</strong> tab. Add a row: pick the from-stop and to-stop from dropdowns, choose the type, set <code>min_transfer_time</code> if the type is 2. Same-stop transfers (from_stop_id == to_stop_id) are allowed and meaningful — they describe the buffer between successive arrivals/departures at one stop.</p>
+
+      <h2 id="vs-fare-transfers">Routing transfers vs. fare transfers</h2>
+      <p>This file is about routing — does the connection exist, is the planner allowed to suggest it. It is <em>not</em> about pricing. The free-transfer-within-90-minutes pattern that smart-card systems implement is a <em>fare</em> transfer, not a routing transfer, and lives in GTFS-Fares v2's <code>fare_transfer_rules.txt</code> (round-tripped on import/export today; editor UI on the roadmap — see <a href="/docs/fares/#v2-roadmap">Fares</a>).</p>
+
+      <h2 id="gotchas">Edge cases and gotchas</h2>
+      <ul>
+        <li><strong>Less is more.</strong> Adding thousands of speculative transfers doesn't help trip planners; in fact it slows them down. Only add rules where the default behavior produces a wrong answer.</li>
+        <li><strong>Timed transfers need real operational support.</strong> If dispatch isn't actually holding the connecting vehicle, marking it as type 1 just produces missed-connection complaints.</li>
+        <li><strong>Stop pairs, not route pairs.</strong> The file describes transfers between <em>stops</em>, not between routes. A "Route 5 to Route 12" rule needs an entry per stop pair where they meet.</li>
+        <li><strong>Symmetry isn't automatic.</strong> A rule for A→B doesn't imply B→A. Add both rows if the situation is symmetric (it usually is).</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/fares/">Fares</a> — Transfers tab lives inside the Fares panel.</li>
+          <li><a href="/docs/stops/">Stops</a> — both ends of a transfer reference stop_ids from here.</li>
+          <li><a href="/docs/timetables-and-trips/">Timetables &amp; trips</a> — for timed transfers, the holding vehicle is a trip that needs slack in the schedule.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Routes &amp; shapes — GTFS·X</title>
+    <meta name="description" content="Draw and edit transit route alignments in GTFS·X: snap-to-road via Mapbox Map Matching, freehand drawing, vertex editing, per-direction shape variants, and route type / metadata." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/routes-and-shapes/" />
+    <meta property="og:title" content="Routes & shapes — GTFS·X" />
+    <meta property="og:description" content="Draw route alignments, edit vertices, snap to road, and manage per-direction shape variants." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/routes-and-shapes/" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Editor panels</div>
+      <h1>Routes &amp; shapes</h1>
+      <p class="lede">Routes are defined <strong>before</strong> stops in GTFS·X. The alignment is the most consequential design choice in a transit service, so the editor's workflow locks in the path first, then places stops along it. Each route can have multiple shape variants — typically one per direction of travel.</p>
+
+      <figure>
+        <img src="/assets/docs/routes-and-shapes-hero.png" alt="GTFS·X editor with the Routes panel showing the demo feed's six routes overlaid on the map." loading="lazy" />
+        <figcaption>The Routes panel. Each route lists its mode, stop count, and trip count; selecting one opens the per-route detail panel with shape and timetable tabs.</figcaption>
+      </figure>
+
+      <h2 id="creating-a-route">Creating a route</h2>
+      <p>Click <strong>Routes</strong> in the sidebar, then <strong>Create Route</strong>. Fill in:</p>
+      <ul>
+        <li><strong>Short name</strong> (<code>route_short_name</code>) — the public-facing identifier riders use. "5", "Rapid", "1A". Keep it short; long short_names break trip planner UIs.</li>
+        <li><strong>Long name</strong> (<code>route_long_name</code>) — the descriptive name. "Downtown Express", "Cherry Creek Connector". Usually a corridor or pair of endpoints.</li>
+        <li><strong>Color</strong> — the route's brand color, used by the map and by trip planner UIs that visualize routes. Pick something distinguishable from the basemap and from other routes.</li>
+        <li><strong>Route type</strong> — bus (3), light rail (0), subway (1), rail (2), ferry (4), cable car (5), aerial lift (6), funicular (7). The GTFS extended route types are supported on import / export but not surfaced in the editor's dropdown today.</li>
+        <li><strong>Agency</strong> — only relevant for multi-agency feeds; auto-selects the only agency otherwise.</li>
+      </ul>
+
+      <h2 id="drawing">Drawing the route</h2>
+      <p>Click <strong>Draw Route Shape</strong>, then click on the map to place vertices along the alignment. Double-click to finish. The drawing tool has two modes:</p>
+      <ul>
+        <li><strong>Snap to road</strong> (default): each segment uses the Mapbox Map Matching API to follow the road network. Click two intersections and the line follows the actual road geometry, not the straight line between them. Best for fixed-route bus and most rail. Snap-to-road occasionally picks the wrong road at complex intersections; drop an intermediate vertex to disambiguate.</li>
+        <li><strong>Freehand</strong>: each segment is a straight line from click to click. Useful for off-road segments, ferry routes, light rail running in its own ROW that isn't in the road graph, or sketching alignments that don't yet have a road.</li>
+      </ul>
+      <p>To edit an existing shape: click the route in the sidebar, then <strong>Edit Vertices</strong>. Drag any vertex to move it, click between two vertices to insert a new one, select-and-Delete to remove. <strong>Simplify</strong> reduces vertex count using the Douglas-Peucker algorithm — useful when a snap-to-road shape has more vertices than you need.</p>
+
+      <h2 id="multiple-variants">Multiple shape variants</h2>
+      <p>Most routes need at least two shapes: one for the outbound direction, one for inbound. The two often differ because one-way streets, turn restrictions, or stop pairs offset across the road force the bus to take slightly different paths each direction.</p>
+      <p>In the editor, the <strong>direction picker</strong> at the top of the route's shape panel toggles between direction 0 and direction 1. Draw separate shapes for each — they share the route_id but get distinct shape_ids on export. Each trip in the timetable then references the shape_id that matches its direction.</p>
+      <p>Loops and branches are also supported: a single direction can have multiple shape variants if the route runs different paths at different times of day (a peak express variant, a weekend deviation, etc.). The editor surfaces these as additional shapes under the same route.</p>
+
+      <h2 id="route-type">Picking a route type</h2>
+      <p>The GTFS spec defines eight basic route types: bus (3), light rail (0), subway (1), rail (2), ferry (4), cable car (5), aerial lift (6), funicular (7). Pick the one that matches the rider's experience, not the operator's classification. A "bus rapid transit" service stays type=3 (bus); it's marketed as rail-like but legally still a bus. A "trolley" running on rails is light rail (0); a "trolley bus" running on rubber tires with overhead wires is bus (3).</p>
+      <p>For services that don't fit cleanly (an aerial gondola on a transit network, a Brightline-style intercity train), the spec defines an extended set of route types in the 100–1700 range. The editor preserves these on import/export but doesn't expose them in the dropdown — for now, edit the imported value through the JSON inspector if you need one.</p>
+
+      <h2 id="gotchas">Edge cases and gotchas</h2>
+      <ul>
+        <li><strong>Snap-to-road needs an internet connection.</strong> The Map Matching API call is online. If you're editing offline, switch to freehand or pre-trace alignments while online.</li>
+        <li><strong>Vertex count costs you nothing in the spec, but high counts slow the editor.</strong> If a shape has 2,000+ vertices, Simplify it — most rider-facing apps draw the line at low zoom anyway and won't see the difference.</li>
+        <li><strong>Don't snap-to-road through private property.</strong> Routes through a bus depot, a college campus, or a hospital ring road won't be in the public road graph and snap-to-road will route around them. Use freehand for those segments.</li>
+        <li><strong>Color contrast matters.</strong> Two routes with similar colors get confused on the map; pick complementary hues for routes that overlap.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/stops/">Stops</a> — placed along the route after the shape is drawn.</li>
+          <li><a href="/docs/timetables-and-trips/">Timetables &amp; trips</a> — every trip references a route and a shape.</li>
+          <li><a href="/docs/flex-zones-and-booking-rules/">Flex zones</a> — for demand-responsive service, not fixed alignments.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Accounts and cloud sync — GTFS·X</title>
+    <meta name="description" content="How GTFS·X handles anonymous editing, account sign-in, the local-storage to cloud transfer when you Save, per-tier feed limits, and account deletion." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/account-and-cloud-sync/" />
+    <meta property="og:title" content="Accounts and cloud sync — GTFS·X" />
+    <meta property="og:description" content="Anonymous editing, what Save does for signed-in users, per-tier limits, and account-deletion behavior." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/account-and-cloud-sync/" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --sand:#FBF6EE; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
+      .site-header nav a:hover, .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      @media (max-width: 720px) { .site-header nav, .site-header .cta { display:none; } .site-header .brand img { height:30px; } }
+      main { padding-top: 24px; padding-bottom: 60px; }
+      .crumbs { color:var(--muted); font-size:0.9rem; margin: 0 0 12px; }
+      .crumbs a { color:var(--muted); text-decoration:none; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      .callout { background:#fff; border:1px solid var(--rule); border-left:4px solid var(--accent); border-radius:8px; padding:16px 20px; margin: 24px 0; }
+      a { color: var(--accent); }
+      ul, ol { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code, kbd { background:var(--sand); padding: 1px 6px; border-radius:4px; font-size:0.9em; }
+      table { border-collapse:collapse; margin: 12px 0; width:100%; font-size:0.95em; }
+      th, td { border:1px solid var(--rule); padding:8px 12px; text-align:left; }
+      th { background:var(--sand); font-weight:700; }
+      .see-also { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 36px 0 0; }
+      .see-also h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; font-size:1.1rem; }
+      .see-also ul { margin: 8px 0 0; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; margin-top:32px; }
+      footer a { color: var(--muted); text-decoration:none; }
+      footer a:hover { color:var(--accent); }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Foundations</div>
+      <h1>Accounts and cloud sync</h1>
+      <p class="lede">GTFS·X is usable without an account — you can edit, validate, and export a feed without ever signing in. Accounts add cloud sync across devices, hosted publishing, and per-organization features. This page covers what changes when you sign in, including the question new users ask most: "where does my work actually live?"</p>
+
+      <h2 id="anonymous">Anonymous editing</h2>
+      <p>If you've never signed in, you're editing as an anonymous user. Your in-progress work lives in your browser's local IndexedDB. The editor auto-saves to IndexedDB roughly every second; refreshing the page, closing the tab, and reopening the browser all preserve your work.</p>
+      <p>What anonymous editing supports:</p>
+      <ul>
+        <li>Full editor functionality — create, edit, validate, and export a GTFS ZIP.</li>
+        <li>Import an existing GTFS feed and round-trip it.</li>
+        <li>Use the demo feed at <a href="/demo">/demo</a> for testing or exploration.</li>
+      </ul>
+      <p>What anonymous editing doesn't support:</p>
+      <ul>
+        <li>Multiple devices or browsers. Your work is tied to the one browser profile it was created in. Opening the editor on another laptop won't show it.</li>
+        <li>Surviving a browser-data clear. If you clear site data, switch browsers, or open in incognito, the work is gone — there's no backup.</li>
+        <li>Hosted publishing, analysis features beyond the Free tier, organization membership.</li>
+      </ul>
+      <div class="callout">
+        <strong>The single most common support question is "I lost my work."</strong> The most common cause is anonymous editing in a browser that subsequently had its site data cleared (often by a privacy extension, an OS update, or a "free up space" sweep). If your feed represents real work, create a free account and click Save. The bandwidth cost to GTFS·X is negligible; the cost to you of losing it is not.
+      </div>
+
+      <h2 id="signed-in">Signed-in editing</h2>
+      <p>Sign in (or create a free account at the link in the top right) to bind your work to a cloud-synced account. With an account you get the same editor, plus:</p>
+      <ul>
+        <li><strong>Cross-device sync.</strong> The feeds you save are visible on any browser you sign into.</li>
+        <li><strong>Snapshots.</strong> Every save can be promoted to a named snapshot you can browse and restore.</li>
+        <li><strong>Organizations.</strong> Team and Enterprise plans support multi-user organizations where members share a set of feeds.</li>
+        <li><strong>Hosted publishing.</strong> Pro and above can publish to <code>feeds.gtfsx.com</code>; see <a href="/docs/hosted-publishing/">Hosted publishing</a>.</li>
+      </ul>
+
+      <h2 id="what-save-does">What "Save" actually does</h2>
+      <p>The Save button behaves slightly differently depending on whether you're anonymous or signed in, and this is the source of the most common confusion:</p>
+      <ul>
+        <li><strong>Anonymous:</strong> Save is a no-op. Your work is already being auto-saved to local IndexedDB; there's nothing to push to the cloud because there's no cloud account to push to.</li>
+        <li><strong>Signed in, on an existing cloud feed:</strong> Save pushes the latest state up to the cloud. Until you click Save, the "Saved" indicator stays as "Unsaved changes."</li>
+        <li><strong>Signed in, on a feed that started anonymous and was never on the cloud:</strong> The first Save transfers the entire local-storage feed up to the cloud and creates a new server-backed project. From that moment on, the feed lives in the cloud and is treated as case 2 above. <em>This is the transfer moment that wires an anonymous draft into your account</em>; everything you do after that point is synced.</li>
+      </ul>
+      <p>The practical takeaway: if you've been editing anonymously and want to keep the work, create an account and click Save. The auto-save to IndexedDB has been keeping it safe locally; the explicit Save promotes it to the cloud.</p>
+
+      <h2 id="tier-limits">Tier limits</h2>
+      <p>Saved feeds and snapshots have per-tier caps:</p>
+      <table>
+        <thead><tr><th>Plan</th><th>Saved feeds</th><th>Snapshots / feed</th><th>Published feeds</th></tr></thead>
+        <tbody>
+          <tr><td>Free</td><td>3</td><td>5</td><td>0 (export &amp; self-host)</td></tr>
+          <tr><td>Pro</td><td>10</td><td>25</td><td>1</td></tr>
+          <tr><td>Team</td><td>Effectively unlimited</td><td>50</td><td>5</td></tr>
+          <tr><td>Enterprise</td><td>Custom</td><td>Custom</td><td>Custom</td></tr>
+        </tbody>
+      </table>
+      <p>If you hit the saved-feeds cap, deleting an existing feed frees up the slot. Anonymous editing doesn't count against the cap — only feeds explicitly saved to the cloud do.</p>
+
+      <h2 id="account-management">Account management</h2>
+      <ul>
+        <li><strong>Sign in / sign out</strong> from the top-right of the editor. Email + password or magic-link by email; pick whichever you prefer at sign-in.</li>
+        <li><strong>Account settings</strong> at <a href="/account">/account</a>. Display name, email, password, organization membership.</li>
+        <li><strong>Billing</strong> at <a href="/account">/account</a> &rarr; Billing. Plan management is handled through Stripe; invoices and receipts are available in the billing portal.</li>
+      </ul>
+
+      <h2 id="data-export-deletion">Data export and deletion</h2>
+      <ul>
+        <li><strong>Export your feed.</strong> The editor's top-bar <strong>Export GTFS</strong> button produces a standards-compliant ZIP at any time, with or without an account. Your data is never locked up — even if you cancel your subscription, you can export the current state of every feed before doing so.</li>
+        <li><strong>Snapshot history.</strong> Snapshots are individually exportable from the Snapshots tab if you want a frozen copy of a past version.</li>
+        <li><strong>Delete a feed.</strong> Deleting a feed from the editor's feed list permanently removes it and all its snapshots from the cloud. Local IndexedDB caches in browsers that previously opened it will also be cleared on the next sync.</li>
+        <li><strong>Delete your account.</strong> Account deletion is a single action in <a href="/account">/account</a>: it cascade-deletes every feed, snapshot, and stored asset, immediately and without recovery. There's no grace period. If you need to retain any feed before deleting, export the GTFS first.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/quick-start/">Quick start</a> — the fastest way to put a feed together (works anonymously).</li>
+          <li><a href="/docs/hosted-publishing/">Hosted publishing</a> — what changes when a saved feed becomes a published feed.</li>
+          <li><a href="/docs/import-and-export/">Import and export</a> — the canonical way to move data in and out.</li>
+          <li><a href="/privacy-policy/">Privacy policy</a> — what GTFS·X stores about you.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

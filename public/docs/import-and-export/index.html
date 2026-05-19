@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Import &amp; export — GTFS·X</title>
+    <meta name="description" content="Import an existing GTFS ZIP into GTFS·X and export a standards-compliant ZIP back out. Round-trip preserves non-standard files and columns where possible. 100 MB import limit." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/import-and-export/" />
+    <meta property="og:title" content="Import & export — GTFS·X" />
+    <meta property="og:description" content="Import and export GTFS ZIPs in GTFS·X. Round-trip preserves data; 100 MB limit." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/import-and-export/" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Validation &amp; I/O</div>
+      <h1>Import &amp; export</h1>
+      <p class="lede">GTFS·X reads and writes standards-compliant GTFS ZIPs. Import an existing feed to edit it; export to produce a ZIP you can host or hand to a regulator. Round-trip preserves the data you imported — non-standard columns and files survive the cycle and reappear on export.</p>
+
+      <figure>
+        <img src="/assets/docs/import-and-export-hero.png" alt="Export GTFS Feed dialog in GTFS·X, listing every file in the export with row counts and an 'All checks passed' status." loading="lazy" />
+        <figcaption>The Export GTFS dialog. Every file that will appear in the ZIP is listed with its row count; the "All checks passed" badge confirms validation cleared.</figcaption>
+      </figure>
+
+      <h2 id="export">Export</h2>
+      <p>Click <strong>Export GTFS</strong> in the top bar. The editor validates first; if any errors are present, export blocks until you fix them (warnings don't block — see <a href="/docs/validation/">Validation</a>). On success you get a ZIP file containing:</p>
+      <ul>
+        <li>Every required GTFS file (<code>agency.txt</code>, <code>stops.txt</code>, <code>routes.txt</code>, <code>trips.txt</code>, <code>stop_times.txt</code>, <code>calendar.txt</code>).</li>
+        <li>Every optional file that has data (<code>calendar_dates.txt</code>, <code>shapes.txt</code>, <code>fare_attributes.txt</code>, <code>fare_rules.txt</code>, <code>transfers.txt</code>, <code>feed_info.txt</code>, <code>frequencies.txt</code> if you used the frequency editor).</li>
+        <li>Empty optional files are <strong>not</strong> exported (no zero-row <code>fare_rules.txt</code> in your ZIP).</li>
+        <li>GTFS-Flex files where applicable (<code>locations.geojson</code>, <code>booking_rules.txt</code>, <code>location_groups.txt</code>, <code>location_group_stops.txt</code>).</li>
+        <li>GTFS-Fares v2 files where present in the imported feed (round-trip preservation — see <a href="/docs/fares/#v2-roadmap">Fares</a>).</li>
+        <li><code>feed_info.txt</code> always — synthesized from agency data if you didn't fill it in explicitly.</li>
+      </ul>
+      <p>The ZIP is named after the project slug, with the export date appended (<code>sunny-valley-transit-20260518.zip</code>). Drop it on a static host, hand it to Google Transit Partners, or use the editor's <a href="/docs/hosted-publishing/">hosted publishing</a> to serve it from a stable URL.</p>
+
+      <h2 id="import">Import</h2>
+      <p>Click <strong>Import</strong> in the top bar, select a ZIP. The editor parses every supported file and surfaces an import summary:</p>
+      <ul>
+        <li><strong>Counts</strong> — agencies, routes, stops, trips, stop_times, shapes, calendars, fares, flex zones, transfers.</li>
+        <li><strong>Warnings</strong> — non-standard columns preserved, files the editor doesn't author but round-trips, unknown route types, anything in the ZIP that's outside the spec.</li>
+      </ul>
+      <p>After import, the editor loads the feed and you can edit it. Subsequent export produces a ZIP that's structurally identical for the parts the editor manages, with the non-managed files preserved verbatim.</p>
+
+      <h2 id="round-trip">Round-trip behavior</h2>
+      <p>The principle: nothing that came in goes out missing or mangled. Specifically:</p>
+      <ul>
+        <li><strong>Non-standard columns</strong> on GTFS files (e.g. an agency that uses a custom <code>route_text_color</code> variant) are preserved at the row level. Edits in the editor write the standard columns; non-standard ones carry through unchanged.</li>
+        <li><strong>Files outside the spec</strong> that the editor doesn't author (extended attribution files, agency-specific extensions) are preserved verbatim. They reappear in the export ZIP at byte-equivalent content.</li>
+        <li><strong>GTFS-Fares v2</strong> is fully round-tripped — every v2 file imported reappears on export, even though there's no editor UI for authoring v2 today.</li>
+        <li><strong>directions.txt</strong>, <code>frequencies.txt</code>, <code>pathways.txt</code> — supported on import; partially supported in the editor; preserved on export.</li>
+      </ul>
+      <p>For agencies running automated quality checks, the round-trip behavior means the editor can sit in your pipeline without changing your feed's structure — only the parts you edit are touched.</p>
+
+      <h2 id="limits">Limits</h2>
+      <ul>
+        <li><strong>100 MB import size.</strong> The browser-side import handles up to a 100 MB ZIP. Larger feeds (transit agencies the size of NYCT, MBTA) exceed this; those agencies typically have their own engineering pipelines and aren't the editor's target audience anyway.</li>
+        <li><strong>ZIP only.</strong> Import expects a ZIP archive. Raw text files in a folder don't import directly; zip them first.</li>
+        <li><strong>UTF-8 expected.</strong> Files in non-UTF-8 encodings (Windows-1252, ISO-8859-1) won't parse cleanly. Convert to UTF-8 before importing — the canonical GTFS spec requires UTF-8 anyway.</li>
+      </ul>
+
+      <h2 id="gotchas">Edge cases and gotchas</h2>
+      <ul>
+        <li><strong>Importing replaces the current project.</strong> Edits you haven't saved get overwritten. The editor prompts before replacing; if you want to keep the current project, save it as a snapshot first or sign in and save to the cloud.</li>
+        <li><strong>BOM at the start of CSV files.</strong> Some Windows-authored feeds have a BOM that confuses parsers. The editor strips it; the canonical validator does too. Other consumers may not.</li>
+        <li><strong>shape_dist_traveled is recomputed on export.</strong> The editor uses geodesic length from the shape geometry on every export, even if the imported value was different. This is the right behavior for consistency, but agencies with hand-tuned distances will see the values change.</li>
+        <li><strong>Empty optional files trip up some validators.</strong> The editor's "don't export empty optional files" behavior is correct per spec but occasionally surprises consumers who expect to see a <code>fare_rules.txt</code> present-but-empty. If you need an empty file to satisfy a downstream check, add a stub fare to keep it populated.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/validation/">Validation</a> — runs before every export; blocks on errors.</li>
+          <li><a href="/docs/hosted-publishing/">Hosted publishing</a> — serve the exported ZIP from a stable URL.</li>
+          <li><a href="/docs/deep-links/">Deep-link integration</a> — load a feed into the editor from a URL.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

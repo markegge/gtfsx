@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Agency setup — GTFS·X</title>
+    <meta name="description" content="Configure agency.txt in GTFS·X: agency name, URL, timezone, multi-agency joint feeds, and the spec gotchas (one timezone per agency, agency_id needed when there's more than one)." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/agency-setup/" />
+    <meta property="og:title" content="Agency setup — GTFS·X" />
+    <meta property="og:description" content="Set up agency.txt: name, URL, timezone, and multi-agency feeds." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/agency-setup/" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Editor panels</div>
+      <h1>Agency setup</h1>
+      <p class="lede">Every GTFS feed needs at least one agency record (<code>agency.txt</code>). The Agency panel is where you set the publisher name, public URL, and timezone — and where you add a second agency for joint feeds where two operators share a single GTFS publication.</p>
+
+      <figure>
+        <img src="/assets/docs/agency-setup-hero.png" alt="GTFS·X editor with the Agency panel selected from the left sidebar." loading="lazy" />
+        <figcaption>The Agency panel in the editor sidebar. Required fields up top; multi-agency feeds add additional rows here.</figcaption>
+      </figure>
+
+      <h2 id="required-fields">Required fields</h2>
+      <ul>
+        <li><strong><code>agency_name</code></strong> — the public-facing name of the operator. Shown in trip planners next to the route ("Run by Sunny Valley Transit"). Use the agency's actual short name, not a project codename.</li>
+        <li><strong><code>agency_url</code></strong> — the agency's public website. Riders see this in some trip planners as the "more info" link; for compliance reasons it should resolve, not 404.</li>
+        <li><strong><code>agency_timezone</code></strong> — the IANA timezone (e.g. <code>America/Los_Angeles</code>, <code>America/Denver</code>) all <code>stop_times</code> in this feed are interpreted in. Pick the timezone the schedule was authored in; trip planners convert from there.</li>
+      </ul>
+
+      <h2 id="optional-fields">Optional fields</h2>
+      <ul>
+        <li><strong><code>agency_id</code></strong> — required only when the feed has more than one agency. If you have a second agency on the feed, every route, fare, and (where relevant) attribution row needs to specify which agency it belongs to via <code>agency_id</code>. With a single agency, the field is optional and most agencies leave it blank.</li>
+        <li><strong><code>agency_lang</code></strong> — the primary language for the agency's text (BCP-47 code; <code>en</code> for English). Helps trip planners pick the right text-to-speech voice and date formatting.</li>
+        <li><strong><code>agency_phone</code></strong> — public contact number. Shown by some apps; useful for riders trying to reach customer service.</li>
+        <li><strong><code>agency_fare_url</code></strong> — link to a page describing fare policy. Useful when the fare data alone doesn't tell the whole story (transfer rules, fare-capping policies).</li>
+        <li><strong><code>agency_email</code></strong> — internal contact for the GTFS feed itself (often a generic <code>data@</code> alias). Used by feed catalogs to reach the operator about quality issues.</li>
+      </ul>
+
+      <h2 id="multi-agency">Multi-agency feeds (joint operators)</h2>
+      <p>Joint feeds are common when a regional fixed-route operator and a separately-branded microtransit partner share GTFS publication, or when a state DOT publishes a unified feed across several rural operators. The pattern is:</p>
+      <ol>
+        <li>Add a second (or third…) agency in the panel. Each gets a unique <code>agency_id</code>.</li>
+        <li>Edit each route in the Routes panel and assign it to the correct agency via the <strong>Agency</strong> dropdown.</li>
+        <li>Fare records also carry an <code>agency_id</code>; the editor sets it automatically based on the route(s) the fare applies to.</li>
+      </ol>
+      <p>One thing to know: each agency has its <em>own</em> timezone. A feed with operators in two timezones (say, an interstate transit district) is valid, and <code>stop_times</code> are interpreted in the agency of the trip's route. This is the correct way to model service that crosses a timezone boundary — don't try to "normalize" everything to one timezone, because riders will see wrong departure times.</p>
+
+      <h2 id="gotchas">Edge cases and gotchas</h2>
+      <ul>
+        <li><strong>Timezone IDs change rarely but they do change.</strong> Use current IANA names (<code>America/Indiana/Indianapolis</code>, not the deprecated <code>US/East-Indiana</code>). Older feeds often have stale names; the editor's timezone picker uses current names.</li>
+        <li><strong>Don't put the publishing tool in agency fields.</strong> A common mistake on first feeds is to set <code>agency_name</code> to "GTFS·X" or the consulting firm. The agency is the transit operator the rider rides, not the entity that produced the GTFS data. Use <code>feed_info.feed_publisher_name</code> if you want to credit the data publisher separately.</li>
+        <li><strong>Don't leave <code>agency_url</code> as a placeholder.</strong> <code>https://example.com</code> will pass GTFS validation but fail Google Transit Partners' onboarding review. Use the real URL or skip the field.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/quick-start/">Quick start</a> — agency setup is step 1.</li>
+          <li><a href="/docs/routes-and-shapes/">Routes &amp; shapes</a> — where you assign routes to agencies.</li>
+          <li><a href="/docs/import-and-export/">Import &amp; export</a> — agency fields preserved on round-trip.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

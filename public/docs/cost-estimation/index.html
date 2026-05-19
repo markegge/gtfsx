@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Cost estimation — GTFS·X</title>
+    <meta name="description" content="Estimate operating cost for any GTFS feed: revenue hours, peak vehicle count, and weekly and annual cost per route and system-wide, with a deadhead factor and per-route overrides." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/cost-estimation/" />
+    <meta property="og:title" content="Cost estimation — GTFS·X" />
+    <meta property="og:description" content="Operating-cost estimates from a GTFS feed: revenue hours, peak vehicles, weekly and annual cost per route." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/cost-estimation/" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --sand:#FBF6EE; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
+      .site-header nav a:hover, .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      @media (max-width: 720px) { .site-header nav, .site-header .cta { display:none; } .site-header .brand img { height:30px; } }
+      main { padding-top: 24px; padding-bottom: 60px; }
+      .crumbs { color:var(--muted); font-size:0.9rem; margin: 0 0 12px; }
+      .crumbs a { color:var(--muted); text-decoration:none; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      .tier-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; vertical-align:middle; }
+      .tier-badge.pro { background:#FBEEDF; color:#9A4F00; border:1px solid #F0D1A0; }
+      a { color: var(--accent); }
+      ul, ol { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code, kbd { background:var(--sand); padding: 1px 6px; border-radius:4px; font-size:0.9em; }
+      figure { margin: 1.4rem 0; }
+      figure img { width:100%; max-width:1200px; height:auto; border:1px solid var(--rule); border-radius:8px; display:block; }
+      figcaption { color:var(--muted); font-size:0.9rem; margin-top:6px; }
+      .see-also { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 36px 0 0; }
+      .see-also h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; font-size:1.1rem; }
+      .see-also ul { margin: 8px 0 0; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; margin-top:32px; }
+      footer a { color: var(--muted); text-decoration:none; }
+      footer a:hover { color:var(--accent); }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Analysis tools</div>
+      <h1>Cost estimation <span class="tier-badge pro">Pro</span></h1>
+      <p class="lede">Estimate the operating cost of any GTFS feed — existing service, a proposed alternative, a back-of-envelope sketch — using revenue hours pulled from the trip schedule and a configurable cost-per-revenue-hour. Outputs per-route and system-wide weekly and annual figures, plus the peak vehicle count.</p>
+
+      <figure>
+        <img src="/assets/docs/cost-estimation-hero.png" alt="Costs panel in GTFS·X showing system totals (weekly revenue hours, peak vehicles, weekly and annual cost) and a per-route breakdown for the Sunny Valley feed." loading="lazy" />
+        <figcaption>The Costs panel on the Sunny Valley feed. Assumptions up top, system totals in the middle, per-route breakdown below. CSV export is one click.</figcaption>
+      </figure>
+
+      <h2 id="what-it-is">What it is</h2>
+      <p>For most small and mid-size agencies, "what does this service cost?" gets answered with a spreadsheet someone built once and nobody fully trusts. The Costs panel replaces the spreadsheet with a calculation that reads the feed directly: every revenue hour in the schedule, the peak vehicle count required to operate it, multiplied by a cost-per-revenue-hour you control. It runs in the editor with no setup, recomputes as you edit, and lets you compare an existing service against a proposed change side by side by saving a snapshot.</p>
+      <p>The output is a budget figure suitable for a board memo, a grant narrative, a service-planning workshop, or a back-of-envelope sanity check — not a substitute for the operator's own cost model, which has to account for benefits, fuel, maintenance, garage capacity, and a hundred other things that don't live in a GTFS feed.</p>
+
+      <h2 id="when-to-use-it">When to use it</h2>
+      <ul>
+        <li>Comparing two alternatives for the same corridor: does the limited-stop variant cost more or less than the local?</li>
+        <li>Sizing a proposed extension before going to the board (or to a grant writer) with a number.</li>
+        <li>Sanity-checking an existing service against the agency's published budget — large divergence is usually a sign that the GTFS feed is out of date.</li>
+        <li>Estimating peak vehicle count for a fleet-planning discussion (the panel computes this from trip overlaps, which is harder to do by hand than it sounds).</li>
+      </ul>
+
+      <h2 id="how-to-use-it">How to use it in GTFS·X</h2>
+      <ol>
+        <li>Open the feed in the editor and click <strong>Costs</strong> in the left sidebar. The panel opens on the right.</li>
+        <li>Set the <strong>Cost per Revenue Hour</strong> input. The default is $50, which is a placeholder, not a recommendation — every agency should plug in its own loaded labor rate (typically $80–$180/hour for fixed-route bus, depending on geography and the operating model). NTD's per-mode operating expense per vehicle-revenue-hour is a defensible starting point if you don't have an internal number; see "Methodology references" below.</li>
+        <li>Set the <strong>Deadhead Factor</strong> input. This is the multiplier on revenue hours to estimate total platform hours (revenue hours + pull-out, pull-in, layover, and reposition time). The default is 1.2 — usable for most urban fixed-route systems with garages close to the network. Long deadhead routes (rural service, one garage serving a wide area) often push this to 1.4 or higher; high-frequency urban networks with garages on the line sometimes sit at 1.1.</li>
+        <li>For per-route overrides, edit the route in the Routes panel — each route has a <code>cost_per_revenue_hour</code> field that supersedes the global default when set. Useful when one route is contracted out at a different rate.</li>
+        <li>Read the system summary card and the per-route table. Use the <strong>Export CSV</strong> button to drop the figures into a spreadsheet for a memo or for combining with non-GTFS cost categories.</li>
+      </ol>
+
+      <h2 id="methodology">Methodology</h2>
+      <p>The tool computes these figures from the open feed:</p>
+      <ul>
+        <li><strong>Revenue hours per service pattern</strong>: for every trip in <code>trips.txt</code>, take the duration as the difference between the first and last stop time. Sum across all trips in each <code>calendar.txt</code> service pattern.</li>
+        <li><strong>Weekly revenue hours</strong>: revenue hours per service pattern, multiplied by the number of days that service runs in a typical week (the day-of-week toggles in <code>calendar.txt</code>).</li>
+        <li><strong>Annual revenue hours</strong>: the calendar range is walked day-by-day, applying <code>calendar_dates.txt</code> exceptions, then normalized to a 365-day year. A calendar that covers six months will be doubled; a calendar that runs three years will be averaged down.</li>
+        <li><strong>Total hours (platform hours)</strong>: revenue hours × deadhead factor.</li>
+        <li><strong>Peak vehicles</strong>: a sweep-line over trip start and end times — the largest number of trips overlapping at any moment is the minimum vehicle count required to operate the schedule. (Strictly: it's the lower bound; the real number is a bit higher because of interlining inefficiency and the operator's own pull policies.)</li>
+        <li><strong>Cost</strong>: total hours × cost-per-revenue-hour. Weekly and annual figures are reported separately so you can quote whichever fits the audience.</li>
+      </ul>
+
+      <h2 id="limits">What it doesn't capture</h2>
+      <ul>
+        <li><strong>Capital and overhead.</strong> The tool produces an operating cost only — no vehicle purchase, no garage, no overhead allocation. Add those separately in your budget memo.</li>
+        <li><strong>Time-of-day rates.</strong> The deadhead factor is a single multiplier, not a peak/off-peak split. Operators with split shifts and premium-pay rules will need to adjust the cost-per-hour figure to reflect their loaded blended rate.</li>
+        <li><strong>Mode-specific cost structures.</strong> Per-revenue-hour costing fits fixed-route bus cleanly and gets fuzzy for demand-responsive service (where per-revenue-mile or per-trip is often more meaningful). Use the tool's output for flex zones as a rough order of magnitude.</li>
+        <li><strong>Headway-based service.</strong> Frequencies defined in <code>frequencies.txt</code> rather than as explicit trips are expanded against the headway and span to compute revenue hours. The resulting figure is an average — if the actual schedule has gaps that the headway doesn't, the cost will be slightly overstated.</li>
+      </ul>
+
+      <h2 id="references">Methodology references</h2>
+      <ul>
+        <li><a href="https://www.transit.dot.gov/ntd" rel="external">National Transit Database</a> — the canonical source for per-agency, per-mode operating expense per vehicle-revenue-hour. Useful for picking a defensible cost-per-revenue-hour value when you don't have an internal number; pull the most recent year's <em>Operating Expenses</em> file and divide by <em>Vehicle Revenue Hours</em> for the closest peer agency in your mode.</li>
+        <li><a href="https://nap.nationalacademies.org/catalog/14267/transit-cost-allocation-models-a-synthesis-of-transit-practice" rel="external">TCRP Synthesis 90: Transit Cost Allocation Models</a> — background on how agencies build the multipliers (hourly, mileage, peak-vehicle) that underlie a serious cost model.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/service-summary/">Service summary</a> — revenue hours and trip counts without the cost calculation.</li>
+          <li><a href="/docs/demographic-coverage/">Demographic coverage</a> — pair with cost for a service-per-dollar-per-capita view.</li>
+          <li><a href="/docs/timetables-and-trips/">Timetables and trips</a> — where the underlying revenue-hour data comes from.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

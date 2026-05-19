@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Demographic coverage — GTFS·X</title>
+    <meta name="description" content="Population, households, and workers within walking distance of stops, computed from US Census ACS data. Per-route and system-wide figures suitable for grant narratives and service planning." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/demographic-coverage/" />
+    <meta property="og:title" content="Demographic coverage — GTFS·X" />
+    <meta property="og:description" content="Population, households, and workers served by a GTFS feed, using US Census ACS data and a configurable walk-distance buffer." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/demographic-coverage/" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --sand:#FBF6EE; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
+      .site-header nav a:hover, .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      @media (max-width: 720px) { .site-header nav, .site-header .cta { display:none; } .site-header .brand img { height:30px; } }
+      main { padding-top: 24px; padding-bottom: 60px; }
+      .crumbs { color:var(--muted); font-size:0.9rem; margin: 0 0 12px; }
+      .crumbs a { color:var(--muted); text-decoration:none; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      .tier-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; vertical-align:middle; }
+      .tier-badge.pro { background:#FBEEDF; color:#9A4F00; border:1px solid #F0D1A0; }
+      a { color: var(--accent); }
+      ul, ol { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code, kbd { background:var(--sand); padding: 1px 6px; border-radius:4px; font-size:0.9em; }
+      figure { margin: 1.4rem 0; }
+      figure img { width:100%; max-width:1200px; height:auto; border:1px solid var(--rule); border-radius:8px; display:block; }
+      figcaption { color:var(--muted); font-size:0.9rem; margin-top:6px; }
+      .see-also { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 36px 0 0; }
+      .see-also h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; font-size:1.1rem; }
+      .see-also ul { margin: 8px 0 0; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; margin-top:32px; }
+      footer a { color: var(--muted); text-decoration:none; }
+      footer a:hover { color:var(--accent); }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Analysis tools</div>
+      <h1>Demographic coverage <span class="tier-badge pro">Pro</span></h1>
+      <p class="lede">Population, households, and workers within walking distance of your stops, computed from US Census ACS data. Per-route and system-wide figures suitable for a grant narrative ("17,400 residents and 9,200 jobs are within a quarter-mile of the proposed Route 5 alignment") or for sanity-checking a service alternative.</p>
+
+      <figure>
+        <img src="/assets/docs/demographic-coverage-paywall.png" alt="Coverage panel in the GTFS·X sidebar showing the Pro plan upgrade card." loading="lazy" />
+        <figcaption>The Coverage panel in the editor sidebar. On the Pro plan the panel shows the analyze button and per-route results; on the Free plan it shows the upgrade card pictured.</figcaption>
+      </figure>
+
+      <h2 id="what-it-is">What it is</h2>
+      <p>The Coverage panel reports three figures for the area within walking distance of your transit network: <strong>population</strong>, <strong>households</strong>, and <strong>workers</strong>. The figures come from the most recent five-year American Community Survey (currently the 2022 5-year release, ACS B01003, B25001, and B08301 respectively) and are apportioned to your service area by overlapping a buffer around each stop with the Census block groups it touches.</p>
+      <p>It's the answer to the most-asked question in a service-planning meeting — "how many people does this route reach?" — without firing up a desktop GIS or pulling Census tables by hand. Run it on your existing network to anchor a discussion; run it on a proposed alternative to support a recommendation.</p>
+
+      <h2 id="when-to-use-it">When to use it</h2>
+      <ul>
+        <li><strong>Grant applications.</strong> Most FTA discretionary programs (5310, 5311, 5339, Areas of Persistent Poverty, etc.) ask for population served. A defensible number with a documented methodology beats a hand-waved estimate every time.</li>
+        <li><strong>Service-planning workshops.</strong> Comparing two corridor options? Run coverage on both and put the numbers side by side. The conversation shifts from "I think A is better" to "A reaches 4,000 more households but 1,200 fewer jobs."</li>
+        <li><strong>NTD reporting context.</strong> Population in service area is one of the NTD reportable metrics; the Coverage figure is a defensible input.</li>
+        <li><strong>Title VI program updates.</strong> A baseline-coverage figure pairs naturally with the <a href="/docs/title-vi-analysis/">Title VI analysis</a> — the latter is a ratio, the former is the denominator.</li>
+      </ul>
+
+      <h2 id="how-to-use-it">How to use it in GTFS·X</h2>
+      <ol>
+        <li>Open the feed in the editor and click <strong>Coverage</strong> in the left sidebar.</li>
+        <li>Click <strong>Analyze Coverage</strong>. The tool fetches the Census block groups that intersect your service area and computes the buffered overlap. First run for a region takes several seconds; results cache locally.</li>
+        <li>Read the system summary card: population, households, workers, and the count of block groups touched, with the buffer distance noted.</li>
+        <li>Scroll the per-route breakdown to see how each route contributes. A route that adds few unique residents relative to its operating cost is worth asking questions about (and the <a href="/docs/cost-estimation/">Cost estimation</a> panel will give you the other half of that ratio).</li>
+      </ol>
+
+      <h2 id="methodology">Methodology</h2>
+      <p>The tool buffers each stop, intersects the buffer with the Census block groups it overlaps, and apportions block-group demographics by the overlap fraction.</p>
+      <ul>
+        <li><strong>Buffer distance.</strong> Quarter-mile (1,320 ft) for bus, ferry, cable car, gondola, and funicular routes; half-mile (2,640 ft) for tram, subway, and rail. These match the conventional walking-distance assumptions used in transit-planning practice. Per-stop buffer overrides aren't supported today.</li>
+        <li><strong>Block-group geometry.</strong> Each block group is modeled as a disc with a half-mile radius centered on the tract centroid. This is a deliberate simplification — actual block-group polygons would be more precise but materially slower to compute in the browser — and is best understood as a reasonable approximation for dense and suburban areas. Sparse rural block groups may be over-counted; if your service area has fewer than ~50 block groups, validate the result against a polygon-aware tool.</li>
+        <li><strong>System-wide aggregation.</strong> For each block group, the tool takes the <em>maximum</em> overlap fraction across all routes (not the sum) before computing population. That means a block group covered by three routes counts once, not three times — the system-wide figure is a union count, not a sum of per-route counts. (Per-route figures, by contrast, are pure per-route — adding them up will over-count.)</li>
+        <li><strong>ACS variables.</strong> <code>B01003_001E</code> for total population, <code>B25001_001E</code> for total housing units (used as a proxy for households), <code>B08301_001E</code> for total workers 16 and over. Vintage: ACS 2022 5-year. If your agency's adopted methodology requires a different vintage, the figure won't be directly comparable — cite the vintage in any document.</li>
+      </ul>
+
+      <h2 id="limits">Limits</h2>
+      <ul>
+        <li>The buffer-around-a-stop assumption treats stop placement as the unit of access. It doesn't model walk-network geometry, intersections, or topography. A stop on the wrong side of a freeway with no underpass will still count as covering everything within a quarter-mile.</li>
+        <li>"Workers" is the residential count — people who live in the buffer and work somewhere. For "jobs in the buffer" (a different demographic, often more useful for downtown coverage), see the Demand Dots layer described in <a href="/docs/rider-propensity/">Rider propensity</a>, which incorporates LEHD workplace data.</li>
+        <li>The tool surfaces totals only. For Title VI–style demographic comparisons (minority vs non-minority, low-income vs non-low-income), see the <a href="/docs/title-vi-analysis/">Title VI analysis</a> page.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/title-vi-analysis/">Title VI analysis</a> — equity comparison using the same Census plumbing.</li>
+          <li><a href="/docs/rider-propensity/">Rider propensity</a> — demographic-driven heatmap including workplace data.</li>
+          <li><a href="/docs/cost-estimation/">Cost estimation</a> — pair with coverage for a service-per-dollar-per-capita view.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

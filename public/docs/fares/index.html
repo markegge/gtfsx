@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Fares — GTFS·X</title>
+    <meta name="description" content="Define GTFS fares in GTFS·X: flat fares, zone-based matrices, multiple fare types (regular, reduced, senior, student). v1 (fare_attributes / fare_rules) authored today; v2 round-trips on import/export." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/fares/" />
+    <meta property="og:title" content="Fares — GTFS·X" />
+    <meta property="og:description" content="Author GTFS-Fares v1 in GTFS·X. v2 round-trips through import / export." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/fares/" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Editor panels</div>
+      <h1>Fares</h1>
+      <p class="lede">Fare data is strongly encouraged. Trip planners and rider-facing apps depend on accurate fare information, and a feed without it is materially less useful to the people consuming it. The Fares panel writes GTFS-Fares v1 (<code>fare_attributes.txt</code> + <code>fare_rules.txt</code>); v2 round-trips on import/export today, with an editor UI on the roadmap.</p>
+
+      <figure>
+        <img src="/assets/docs/fares-hero.png" alt="GTFS·X editor with the merged Fares & Transfers panel, Fares tab selected." loading="lazy" />
+        <figcaption>The Fares panel. Two tabs: Fares (shown) and Transfers — see <a href="/docs/transfers/">Transfers</a> for the latter.</figcaption>
+      </figure>
+
+      <h2 id="when-to-use">When to use it</h2>
+      <p>Every published feed should have at least a flat fare. The empty-fare warning that surfaces persistently in the editor isn't pedantic — Google Transit and Apple Maps both reduce the quality score of feeds without fares, and the user-facing apps that rely on fare data (Transit, Citymapper, OneBusAway, OpenTripPlanner deployments) will display "Fare: unknown" next to your trips when riders look them up.</p>
+
+      <h2 id="flat-fares">Flat fare (the simplest case)</h2>
+      <p>One fare, applied to every route. The 80% case for small and mid-size agencies. In the Fares panel:</p>
+      <ol>
+        <li>Click <strong>Add Fare</strong>.</li>
+        <li>Set the price (e.g. 2.00), currency (USD), payment method (1 = before boarding, for prepaid; 0 = on board, for cash-on-bus), and transfer policy (0 = no transfers, 1 = one transfer, 2 = two transfers, blank = unlimited).</li>
+        <li>Save. The fare applies to every route by default.</li>
+      </ol>
+
+      <h2 id="fare-types">Multiple fare types</h2>
+      <p>For agencies that publish reduced fares (senior, student, disability), add additional <code>fare_attributes.txt</code> records — one per fare class. The editor uses a fare_id naming convention that prefixes the class: <code>senior-</code>, <code>student-</code>, <code>reduced-</code>, <code>free-</code>. Pick the prefix that matches the agency's published fare list.</p>
+      <p>Note: GTFS v1 fares don't have first-class "rider category" records — fare class is encoded by convention in the fare_id. GTFS-Fares v2 adds <code>rider_categories.txt</code> as a first-class concept; for agencies that need explicit rider categorization in their published data, v2 is the right path (round-trips today; editor UI planned).</p>
+
+      <h2 id="zone-based">Zone-based fares</h2>
+      <p>For zone-based systems, each stop gets a <code>zone_id</code>, and fare rules define what each origin → destination pair costs.</p>
+      <ol>
+        <li>Open the Stops panel and assign a <code>zone_id</code> to each stop. (Zone IDs are arbitrary strings — "Z1", "DOWNTOWN", "RING_1" — pick something stable and short.)</li>
+        <li>Back in the Fares panel, add a fare with a price for each zone-to-zone combination. The editor presents a matrix view; fill in the cells.</li>
+        <li>For symmetric fare schedules ($1 from Z1 to Z2 and also from Z2 to Z1), the matrix lets you toggle "mirror" so you only fill the upper triangle.</li>
+      </ol>
+      <p>Stops without a <code>zone_id</code> fall back to the system-wide default fare. If you have a partial zone system (downtown is zoned, suburbs are flat), set zones only on the affected stops and the default fare covers the rest.</p>
+
+      <h2 id="transfers-tab">Transfers (transfers.txt)</h2>
+      <p>The same Fares panel has a <strong>Transfers</strong> tab for <code>transfers.txt</code> — recommended / timed / minimum-time / not-possible rules between stop pairs. These are routing semantics, not fare rules: they tell trip planners how to chain trips together. See <a href="/docs/transfers/">Transfers</a> for the full reference; the panel reuses the same Transfers editor it used to live in standalone.</p>
+
+      <h2 id="v2-roadmap">GTFS-Fares v2</h2>
+      <p>v2 is a major rework of the fare spec: distance-based fares, transfer rules with discounts and time windows, rider categories, fare media (cash vs smartcard vs contactless), and capped-fare patterns. It lives in a parallel set of files (<code>fare_products.txt</code>, <code>fare_leg_rules.txt</code>, <code>fare_transfer_rules.txt</code>, plus the supporting <code>areas</code> / <code>networks</code> / <code>timeframes</code> / <code>rider_categories</code> / <code>fare_media</code> tables) and coexists with v1 — consumers prefer v2 when present.</p>
+      <p>What works today: import a v2 feed, edit the v1 portion in the editor, export — every v2 file you imported is preserved on export. Round-trip is covered by integration tests.</p>
+      <p>What's not yet available: authoring v2 records from scratch in the editor. The Phase 2 editor UI (Areas, Networks, Fare Products, Leg Rules, Transfer Rules) is on the roadmap. Until it ships, agencies that need to author v2 typically maintain it in a spreadsheet alongside the editor.</p>
+
+      <h2 id="gotchas">Edge cases and gotchas</h2>
+      <ul>
+        <li><strong>Prices are decimal strings.</strong> "2.00" (with the dot) is correct; "200" (as cents) is wrong. The spec stores fare price as a decimal in the currency's main unit.</li>
+        <li><strong>Currency must be ISO 4217.</strong> USD, CAD, MXN, EUR. The editor's currency picker uses ISO codes.</li>
+        <li><strong>"Transfers = blank" means unlimited.</strong> Don't set it to a big number; leave the field empty.</li>
+        <li><strong>Free fares are allowed.</strong> Price 0.00 with currency_type set models a free service (university shuttles, downtown circulators). Apps display "Free" instead of "Unknown."</li>
+        <li><strong>One agency, one currency.</strong> Multi-currency feeds aren't a supported scenario in v1. If you operate cross-border service with different currencies, that's a v2 use case.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/transfers/">Transfers</a> — routing transfers, edited in the same panel under the Transfers tab.</li>
+          <li><a href="/docs/stops/">Stops</a> — <code>zone_id</code> is set per stop in the Stops panel.</li>
+          <li><a href="/docs/routes-and-shapes/">Routes &amp; shapes</a> — route-level fare assignment.</li>
+          <li><a href="/docs/validation/">Validation</a> — the empty-fare warning surfaces here.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

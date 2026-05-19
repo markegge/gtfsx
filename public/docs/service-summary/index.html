@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Service summary — GTFS·X</title>
+    <meta name="description" content="Service Summary tab in GTFS·X: revenue hours, trip counts per route, peak vehicles, span of service. Use it to sanity-check a feed and prep NTD reporting figures." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/service-summary/" />
+    <meta property="og:title" content="Service summary — GTFS·X" />
+    <meta property="og:description" content="Revenue hours, trip counts, peak vehicles, and span of service derived from your GTFS feed." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/service-summary/" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Validation &amp; I/O</div>
+      <h1>Service summary</h1>
+      <p class="lede">The Service Summary tab surfaces the operational shape of your feed as numbers: weekly revenue hours, total trips per route, peak vehicle count, and span of service. Use it to sanity-check a feed before publishing, prep NTD reporting figures, or compare a proposed alternative against the existing service.</p>
+
+      <figure>
+        <img src="/assets/docs/service-summary-hero.png" alt="GTFS·X editor with the Service Summary footer tab open." loading="lazy" />
+        <figcaption>The Service Summary tab in the footer. Per-route breakdowns appear below the system totals.</figcaption>
+      </figure>
+
+      <h2 id="what-it-shows">What it shows</h2>
+      <p>Open the <strong>Service Summary</strong> tab in the footer. The view is organized by route, with a system-wide summary at the top.</p>
+      <ul>
+        <li><strong>Weekly revenue hours</strong> — sum of trip durations across all trips on each calendar day in a typical week, multiplied by how often each calendar runs.</li>
+        <li><strong>Trips per week</strong> — count of distinct trips operating in a typical week, summed across service patterns.</li>
+        <li><strong>Peak vehicles</strong> — the maximum number of vehicles required at any moment. Computed via a sweep-line over trip start/end times.</li>
+        <li><strong>Span of service</strong> — earliest first-stop departure and latest last-stop arrival across the route's trips.</li>
+        <li><strong>Service days</strong> — which days of the week the route runs on, derived from the calendar pattern of every trip.</li>
+      </ul>
+
+      <h2 id="when-to-use">When to use it</h2>
+      <ul>
+        <li><strong>Sanity-check a freshly built feed.</strong> Does the revenue-hour total match what the agency budget says you operate? A 30% divergence usually means the feed has stale trips or a calendar that's wrong.</li>
+        <li><strong>Prep NTD reporting figures.</strong> Service hours and miles are part of the NTD F-30 / S-10 forms. The Service Summary gives a defensible figure — verify against the operator's farebox or AVL data before submission.</li>
+        <li><strong>Compare alternatives.</strong> Author two feeds (current vs. proposed) as separate projects, open Service Summary on each, and put the per-route numbers side by side in a board memo. Often more legible than a cost figure alone.</li>
+        <li><strong>Spot anomalies.</strong> A route with 200% the trip count of a peer suggests duplicated trips. A route with 4 hours of span when the timetable says 14 suggests a service pattern that's only running one day per week. Service Summary makes anomalies obvious.</li>
+      </ul>
+
+      <h2 id="methodology">Methodology</h2>
+      <ul>
+        <li><strong>Revenue hours per trip</strong> = last stop time − first stop time. Includes layover at terminals if those stops are in <code>stop_times.txt</code>.</li>
+        <li><strong>Weekly</strong> = per-service-day revenue hours × number of days that service runs in a typical week (the seven day toggles in <code>calendar.txt</code>, ignoring exceptions for the weekly average).</li>
+        <li><strong>Peak vehicles</strong> via sweep-line: walk start and end times in chronological order, count overlapping trips, take the max. This is the lower-bound peak — actual fleet size is a bit higher due to pull-out / pull-in time and the operator's interlining choices.</li>
+        <li><strong>Service days</strong> derived from the calendar patterns referenced by the route's trips. A route with trips on both a Weekday and Saturday service shows as "Mon–Sat".</li>
+      </ul>
+
+      <h2 id="gotchas">Edge cases and gotchas</h2>
+      <ul>
+        <li><strong>Frequency-based trips are expanded against the headway.</strong> A 10-minute headway over 14 hours contributes 84 trips and the corresponding revenue hours, even though it's one row in <code>frequencies.txt</code>.</li>
+        <li><strong>Calendar_dates exceptions don't affect the weekly figure.</strong> The summary uses the weekly pattern in <code>calendar.txt</code>; holiday adds/removes affect the annualized total separately (used by <a href="/docs/cost-estimation/">Cost estimation</a>) but not the "weekly" figure.</li>
+        <li><strong>Revenue hours include scheduled layover.</strong> If the published <code>stop_times</code> include a 20-minute layover at the terminal, that's in the revenue-hour total. Operationally that's correct — the bus is on the route — but it's not "in service" in the way a rider would describe.</li>
+        <li><strong>Doesn't include deadhead.</strong> Pull-out, pull-in, and reposition moves aren't in GTFS. Cost estimates apply a deadhead factor; the raw revenue-hour figure here is service hours only.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/cost-estimation/">Cost estimation</a> — adds a per-revenue-hour cost on top of the figures shown here.</li>
+          <li><a href="/docs/timetables-and-trips/">Timetables &amp; trips</a> — the underlying trip data.</li>
+          <li><a href="/docs/service-calendars/">Service calendars</a> — what drives the weekly multiplier.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

@@ -53,10 +53,11 @@ Required and core-optional files are first-class entities in the editor:
 | `calendar_dates.txt` | ✅ |
 | `shapes.txt` | ✅ |
 | `feed_info.txt` | ✅ |
-| `fare_attributes.txt` / `fare_rules.txt` | ✅ |
+| `fare_attributes.txt` / `fare_rules.txt` (GTFS-Fares v1) | ✅ |
+| GTFS-Fares v2 (`areas.txt`, `stop_areas.txt`, `networks.txt`, `route_networks.txt`, `timeframes.txt`, `rider_categories.txt`, `fare_media.txt`, `fare_products.txt`, `fare_leg_rules.txt`, `fare_transfer_rules.txt`) | 🟡 — Phase 1 round-trip only; see [§1.6](#16-fares) |
 | `directions.txt` (auto-emitted from per-route direction names) | ✅ |
 | `frequencies.txt` (headway-based service) | 🔲 |
-| `transfers.txt` | 🔲 |
+| `transfers.txt` | ✅ |
 | `pathways.txt` | 🔲 |
 | GTFS-Flex (`locations.geojson`, `booking_rules.txt`, `location_groups.txt`, extended `stop_times`) | 🟡 — see [`FLEX_ROADMAP.md`](./FLEX_ROADMAP.md) |
 
@@ -114,11 +115,44 @@ Stops are placed in the context of the currently-selected route. Default behavio
 
 Fare information is **strongly encouraged**. Empty-fare feeds are flagged prominently; export emits a warning.
 
+#### 1.6.1 GTFS-Fares v1 — shipped
+
 - ✅ Fare attributes (price, currency, payment method, transfer policy, transfer duration).
 - ✅ Fare rules — flat-route fares, zone-to-zone matrices.
 - ✅ Multiple fare types (regular, reduced, etc., via additional `fare_id`s).
 - ✅ Empty-fare warning banner + export-time validation warning.
 - 🟡 Zone editor — basic zone assignment per stop is supported; no map-drawing zone editor yet.
+
+#### 1.6.2 GTFS-Fares v2 — Phase 1 shipped, Phases 2/3 planned
+
+GTFS-Fares v2 is a parallel set of files alongside v1; consumers prefer v2 when present. Most agencies serving Google/Apple/MobilityData ingestors today publish both during a transition window. The editor's v2 work is staged:
+
+**Phase 1 — round-trip preservation (shipped).** A v2-aware feed imported into the editor is preserved on export. Round-trip integration test (`run-tests.ts` Phase 12) asserts every v2 file survives import → export → re-import without data loss.
+
+- ✅ Types for all 10 v2 entities in `src/types/gtfs.ts`.
+- ✅ Store slice `src/store/fareV2Slice.ts` holding parsed rows.
+- ✅ Import (`gtfsImport.ts`) parses `areas.txt`, `stop_areas.txt`, `networks.txt`, `route_networks.txt`, `timeframes.txt`, `rider_categories.txt`, `fare_media.txt`, `fare_products.txt`, `fare_leg_rules.txt`, `fare_transfer_rules.txt`.
+- ✅ Export (`gtfsExport.ts`) emits each file when populated; v1 and v2 coexist in the same ZIP.
+- ✅ Persistence layer (`persistence.ts`, `serverPersistence.ts`) snapshots the v2 state alongside the rest of the editor.
+
+**Phase 2 — editor UI (planned).** Authoring requires new panels because the v2 cross-references go several levels deep. Recommended build order, each piece blocked on the prior:
+
+- 🔲 Areas editor — name an area, assign stops on the map (replaces v1 zone assignment for v2-only feeds).
+- 🔲 Networks editor — group routes for fare purposes.
+- 🔲 Rider Categories editor — first-class records for adult / senior / student / child.
+- 🔲 Fare Media editor — cash vs smart card vs cEMV vs mobile app.
+- 🔲 Fare Products editor — the actual purchasable thing, joining categories and media to prices.
+- 🔲 Timeframes editor — peak/off-peak windows tied to service_ids.
+- 🔲 Leg Rules editor — which (area + network + timeframe + rider category) combo costs which fare product.
+- 🔲 Transfer Rules editor — free / discounted / time-bounded transfer pricing. Distinct from `transfers.txt` (routing semantics) — these are fare rules. Lives under the Fares panel when built.
+
+**Phase 3 — validation (planned).** v2's referential integrity is dense and bad references silently break trip-planner fare display.
+
+- 🔲 Cross-reference checks: `fare_leg_rules.fare_product_id` exists in `fare_products`; `fare_leg_rules.network_id` exists in `networks`; same for `area_id`, `timeframe_group_id`, etc.
+- 🔲 Validation that every route is covered by at least one applicable leg rule (or surface a "no fare defined for route X" warning analogous to the v1 check).
+- 🔲 Detect v1/v2 conflicts when both are present (e.g. a route priced differently in v1 and v2).
+
+Why staged: the editor's target audience is small and mid-size agencies whose immediate need is the ability to import a v2 feed (often handed to them by a state DOT or a consultant) and round-trip it without data loss. The editor UI is the long pole and adds little value until an agency is actually authoring v2 from scratch — which most aren't yet. Phases 2/3 land as the install base of v2-authoring agencies grows.
 
 ### 1.7 GTFS-Flex (demand-responsive service)
 

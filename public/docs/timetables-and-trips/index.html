@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Timetables &amp; trips — GTFS·X</title>
+    <meta name="description" content="Build GTFS timetables in GTFS·X: trip grid, auto-interpolation, duplicate-with-offset for repeating service, frequency editor for headway-based service, direction toggle." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/timetables-and-trips/" />
+    <meta property="og:title" content="Timetables & trips — GTFS·X" />
+    <meta property="og:description" content="Build the trip grid, auto-interpolate stop times, duplicate trips at a fixed offset, switch to headway-based service." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/timetables-and-trips/" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Editor panels</div>
+      <h1>Timetables &amp; trips</h1>
+      <p class="lede">The timetable editor is a grid: each row is a trip, each column is a stop, each cell is an arrival/departure time. Type the first stop's time, auto-interpolate the rest from the route geometry, and use duplicate-with-offset to spawn the repeating service. For headway-only service, the frequency editor writes <code>frequencies.txt</code> instead.</p>
+
+      <figure>
+        <img src="/assets/docs/timetables-and-trips-hero.png" alt="GTFS·X editor with the Timetable footer tab open for the Blueline route, showing the trip grid." loading="lazy" />
+        <figcaption>The Timetable tab in the footer, with the Blueline route's trips loaded. Rows are trips, columns are stops, cells are times.</figcaption>
+      </figure>
+
+      <h2 id="the-grid">The trip grid</h2>
+      <p>Open the Timetable from the footer, pick a route, and the grid loads. Rows are trips; columns are the stops in <code>stop_sequence</code> order; cells are times in <code>HH:MM:SS</code> format. The editor accepts shorthand input — type <code>7:30</code> or <code>730</code> and it auto-formats to <code>07:30:00</code>.</p>
+      <p>The direction toggle at the top of the grid switches between outbound (direction 0) and inbound (direction 1) trips. Each direction has its own trip list and its own stop order — the route's outbound shape's stops vs. inbound shape's stops.</p>
+
+      <h2 id="creating-trips">Creating trips</h2>
+      <p>Click <strong>+ Add Trip</strong> to insert a new row. Each trip needs:</p>
+      <ul>
+        <li><strong>Service pattern</strong> — pick from the patterns defined in the <a href="/docs/service-calendars/">Calendars</a> panel.</li>
+        <li><strong>Direction</strong> — 0 or 1; the toggle at the top of the grid already filters.</li>
+        <li><strong>Headsign</strong> — the destination text riders see ("Downtown via Main", "Airport").</li>
+        <li><strong>First stop time</strong> — type into the leftmost cell. Everything downstream interpolates from this.</li>
+      </ul>
+      <p>To create a series of trips at a fixed headway, fill in one trip, then click <strong>Repeat Every…</strong>. Enter a headway (15 min, 30 min, etc.) and a count; the editor spawns N copies of the trip, each offset by the headway. Much faster than typing a full weekday schedule by hand.</p>
+
+      <h2 id="interpolation">Interpolation</h2>
+      <p>Once the first stop time is set, click the interpolate button (arrow icon at the top of the trip row) to auto-fill intermediate stop times. The editor computes the segment lengths from the route shape, divides by an assumed average speed, and fills the cells.</p>
+      <p>Default speed is configurable per trip. The default is reasonable for urban fixed-route bus; for express routes or rail you'll want a higher number. After interpolating, refine individual cells by typing — only the cell you edit changes, the surrounding interpolation stays put.</p>
+
+      <h2 id="frequencies">Frequency-based service (frequencies.txt)</h2>
+      <p>For service that's described as a headway over a span ("every 10 minutes from 6am to 9pm") rather than as explicit trip times, use the frequency editor. From the Timetable, click <strong>Switch to frequencies</strong>. Define one trip as a "pattern" (this becomes the canonical reference for stop times), then add frequency windows: start_time, end_time, headway_secs, exact_times.</p>
+      <p>Trade-offs:</p>
+      <ul>
+        <li><strong>Explicit times</strong>: more accurate for irregular service, easier for downstream consumers to display, lets you model timepoints and slack precisely.</li>
+        <li><strong>Frequencies</strong>: dramatically smaller feed for high-frequency service (a 5-minute headway over 14 hours is 168 trips of explicit times vs. one frequency record), easier to maintain when the headway changes.</li>
+      </ul>
+      <p>Most agencies use explicit times for everything because some downstream consumers handle frequencies awkwardly. High-frequency urban rail and BRT are the typical exception.</p>
+
+      <h2 id="duplicate-direction">Duplicating a trip in the other direction</h2>
+      <p>An outbound trip and its inbound counterpart aren't automatic — you have to create both. The editor's <strong>Duplicate</strong> action creates a copy on the opposite direction with the stop times reversed; refine from there. For most agencies the outbound and inbound runtimes are similar but not identical (turn lanes, peak-direction congestion).</p>
+
+      <h2 id="gotchas">Edge cases and gotchas</h2>
+      <ul>
+        <li><strong>Times can exceed 24:00:00.</strong> A trip that starts at 11:45 PM and ends after midnight has stop times like 23:45:00, 24:15:00, 24:42:00. The GTFS spec allows this and you should use it — splitting the trip at midnight breaks trip-planner continuity.</li>
+        <li><strong>Stop times must monotonically increase.</strong> The validator flags a trip where stop_sequence[3]'s time is earlier than stop_sequence[2]'s. Usually a typo (forgot the leading hour); occasionally an honest interpolation that ran too fast at an intermediate point.</li>
+        <li><strong>Different trips on the same route can serve different stops.</strong> A short-turn variant that only goes downtown-to-midpoint is a separate set of trips that reference a subset of the route's stops. The editor handles this — each trip's grid row shows only the stops the trip actually visits.</li>
+        <li><strong>Don't pad timepoints with fake stops.</strong> If a route has 30 stops but only 6 timepoints, populate the 6 timepoints and let intermediate stops interpolate. Pulling timepoint values forward to every intermediate stop pretends to a precision the operator can't actually deliver.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/routes-and-shapes/">Routes &amp; shapes</a> — the shape geometry drives interpolation.</li>
+          <li><a href="/docs/service-calendars/">Service calendars</a> — every trip references a service pattern from here.</li>
+          <li><a href="/docs/stops/">Stops</a> — the columns of the grid.</li>
+          <li><a href="/docs/service-summary/">Service summary</a> — derives revenue hours and peak-vehicle counts from the trips you author here.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

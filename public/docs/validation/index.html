@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Validation — GTFS·X</title>
+    <meta name="description" content="Continuous GTFS validation in GTFS·X: errors block export, warnings don't, inline jump-to-entity, summary panel. Aligned with the canonical MobilityData GTFS Validator." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/validation/" />
+    <meta property="og:title" content="Validation — GTFS·X" />
+    <meta property="og:description" content="Continuous GTFS validation: errors block export, warnings are flagged, click to jump to the offending entity." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/validation/" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Validation &amp; I/O</div>
+      <h1>Validation</h1>
+      <p class="lede">Validation runs continuously as you edit. Errors and warnings appear inline next to the entity that owns them; a Validation tab in the footer lists every outstanding issue. Errors block export — they're spec violations that would make the feed unusable. Warnings allow export but get flagged for review. The editor's rule set is aligned with the canonical MobilityData GTFS Validator, so what passes here passes there.</p>
+
+      <figure>
+        <img src="/assets/docs/validation-hero.png" alt="GTFS·X editor with the Validation footer tab open, showing the all-clear state for the demo feed." loading="lazy" />
+        <figcaption>The Validation tab in the footer. When everything passes, the tab shows the all-good state; errors and warnings appear here grouped by severity.</figcaption>
+      </figure>
+
+      <h2 id="errors-vs-warnings">Errors vs. warnings</h2>
+      <ul>
+        <li><strong>Errors</strong> are spec violations: required fields missing, references that don't resolve, malformed times, duplicate primary keys. Export refuses to produce a ZIP while errors exist — fix them first.</li>
+        <li><strong>Warnings</strong> are conditions that are technically valid but probably wrong: a route with no fare assigned, a stop served by no trips, a service pattern with no holiday exceptions configured. Export proceeds but the warnings travel with the feed in the export summary so you can decide whether to address them before publishing.</li>
+      </ul>
+      <p>The editor doesn't second-guess this distinction. If the validator says it's a warning, you can ship; if it says it's an error, you can't. The defaults match MobilityData's published rule set, so feeds that pass here pass that validator.</p>
+
+      <h2 id="inline-surfacing">Inline messages</h2>
+      <p>Most validation messages appear next to the entity that owns them: a red border on a route with no shape, an inline warning on a stop with no name. Click the message to jump to the editor section that owns the entity — the editor opens the right panel, scrolls to the row, and highlights it.</p>
+      <p>For messages that don't belong to a specific entity (feed-level issues — missing feed_info, stale date ranges), the Validation footer tab is the canonical place to read them.</p>
+
+      <h2 id="summary-panel">The Validation tab</h2>
+      <p>Open <strong>Validation</strong> in the footer to see every issue in one list, grouped by severity and entity type. Each row is clickable; clicking jumps to the entity (same behavior as the inline messages). Filter by severity if you want to focus on errors first.</p>
+      <p>For a published feed, run the canonical validator separately as part of your release process — the editor catches the same issues, but having a second tool in the loop is good practice for high-stakes publishes (Google Transit Partners submission, agency boards reviewing feed quality).</p>
+
+      <h2 id="common-issues">Common warnings worth addressing before publishing</h2>
+      <ul>
+        <li><strong>No fare data.</strong> The empty-fare warning surfaces from the moment a feed has any routes. See <a href="/docs/fares/">Fares</a> for the cheapest fix (add a single flat fare).</li>
+        <li><strong>Holiday exceptions missing.</strong> A service pattern that doesn't have any <code>calendar_dates</code> exceptions on US federal holidays is suspect — most agencies operate reduced service or no service on those days. The Calendars panel's "Add US Holidays" tool fixes this in one click.</li>
+        <li><strong>Stops served by no trips.</strong> Stops that exist in the feed but no trip visits. Usually leftover from a deleted route. Either delete the stop or attach it to a trip.</li>
+        <li><strong>Route with no fare.</strong> A route exists but no <code>fare_rule</code> covers it. Either the flat-fare default should apply (and you can ignore the warning) or the route needs a specific fare assigned.</li>
+        <li><strong>Stale date range.</strong> A service's end_date is in the past or within two weeks. Refresh the dates and re-publish.</li>
+      </ul>
+
+      <h2 id="errors-that-block-export">Common errors that block export</h2>
+      <ul>
+        <li><strong>Trip references a missing route_id.</strong> The trip's <code>route_id</code> doesn't exist in <code>routes.txt</code>. Usually from a deleted route that left trips orphaned. The export dialog offers an auto-fix to drop the orphan trips.</li>
+        <li><strong>Stop_times references a missing stop_id.</strong> Same shape — stop deleted, stop_times left behind.</li>
+        <li><strong>Non-monotonic stop times.</strong> Within a trip, stop_sequence[i+1]'s time is earlier than stop_sequence[i]'s. Typo in the time, or interpolation that ran too fast at an intermediate point.</li>
+        <li><strong>Required field empty.</strong> Agency missing a name or timezone; a route missing route_type; a calendar missing dates.</li>
+      </ul>
+
+      <h2 id="gotchas">Edge cases and gotchas</h2>
+      <ul>
+        <li><strong>Validation runs in your browser.</strong> No data leaves the page. For large feeds (thousands of trips, tens of thousands of stop_times) the validator is fast but not instantaneous; expect a slight pause after a bulk edit.</li>
+        <li><strong>External validators may report extra rules.</strong> The canonical MobilityData validator runs server-side and applies some checks the editor doesn't (deep geometry validation, cross-feed reference checks). Pass the editor's rules first, then run the canonical validator as a final gate.</li>
+        <li><strong>Warnings aren't optional in the long term.</strong> A pattern of warnings that ship with every feed eventually trains downstream consumers to filter you out. Treat the Validation tab as a punch list, not an "informational" surface.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/import-and-export/">Import &amp; export</a> — validation runs at both ends.</li>
+          <li><a href="/docs/fares/">Fares</a> — most-common warning category.</li>
+          <li><a href="https://gtfs-validator.mobilitydata.org/" rel="external">MobilityData GTFS Validator</a> — the canonical external validator.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

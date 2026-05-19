@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Flex zones &amp; booking rules — GTFS·X</title>
+    <meta name="description" content="Author GTFS-Flex zones in GTFS·X: polygon zones, stop groups, auto-generate from fixed routes; pickup/drop-off windows, booking rules, fare assignment, travel-time estimation." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/flex-zones-and-booking-rules/" />
+    <meta property="og:title" content="Flex zones & booking rules — GTFS·X" />
+    <meta property="og:description" content="GTFS-Flex authoring: zones, booking rules, pickup/drop-off windows." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/flex-zones-and-booking-rules/" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Editor panels</div>
+      <h1>Flex zones &amp; booking rules</h1>
+      <p class="lede">GTFS-Flex describes demand-responsive service — microtransit, dial-a-ride, deviated fixed-route, on-demand zones. Authoring it correctly is hard, and most agencies running flex service today don't publish it. The Flex Zones panel makes the authoring tractable: draw polygon zones, configure booking rules in a form, and validate before export. If you've never published flex before, read the <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a> primer first.</p>
+
+      <figure>
+        <img src="/assets/docs/flex-zones-and-booking-rules-hero.png" alt="GTFS·X editor with the Flex Zones panel selected." loading="lazy" />
+        <figcaption>The Flex Zones panel. Three zone-creation methods are available — draw a polygon, group existing stops, or buffer existing fixed routes.</figcaption>
+      </figure>
+
+      <h2 id="when-to-use">When to use it</h2>
+      <p>Flex applies any time service isn't a fixed route running on a fixed schedule:</p>
+      <ul>
+        <li><strong>Microtransit / on-demand zones.</strong> A defined service area where riders book a ride and get picked up at their location (or a generated meet point).</li>
+        <li><strong>Dial-a-ride / paratransit.</strong> Same shape but oriented to ADA-eligible riders. The booking rule fields cover the prior-notice and contact requirements.</li>
+        <li><strong>Deviated fixed-route.</strong> A bus that runs a published route but will detour up to a quarter mile on request. Modeled as a hybrid: fixed-route stops plus a flex zone for the deviation area.</li>
+        <li><strong>Demand-responsive connectors</strong> from a fixed line to a low-density area.</li>
+      </ul>
+
+      <h2 id="three-zone-types">Three ways to create a zone</h2>
+      <p>Click <strong>+ Create New Flex Zone</strong>, then pick:</p>
+      <ul>
+        <li><strong>Draw Zone on Map</strong> — click to place polygon vertices, double-click to close. Exports as <code>locations.geojson</code>. Multi-polygon zones (two disjoint service areas under the same booking) are supported — draw additional polygons within the same zone.</li>
+        <li><strong>Create Stop Group</strong> — a named group of existing stops, used when the "zone" is really a list of allowed pickup/drop-off points rather than a free area. Exports as <code>location_groups.txt</code> + <code>location_group_stops.txt</code>.</li>
+        <li><strong>Auto-generate from fixed routes</strong> — buffer a set of existing fixed routes by a configurable distance to produce a polygon zone. Useful for deviated fixed-route service where the deviation area is "X miles either side of the route."</li>
+      </ul>
+
+      <h2 id="configuring-a-zone">Configuring a zone</h2>
+      <p>Select a zone to open <strong>Service Details</strong>. The configuration fields:</p>
+      <ul>
+        <li><strong>Service pattern</strong> — pick from your calendars. Calendar_dates-only services are fine (a zone that only runs on event days).</li>
+        <li><strong>Pickup window</strong> — start and end times in HH:MM:SS. Required for export; a zone without a window is skipped on export with a warning. Defines the hours within which a rider can book a pickup.</li>
+        <li><strong>Drop-off window</strong> — same shape; optional. If unset, equals the pickup window.</li>
+        <li><strong>Additional service windows</strong> — multiple windows per zone (morning + evening shifts). Modeled as multiple trips on the same zone.</li>
+        <li><strong>Booking rule</strong> — links to a record in <code>booking_rules.txt</code>: prior-notice duration (must book at least N minutes in advance), latest booking time (cutoff for next-day requests), booking type (real-time, same-day, prior-day), phone / URL / message text.</li>
+        <li><strong>Fare</strong> — link to a fare defined in the Fares panel. Zones without a fare assignment will inherit any system-wide flat fare.</li>
+        <li><strong>Travel-time estimation</strong> — mean and "safe" duration factors that trip planners use to estimate door-to-door time. Mean is the typical case; "safe" pads for traffic so planners don't suggest impossibly tight connections.</li>
+        <li><strong>Continuous pickup / drop-off</strong> — applicable for deviated fixed-route hybrids; signals that riders can flag the bus down anywhere within the zone, not just at defined stops.</li>
+      </ul>
+
+      <h2 id="map-popups">Map popups and editing</h2>
+      <p>Click a zone on the map to get a popup with quick links to <strong>Edit Route</strong> (every flex zone has an automatically-paired route that appears in trip planners) and <strong>Edit Service Details</strong>. Zone fill color tracks the linked route's color, so styling a zone consistently is a matter of styling its route.</p>
+
+      <h2 id="export-behavior">What gets exported</h2>
+      <p>Flex export produces multiple files depending on the zone types:</p>
+      <ul>
+        <li><code>locations.geojson</code> — polygon zones (one Feature per zone).</li>
+        <li><code>booking_rules.txt</code> — every booking rule referenced by any zone.</li>
+        <li><code>location_groups.txt</code> + <code>location_group_stops.txt</code> — for stop-group zones.</li>
+        <li>Extended <code>stop_times.txt</code> columns — <code>location_id</code>, <code>start_pickup_drop_off_window</code>, <code>end_pickup_drop_off_window</code>, <code>pickup_booking_rule_id</code>, <code>drop_off_booking_rule_id</code>.</li>
+      </ul>
+      <p>Zones missing a pickup window are flagged in the Export dialog and skipped from the output. Fix the warning before publishing — a flex zone without a window won't function in trip planners.</p>
+
+      <h2 id="gotchas">Edge cases and gotchas</h2>
+      <ul>
+        <li><strong>Booking rule sharing is the right default.</strong> If five zones all use the same phone-based booking with the same prior-notice rules, define one booking_rule and link all five zones to it. The editor lets you reuse rules across zones.</li>
+        <li><strong>Polygon zones should not extend beyond your actual service area.</strong> A zone that reaches into a neighboring agency's territory will get suggested by trip planners as if you served it.</li>
+        <li><strong>Don't combine deviated-fixed-route flex with regular fixed-route shapes carelessly.</strong> If the same trip is both fixed-route and deviation-eligible, the trip needs to reference the flex zone in its stop_times, not be a separate trip.</li>
+        <li><strong>Some consumers don't render flex yet.</strong> Google Maps does; Apple Maps does partially; OpenTripPlanner does; many regional trip planners don't. The flex data you publish is correct, but you may need to communicate availability through other channels too.</li>
+        <li><strong>Travel-time estimation matters more than it sounds.</strong> A bad estimate produces missed connections downstream. Pad the "safe" factor on shared-ride services that have a lot of zigzag.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/learn/gtfs-flex/">What is GTFS-Flex?</a> — primer on the spec extension.</li>
+          <li><a href="/docs/routes-and-shapes/">Routes &amp; shapes</a> — every flex zone has a paired route.</li>
+          <li><a href="/docs/fares/">Fares</a> — zone-fare assignment.</li>
+          <li><a href="/docs/validation/">Validation</a> — surfaces flex-specific errors.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

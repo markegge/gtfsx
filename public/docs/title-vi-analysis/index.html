@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Title VI analysis — GTFS·X</title>
+    <meta name="description" content="Title VI equity analysis for transit: compare service levels in minority and non-minority block groups using ACS data, with the four-fifths threshold convention from FTA Circular 4702.1B." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/title-vi-analysis/" />
+    <meta property="og:title" content="Title VI analysis — GTFS·X" />
+    <meta property="og:description" content="Equity analysis comparing service levels across minority and non-minority Census block groups, aligned with FTA Circular 4702.1B." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/title-vi-analysis/" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --sand:#FBF6EE; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
+      .site-header nav a:hover, .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      @media (max-width: 720px) { .site-header nav, .site-header .cta { display:none; } .site-header .brand img { height:30px; } }
+      main { padding-top: 24px; padding-bottom: 60px; }
+      .crumbs { color:var(--muted); font-size:0.9rem; margin: 0 0 12px; }
+      .crumbs a { color:var(--muted); text-decoration:none; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      .tier-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; vertical-align:middle; }
+      .tier-badge.team { background:#EADFFD; color:#5B2E91; border:1px solid #C9B1F0; }
+      a { color: var(--accent); }
+      ul, ol { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code, kbd { background:var(--sand); padding: 1px 6px; border-radius:4px; font-size:0.9em; }
+      figure { margin: 1.4rem 0; }
+      figure img { width:100%; max-width:1200px; height:auto; border:1px solid var(--rule); border-radius:8px; display:block; }
+      figcaption { color:var(--muted); font-size:0.9rem; margin-top:6px; }
+      .callout { background:#fff; border:1px solid var(--rule); border-left:4px solid var(--accent); border-radius:8px; padding:16px 20px; margin: 24px 0; }
+      .callout strong { color:var(--ink); }
+      .see-also { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 36px 0 0; }
+      .see-also h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; font-size:1.1rem; }
+      .see-also ul { margin: 8px 0 0; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; margin-top:32px; }
+      footer a { color: var(--muted); text-decoration:none; }
+      footer a:hover { color:var(--accent); }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Analysis tools</div>
+      <h1>Title VI analysis <span class="tier-badge team">Team</span></h1>
+      <p class="lede">Compare service levels across minority and non-minority Census block groups using ACS data, with the four-fifths threshold convention from FTA Circular 4702.1B. Use it to identify equity concerns in an existing or proposed service before a board meeting, a hearing, or a Title VI program update.</p>
+
+      <figure>
+        <img src="/assets/docs/title-vi-analysis-paywall.png" alt="Title VI panel in the editor sidebar showing a Team-plan upgrade card." loading="lazy" />
+        <figcaption>The Title VI panel in the editor sidebar. On the Team plan the panel shows the analysis controls; on lower tiers it shows the upgrade card pictured.</figcaption>
+      </figure>
+
+      <h2 id="what-it-is">What it is</h2>
+      <p>Title VI of the Civil Rights Act of 1964 prohibits federally-funded programs — including most transit agencies — from discriminating on the basis of race, color, or national origin. For transit specifically, the Federal Transit Administration spells out what that means in <strong>FTA Circular 4702.1B</strong> ("Title VI Requirements and Guidelines for FTA Recipients"). Agencies receiving FTA funds owe FTA a Title VI program update every three years, plus an equity analysis any time they propose a major service change or fare change.</p>
+      <p>The hard part of doing a Title VI equity analysis is the data plumbing: aligning the GTFS feed with Census block groups, deciding which block groups count as "minority," computing service levels in each, and producing a table that supports the eventual finding. The GTFS·X Title VI panel does that plumbing on a feed you already have open, so you can ask "does this service look equitable?" while you're still designing it — not the night before the public hearing.</p>
+
+      <h2 id="regulatory-context">The regulatory context, briefly</h2>
+      <p>Two terms from the FTA circular are worth getting right before reading any tool output:</p>
+      <ul>
+        <li><strong>Disparate impact (DI).</strong> A facially neutral policy that disproportionately affects a protected group (here: minority populations). The DI threshold in transit practice is the <strong>four-fifths rule</strong>: if minority-area service is less than 80% of non-minority-area service (a ratio &lt;&nbsp;0.80), the change is presumptively disparate and the agency must either modify it or show a substantial legitimate justification with no less-discriminatory alternative.</li>
+        <li><strong>Disproportionate burden (DB).</strong> The analogous concept for low-income populations, which Title VI itself doesn't cover but FTA reviews under Executive Order 12898 on environmental justice. Each agency adopts its own DB threshold in its Title VI program; the four-fifths convention is common but not mandated.</li>
+      </ul>
+      <p>The GTFS·X Title VI tool focuses on the DI side — race and ethnicity from ACS table B03002 — and reports an equity ratio that you compare against the agency's adopted threshold (typically 0.80). For DB analysis on low-income population, run the equivalent comparison using the demographic data from the <a href="/docs/demographic-coverage/">Coverage</a> tool with low-income variables; that analysis isn't automated in the Title VI panel today.</p>
+
+      <h2 id="what-the-tool-computes">What the tool computes</h2>
+      <p>Inputs:</p>
+      <ul>
+        <li><strong>Stops</strong> from the open feed. Each stop is buffered by either 0.25 miles (general) or 0.5 miles (high-frequency, defined as peak-hour headway ≤ 15 minutes) — see "Methodology and limits" below for why.</li>
+        <li><strong>Trips</strong> from <code>stop_times.txt</code>. The tool counts unique trips serving each stop on the dominant service day. That's the service intensity each block group "sees." Trips per hour at each stop also drive the buffer-tier classification above.</li>
+        <li><strong>ACS 2022 5-year</strong> data: B03002 (Hispanic or Latino origin by race) for the racial composition of each block group, B01003 for total population.</li>
+      </ul>
+      <p>The computation:</p>
+      <ol>
+        <li>For each block group in the service area, compute <em>minority share</em> = (total population − non-Hispanic white population) / total population.</li>
+        <li>Compute the <em>regional minority share</em> across all block groups in the service area (population-weighted average). Block groups with a minority share at or above the regional average are classified <strong>minority</strong>; the rest are <strong>non-minority</strong>.</li>
+        <li>For each block group, compute <em>service exposure</em> as the sum of (daily trips at stop × overlap fraction) over every stop within a half-mile.</li>
+        <li>Aggregate population and service exposure separately for the minority and non-minority groups, then divide each group's service exposure by its population to get a service-per-capita figure.</li>
+        <li>The reported <strong>equity ratio</strong> is minority service-per-capita ÷ non-minority service-per-capita. A ratio of 1.0 means the two groups receive equal service intensity; below 0.80 crosses the four-fifths threshold; above 1.0 means the minority population is served more intensively than the non-minority population.</li>
+      </ol>
+      <p>The panel surfaces the equity ratio with a color band: green at or above 1.0, amber from 0.80 to 1.0 (worth a closer look), red below 0.80 (presumptively disparate under the four-fifths rule). The block-group-level numbers are exposed in the underlying data so you can dig in or export them.</p>
+
+      <h2 id="how-to-use">How to use it</h2>
+      <ol>
+        <li>Open the feed in the editor and click <strong>Title VI</strong> in the left sidebar (it sits below Coverage). The panel opens on the right.</li>
+        <li>Click <strong>Run Title VI Analysis</strong>. The tool fetches the relevant Census block groups, computes the comparison, and renders the result. First run for a given region takes a few seconds; subsequent runs are cached locally.</li>
+        <li>Read the two cards at the top: <em>Minority</em> and <em>Non-Minority</em>. Each shows the population served, the block group count, and the average daily trips per capita.</li>
+        <li>Check the equity ratio band. If it's red or amber, look at the block-group breakdown to see which areas are pulling the average down — often a single corridor.</li>
+      </ol>
+
+      <h2 id="reading-the-output">Reading the output</h2>
+      <p>The Title VI panel is descriptive, not prescriptive. A green ratio doesn't certify your feed as compliant, and a red ratio doesn't doom a service change — it tells you where the conversation needs to go.</p>
+      <ul>
+        <li><strong>Green (≥ 1.0).</strong> Minority block groups receive at least the same trips-per-capita as non-minority block groups. Good baseline. Document it.</li>
+        <li><strong>Amber (0.80 – 1.0).</strong> Below parity but above the four-fifths floor. Many agencies sit here on existing networks; the discussion is whether a proposed change widens or narrows the gap.</li>
+        <li><strong>Red (&lt; 0.80).</strong> Presumptive disparate impact under the four-fifths convention. The agency needs either a less-discriminatory alternative or a documented substantial legitimate justification before adopting the change.</li>
+      </ul>
+      <p>For a <em>change</em> analysis (the most common Title VI use), run the tool on the current feed, then on the proposed feed, and compare the two ratios. The change itself is what FTA cares about — not the absolute level.</p>
+
+      <h2 id="caveat">What the tool isn't</h2>
+      <div class="callout">
+        <strong>This is an analysis tool, not a Title VI program.</strong> The numbers it produces are an input to the Title VI program update, public engagement, and policy discussion your agency owes FTA — not a substitute. A green equity ratio doesn't satisfy your obligation to run a public hearing for a major service change, to publish a Title VI notice in the languages spoken in your service area, to maintain a complaint process, or to file the triennial program update. Run the tool, document the result, then continue with the actual program.
+      </div>
+
+      <h2 id="methodology-and-limits">Methodology and limits</h2>
+      <ul>
+        <li><strong>Two-tier stop buffer.</strong> Each stop draws its service area at one of two distances: <strong>0.25 mile</strong> (the conventional walking-distance threshold for local bus service) for general stops, or <strong>0.5 mile</strong> (the threshold often applied to rail and BRT) for high-frequency stops. The high-frequency tier is triggered when the stop's peak-hour headway is 15 minutes or less, computed as the single hour-of-day with the most trips serving that stop. This matches the local practice that "frequent service draws riders from farther" while keeping the bulk of the network on the tighter 0.25-mile buffer.</li>
+        <li><strong>Circle-circle apportionment.</strong> Block groups are modeled as discs (half-mile radius centered on the tract centroid) rather than their actual polygon geometry. This is a deliberate approximation — block-group boundaries are jagged and the analytic precision rarely matters at the scale of the four-fifths comparison — but it does mean a sparse rural block group with one stop on its edge will be over-counted relative to its true shape. If your service area is small or unusually shaped, run the numbers through a polygon-aware tool (Remix, ArcGIS) to confirm.</li>
+        <li><strong>Trip count, not headway-weighted in the comparison itself.</strong> The buffer choice uses headway, but the per-block-group service metric is still the raw daily trip count apportioned through the buffer. A 15-minute corridor with 60 daily trips contributes 60 trips to its block groups; a 60-trip commuter expressway contributes the same. For agencies that weight trips by frequency or span in their program documentation, recompute with that adjustment.</li>
+        <li><strong>One race / ethnicity table.</strong> The analysis uses ACS B03002 (Hispanic origin by race) and reports a single minority/non-minority split. It doesn't compute breakdowns by individual racial group, by primary language, or by limited-English-proficiency status. Those analyses still need to happen — they just don't happen in this panel.</li>
+        <li><strong>ACS vintage.</strong> Currently using the 2022 5-year ACS. If your agency's adopted methodology requires a different vintage, the tool's output won't be directly comparable — note the vintage in any document that cites the result.</li>
+      </ul>
+
+      <h2 id="references">References</h2>
+      <ul>
+        <li><a href="https://www.transit.dot.gov/regulations-and-guidance/civil-rights-ada/title-vi-fta" rel="external">FTA — Title VI requirements for FTA recipients</a> (entry point for Circular 4702.1B and supporting guidance).</li>
+        <li><a href="https://www.transit.dot.gov/sites/fta.dot.gov/files/docs/FTA_Title_VI_FINAL.pdf" rel="external">FTA Circular 4702.1B (PDF)</a> — the actual circular.</li>
+        <li><a href="https://www.census.gov/programs-surveys/acs" rel="external">US Census ACS</a> — source of the demographic data used by the tool.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/demographic-coverage/">Demographic coverage</a> — the same Census plumbing used for total population, households, and jobs served.</li>
+          <li><a href="/docs/rider-propensity/">Rider propensity</a> — demographic-driven heatmap for proactive service planning.</li>
+          <li><a href="/docs/service-summary/">Service summary</a> — trip-count and revenue-hour figures often quoted alongside Title VI results.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

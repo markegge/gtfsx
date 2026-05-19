@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Rider propensity (Demand Dots) — GTFS·X</title>
+    <meta name="description" content="A nationwide map layer showing transit-propensity population and jobs as dots — useful for spotting under-served demand pockets when laying out a route or zone." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/rider-propensity/" />
+    <meta property="og:title" content="Rider propensity (Demand Dots) — GTFS·X" />
+    <meta property="og:description" content="A nationwide Demand Dots map layer combining ACS demographics with LEHD job locations to show where transit demand likely concentrates." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/rider-propensity/" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --sand:#FBF6EE; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
+      .site-header nav a:hover, .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      @media (max-width: 720px) { .site-header nav, .site-header .cta { display:none; } .site-header .brand img { height:30px; } }
+      main { padding-top: 24px; padding-bottom: 60px; }
+      .crumbs { color:var(--muted); font-size:0.9rem; margin: 0 0 12px; }
+      .crumbs a { color:var(--muted); text-decoration:none; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      .tier-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; vertical-align:middle; }
+      .tier-badge.pro { background:#FBEEDF; color:#9A4F00; border:1px solid #F0D1A0; }
+      .callout { background:#fff; border:1px solid var(--rule); border-left:4px solid var(--accent); border-radius:8px; padding:16px 20px; margin: 24px 0; }
+      a { color: var(--accent); }
+      ul, ol { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code, kbd { background:var(--sand); padding: 1px 6px; border-radius:4px; font-size:0.9em; }
+      figure { margin: 1.4rem 0; }
+      figure img { width:100%; max-width:1200px; height:auto; border:1px solid var(--rule); border-radius:8px; display:block; }
+      figcaption { color:var(--muted); font-size:0.9rem; margin-top:6px; }
+      .see-also { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 36px 0 0; }
+      .see-also h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; font-size:1.1rem; }
+      .see-also ul { margin: 8px 0 0; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; margin-top:32px; }
+      footer a { color: var(--muted); text-decoration:none; }
+      footer a:hover { color:var(--accent); }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Analysis tools</div>
+      <h1>Rider propensity <span class="tier-badge pro">Pro</span></h1>
+      <p class="lede">A nationwide Demand Dots map layer that surfaces likely transit demand — population most likely to ride and the jobs they could be commuting to — as dots rendered directly on the basemap. Use it to spot under-served demand pockets when sketching a new route or sizing a flex zone.</p>
+
+      <figure>
+        <img src="/assets/docs/rider-propensity-dots-on.png" alt="GTFS·X editor with the Demand Dots layer enabled, showing colored dots representing high-propensity population and jobs across the Bozeman area." loading="lazy" />
+        <figcaption>Demand Dots overlaid on the demo feed. Blue dots: high-propensity adults. Orange dots: jobs. Gray dots: other adults. One dot represents five people (or five jobs).</figcaption>
+      </figure>
+
+      <h2 id="where-to-find-it">Where to find it</h2>
+      <p>Demand Dots is a <strong>basemap layer toggle</strong>, not a sidebar panel. Open the basemap control on the top-right of the map (the small square icon below the zoom controls) and check the <strong>Demand Dots</strong> box. The dots appear at every zoom level; they're most legible from neighborhood-scale (zoom ~12) to corridor-scale (zoom ~15).</p>
+
+      <figure>
+        <img src="/assets/docs/rider-propensity-basemap-toggle.png" alt="Basemap control panel in the GTFS·X editor showing a Demand Dots checkbox." loading="lazy" />
+        <figcaption>The basemap control with the Demand Dots checkbox. Toggling it doesn't change the underlying basemap style — it adds the dot layer on top.</figcaption>
+      </figure>
+
+      <h2 id="what-the-dots-show">What the dots show</h2>
+      <p>The layer renders three categories of dots, each at a one-dot-equals-five-units density:</p>
+      <ul>
+        <li><strong>Blue — high-propensity adults.</strong> Population estimated to be more likely to ride transit than the general population: renters, members of zero-vehicle households, and adults 18–24. The three groups overlap, so a 0.6 deduplication factor is applied. Distributed within each Census block according to land area.</li>
+        <li><strong>Gray — other adults.</strong> The rest of the adult population, by the same block-level distribution. The contrast between blue and gray is the part that matters; areas where blue dots dominate are higher-propensity neighborhoods.</li>
+        <li><strong>Orange — jobs.</strong> Workplace locations from LEHD LODES workplace-area characteristics, distributed within each block. A dense cluster of orange dots is the demand side a commute route is feeding.</li>
+      </ul>
+      <p>The layer is <strong>nationwide</strong>: every state, plus DC. Alaska and Puerto Rico render the population layers (blue and gray) but not jobs, because LODES isn't published for those jurisdictions.</p>
+
+      <h2 id="how-to-use">How to use it</h2>
+      <ul>
+        <li><strong>Sizing a new route.</strong> Zoom to the corridor you're considering, toggle Demand Dots on, and look at how the proposed alignment intersects the dot density. A route that runs through blue-and-orange together is going to perform better than the same mileage of road through neither.</li>
+        <li><strong>Locating a flex zone.</strong> Demand Dots is particularly useful for non-fixed-route service. A flex zone polygon drawn around a high blue-dot density gives you a defensible service area; the same polygon drawn around mostly empty space tells you the demographics don't support the service even before you crunch a single ridership number.</li>
+        <li><strong>Comparing scenarios.</strong> Toggle the layer with your existing network visible, then with a proposed change visible. Where do the dots that <em>were</em> covered stop being covered? Where do new dots come into reach?</li>
+        <li><strong>Telling the story.</strong> A map screenshot with Demand Dots overlaid often communicates "this is who we'd be serving" more directly to a board than the equivalent table of demographic figures.</li>
+      </ul>
+
+      <h2 id="caveat">What it isn't</h2>
+      <div class="callout">
+        <strong>This is a propensity layer, not a ridership forecast.</strong> Demand Dots tells you where transit-inclined population and jobs concentrate. It does <em>not</em> predict how many people will ride your route, how that ridership splits by trip purpose, or how it responds to frequency, fare, or competing modes. If your decision needs an actual ridership estimate, you need a ridership model (regional travel demand, direct demand, sketch elasticity) — not this layer. Agencies have spent real money on real mistakes by treating a propensity heatmap as a forecast; don't.
+      </div>
+
+      <h2 id="methodology">Methodology</h2>
+      <ul>
+        <li><strong>Population.</strong> ACS 2020–2024 5-year estimates at the Census block group level, allocated to 2020 Census blocks by land area. High-propensity population is the union of three indicators — renter households (B25003), zero-vehicle households (B25044), and adults 18–24 (B01001 age-by-sex) — with a 0.6 deduplication factor to correct for the overlap between the three groups. Total adult population is treated as 78% of total population (standard ACS-derived figure); other adults = total adults − high-propensity adults.</li>
+        <li><strong>Jobs.</strong> LEHD LODES 8 (2023) workplace-area characteristics, block-level. Reports total jobs per block; not split by sector or wage tier in this layer.</li>
+        <li><strong>Rendering.</strong> Vector tiles served from the GTFS·X tile origin. Each dot represents five people or five jobs, randomly placed within the block (consistent across zoom levels). At low zooms the layer downsamples to keep render time reasonable.</li>
+        <li><strong>Vintages.</strong> ACS 2020–2024 5-year, LODES 2023, TIGER 2025 block boundaries. Re-rendered when the underlying vintages refresh — annually for ACS, on LODES release cadence for jobs.</li>
+      </ul>
+
+      <h2 id="limits">Limits</h2>
+      <ul>
+        <li>The high-propensity indicators are national-average proxies. Calibrating them to a specific region (different car-ownership patterns, age structure, transit culture) isn't yet supported.</li>
+        <li>Jobs are by workplace, not by commute mode. A dense orange cluster could be a hospital where most employees drive; the layer can't distinguish.</li>
+        <li>The dots are a visual representation — not a hover-tooltip lookup. For exact population counts inside a buffer, use the <a href="/docs/demographic-coverage/">Coverage</a> panel; for an equity-style comparison, use the <a href="/docs/title-vi-analysis/">Title VI analysis</a> panel.</li>
+        <li>Alaska and Puerto Rico are population-only; LODES does not publish for those jurisdictions.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/demographic-coverage/">Demographic coverage</a> — exact population and job counts within a stop buffer.</li>
+          <li><a href="/docs/title-vi-analysis/">Title VI analysis</a> — equity comparison using the same Census plumbing.</li>
+          <li><a href="/docs/routes-and-shapes/">Routes &amp; shapes</a> — drawing alignments over the dots.</li>
+          <li><a href="/docs/flex-zones-and-booking-rules/">Flex zones</a> — common pairing for sizing demand-responsive service areas.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

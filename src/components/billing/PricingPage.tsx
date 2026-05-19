@@ -37,6 +37,7 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
       'Rider-facing embeds + mini-site',
       'Demographic coverage analysis',
       'Cost estimation analysis',
+      'Ridership propensity heatmap',
       'Custom brand color',
       'Email support (best-effort)',
     ],
@@ -51,7 +52,7 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
     features: [
       'Unlimited saved feeds',
       'Publish up to 5 feeds',
-      'Full analysis: Title VI + propensity heatmap',
+      'Title VI equity analysis',
       'Unlimited team members in your organization',
       'Cross-org membership (work in unlimited client orgs)',
       'Custom brand color + org logo',

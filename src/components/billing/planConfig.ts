@@ -26,7 +26,7 @@ export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
   snapshot_history:     ['pro', 'team', 'enterprise'],
   analysis_basic:      ['pro', 'team', 'enterprise'],
   analysis_title_vi:   ['team', 'enterprise'],
-  analysis_propensity: ['team', 'enterprise'],
+  analysis_propensity: ['pro', 'team', 'enterprise'],
   org_workspace:       ['team', 'enterprise'],
   cross_org_member:    ['team', 'enterprise'],
   org_logo:            ['team', 'enterprise'],

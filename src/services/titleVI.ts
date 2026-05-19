@@ -5,8 +5,16 @@ import type { Stop } from '../types/gtfs';
 import type { AppStore } from '../store';
 import { BG_RADIUS_MILES, circleOverlapFraction } from './coverageAnalysis';
 
-/** Buffer radius used when assigning stop service to block groups for Title VI. */
-const TITLE_VI_BUFFER_MILES = 0.5;
+/**
+ * Two-tier buffer per FTA-aligned local practice: stops with peak-hour headways
+ * of 15 minutes or less ("high-frequency" service) draw service area at the
+ * 0.5-mile walk distance commonly associated with light rail / BRT; all other
+ * stops use 0.25 mile, the conventional bus walk-distance threshold.
+ */
+const HIGH_FREQ_BUFFER_MILES = 0.5;
+const GENERAL_BUFFER_MILES = 0.25;
+/** A stop qualifies for the larger buffer when its peak hour headway ≤ this. */
+const HIGH_FREQ_HEADWAY_MIN = 15;
 
 export interface BlockGroupServiceLevel {
   geoid: string;
@@ -36,17 +44,60 @@ export interface TitleVIResult {
 }
 
 /**
- * Perform a Title VI transit service equity analysis per the methodology in
- * "Title VI Transit Service Analysis - Calculation Procedures Memo.md".
+ * Pick a per-stop service buffer using the peak-hour headway as the
+ * frequency proxy. Peak hour = the single hour-of-day with the most trips
+ * serving the stop; headway = 60 / trip-count in that hour. Stops with no
+ * stop_times entries inherit the general buffer (no service to weight).
+ */
+function computeStopBuffers(
+  stops: Stop[],
+  stopTimes: AppStore['stopTimes'],
+): Map<string, number> {
+  // Trips per (stop_id, hour-of-day 0-23). Wrap-around hours (24:00:00 +)
+  // collapse modulo 24 — overnight service rarely defines the peak anyway.
+  const tripsPerHourPerStop = new Map<string, Map<number, number>>();
+  for (const st of stopTimes) {
+    const time = st.departure_time || st.arrival_time;
+    if (!time) continue;
+    const hour = Number.parseInt(time.split(':')[0] ?? '', 10);
+    if (!Number.isFinite(hour)) continue;
+    const bucket = ((hour % 24) + 24) % 24;
+    let m = tripsPerHourPerStop.get(st.stop_id);
+    if (!m) { m = new Map(); tripsPerHourPerStop.set(st.stop_id, m); }
+    m.set(bucket, (m.get(bucket) ?? 0) + 1);
+  }
+
+  const buffers = new Map<string, number>();
+  for (const s of stops) {
+    const hourMap = tripsPerHourPerStop.get(s.stop_id);
+    if (!hourMap || hourMap.size === 0) {
+      buffers.set(s.stop_id, GENERAL_BUFFER_MILES);
+      continue;
+    }
+    let maxTrips = 0;
+    for (const v of hourMap.values()) if (v > maxTrips) maxTrips = v;
+    const peakHeadway = maxTrips > 0 ? 60 / maxTrips : Number.POSITIVE_INFINITY;
+    buffers.set(
+      s.stop_id,
+      peakHeadway <= HIGH_FREQ_HEADWAY_MIN ? HIGH_FREQ_BUFFER_MILES : GENERAL_BUFFER_MILES,
+    );
+  }
+  return buffers;
+}
+
+/**
+ * Perform a Title VI transit service equity analysis.
  *
  * Steps:
  *   1. Count daily trips per stop (unique trip_ids in stop_times).
- *   2. Compute the regional minority share threshold.
- *   3. For each block group, apportion daily trips from nearby stops using the
+ *   2. Determine a per-stop service buffer: 0.5 mi when peak-hour headway is
+ *      ≤ 15 minutes ("high-frequency"), 0.25 mi otherwise.
+ *   3. Compute the regional minority share threshold.
+ *   4. For each block group, apportion daily trips from nearby stops using the
  *      same circle-circle overlap formula as the coverage analysis.
- *   4. Classify each BG as minority or non-minority based on whether its
+ *   5. Classify each BG as minority or non-minority based on whether its
  *      minority population share meets or exceeds the regional average.
- *   5. Compare average apportioned daily trips between the two groups.
+ *   6. Compare average apportioned daily trips between the two groups.
  */
 export function calculateTitleVI(
   stops: Stop[],
@@ -65,16 +116,20 @@ export function calculateTitleVI(
     dailyTripsPerStop.set(stopId, trips.size);
   }
 
-  // 2. Regional minority share across all block groups with known race data
+  // 2. Per-stop buffer based on peak-hour headway
+  const stopBuffers = computeStopBuffers(stops, state.stopTimes);
+
+  // 3. Regional minority share across all block groups with known race data
   const bgsWithRace = blockGroups.filter((bg) => bg.totalRacePop > 0);
   const regionTotalPop = bgsWithRace.reduce((s, bg) => s + bg.totalRacePop, 0);
   const regionMinorityPop = bgsWithRace.reduce((s, bg) => s + bg.minorityPop, 0);
   const regionalMinorityShare = regionTotalPop > 0 ? regionMinorityPop / regionTotalPop : 0;
 
-  // 3 & 4. For each block group compute apportioned daily trips and classify
+  // 4 & 5. For each block group compute apportioned daily trips and classify
   const stopPoints = stops.map((s) => ({
     pt: point([s.stop_lon, s.stop_lat]),
     dailyTrips: dailyTripsPerStop.get(s.stop_id) ?? 0,
+    bufferMiles: stopBuffers.get(s.stop_id) ?? GENERAL_BUFFER_MILES,
   }));
 
   const levels: BlockGroupServiceLevel[] = [];
@@ -83,9 +138,9 @@ export function calculateTitleVI(
     const bgPoint = point([bg.lon, bg.lat]);
     let dailyTrips = 0;
 
-    for (const { pt, dailyTrips: stopTrips } of stopPoints) {
+    for (const { pt, dailyTrips: stopTrips, bufferMiles } of stopPoints) {
       const d = distance(bgPoint, pt, { units: 'miles' });
-      const fraction = circleOverlapFraction(d, TITLE_VI_BUFFER_MILES, BG_RADIUS_MILES);
+      const fraction = circleOverlapFraction(d, bufferMiles, BG_RADIUS_MILES);
       if (fraction > 0) dailyTrips += fraction * stopTrips;
     }
 
@@ -99,7 +154,7 @@ export function calculateTitleVI(
     });
   }
 
-  // 5. Aggregate by group
+  // 6. Aggregate by group
   const minorityLevels    = levels.filter((l) => l.isMinority);
   const nonMinorityLevels = levels.filter((l) => !l.isMinority);
 

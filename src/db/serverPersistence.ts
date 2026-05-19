@@ -23,6 +23,16 @@ const DATA_KEYS = [
   'feedInfo',
   'fareAttributes',
   'fareRules',
+  'fareAreas',
+  'stopAreas',
+  'fareNetworks',
+  'routeNetworks',
+  'timeframes',
+  'riderCategories',
+  'fareMedia',
+  'fareProducts',
+  'fareLegRules',
+  'fareTransferRules',
   'flexZones',
 ] as const;
 
@@ -81,6 +91,16 @@ export function applySnapshotToStore(snapshot: Record<string, unknown>) {
   if (g('feedInfo') !== undefined) state.setFeedInfo(g('feedInfo') as never);
   if (Array.isArray(g('fareAttributes'))) state.setFareAttributes(g('fareAttributes') as never);
   if (Array.isArray(g('fareRules'))) state.setFareRules(g('fareRules') as never);
+  if (Array.isArray(g('fareAreas'))) state.setFareAreas(g('fareAreas') as never);
+  if (Array.isArray(g('stopAreas'))) state.setStopAreas(g('stopAreas') as never);
+  if (Array.isArray(g('fareNetworks'))) state.setFareNetworks(g('fareNetworks') as never);
+  if (Array.isArray(g('routeNetworks'))) state.setRouteNetworks(g('routeNetworks') as never);
+  if (Array.isArray(g('timeframes'))) state.setTimeframes(g('timeframes') as never);
+  if (Array.isArray(g('riderCategories'))) state.setRiderCategories(g('riderCategories') as never);
+  if (Array.isArray(g('fareMedia'))) state.setFareMedia(g('fareMedia') as never);
+  if (Array.isArray(g('fareProducts'))) state.setFareProducts(g('fareProducts') as never);
+  if (Array.isArray(g('fareLegRules'))) state.setFareLegRules(g('fareLegRules') as never);
+  if (Array.isArray(g('fareTransferRules'))) state.setFareTransferRules(g('fareTransferRules') as never);
   if (Array.isArray(g('flexZones'))) state.setFlexZones(g('flexZones') as never);
 
   state.markSaved();

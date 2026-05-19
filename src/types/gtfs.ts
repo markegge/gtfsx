@@ -161,3 +161,115 @@ export interface Transfer {
   /** Seconds required to make the transfer. Required when transfer_type=2. */
   min_transfer_time?: number;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * GTFS-Fares v2 — Phase 1: round-trip only.
+ *
+ * v2 lives in a parallel set of files alongside v1's fare_attributes.txt /
+ * fare_rules.txt; consumers prefer v2 when present and fall back to v1.
+ * The editor preserves these on import → export but doesn't yet expose UI
+ * for authoring them; see Section 1.6 of docs/REQUIREMENTS.md for the
+ * Phase 2/3 roadmap (editor UI and validation rules).
+ * ───────────────────────────────────────────────────────────────────────── */
+
+/** areas.txt — a fare area, used by fare_leg_rules and stop_areas. */
+export interface FareArea {
+  area_id: string;
+  area_name?: string;
+}
+
+/** stop_areas.txt — assigns a stop to one or more fare areas. */
+export interface StopArea {
+  area_id: string;
+  stop_id: string;
+}
+
+/** networks.txt — a named grouping of routes for fare purposes. */
+export interface FareNetwork {
+  network_id: string;
+  network_name?: string;
+}
+
+/** route_networks.txt — assigns a route to a fare network. */
+export interface RouteNetwork {
+  network_id: string;
+  route_id: string;
+}
+
+/** timeframes.txt — a time window used by leg rules (peak/off-peak). */
+export interface Timeframe {
+  timeframe_group_id: string;
+  start_time?: string; // HH:MM:SS
+  end_time?: string;   // HH:MM:SS
+  service_id: string;
+}
+
+/** rider_categories.txt — first-class rider type (adult, senior, etc.). */
+export interface RiderCategory {
+  rider_category_id: string;
+  rider_category_name: string;
+  is_default_fare_category?: 0 | 1;
+  eligibility_url?: string;
+}
+
+/** fare_media.txt — payment medium (cash, contactless, smart card, etc.). */
+export interface FareMedia {
+  fare_media_id: string;
+  fare_media_name?: string;
+  /**
+   * 0 = no fare media (cash, equivalent),
+   * 1 = physical paper ticket,
+   * 2 = physical transit card,
+   * 3 = cEMV (contactless),
+   * 4 = mobile app.
+   */
+  fare_media_type: 0 | 1 | 2 | 3 | 4;
+}
+
+/** fare_products.txt — the actual purchasable product (ticket, pass, transfer). */
+export interface FareProduct {
+  fare_product_id: string;
+  fare_product_name?: string;
+  rider_category_id?: string;
+  fare_media_id?: string;
+  amount: string;
+  currency: string;
+}
+
+/**
+ * fare_leg_rules.txt — describes the fare for a single leg of travel.
+ * Joins areas + networks + timeframes + rider categories to fare products.
+ */
+export interface FareLegRule {
+  leg_group_id?: string;
+  network_id?: string;
+  from_area_id?: string;
+  to_area_id?: string;
+  from_timeframe_group_id?: string;
+  to_timeframe_group_id?: string;
+  fare_product_id: string;
+  rule_priority?: number;
+}
+
+/**
+ * fare_transfer_rules.txt — discounts or rules applied to transfers between
+ * legs. Distinct from transfers.txt: this is pricing, not routing.
+ */
+export interface FareTransferRule {
+  from_leg_group_id?: string;
+  to_leg_group_id?: string;
+  transfer_count?: number; // -1 for unlimited
+  duration_limit?: number; // seconds
+  /**
+   * 0 = between sequential legs only,
+   * 1 = duration calculated from the start of the previous leg.
+   */
+  duration_limit_type?: 0 | 1;
+  /**
+   * 0 = no cost on transfer (free transfer),
+   * 1 = fare_product_id is the price of the transfer,
+   * 2 = fare_product_id is the discount applied to the next leg.
+   */
+  fare_transfer_type: 0 | 1 | 2;
+  fare_product_id?: string;
+}

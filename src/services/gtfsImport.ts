@@ -3,7 +3,12 @@ import Papa from 'papaparse';
 import length from '@turf/length';
 import { lineString } from '@turf/helpers';
 import { useStore } from '../store';
-import type { Agency, Calendar, CalendarDate, Route, Shape, ShapePoint, Stop, Trip, StopTime, FeedInfo, RouteStop, FareAttribute, FareRule, Transfer } from '../types/gtfs';
+import type {
+  Agency, Calendar, CalendarDate, Route, Shape, ShapePoint, Stop, Trip, StopTime, FeedInfo, RouteStop,
+  FareAttribute, FareRule, Transfer,
+  FareArea, StopArea, FareNetwork, RouteNetwork, Timeframe, RiderCategory, FareMedia,
+  FareProduct, FareLegRule, FareTransferRule,
+} from '../types/gtfs';
 import type { FlexZone, BookingRule } from '../store/flexSlice';
 
 /** Populate shape_dist_traveled from the lat/lon geometry. Mirrors
@@ -44,6 +49,16 @@ export async function importGtfsZip(file: File): Promise<{
   fareAttributes: FareAttribute[];
   fareRules: FareRule[];
   transfers: Transfer[];
+  fareAreas: FareArea[];
+  stopAreas: StopArea[];
+  fareNetworks: FareNetwork[];
+  routeNetworks: RouteNetwork[];
+  timeframes: Timeframe[];
+  riderCategories: RiderCategory[];
+  fareMedia: FareMedia[];
+  fareProducts: FareProduct[];
+  fareLegRules: FareLegRule[];
+  fareTransferRules: FareTransferRule[];
   flexZones: FlexZone[];
   warnings: string[];
 }> {
@@ -296,6 +311,128 @@ export async function importGtfsZip(file: File): Promise<{
             ? num(row.min_transfer_time) : undefined,
         }))
     : [];
+
+  // GTFS-Fares v2 (round-trip only — no editor UI in Phase 1).
+  // Each file is optional. We preserve the rows as-is so a v2-aware consumer
+  // sees exactly what the publisher uploaded.
+  const fareAreas: FareArea[] = await readFile('areas.txt').then((t) =>
+    t
+      ? parseCSV<any>(t)
+          .filter((r) => r.area_id)
+          .map((r) => ({ area_id: String(r.area_id), area_name: r.area_name || undefined }))
+      : []
+  );
+  const stopAreas: StopArea[] = await readFile('stop_areas.txt').then((t) =>
+    t
+      ? parseCSV<any>(t)
+          .filter((r) => r.area_id && r.stop_id)
+          .map((r) => ({ area_id: String(r.area_id), stop_id: String(r.stop_id) }))
+      : []
+  );
+  const fareNetworks: FareNetwork[] = await readFile('networks.txt').then((t) =>
+    t
+      ? parseCSV<any>(t)
+          .filter((r) => r.network_id)
+          .map((r) => ({ network_id: String(r.network_id), network_name: r.network_name || undefined }))
+      : []
+  );
+  const routeNetworks: RouteNetwork[] = await readFile('route_networks.txt').then((t) =>
+    t
+      ? parseCSV<any>(t)
+          .filter((r) => r.network_id && r.route_id)
+          .map((r) => ({ network_id: String(r.network_id), route_id: String(r.route_id) }))
+      : []
+  );
+  const timeframes: Timeframe[] = await readFile('timeframes.txt').then((t) =>
+    t
+      ? parseCSV<any>(t)
+          .filter((r) => r.timeframe_group_id && r.service_id)
+          .map((r) => ({
+            timeframe_group_id: String(r.timeframe_group_id),
+            start_time: r.start_time || undefined,
+            end_time: r.end_time || undefined,
+            service_id: String(r.service_id),
+          }))
+      : []
+  );
+  const riderCategories: RiderCategory[] = await readFile('rider_categories.txt').then((t) =>
+    t
+      ? parseCSV<any>(t)
+          .filter((r) => r.rider_category_id && r.rider_category_name)
+          .map((r) => ({
+            rider_category_id: String(r.rider_category_id),
+            rider_category_name: String(r.rider_category_name),
+            is_default_fare_category: r.is_default_fare_category !== undefined && r.is_default_fare_category !== ''
+              ? (num(r.is_default_fare_category) as 0 | 1)
+              : undefined,
+            eligibility_url: r.eligibility_url || undefined,
+          }))
+      : []
+  );
+  const fareMedia: FareMedia[] = await readFile('fare_media.txt').then((t) =>
+    t
+      ? parseCSV<any>(t)
+          .filter((r) => r.fare_media_id)
+          .map((r) => ({
+            fare_media_id: String(r.fare_media_id),
+            fare_media_name: r.fare_media_name || undefined,
+            fare_media_type: (num(r.fare_media_type) as 0 | 1 | 2 | 3 | 4),
+          }))
+      : []
+  );
+  const fareProducts: FareProduct[] = await readFile('fare_products.txt').then((t) =>
+    t
+      ? parseCSV<any>(t)
+          .filter((r) => r.fare_product_id)
+          .map((r) => ({
+            fare_product_id: String(r.fare_product_id),
+            fare_product_name: r.fare_product_name || undefined,
+            rider_category_id: r.rider_category_id || undefined,
+            fare_media_id: r.fare_media_id || undefined,
+            amount: String(r.amount ?? ''),
+            currency: String(r.currency || 'USD'),
+          }))
+      : []
+  );
+  const fareLegRules: FareLegRule[] = await readFile('fare_leg_rules.txt').then((t) =>
+    t
+      ? parseCSV<any>(t)
+          .filter((r) => r.fare_product_id)
+          .map((r) => ({
+            leg_group_id: r.leg_group_id || undefined,
+            network_id: r.network_id || undefined,
+            from_area_id: r.from_area_id || undefined,
+            to_area_id: r.to_area_id || undefined,
+            from_timeframe_group_id: r.from_timeframe_group_id || undefined,
+            to_timeframe_group_id: r.to_timeframe_group_id || undefined,
+            fare_product_id: String(r.fare_product_id),
+            rule_priority: r.rule_priority !== undefined && r.rule_priority !== ''
+              ? num(r.rule_priority)
+              : undefined,
+          }))
+      : []
+  );
+  const fareTransferRules: FareTransferRule[] = await readFile('fare_transfer_rules.txt').then((t) =>
+    t
+      ? parseCSV<any>(t)
+          .filter((r) => r.fare_transfer_type !== undefined && r.fare_transfer_type !== '')
+          .map((r) => ({
+            from_leg_group_id: r.from_leg_group_id || undefined,
+            to_leg_group_id: r.to_leg_group_id || undefined,
+            transfer_count: r.transfer_count !== undefined && r.transfer_count !== ''
+              ? num(r.transfer_count)
+              : undefined,
+            duration_limit: r.duration_limit !== undefined && r.duration_limit !== ''
+              ? num(r.duration_limit)
+              : undefined,
+            duration_limit_type: r.duration_limit_type !== undefined && r.duration_limit_type !== ''
+              ? (num(r.duration_limit_type) as 0 | 1)
+              : undefined,
+            fare_transfer_type: (num(r.fare_transfer_type) as 0 | 1 | 2),
+            fare_product_id: r.fare_product_id || undefined,
+          }))
+      : []
+  );
 
   // Build routeStops from stop_times: for each route, find unique stops in order
   const routeStops: RouteStop[] = [];
@@ -569,6 +706,9 @@ export async function importGtfsZip(file: File): Promise<{
     routes: routesWithoutFlex, shapes, stops,
     trips: tripsWithoutFlex, stopTimes, feedInfo,
     routeStops, fareAttributes, fareRules, transfers,
+    fareAreas, stopAreas, fareNetworks, routeNetworks,
+    timeframes, riderCategories, fareMedia,
+    fareProducts, fareLegRules, fareTransferRules,
     flexZones, warnings,
   };
 }
@@ -623,6 +763,16 @@ export function loadImportIntoStore(data: Awaited<ReturnType<typeof importGtfsZi
   store.setFareAttributes(data.fareAttributes);
   store.setFareRules(data.fareRules);
   store.setTransfers(data.transfers);
+  store.setFareAreas(data.fareAreas);
+  store.setStopAreas(data.stopAreas);
+  store.setFareNetworks(data.fareNetworks);
+  store.setRouteNetworks(data.routeNetworks);
+  store.setTimeframes(data.timeframes);
+  store.setRiderCategories(data.riderCategories);
+  store.setFareMedia(data.fareMedia);
+  store.setFareProducts(data.fareProducts);
+  store.setFareLegRules(data.fareLegRules);
+  store.setFareTransferRules(data.fareTransferRules);
   store.setFlexZones(data.flexZones);
 }
 

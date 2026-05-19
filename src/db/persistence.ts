@@ -5,6 +5,9 @@ const DATA_KEYS = [
   'agencies', 'calendars', 'calendarDates', 'routes', 'routeStops',
   'stops', 'trips', 'stopTimes', 'shapes', 'feedInfo',
   'fareAttributes', 'fareRules',
+  'fareAreas', 'stopAreas', 'fareNetworks', 'routeNetworks',
+  'timeframes', 'riderCategories', 'fareMedia',
+  'fareProducts', 'fareLegRules', 'fareTransferRules',
   'projectId', 'projectName',
 ] as const;
 
@@ -74,6 +77,16 @@ export async function loadProject(projectId: string) {
   if (snapshot.feedInfo !== undefined) state.setFeedInfo(snapshot.feedInfo);
   if (snapshot.fareAttributes) state.setFareAttributes(snapshot.fareAttributes);
   if (snapshot.fareRules) state.setFareRules(snapshot.fareRules);
+  if (snapshot.fareAreas) state.setFareAreas(snapshot.fareAreas);
+  if (snapshot.stopAreas) state.setStopAreas(snapshot.stopAreas);
+  if (snapshot.fareNetworks) state.setFareNetworks(snapshot.fareNetworks);
+  if (snapshot.routeNetworks) state.setRouteNetworks(snapshot.routeNetworks);
+  if (snapshot.timeframes) state.setTimeframes(snapshot.timeframes);
+  if (snapshot.riderCategories) state.setRiderCategories(snapshot.riderCategories);
+  if (snapshot.fareMedia) state.setFareMedia(snapshot.fareMedia);
+  if (snapshot.fareProducts) state.setFareProducts(snapshot.fareProducts);
+  if (snapshot.fareLegRules) state.setFareLegRules(snapshot.fareLegRules);
+  if (snapshot.fareTransferRules) state.setFareTransferRules(snapshot.fareTransferRules);
   if (snapshot.projectName) state.setProjectName(snapshot.projectName);
   if (snapshot.projectId) state.setProjectId(snapshot.projectId);
 

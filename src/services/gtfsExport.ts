@@ -331,6 +331,41 @@ export async function exportGtfsZip(): Promise<Blob> {
     zip.file('transfers.txt', toCSV(state.transfers.map(stripUIFields)));
   }
 
+  // GTFS-Fares v2 — written when populated, alongside (not instead of) v1.
+  // Consumers prefer v2 when present; agencies often publish both during
+  // a transition window. There's no v1↔v2 cross-reference in the editor
+  // today (Phase 1 round-trip only).
+  if (state.fareAreas.length > 0) {
+    zip.file('areas.txt', toCSV(state.fareAreas.map(stripUIFields)));
+  }
+  if (state.stopAreas.length > 0) {
+    zip.file('stop_areas.txt', toCSV(state.stopAreas.map(stripUIFields)));
+  }
+  if (state.fareNetworks.length > 0) {
+    zip.file('networks.txt', toCSV(state.fareNetworks.map(stripUIFields)));
+  }
+  if (state.routeNetworks.length > 0) {
+    zip.file('route_networks.txt', toCSV(state.routeNetworks.map(stripUIFields)));
+  }
+  if (state.timeframes.length > 0) {
+    zip.file('timeframes.txt', toCSV(state.timeframes.map(stripUIFields)));
+  }
+  if (state.riderCategories.length > 0) {
+    zip.file('rider_categories.txt', toCSV(state.riderCategories.map(stripUIFields)));
+  }
+  if (state.fareMedia.length > 0) {
+    zip.file('fare_media.txt', toCSV(state.fareMedia.map(stripUIFields)));
+  }
+  if (state.fareProducts.length > 0) {
+    zip.file('fare_products.txt', toCSV(state.fareProducts.map(stripUIFields)));
+  }
+  if (state.fareLegRules.length > 0) {
+    zip.file('fare_leg_rules.txt', toCSV(state.fareLegRules.map(stripUIFields)));
+  }
+  if (state.fareTransferRules.length > 0) {
+    zip.file('fare_transfer_rules.txt', toCSV(state.fareTransferRules.map(stripUIFields)));
+  }
+
   // feed_info.txt — recommended per the GTFS spec (MobilityData's validator
   // raises a `missing_recommended_file` warning when absent). When the user
   // hasn't filled out feed info explicitly, synthesize the three required

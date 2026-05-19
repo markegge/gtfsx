@@ -236,6 +236,77 @@ async function main() {
   assert('delete calendar', !s().calendars.some(c => c.service_id === 'test-summer'));
   assert('delete cascades dates', s().calendarDates.filter(cd => cd.service_id === 'test-summer').length === 0);
 
+  // ---- PHASE 12: GTFS-Fares v2 round-trip ----
+  // Build a minimal synthetic v2 feed in-memory and verify every v2 file
+  // survives import → export → re-import without data loss. No editor UI yet
+  // (Phase 1 scope is round-trip only); this test guards against regressions
+  // in the import/export plumbing.
+  console.log('\nPhase 12: GTFS-Fares v2 round-trip');
+  const JSZip = (await import('jszip')).default;
+  const v2zip = new JSZip();
+  // Minimum-viable feed scaffolding so importGtfsZip parses without warnings.
+  v2zip.file('agency.txt', 'agency_id,agency_name,agency_url,agency_timezone\nA1,Test Agency,https://example.com,America/Los_Angeles\n');
+  v2zip.file('routes.txt', 'route_id,agency_id,route_short_name,route_long_name,route_type\nR1,A1,1,Test Route,3\n');
+  v2zip.file('stops.txt', 'stop_id,stop_name,stop_lat,stop_lon\nS1,Stop One,37.7749,-122.4194\nS2,Stop Two,37.7849,-122.4094\n');
+  v2zip.file('calendar.txt', 'service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nWKDY,1,1,1,1,1,0,0,20260101,20261231\n');
+  v2zip.file('trips.txt', 'route_id,service_id,trip_id\nR1,WKDY,T1\n');
+  v2zip.file('stop_times.txt', 'trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,08:00:00,08:00:00,S1,1\nT1,08:10:00,08:10:00,S2,2\n');
+  // v2 fare data — one row per file that exercises the typed columns.
+  v2zip.file('areas.txt', 'area_id,area_name\nDOWNTOWN,Downtown\nSUBURBAN,Suburban\n');
+  v2zip.file('stop_areas.txt', 'area_id,stop_id\nDOWNTOWN,S1\nSUBURBAN,S2\n');
+  v2zip.file('networks.txt', 'network_id,network_name\nBUS,Bus Network\n');
+  v2zip.file('route_networks.txt', 'network_id,route_id\nBUS,R1\n');
+  v2zip.file('timeframes.txt', 'timeframe_group_id,start_time,end_time,service_id\nPEAK,06:00:00,09:00:00,WKDY\nPEAK,15:00:00,19:00:00,WKDY\n');
+  v2zip.file('rider_categories.txt', 'rider_category_id,rider_category_name,is_default_fare_category,eligibility_url\nADULT,Adult,1,\nSENIOR,Senior,0,https://example.com/senior\n');
+  v2zip.file('fare_media.txt', 'fare_media_id,fare_media_name,fare_media_type\nCASH,Cash,0\nCARD,Smart Card,2\nCEMV,Contactless,3\n');
+  v2zip.file('fare_products.txt', 'fare_product_id,fare_product_name,rider_category_id,fare_media_id,amount,currency\nSINGLE,Single Ride,ADULT,CASH,2.50,USD\nSENIOR_SINGLE,Senior Single,SENIOR,CARD,1.25,USD\n');
+  v2zip.file('fare_leg_rules.txt', 'leg_group_id,network_id,from_area_id,to_area_id,from_timeframe_group_id,to_timeframe_group_id,fare_product_id,rule_priority\nLG_BUS,BUS,,,PEAK,,SINGLE,1\n');
+  v2zip.file('fare_transfer_rules.txt', 'from_leg_group_id,to_leg_group_id,transfer_count,duration_limit,duration_limit_type,fare_transfer_type,fare_product_id\nLG_BUS,LG_BUS,-1,5400,1,0,\n');
+
+  const v2bytes = await v2zip.generateAsync({ type: 'nodebuffer' });
+  const v2File = v2bytes as unknown as File;
+  const v2data = await importGtfsZip(v2File);
+  loadImportIntoStore(v2data);
+
+  assert('v2 import: 2 areas', s().fareAreas.length === 2, `got ${s().fareAreas.length}`);
+  assert('v2 import: 2 stop_areas', s().stopAreas.length === 2, `got ${s().stopAreas.length}`);
+  assert('v2 import: 1 network', s().fareNetworks.length === 1, `got ${s().fareNetworks.length}`);
+  assert('v2 import: 1 route_network', s().routeNetworks.length === 1, `got ${s().routeNetworks.length}`);
+  assert('v2 import: 2 timeframes (PEAK)', s().timeframes.length === 2, `got ${s().timeframes.length}`);
+  assert('v2 import: 2 rider categories', s().riderCategories.length === 2, `got ${s().riderCategories.length}`);
+  assert('v2 import: 3 fare media', s().fareMedia.length === 3, `got ${s().fareMedia.length}`);
+  assert('v2 import: 2 fare products', s().fareProducts.length === 2, `got ${s().fareProducts.length}`);
+  assert('v2 import: 1 leg rule', s().fareLegRules.length === 1, `got ${s().fareLegRules.length}`);
+  assert('v2 import: 1 transfer rule', s().fareTransferRules.length === 1, `got ${s().fareTransferRules.length}`);
+  assert('v2 import: SINGLE amount preserved', s().fareProducts.find(p => p.fare_product_id === 'SINGLE')?.amount === '2.50');
+  assert('v2 import: ADULT is default', s().riderCategories.find(c => c.rider_category_id === 'ADULT')?.is_default_fare_category === 1);
+  assert('v2 import: cEMV media type=3', s().fareMedia.find(m => m.fare_media_id === 'CEMV')?.fare_media_type === 3);
+  assert('v2 import: leg rule has PEAK timeframe', s().fareLegRules[0]?.from_timeframe_group_id === 'PEAK');
+  assert('v2 import: transfer count -1 (unlimited)', s().fareTransferRules[0]?.transfer_count === -1);
+
+  // Export and re-import — every count and key value should survive.
+  const v2blob = await exportGtfsZip();
+  const v2reBytes = Buffer.from(await v2blob.arrayBuffer());
+  const v2reFile = v2reBytes as unknown as File;
+  const v2re = await importGtfsZip(v2reFile);
+  loadImportIntoStore(v2re);
+
+  assert('v2 round-trip: areas', s().fareAreas.length === 2);
+  assert('v2 round-trip: stop_areas', s().stopAreas.length === 2);
+  assert('v2 round-trip: networks', s().fareNetworks.length === 1);
+  assert('v2 round-trip: route_networks', s().routeNetworks.length === 1);
+  assert('v2 round-trip: timeframes', s().timeframes.length === 2);
+  assert('v2 round-trip: rider categories', s().riderCategories.length === 2);
+  assert('v2 round-trip: fare media', s().fareMedia.length === 3);
+  assert('v2 round-trip: fare products', s().fareProducts.length === 2);
+  assert('v2 round-trip: leg rules', s().fareLegRules.length === 1);
+  assert('v2 round-trip: transfer rules', s().fareTransferRules.length === 1);
+  assert('v2 round-trip: SINGLE amount', s().fareProducts.find(p => p.fare_product_id === 'SINGLE')?.amount === '2.50');
+  assert('v2 round-trip: ADULT default flag', s().riderCategories.find(c => c.rider_category_id === 'ADULT')?.is_default_fare_category === 1);
+  assert('v2 round-trip: cEMV media type=3', s().fareMedia.find(m => m.fare_media_id === 'CEMV')?.fare_media_type === 3);
+  assert('v2 round-trip: leg rule timeframe', s().fareLegRules[0]?.from_timeframe_group_id === 'PEAK');
+  assert('v2 round-trip: transfer count -1', s().fareTransferRules[0]?.transfer_count === -1);
+
   // ---- SUMMARY ----
   console.log(`\n${'='.repeat(50)}`);
   console.log(`Results: ${passed} passed, ${failed} failed out of ${passed + failed} tests`);

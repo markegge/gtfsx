@@ -1,6 +1,7 @@
 import { useCallback, useRef, useMemo, useEffect, useState } from 'react';
 import Map, { NavigationControl, type MapRef } from 'react-map-gl/mapbox';
 import type MapboxDraw from '@mapbox/mapbox-gl-draw';
+import type { DrawEvent } from '@mapbox/mapbox-gl-draw';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useStore } from '../../store';
 import { DrawControl } from './DrawControl';
@@ -17,6 +18,8 @@ import { DemandDotsLayer } from './DemandDotsLayer';
 import { MapLayerControls } from './MapLayerControls';
 import { createFlexZoneWithRoute } from '../flex/flexHelpers';
 import type { MapStyleId } from './MapLayerControls';
+import type { MapMouseEvent, MapboxGeoJSONFeature } from 'mapbox-gl';
+import type { ShapePoint } from '../../types/gtfs';
 import { generateId } from '../../services/idGenerator';
 import { snapToRoad } from '../../services/snapToRoad';
 import { simplifyShapePoints } from '../../services/simplifyShape';
@@ -49,7 +52,7 @@ export function MapView() {
   // Track the draw feature ID for shape/zone editing
   const editDrawFeatureIdRef = useRef<string | null>(null);
   // Snapshot of original shape points before editing (for discard)
-  const originalShapePointsRef = useRef<any[] | null>(null);
+  const originalShapePointsRef = useRef<ShapePoint[] | null>(null);
   // Snapshot of original flex zone geojson before editing (for discard)
   const originalFlexZoneGeojsonRef = useRef<GeoJSON.FeatureCollection | null>(null);
   // Confirm discard dialog
@@ -79,7 +82,9 @@ export function MapView() {
   // Stop move state (for didDragStop compat with click handler)
   const didDragStopRef = useRef(false);
 
-  // Compute initial view from stops or shapes
+  // Compute initial view from stops or shapes. Recompute only when the
+  // "any data?" boolean flips — avoids re-running on every stop edit.
+  const hasAnyData = stops.length > 0 || shapes.length > 0;
   const initialView = useMemo(() => {
     const allLats: number[] = [];
     const allLons: number[] = [];
@@ -94,7 +99,8 @@ export function MapView() {
       };
     }
     return { latitude: 45.68, longitude: -111.05, zoom: 12 };
-  }, [stops.length === 0 && shapes.length === 0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAnyData]);
 
   // ESC key handler — use capture phase so we fire before mapbox-gl-draw
   useEffect(() => {
@@ -306,10 +312,10 @@ export function MapView() {
 
   // Expose map flyTo on window for sidebar components
   useEffect(() => {
-    (window as any).__mapFlyTo = (lng: number, lat: number, zoom?: number) => {
+    window.__mapFlyTo = (lng: number, lat: number, zoom?: number) => {
       mapRef.current?.flyTo({ center: [lng, lat], zoom: zoom ?? mapRef.current.getZoom(), duration: 500 });
     };
-    (window as any).__mapFitBounds = (
+    window.__mapFitBounds = (
       bounds: [[number, number], [number, number]],
       opts?: { padding?: number; maxZoom?: number; duration?: number },
     ) => {
@@ -320,22 +326,22 @@ export function MapView() {
       });
     };
     return () => {
-      delete (window as any).__mapFlyTo;
-      delete (window as any).__mapFitBounds;
+      delete window.__mapFlyTo;
+      delete window.__mapFitBounds;
     };
   }, []);
 
   // Expose save/discard on window so RouteEditor / FlexEditor can call them
   useEffect(() => {
-    (window as any).__shapeEditSave = saveShapeEdit;
-    (window as any).__shapeEditDiscard = discardShapeEdit;
-    (window as any).__flexZoneEditSave = saveFlexZoneEdit;
-    (window as any).__flexZoneEditDiscard = discardFlexZoneEdit;
+    window.__shapeEditSave = saveShapeEdit;
+    window.__shapeEditDiscard = discardShapeEdit;
+    window.__flexZoneEditSave = saveFlexZoneEdit;
+    window.__flexZoneEditDiscard = discardFlexZoneEdit;
     return () => {
-      delete (window as any).__shapeEditSave;
-      delete (window as any).__shapeEditDiscard;
-      delete (window as any).__flexZoneEditSave;
-      delete (window as any).__flexZoneEditDiscard;
+      delete window.__shapeEditSave;
+      delete window.__shapeEditDiscard;
+      delete window.__flexZoneEditSave;
+      delete window.__flexZoneEditDiscard;
     };
   }, [saveShapeEdit, discardShapeEdit, saveFlexZoneEdit, discardFlexZoneEdit]);
 
@@ -403,12 +409,12 @@ export function MapView() {
     const map = mapRef.current?.getMap();
     if (!map) return;
 
-    const onMouseDown = (e: any) => {
+    const onMouseDown = (e: MapMouseEvent) => {
       if (useStore.getState().mapMode !== 'move_stop') return;
       const stopId = useStore.getState().selectedStopId;
       if (!stopId) return;
       const features = map.queryRenderedFeatures(e.point, { layers: ['stop-circles', 'stop-circles-outer'] });
-      const hit = features.some((f: any) => f.properties?.stop_id === stopId);
+      const hit = features.some((f: MapboxGeoJSONFeature) => f.properties?.stop_id === stopId);
       if (!hit) return;
 
       e.preventDefault();
@@ -417,7 +423,7 @@ export function MapView() {
       map.dragPan.disable();
     };
 
-    const onMouseMove = (e: any) => {
+    const onMouseMove = (e: MapMouseEvent) => {
       if (!draggingStopRef.current) return;
       const stopId = useStore.getState().selectedStopId;
       if (!stopId) return;
@@ -450,7 +456,7 @@ export function MapView() {
     };
   }, [mapMode]);
 
-  const handleDrawCreate = useCallback((e: any) => {
+  const handleDrawCreate = useCallback((e: DrawEvent) => {
     const feature = e.features[0];
     if (!feature) return;
 
@@ -475,10 +481,10 @@ export function MapView() {
     const currentSnapToRoad = currentState.snapToRoad;
 
     if (feature.geometry.type === 'LineString' && currentDrawingRouteId) {
-      const rawCoords: [number, number][] = feature.geometry.coordinates;
+      const rawCoords = feature.geometry.coordinates as [number, number][];
 
       // Read the drawing direction from window (set by RouteEditor)
-      const drawingDirection: 0 | 1 = (window as any).__drawingDirection ?? 0;
+      const drawingDirection: 0 | 1 = window.__drawingDirection ?? 0;
 
       const createShapeFromCoords = (coords: [number, number][]) => {
         const shapeId = generateId('shape');
@@ -549,7 +555,7 @@ export function MapView() {
     }
   }, []);
 
-  const handleDrawUpdate = useCallback((e: any) => {
+  const handleDrawUpdate = useCallback((e: DrawEvent) => {
     // Read current state directly to avoid stale closures
     const currentState = useStore.getState();
 
@@ -577,7 +583,7 @@ export function MapView() {
     }
   }, []);
 
-  const handleMapClick = useCallback((e: any) => {
+  const handleMapClick = useCallback((e: MapMouseEvent & { features?: MapboxGeoJSONFeature[] }) => {
     // Ignore clicks that are the end of a stop drag
     if (didDragStopRef.current) return;
 
@@ -763,8 +769,8 @@ export function MapView() {
 
     // Select mode
     if (currentState.mapMode === 'select') {
-      const stopFeature = e.features?.find((f: any) => f.layer?.id === 'stop-circles');
-      if (stopFeature) {
+      const stopFeature = e.features?.find((f: MapboxGeoJSONFeature) => f.layer?.id === 'stop-circles');
+      if (stopFeature?.properties) {
         const sid = stopFeature.properties.stop_id;
         currentState.selectStop(sid);
         setPopupStopId(sid);
@@ -774,8 +780,8 @@ export function MapView() {
         return;
       }
 
-      const routeFeature = e.features?.find((f: any) => f.layer?.id === 'route-lines');
-      if (routeFeature) {
+      const routeFeature = e.features?.find((f: MapboxGeoJSONFeature) => f.layer?.id === 'route-lines');
+      if (routeFeature?.properties) {
         const rid = routeFeature.properties.route_id;
         const did = routeFeature.properties.direction_id;
         currentState.selectRoute(rid);
@@ -791,8 +797,8 @@ export function MapView() {
         return;
       }
 
-      const flexFeature = e.features?.find((f: any) => f.layer?.id === 'flex-zone-fill');
-      if (flexFeature) {
+      const flexFeature = e.features?.find((f: MapboxGeoJSONFeature) => f.layer?.id === 'flex-zone-fill');
+      if (flexFeature?.properties) {
         setPopupFlexZoneId(flexFeature.properties.zoneId);
         setPopupStopId(null);
         setPopupRouteId(null);
@@ -806,7 +812,7 @@ export function MapView() {
     }
   }, []);
 
-  const handleMouseMove = useCallback((e: any) => {
+  const handleMouseMove = useCallback((e: MapMouseEvent & { features?: MapboxGeoJSONFeature[] }) => {
     if (mapMode === 'select') {
       setHoveringFeature(!!(e.features && e.features.length > 0));
       return;
@@ -816,7 +822,7 @@ export function MapView() {
       // switch to a grab affordance while in move mode. Skip updates during
       // an active drag so the cursor doesn't flicker between grab and grabbing.
       if (draggingStopRef.current) return;
-      const over = !!(e.features && e.features.some((f: any) => f.layer?.id === 'stop-circles'));
+      const over = !!(e.features && e.features.some((f: MapboxGeoJSONFeature) => f.layer?.id === 'stop-circles'));
       setHoveringStop(over);
     }
   }, [mapMode]);

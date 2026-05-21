@@ -1,0 +1,121 @@
+# GTFS·X CI — runs on every push and PR. All jobs are blocking.
+#
+#   1. typecheck — frontend + worker tsc --noEmit
+#   2. editor-tests — npx tsx run-tests.ts (82 GTFS import/export assertions)
+#   3. frontend-service-tests — vitest (mocked fetch for demographics/snapToRoad)
+#   4. worker-tests — vitest (193 worker integration tests)
+#   5. ui-smoke — Playwright SPA bootstrap check
+#   6. lint — eslint
+#
+# External-API contract checks (Census ACS, FCC FIPS, Mapbox snap-to-road)
+# live in external-apis.yml and run on a daily cron + on changes to the
+# files that call those services.
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+# Cancel earlier in-progress runs for the same branch/PR.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  typecheck:
+    name: Typecheck (app + worker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Frontend typecheck
+        run: npx tsc -p tsconfig.app.json --noEmit
+      - name: Worker typecheck
+        run: npx tsc -p tsconfig.worker.json --noEmit
+
+  editor-tests:
+    name: Editor integration tests (run-tests.ts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx tsx run-tests.ts
+
+  frontend-service-tests:
+    name: Frontend service unit tests (mocked fetch)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run test:frontend
+
+  worker-tests:
+    name: Worker integration tests (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      # --fileParallelism=false is required: workerd has a WebSocket-disconnect
+      # quirk under parallel runs that flakes worker tests. Serial is stable.
+      - run: npx vitest run --fileParallelism=false
+
+  ui-smoke:
+    name: UI smoke (Playwright)
+    runs-on: ubuntu-latest
+    env:
+      # The smoke needs a Mapbox token baked into the build so map-init doesn't
+      # produce real network errors that pollute the console filter. The test
+      # is tolerant of mapbox-gl exceptions but requires the value to be a
+      # valid public token format. Repo secret VITE_MAPBOX_TOKEN supplies it.
+      VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint

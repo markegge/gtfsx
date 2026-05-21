@@ -24,6 +24,9 @@ export function RouteEditor() {
   const [simplifyShapeId, setSimplifyShapeId] = useState<string | null>(null);
   const [warnEditShapeId, setWarnEditShapeId] = useState<string | null>(null);
 
+  const editingShapeId = useStore((s) => s.editingShapeId);
+  const mapMode = useStore((s) => s.mapMode);
+
   const route = routes.find((r) => r.route_id === selectedRouteId);
 
   const routeShapes = useMemo(() => {
@@ -41,7 +44,7 @@ export function RouteEditor() {
 
   const handleDrawShape = () => {
     // Set direction on window for MapView to read
-    (window as any).__drawingDirection = drawDirection;
+    window.__drawingDirection = drawDirection;
     setDrawingRouteId(route.route_id);
     setMapMode('draw_route');
   };
@@ -64,12 +67,12 @@ export function RouteEditor() {
 
   const handleSaveShapeEdit = () => {
     // Call the save function exposed by MapView
-    (window as any).__shapeEditSave?.();
+    window.__shapeEditSave?.();
   };
 
   const handleCancelShapeEdit = () => {
     // Call the discard function exposed by MapView
-    (window as any).__shapeEditDiscard?.();
+    window.__shapeEditDiscard?.();
   };
 
   const handleDeleteShape = (shapeId: string) => {
@@ -106,9 +109,6 @@ export function RouteEditor() {
         setSnappingShapeId(null);
       });
   };
-
-  const editingShapeId = useStore((s) => s.editingShapeId);
-  const mapMode = useStore((s) => s.mapMode);
 
   return (
     <div>
@@ -509,7 +509,7 @@ export function RouteEditor() {
                 onClick={() => {
                   if (onlyOneAvailable) {
                     setDrawDirection(availableDirection);
-                    (window as any).__drawingDirection = availableDirection;
+                    window.__drawingDirection = availableDirection;
                   }
                   handleDrawShape();
                 }}

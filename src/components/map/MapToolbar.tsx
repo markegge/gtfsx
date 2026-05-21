@@ -39,7 +39,7 @@ export function MapToolbar() {
   const handleDrawRoute = () => {
     const state = useStore.getState();
     const routeId = ensureActiveRoute();
-    (window as any).__drawingDirection = state.stopPlacementDirection;
+    window.__drawingDirection = state.stopPlacementDirection;
     state.setDrawingRouteId(routeId);
     state.setEditingRouteId(routeId);
     state.setSidebarSection('routes');

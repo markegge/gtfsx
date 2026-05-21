@@ -1,0 +1,51 @@
+# Daily contract checks against the third-party APIs the editor depends on.
+#
+# Purpose: catch silent contract drift — e.g., the May 2026 incident where
+# Census's API-key requirement broke demographic features and the issue
+# went undetected for ~24 hours. The mocked unit tests in CI cannot see
+# changes on the provider side; this workflow does.
+#
+# Schedule: daily at 14:00 UTC (~7am Pacific) on the default branch.
+# Also runs on demand (workflow_dispatch) and on push when the files that
+# call these APIs change — so a PR landing today gets validated immediately
+# instead of waiting up to 24 hours for the next cron.
+#
+# Required repo secrets (set in GitHub Settings → Secrets and variables →
+# Actions):
+#   - VITE_CENSUS_API_KEY  — Census ACS5 API key
+#   - VITE_MAPBOX_TOKEN    — Mapbox token with Map Matching scope
+#
+# Failure notification: GitHub's default workflow-failure emails are sent
+# to repository collaborators on default-branch failures. No extra wiring.
+
+name: External API contract checks
+
+on:
+  schedule:
+    # 14:00 UTC daily — keeps a one-day-max blast radius for contract drift.
+    - cron: '0 14 * * *'
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - 'src/services/demographics.ts'
+      - 'src/services/snapToRoad.ts'
+      - 'tests/external/**'
+      - '.github/workflows/external-apis.yml'
+
+jobs:
+  contract-checks:
+    name: Hit real Census, FCC, Mapbox endpoints
+    runs-on: ubuntu-latest
+    env:
+      CENSUS_API_KEY: ${{ secrets.VITE_CENSUS_API_KEY }}
+      MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Run contract checks
+        run: npx tsx tests/external/check.ts

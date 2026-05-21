@@ -14,6 +14,8 @@ function generateTripName(routeName: string, departureTime: string, serviceIndex
   return `${serviceIndex}${prefix}${h}${String(m).padStart(2, '0')}`;
 }
 
+const cellKey = (tripIdx: number, stopIdx: number) => `${tripIdx}-${stopIdx}`;
+
 /** Get the 1-based index of a service_id in the calendars list */
 function getServiceIndex(serviceId: string, calendars: { service_id: string }[]): number {
   const idx = calendars.findIndex((c) => c.service_id === serviceId);
@@ -77,7 +79,6 @@ export function TimetableGrid() {
 
   // Ref map for Tab navigation between cells
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
-  const cellKey = (tripIdx: number, stopIdx: number) => `${tripIdx}-${stopIdx}`;
 
   // Get ordered stops for this route filtered by direction
   const orderedStops = useMemo(() => {

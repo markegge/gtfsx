@@ -58,9 +58,27 @@ export async function handleSearch(request: Request, env: Env): Promise<Response
       headers: { 'Access-Control-Allow-Origin': '*' },
     });
   }
-  const feedArrays = (await Promise.all(responses.map((r) => r.json()))) as any[][];
+  // Mobility Database feed shape — we trim to a known subset before
+  // returning. Only the fields we forward are typed; the rest passes through.
+  interface CatalogFeed {
+    id: string;
+    provider?: string;
+    feed_name?: string;
+    note?: string;
+    country_code?: string;
+    subdivision_name?: string;
+    municipality?: string;
+    locations?: unknown;
+    source_info?: { producer_url?: string };
+    latest_dataset?: {
+      id?: string;
+      hosted_url?: string;
+      downloaded_at?: string;
+    };
+  }
+  const feedArrays = (await Promise.all(responses.map((r) => r.json()))) as CatalogFeed[][];
   const seen = new Set<string>();
-  const feeds: any[] = [];
+  const feeds: CatalogFeed[] = [];
   for (const arr of feedArrays) {
     if (!Array.isArray(arr)) continue;
     for (const f of arr) {

@@ -38,6 +38,13 @@ export type AppStore = AgencySlice &
   TransferSlice &
   FareV2Slice;
 
+// Zustand-immer slice composition: each create*Slice is typed against its
+// own slice (e.g. `StateCreator<AgencySlice, ..., [], AgencySlice>`), but
+// here we hand it the immer-middleware-wrapped setter for the full AppStore.
+// The mismatch is intentional — slices only touch their own keys, but the
+// types don't let us express that without a full mutator-type cascade.
+// Casting through `any` is the canonical Zustand-with-slices workaround.
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export const useStore = create<AppStore>()(
   immer((...a) => ({
     ...(createAgencySlice as any)(...a),
@@ -54,23 +61,20 @@ export const useStore = create<AppStore>()(
     ...(createCoverageSlice as any)(...a),
     ...(createFlexSlice as any)(...a),
     ...(createAuthSlice as any)(...a),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...(createFeedsSlice as any)(...a),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...(createOrgsSlice as any)(...a),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...(createTransferSlice as any)(...a),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...(createFareV2Slice as any)(...a),
   }))
 );
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 // Expose store and test runner for testing/debugging
 if (typeof window !== 'undefined') {
-  (window as any).__gtfsStore = useStore;
+  window.__gtfsStore = useStore;
 
   // Lazy-load test runner
-  (window as any).__runTests = async (zipPath?: string) => {
+  window.__runTests = async (zipPath?: string) => {
     const { runAllTests } = await import('../tests/feedTests');
     const path = zipPath || '/pittsburgh_gtfs.zip';
     console.log(`Fetching ${path}...`);

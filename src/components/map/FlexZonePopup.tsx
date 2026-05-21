@@ -67,7 +67,7 @@ export function FlexZonePopup({ zoneId, lngLat, onClose }: Props) {
   const editDetails = () => {
     setSidebarSection('flex');
     // Signal the Flex sidebar to open this specific zone's Details panel.
-    (window as any).__flexZoneExpand = zone.id;
+    window.__flexZoneExpand = zone.id;
     onClose();
   };
 

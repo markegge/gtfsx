@@ -131,13 +131,13 @@ export async function loadDraftZipBytes(
   return { ok: true, bytes: new Uint8Array(buf) };
 }
 
-export const DRAFT_URL_RE = /^\/([a-z0-9][a-z0-9-]*)\/draft\/([A-Za-z0-9_\-]+)\.zip$/;
+export const DRAFT_URL_RE = /^\/([a-z0-9][a-z0-9-]*)\/draft\/([A-Za-z0-9_-]+)\.zip$/;
 
 // ─── Route dispatch ────────────────────────────────────────────────────────────
 
 const CANONICAL_RE = /^\/([a-z0-9][a-z0-9-]*)\/gtfs\.zip$/;
 const FEED_INFO_RE = /^\/([a-z0-9][a-z0-9-]*)\/feed_info\.json$/;
-const DRAFT_RE = /^\/([a-z0-9][a-z0-9-]*)\/draft\/([A-Za-z0-9_\-]+)\.zip$/;
+const DRAFT_RE = /^\/([a-z0-9][a-z0-9-]*)\/draft\/([A-Za-z0-9_-]+)\.zip$/;
 const EMBED_ROUTE_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/route\/([^/?#]+)\/?$/;
 const EMBED_STOP_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/stop\/([^/?#]+)\/?$/;
 const EMBED_SYSMAP_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/system-map\/?$/;
@@ -355,7 +355,7 @@ async function serveFeedInfo(env: Env, slug: string): Promise<Response> {
   // these aren't present — the version row is always there, but the feed may
   // not have populated a feed_info table.
   let feedTitle = pub.name;
-  let description = pub.description ?? '';
+  const description = pub.description ?? '';
   let feedStart: string | undefined;
   let feedEnd: string | undefined;
   try {

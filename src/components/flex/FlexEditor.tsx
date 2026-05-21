@@ -84,10 +84,10 @@ export function FlexEditor() {
   // Let external triggers (e.g. the Flex zone map popup) expand a specific
   // zone's Details panel on mount.
   useEffect(() => {
-    const pending = (window as any).__flexZoneExpand;
+    const pending = window.__flexZoneExpand;
     if (pending && flexZones.some((z) => z.id === pending)) {
       setExpandedZoneId(pending);
-      delete (window as any).__flexZoneExpand;
+      delete window.__flexZoneExpand;
     }
   }, [flexZones]);
 
@@ -122,8 +122,8 @@ export function FlexEditor() {
         bufferMiles,
         geojson,
       });
-    } catch (e: any) {
-      setError(e.message || 'Failed to generate service area');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to generate service area');
     } finally {
       setGenerating(false);
     }
@@ -154,11 +154,11 @@ export function FlexEditor() {
   };
 
   const handleSaveEdit = () => {
-    (window as any).__flexZoneEditSave?.();
+    window.__flexZoneEditSave?.();
   };
 
   const handleCancelEdit = () => {
-    (window as any).__flexZoneEditDiscard?.();
+    window.__flexZoneEditDiscard?.();
   };
 
   const isDrawing = mapMode === 'draw_flex_zone';

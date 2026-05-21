@@ -154,6 +154,18 @@ export function RouteStopsTab() {
       .filter(Boolean) as Stop[];
   }, [orderedRouteStops, stops]);
 
+  // Click on a stop row: select it, fly the map to it. Clicking the
+  // already-selected row deselects (so the active state is dismissable in
+  // place).
+  const handleSelect = useCallback((stopId: string) => {
+    const next = selectedStopId === stopId ? null : stopId;
+    selectStop(next);
+    if (next === null) return;
+    const stop = stops.find((s) => s.stop_id === stopId);
+    const flyTo = (window as { __mapFlyTo?: (lng: number, lat: number) => void }).__mapFlyTo;
+    if (stop && flyTo) flyTo(stop.stop_lon, stop.stop_lat);
+  }, [stops, selectStop, selectedStopId]);
+
   if (!routeId || !route) return null;
 
   const routeColor = `#${route.route_color}`;
@@ -188,18 +200,6 @@ export function RouteStopsTab() {
     newOrder.splice(newIndex, 0, moved);
     reorderRouteStops(routeId, directionId, newOrder);
   };
-
-  // Click on a stop row: select it, fly the map to it. Clicking the
-  // already-selected row deselects (so the active state is dismissable in
-  // place).
-  const handleSelect = useCallback((stopId: string) => {
-    const next = selectedStopId === stopId ? null : stopId;
-    selectStop(next);
-    if (next === null) return;
-    const stop = stops.find((s) => s.stop_id === stopId);
-    const flyTo = (window as { __mapFlyTo?: (lng: number, lat: number) => void }).__mapFlyTo;
-    if (stop && flyTo) flyTo(stop.stop_lon, stop.stop_lat);
-  }, [stops, selectStop, selectedStopId]);
 
   // Stops already assigned to this route+direction — always exclude from the
   // "Add existing" pool so the dropdown doesn't offer to add a duplicate.

@@ -25,12 +25,14 @@ function fillShapeDistances(points: ShapePoint[]): ShapePoint[] {
   return points;
 }
 
-function parseCSV<T>(text: string): T[] {
+type CsvRow = Record<string, string>;
+
+function parseCSV<T = CsvRow>(text: string): T[] {
   const result = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: false });
   return result.data as T[];
 }
 
-function num(v: any): number {
+function num(v: unknown): number {
   const n = Number(v);
   return isNaN(n) ? 0 : n;
 }
@@ -93,7 +95,7 @@ export async function importGtfsZip(file: File): Promise<{
   // Agency
   const agencyText = await readFile('agency.txt');
   const agencies: Agency[] = agencyText
-    ? parseCSV<any>(agencyText).map((row) => ({
+    ? parseCSV(agencyText).map((row) => ({
         agency_id: row.agency_id || '',
         agency_name: row.agency_name || '',
         agency_url: row.agency_url || '',
@@ -108,7 +110,7 @@ export async function importGtfsZip(file: File): Promise<{
   // Calendar
   const calendarText = await readFile('calendar.txt');
   const calendars: Calendar[] = calendarText
-    ? parseCSV<any>(calendarText).map((row) => ({
+    ? parseCSV(calendarText).map((row) => ({
         service_id: String(row.service_id),
         monday: (num(row.monday) as 0 | 1),
         tuesday: (num(row.tuesday) as 0 | 1),
@@ -126,7 +128,7 @@ export async function importGtfsZip(file: File): Promise<{
   // Calendar dates
   const calDatesText = await readFile('calendar_dates.txt');
   const calendarDates: CalendarDate[] = calDatesText
-    ? parseCSV<any>(calDatesText).map((row) => ({
+    ? parseCSV(calDatesText).map((row) => ({
         service_id: String(row.service_id),
         date: String(row.date),
         exception_type: num(row.exception_type) as 1 | 2,
@@ -136,7 +138,7 @@ export async function importGtfsZip(file: File): Promise<{
   // Routes
   const routesText = await readFile('routes.txt');
   const routes: Route[] = routesText
-    ? parseCSV<any>(routesText).map((row) => ({
+    ? parseCSV(routesText).map((row) => ({
         route_id: String(row.route_id),
         agency_id: String(row.agency_id || agencies[0]?.agency_id || ''),
         route_short_name: row.route_short_name || '',
@@ -157,7 +159,7 @@ export async function importGtfsZip(file: File): Promise<{
   const shapesText = await readFile('shapes.txt');
   const shapesMap = new Map<string, ShapePoint[]>();
   if (shapesText) {
-    const rows = parseCSV<any>(shapesText);
+    const rows = parseCSV(shapesText);
     for (const row of rows) {
       const id = String(row.shape_id);
       if (!shapesMap.has(id)) shapesMap.set(id, []);
@@ -185,7 +187,7 @@ export async function importGtfsZip(file: File): Promise<{
   // Stops
   const stopsText = await readFile('stops.txt');
   const stops: Stop[] = stopsText
-    ? parseCSV<any>(stopsText).map((row) => ({
+    ? parseCSV(stopsText).map((row) => ({
         stop_id: String(row.stop_id),
         stop_code: row.stop_code || undefined,
         stop_name: row.stop_name || '',
@@ -204,7 +206,7 @@ export async function importGtfsZip(file: File): Promise<{
   // Trips
   const tripsText = await readFile('trips.txt');
   const trips: Trip[] = tripsText
-    ? parseCSV<any>(tripsText).map((row) => ({
+    ? parseCSV(tripsText).map((row) => ({
         trip_id: String(row.trip_id),
         route_id: String(row.route_id),
         service_id: String(row.service_id),
@@ -222,8 +224,8 @@ export async function importGtfsZip(file: File): Promise<{
   // so they can feed back into FlexZone metadata (and don't pollute the
   // fixed-route stop_times table).
   const stopTimesText = await readFile('stop_times.txt');
-  const stopTimesAll = stopTimesText ? parseCSV<any>(stopTimesText) : [];
-  const flexStopTimeRows: any[] = [];
+  const stopTimesAll = stopTimesText ? parseCSV(stopTimesText) : [];
+  const flexStopTimeRows: CsvRow[] = [];
   const stopTimes: StopTime[] = [];
   for (const row of stopTimesAll) {
     const isFlex = (row.location_id && !row.stop_id) ||
@@ -255,7 +257,7 @@ export async function importGtfsZip(file: File): Promise<{
   const feedInfoText = await readFile('feed_info.txt');
   let feedInfo: FeedInfo | null = null;
   if (feedInfoText) {
-    const rows = parseCSV<any>(feedInfoText);
+    const rows = parseCSV(feedInfoText);
     if (rows[0]) {
       const r = rows[0];
       feedInfo = {
@@ -275,7 +277,7 @@ export async function importGtfsZip(file: File): Promise<{
   // Fare attributes
   const fareAttrText = await readFile('fare_attributes.txt');
   const fareAttributes: FareAttribute[] = fareAttrText
-    ? parseCSV<any>(fareAttrText).map((row) => ({
+    ? parseCSV(fareAttrText).map((row) => ({
         fare_id: String(row.fare_id),
         price: String(row.price),
         currency_type: String(row.currency_type || 'USD'),
@@ -289,7 +291,7 @@ export async function importGtfsZip(file: File): Promise<{
   // Fare rules
   const fareRulesText = await readFile('fare_rules.txt');
   const fareRules: FareRule[] = fareRulesText
-    ? parseCSV<any>(fareRulesText).map((row) => ({
+    ? parseCSV(fareRulesText).map((row) => ({
         fare_id: String(row.fare_id),
         route_id: row.route_id || undefined,
         origin_id: row.origin_id || undefined,
@@ -301,7 +303,7 @@ export async function importGtfsZip(file: File): Promise<{
   // Transfers
   const transfersText = await readFile('transfers.txt');
   const transfers: Transfer[] = transfersText
-    ? parseCSV<any>(transfersText)
+    ? parseCSV(transfersText)
         .filter((row) => row.from_stop_id && row.to_stop_id)
         .map((row) => ({
           from_stop_id: String(row.from_stop_id),
@@ -317,35 +319,35 @@ export async function importGtfsZip(file: File): Promise<{
   // sees exactly what the publisher uploaded.
   const fareAreas: FareArea[] = await readFile('areas.txt').then((t) =>
     t
-      ? parseCSV<any>(t)
+      ? parseCSV(t)
           .filter((r) => r.area_id)
           .map((r) => ({ area_id: String(r.area_id), area_name: r.area_name || undefined }))
       : []
   );
   const stopAreas: StopArea[] = await readFile('stop_areas.txt').then((t) =>
     t
-      ? parseCSV<any>(t)
+      ? parseCSV(t)
           .filter((r) => r.area_id && r.stop_id)
           .map((r) => ({ area_id: String(r.area_id), stop_id: String(r.stop_id) }))
       : []
   );
   const fareNetworks: FareNetwork[] = await readFile('networks.txt').then((t) =>
     t
-      ? parseCSV<any>(t)
+      ? parseCSV(t)
           .filter((r) => r.network_id)
           .map((r) => ({ network_id: String(r.network_id), network_name: r.network_name || undefined }))
       : []
   );
   const routeNetworks: RouteNetwork[] = await readFile('route_networks.txt').then((t) =>
     t
-      ? parseCSV<any>(t)
+      ? parseCSV(t)
           .filter((r) => r.network_id && r.route_id)
           .map((r) => ({ network_id: String(r.network_id), route_id: String(r.route_id) }))
       : []
   );
   const timeframes: Timeframe[] = await readFile('timeframes.txt').then((t) =>
     t
-      ? parseCSV<any>(t)
+      ? parseCSV(t)
           .filter((r) => r.timeframe_group_id && r.service_id)
           .map((r) => ({
             timeframe_group_id: String(r.timeframe_group_id),
@@ -357,7 +359,7 @@ export async function importGtfsZip(file: File): Promise<{
   );
   const riderCategories: RiderCategory[] = await readFile('rider_categories.txt').then((t) =>
     t
-      ? parseCSV<any>(t)
+      ? parseCSV(t)
           .filter((r) => r.rider_category_id && r.rider_category_name)
           .map((r) => ({
             rider_category_id: String(r.rider_category_id),
@@ -371,7 +373,7 @@ export async function importGtfsZip(file: File): Promise<{
   );
   const fareMedia: FareMedia[] = await readFile('fare_media.txt').then((t) =>
     t
-      ? parseCSV<any>(t)
+      ? parseCSV(t)
           .filter((r) => r.fare_media_id)
           .map((r) => ({
             fare_media_id: String(r.fare_media_id),
@@ -382,7 +384,7 @@ export async function importGtfsZip(file: File): Promise<{
   );
   const fareProducts: FareProduct[] = await readFile('fare_products.txt').then((t) =>
     t
-      ? parseCSV<any>(t)
+      ? parseCSV(t)
           .filter((r) => r.fare_product_id)
           .map((r) => ({
             fare_product_id: String(r.fare_product_id),
@@ -396,7 +398,7 @@ export async function importGtfsZip(file: File): Promise<{
   );
   const fareLegRules: FareLegRule[] = await readFile('fare_leg_rules.txt').then((t) =>
     t
-      ? parseCSV<any>(t)
+      ? parseCSV(t)
           .filter((r) => r.fare_product_id)
           .map((r) => ({
             leg_group_id: r.leg_group_id || undefined,
@@ -414,7 +416,7 @@ export async function importGtfsZip(file: File): Promise<{
   );
   const fareTransferRules: FareTransferRule[] = await readFile('fare_transfer_rules.txt').then((t) =>
     t
-      ? parseCSV<any>(t)
+      ? parseCSV(t)
           .filter((r) => r.fare_transfer_type !== undefined && r.fare_transfer_type !== '')
           .map((r) => ({
             from_leg_group_id: r.from_leg_group_id || undefined,
@@ -466,7 +468,7 @@ export async function importGtfsZip(file: File): Promise<{
   // directions.txt (non-standard but widely supported)
   const directionsText = await readFile('directions.txt');
   if (directionsText) {
-    const dirRows = parseCSV<any>(directionsText);
+    const dirRows = parseCSV(directionsText);
     for (const row of dirRows) {
       const route = routes.find((r) => r.route_id === String(row.route_id));
       if (!route) continue;
@@ -493,8 +495,8 @@ export async function importGtfsZip(file: File): Promise<{
    * the top-level `id` field and often leave properties empty.
    */
   const locationIdOf = (f: GeoJSON.Feature): string => {
-    const p = (f.properties || {}) as Record<string, any>;
-    return String(p.stop_id || p.id || (f as any).id || '');
+    const p = (f.properties || {}) as Record<string, unknown>;
+    return String(p.stop_id || p.id || f.id || '');
   };
 
   /**
@@ -510,7 +512,7 @@ export async function importGtfsZip(file: File): Promise<{
   const bookingRulesText = await readFile('booking_rules.txt');
   const bookingRuleMap = new Map<string, BookingRule>();
   if (bookingRulesText) {
-    for (const row of parseCSV<any>(bookingRulesText)) {
+    for (const row of parseCSV(bookingRulesText)) {
       const id = String(row.booking_rule_id || '');
       if (!id) continue;
       bookingRuleMap.set(id, {
@@ -538,14 +540,14 @@ export async function importGtfsZip(file: File): Promise<{
   const groupNameById = new Map<string, string>();
   const groupStopsById = new Map<string, string[]>();
   if (locationGroupsText) {
-    for (const row of parseCSV<any>(locationGroupsText)) {
+    for (const row of parseCSV(locationGroupsText)) {
       const id = String(row.location_group_id || '');
       if (!id) continue;
       groupNameById.set(id, row.location_group_name || id);
     }
   }
   if (locationGroupStopsText) {
-    for (const row of parseCSV<any>(locationGroupStopsText)) {
+    for (const row of parseCSV(locationGroupStopsText)) {
       const id = String(row.location_group_id || '');
       const sid = String(row.stop_id || '');
       if (!id || !sid) continue;
@@ -582,7 +584,7 @@ export async function importGtfsZip(file: File): Promise<{
       }
     }
 
-    const numOrU = (v: any) => (v === '' || v == null ? undefined : Number(v));
+    const numOrU = (v: unknown) => (v === '' || v == null ? undefined : Number(v));
     flexZones.push({
       // Mirror our own export's naming so a round-trip is stable.
       id: groupId.replace(/-group$/, ''),
@@ -617,7 +619,7 @@ export async function importGtfsZip(file: File): Promise<{
       // Build one FlexZone per group.
       for (const [zoneId, features] of byZone) {
         const first = features[0];
-        const props = (first.properties || {}) as Record<string, any>;
+        const props = (first.properties || {}) as Record<string, unknown>;
 
         // Collect this zone's location_ids and all flex stop_times rows
         // that reference any of them. The first row sets the primary
@@ -651,7 +653,7 @@ export async function importGtfsZip(file: File): Promise<{
           }
         }
 
-        const numOrU = (v: any) => (v === '' || v == null ? undefined : Number(v));
+        const numOrU = (v: unknown) => (v === '' || v == null ? undefined : Number(v));
         const additionalWindows = extraRows.map((r) => {
           const t = trips.find((t) => t.trip_id === String(r.trip_id));
           return {
@@ -662,12 +664,12 @@ export async function importGtfsZip(file: File): Promise<{
         }).filter((w) => w.pickupWindowStart && w.pickupWindowEnd && w.serviceId);
         flexZones.push({
           id: zoneId,
-          name: props.stop_name || props.name || zoneId,
+          name: String(props.stop_name || props.name || zoneId),
           bufferMiles: 0,
           geojson: { type: 'FeatureCollection', features },
           bookingRule,
-          pickupWindowStart: pickupStart || undefined,
-          pickupWindowEnd: pickupEnd || undefined,
+          pickupWindowStart: pickupStart ? String(pickupStart) : undefined,
+          pickupWindowEnd: pickupEnd ? String(pickupEnd) : undefined,
           serviceId,
           routeId,
           meanDurationFactor: numOrU(flexRow?.mean_duration_factor),

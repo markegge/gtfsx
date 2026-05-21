@@ -20,7 +20,7 @@ export const LAST_PROJECT_KEY = 'gtfs:lastProjectId';
 
 export async function saveProject() {
   const state = useStore.getState();
-  const snapshot: Record<string, any> = {};
+  const snapshot: Record<string, unknown> = {};
   for (const key of DATA_KEYS) {
     snapshot[key] = state[key];
   }

@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { Stop } from '../types/gtfs';
+import type { Stop, Transfer } from '../types/gtfs';
 import type { TripSlice } from './tripSlice';
 import type { RouteSlice } from './routeSlice';
 
@@ -10,6 +10,10 @@ export interface StopSlice {
   removeStop: (stop_id: string) => void;
   setStops: (stops: Stop[]) => void;
 }
+
+// removeStop cascades into other slices (stop_times, route_stops, transfers);
+// widen the state view to cover those fields without resorting to `any`.
+type CrossSliceState = StopSlice & TripSlice & RouteSlice & { transfers?: Transfer[] };
 
 export const createStopSlice: StateCreator<StopSlice, [['zustand/immer', never]], [], StopSlice> = (set, get) => ({
   stops: [],
@@ -22,17 +26,17 @@ export const createStopSlice: StateCreator<StopSlice, [['zustand/immer', never]]
     state.stops = state.stops.filter((s) => s.stop_id !== stop_id);
 
     // Cascade: remove stop_times referencing this stop
-    const fullState = get() as unknown as StopSlice & TripSlice & RouteSlice;
-    (state as any).stopTimes = fullState.stopTimes.filter((st) => st.stop_id !== stop_id);
+    const fullState = get() as unknown as CrossSliceState;
+    (state as CrossSliceState).stopTimes = fullState.stopTimes.filter((st) => st.stop_id !== stop_id);
 
     // Remove route-stop associations
-    (state as any).routeStops = fullState.routeStops.filter((rs) => rs.stop_id !== stop_id);
+    (state as CrossSliceState).routeStops = fullState.routeStops.filter((rs) => rs.stop_id !== stop_id);
 
     // Remove transfers referencing this stop on either side
-    if ((state as any).transfers) {
-      (state as any).transfers = (state as any).transfers.filter(
-        (t: { from_stop_id: string; to_stop_id: string }) =>
-          t.from_stop_id !== stop_id && t.to_stop_id !== stop_id,
+    const cross = state as CrossSliceState;
+    if (cross.transfers) {
+      cross.transfers = cross.transfers.filter(
+        (t) => t.from_stop_id !== stop_id && t.to_stop_id !== stop_id,
       );
     }
   }),

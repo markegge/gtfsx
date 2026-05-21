@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { ulid } from 'ulidx';
 import type { AppContext } from './env';
 import { requireAuth } from './auth/middleware';
 import {

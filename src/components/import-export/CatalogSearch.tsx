@@ -79,8 +79,8 @@ export function CatalogSearch({ onSelect }: Props) {
       if (!r.ok) throw new Error(`Search failed: ${r.status} ${await r.text()}`);
       const j = (await r.json()) as { results: CatalogFeed[] };
       setResults(j.results || []);
-    } catch (e: any) {
-      setSearchError(e.message || 'Search failed');
+    } catch (e: unknown) {
+      setSearchError(e instanceof Error ? e.message : 'Search failed');
     } finally {
       setSearching(false);
     }
@@ -101,8 +101,8 @@ export function CatalogSearch({ onSelect }: Props) {
     try {
       const fileName = feed.provider.split(',')[0].trim().slice(0, 60).replace(/[\\/:*?"<>|]+/g, '_') || feed.id;
       await onSelect(feed, fileName);
-    } catch (e: any) {
-      setImportError(e.message || 'Import failed');
+    } catch (e: unknown) {
+      setImportError(e instanceof Error ? e.message : 'Import failed');
     } finally {
       setImportingId(null);
     }

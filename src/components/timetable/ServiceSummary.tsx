@@ -55,11 +55,15 @@ export function ServiceSummary() {
   // Local route order for drag-and-drop reordering
   const [routeOrder, setRouteOrder] = useState<string[]>([]);
 
-  // Sync route order when visible routes change
+  // Sync route order when visible routes change. setState-in-effect is
+  // intentional here: routeOrder is user-mutable (drag reorder) but must
+  // also stay in sync with the underlying visible-routes list when routes
+  // are added/removed externally. Pure derivation via useMemo would lose
+  // the user's drag order.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRouteOrder((prev) => {
       const visibleIds = new Set(visibleRoutes.map((r) => r.route_id));
-      // Keep existing order for routes that are still visible, append new ones
       const kept = prev.filter((id) => visibleIds.has(id));
       const keptSet = new Set(kept);
       const added = visibleRoutes.filter((r) => !keptSet.has(r.route_id)).map((r) => r.route_id);

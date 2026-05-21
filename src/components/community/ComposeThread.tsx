@@ -38,6 +38,11 @@ export function ComposeThread() {
     return () => {
       cancelled = true;
     };
+    // Run once on mount — initial categoryId is read from the URL and we
+    // only want to fall back to the first postable category when no
+    // category was preselected. Re-running when categoryId changes would
+    // overwrite the user's selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const lockedForUser = useMemo(() => {

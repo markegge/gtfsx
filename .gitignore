@@ -28,6 +28,10 @@ backups/
 # Playwright MCP run artifacts (console logs, snapshots from test sessions)
 .playwright-mcp/
 
+# Playwright UI smoke artifacts
+test-results/
+playwright-report/
+
 # demand-dots build artifacts
 demand-dots/cache/
 demand-dots/.venv/

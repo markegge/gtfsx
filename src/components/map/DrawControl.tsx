@@ -1,24 +1,36 @@
 import { useEffect, useRef } from 'react';
 import { useControl } from 'react-map-gl/mapbox';
-import MapboxDraw from '@mapbox/mapbox-gl-draw';
+import MapboxDraw, { type DrawEvent } from '@mapbox/mapbox-gl-draw';
 
-// @ts-ignore - mapbox-gl-draw CSS
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 
 interface DrawControlProps {
-  onCreate?: (e: any) => void;
-  onUpdate?: (e: any) => void;
-  onDelete?: (e: any) => void;
+  onCreate?: (e: DrawEvent) => void;
+  onUpdate?: (e: DrawEvent) => void;
+  onDelete?: (e: DrawEvent) => void;
   drawRef?: import('react').MutableRefObject<MapboxDraw | null>;
 }
 
-// Custom direct_select mode that prevents dragging the entire feature
+// Custom direct_select mode that prevents dragging the entire feature.
+// The mode object is opaque (Record<string, unknown>) — we spread it and
+// override one method, which is the pattern Draw expects.
 const DirectSelectNoDrag = {
-  ...(MapboxDraw as any).modes.direct_select,
+  ...MapboxDraw.modes.direct_select,
   dragFeature() {
     // no-op: prevent dragging the entire route/shape
   },
 };
+
+// Sentinel property attached to the map for listener cleanup across
+// StrictMode remounts. Defined structurally so it works on any map ref
+// shape react-map-gl might hand back.
+interface DrawListenerHolder {
+  __gbDrawListeners?: {
+    onCreate: (e: unknown) => void;
+    onUpdate: (e: unknown) => void;
+    onDelete: (e: unknown) => void;
+  };
+}
 
 export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawControlProps) {
   // Use refs to always have the latest callbacks without re-registering listeners
@@ -37,7 +49,7 @@ export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawContr
         controls: {},
         defaultMode: 'simple_select',
         modes: {
-          ...(MapboxDraw as any).modes,
+          ...MapboxDraw.modes,
           direct_select: DirectSelectNoDrag,
         },
         styles: [
@@ -117,21 +129,22 @@ export function DrawControl({ onCreate, onUpdate, onDelete, drawRef }: DrawContr
       // onto the wrappers and hand them back in the cleanup. Otherwise React
       // StrictMode's mount/unmount/mount cycle leaves an old listener behind
       // and every draw.create fires twice.
-      const onCreate = (e: unknown) => onCreateRef.current?.(e);
-      const onUpdate = (e: unknown) => onUpdateRef.current?.(e);
-      const onDelete = (e: unknown) => onDeleteRef.current?.(e);
-      (map as any).__gbDrawListeners = { onCreate, onUpdate, onDelete };
+      const onCreate = (e: unknown) => onCreateRef.current?.(e as DrawEvent);
+      const onUpdate = (e: unknown) => onUpdateRef.current?.(e as DrawEvent);
+      const onDelete = (e: unknown) => onDeleteRef.current?.(e as DrawEvent);
+      (map as unknown as DrawListenerHolder).__gbDrawListeners = { onCreate, onUpdate, onDelete };
       map.on('draw.create', onCreate);
       map.on('draw.update', onUpdate);
       map.on('draw.delete', onDelete);
     },
-    ({ map }: { map: any }) => {
-      const listeners = map.__gbDrawListeners;
+    ({ map }) => {
+      const holder = map as unknown as DrawListenerHolder;
+      const listeners = holder.__gbDrawListeners;
       if (listeners) {
         map.off('draw.create', listeners.onCreate);
         map.off('draw.update', listeners.onUpdate);
         map.off('draw.delete', listeners.onDelete);
-        delete map.__gbDrawListeners;
+        delete holder.__gbDrawListeners;
       }
     },
   );

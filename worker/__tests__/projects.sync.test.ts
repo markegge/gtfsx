@@ -8,7 +8,6 @@ import {
   resetDb,
   seedUser,
   setupEmailCapture,
-  ungzip,
   type EmailCapture,
 } from './_setup';
 

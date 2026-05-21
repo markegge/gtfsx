@@ -5,6 +5,10 @@ import { Badge } from '../ui/Badge';
 
 export function ValidationPanel() {
   const state = useStore();
+  // Depend on the specific entity slices the validator reads; `state` as a
+  // whole would re-trigger on every unrelated store change (UI state,
+  // selection, etc.). Listing the slices is intentional.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const messages = useMemo(() => runValidation(state), [
     state.agencies, state.calendars, state.calendarDates,
     state.routes, state.stops, state.trips, state.stopTimes, state.shapes,

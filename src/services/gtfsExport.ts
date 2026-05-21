@@ -18,13 +18,16 @@ function fillShapeDistancesExport(points: ShapePoint[]): ShapePoint[] {
   return out;
 }
 
-function toCSV(data: Record<string, any>[]): string {
+// CSV input rows are heterogeneous (GTFS entity types with varying field
+// sets); accept any object shape but flatten to a plain record before
+// handing to PapaParse so it sees consistent keys.
+function toCSV(data: readonly object[]): string {
   if (data.length === 0) return '';
-  return Papa.unparse(data);
+  return Papa.unparse(data as Record<string, unknown>[]);
 }
 
-function stripUIFields(obj: Record<string, any>): Record<string, any> {
-  const result: Record<string, any> = {};
+function stripUIFields<T extends object>(obj: T): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (!key.startsWith('_') && value !== undefined) {
       result[key] = value;
@@ -39,7 +42,7 @@ function stripUIFields(obj: Record<string, any>): Record<string, any> {
  *  feed_lang — fall back to the primary agency when unset. Optional fields
  *  only appear when the user explicitly set them. Emitting this file clears
  *  the validator's `missing_recommended_file` warning for feed_info.txt. */
-function buildFeedInfoRow(state: ReturnType<typeof useStore.getState>): Record<string, any> | null {
+function buildFeedInfoRow(state: ReturnType<typeof useStore.getState>): Record<string, unknown> | null {
   const primary = state.agencies[0];
   const userInfo = state.feedInfo;
 
@@ -52,7 +55,7 @@ function buildFeedInfoRow(state: ReturnType<typeof useStore.getState>): Record<s
 
   if (!publisher_name || !publisher_url) return null;
 
-  const row: Record<string, any> = {
+  const row: Record<string, unknown> = {
     feed_publisher_name: publisher_name,
     feed_publisher_url: publisher_url,
     feed_lang: lang,
@@ -72,12 +75,12 @@ interface FlexMaterialized {
   calendars: Calendar[];
   trips: Trip[];
   /** stop_times rows that reference a location_id or location_group_id. */
-  flexStopTimes: Record<string, any>[];
-  fareRules: Record<string, any>[];
+  flexStopTimes: Record<string, unknown>[];
+  fareRules: Record<string, unknown>[];
   /** location_groups.txt rows (for group-based flex zones). */
-  locationGroups: Record<string, any>[];
+  locationGroups: Record<string, unknown>[];
   /** location_group_stops.txt rows (group_id, stop_id). */
-  locationGroupStops: Record<string, any>[];
+  locationGroupStops: Record<string, unknown>[];
 }
 
 /**
@@ -236,7 +239,7 @@ export async function exportGtfsZip(): Promise<Blob> {
   }
 
   // directions.txt (non-standard but widely supported)
-  const directionRows: Record<string, any>[] = [];
+  const directionRows: Record<string, unknown>[] = [];
   for (const route of state.routes) {
     if (route._direction_0_name) {
       directionRows.push({ route_id: route.route_id, direction_id: 0, direction: route._direction_0_name });
@@ -295,7 +298,7 @@ export async function exportGtfsZip(): Promise<Blob> {
   // before writing so we never emit a shape with duplicate cumulative
   // distances across distinct lat/lon points.
   if (state.shapes.length > 0) {
-    const shapeRows: Record<string, any>[] = [];
+    const shapeRows: Record<string, unknown>[] = [];
     for (const shape of state.shapes) {
       let pts = shape.points;
       const hasRealDistances = pts.some((p) => p.shape_dist_traveled !== 0);

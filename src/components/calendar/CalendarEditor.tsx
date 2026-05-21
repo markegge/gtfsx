@@ -33,8 +33,8 @@ function dateToGtfs(d: Date): string {
  */
 function nthWeekdayOfMonth(year: number, month: number, weekday: number, n: number): Date {
   const first = new Date(year, month, 1);
-  let dayOfWeek = first.getDay();
-  let diff = (weekday - dayOfWeek + 7) % 7;
+  const dayOfWeek = first.getDay();
+  const diff = (weekday - dayOfWeek + 7) % 7;
   const date = 1 + diff + (n - 1) * 7;
   return new Date(year, month, date);
 }
@@ -103,12 +103,18 @@ export function CalendarEditor() {
     }
   }, [editingCalendarServiceId, calendars, setEditingCalendarServiceId]);
 
-  const selected = editingCalendarServiceId
-    ? calendars.find((c) => c.service_id === editingCalendarServiceId) ?? null
-    : null;
-  const selectedDates = editingCalendarServiceId
-    ? calendarDates.filter((cd) => cd.service_id === editingCalendarServiceId)
-    : [];
+  const selected = useMemo(
+    () => editingCalendarServiceId
+      ? calendars.find((c) => c.service_id === editingCalendarServiceId) ?? null
+      : null,
+    [editingCalendarServiceId, calendars],
+  );
+  const selectedDates = useMemo(
+    () => editingCalendarServiceId
+      ? calendarDates.filter((cd) => cd.service_id === editingCalendarServiceId)
+      : [],
+    [editingCalendarServiceId, calendarDates],
+  );
 
   const holidaysInRange = useMemo(() => {
     if (!selected) return [];
@@ -123,7 +129,7 @@ export function CalendarEditor() {
       }
     }
     return holidays;
-  }, [selected?.start_date, selected?.end_date]);
+  }, [selected]);
 
   const existingDateSet = useMemo(() => {
     return new Set(selectedDates.map((cd) => cd.date));
@@ -245,7 +251,7 @@ export function CalendarEditor() {
               saturday: selected.saturday,
               sunday: selected.sunday,
             }}
-            onChange={(day, value) => updateCalendar(selected.service_id, { [day]: value } as any)}
+            onChange={(day, value) => updateCalendar(selected.service_id, { [day]: value } as Partial<typeof selected>)}
           />
 
           <div className="grid grid-cols-2 gap-3 mt-3">

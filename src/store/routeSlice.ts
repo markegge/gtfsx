@@ -5,6 +5,11 @@ import type { ShapeSlice } from './shapeSlice';
 import type { FareSlice } from './fareSlice';
 import type { StopSlice } from './stopSlice';
 
+// Cross-slice mutations need to see fields from neighbouring slices.
+// Casting state to this intersection is narrower than `any` and surfaces
+// real typos in field names.
+type CrossSliceState = RouteSlice & TripSlice & ShapeSlice & FareSlice & StopSlice;
+
 export interface RouteSlice {
   routes: Route[];
   routeStops: RouteStop[];
@@ -70,25 +75,25 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
     );
 
     // Remove trips
-    (state as any).trips = fullState.trips.filter((t) => t.route_id !== route_id);
+    (state as CrossSliceState).trips = fullState.trips.filter((t) => t.route_id !== route_id);
     // Remove stop_times for deleted trips
-    (state as any).stopTimes = fullState.stopTimes.filter((st) => !tripIds.has(st.trip_id));
+    (state as CrossSliceState).stopTimes = fullState.stopTimes.filter((st) => !tripIds.has(st.trip_id));
     // Remove shapes only used by this route
     const shapesToRemove = new Set(
       [...routeShapeIds].filter((sid) => !otherShapeIds.has(sid))
     );
     if (shapesToRemove.size > 0) {
-      (state as any).shapes = fullState.shapes.filter((s) => !shapesToRemove.has(s.shape_id));
+      (state as CrossSliceState).shapes = fullState.shapes.filter((s) => !shapesToRemove.has(s.shape_id));
     }
     // Remove fare rules for this route
-    (state as any).fareRules = fullState.fareRules.filter((fr) => fr.route_id !== route_id);
+    (state as CrossSliceState).fareRules = fullState.fareRules.filter((fr) => fr.route_id !== route_id);
 
     // Optionally remove the stops that are now orphaned (not used by any
     // other route). When `deleteOrphanedStops` is false, the stops stay
     // in stops.txt as standalone points — useful for users planning to
     // assign them to a different route.
     if (deleteOrphanedStops && uniqueStopIds.size > 0) {
-      (state as any).stops = fullState.stops.filter((s) => !uniqueStopIds.has(s.stop_id));
+      (state as CrossSliceState).stops = fullState.stops.filter((s) => !uniqueStopIds.has(s.stop_id));
     }
   }),
   duplicateRoute: (route_id) => {
@@ -138,7 +143,7 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
       // Clone shapes (only those exclusively used by this route's trips).
       for (const s of originalShapes) {
         const newShapeId = shapeIdMap.get(s.shape_id)!;
-        (state as any).shapes.push({
+        (state as CrossSliceState).shapes.push({
           ...s,
           shape_id: newShapeId,
           points: s.points.map((p) => ({ ...p })),
@@ -147,7 +152,7 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
 
       // Clone trips and remap shape_id.
       for (const t of originalTrips) {
-        (state as any).trips.push({
+        (state as CrossSliceState).trips.push({
           ...t,
           trip_id: tripIdMap.get(t.trip_id)!,
           route_id: newRouteId,
@@ -158,7 +163,7 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
       // Clone stop_times.
       for (const st of fullState.stopTimes) {
         if (!tripIdMap.has(st.trip_id)) continue;
-        (state as any).stopTimes.push({
+        (state as CrossSliceState).stopTimes.push({
           ...st,
           trip_id: tripIdMap.get(st.trip_id)!,
         });
@@ -180,7 +185,7 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
         .map((t) => t.trip_id),
     );
     if (affectedTripIds.size > 0) {
-      (state as any).stopTimes = fullState.stopTimes.filter(
+      (state as CrossSliceState).stopTimes = fullState.stopTimes.filter(
         (st) => !(affectedTripIds.has(st.trip_id) && st.stop_id === stop_id)
       );
     }

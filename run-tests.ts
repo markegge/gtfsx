@@ -1,22 +1,28 @@
 /**
  * Run GTFS·X integration tests headlessly via tsx.
  * Usage: npx tsx run-tests.ts
+ *
+ * Fixture is built in-memory from `streamline_gtfs_march_2026/` so the test
+ * is self-contained on a fresh checkout (and in CI). No external zips required.
  */
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import path from 'node:path';
+import JSZip from 'jszip';
 import { importGtfsZip, loadImportIntoStore } from './src/services/gtfsImport';
 import { exportGtfsZip } from './src/services/gtfsExport';
 import { runValidation } from './src/services/validation';
 import { useStore } from './src/store';
 
-// Polyfill File for Node
-class NodeFile extends Blob {
-  name: string;
-  lastModified: number;
-  constructor(bits: BlobPart[], name: string, opts?: FilePropertyBag) {
-    super(bits, opts);
-    this.name = name;
-    this.lastModified = Date.now();
+const FIXTURE_DIR = 'streamline_gtfs_march_2026';
+
+async function buildFixtureZip(): Promise<Buffer> {
+  const zip = new JSZip();
+  for (const name of readdirSync(FIXTURE_DIR)) {
+    const full = path.join(FIXTURE_DIR, name);
+    if (!statSync(full).isFile() || !name.endsWith('.txt')) continue;
+    zip.file(name, readFileSync(full));
   }
+  return zip.generateAsync({ type: 'nodebuffer' });
 }
 
 let passed = 0;
@@ -40,32 +46,32 @@ function s() { return useStore.getState(); }
 async function main() {
   console.log('=== GTFS·X Integration Tests ===\n');
 
-  // Load Pittsburgh GTFS — pass Buffer directly, JSZip handles it natively
-  const zipBuffer = readFileSync('pittsburgh_gtfs.zip');
+  // Build fixture zip from the in-repo streamline (BOZEMAN) feed.
+  const zipBuffer = await buildFixtureZip();
   const zipFile = zipBuffer as unknown as File;
 
   // ---- PHASE 1: IMPORT ----
-  console.log('Phase 1: Import Pittsburgh GTFS');
+  console.log('Phase 1: Import Streamline (BOZEMAN) GTFS');
   const data = await importGtfsZip(zipFile);
   loadImportIntoStore(data);
 
   assert('agencies loaded', s().agencies.length === 1, `got ${s().agencies.length}`);
-  assert('agency name correct', s().agencies[0]?.agency_name === 'Pittsburgh Regional Transit');
-  assert('routes loaded (101)', s().routes.length === 101, `got ${s().routes.length}`);
-  assert('stops loaded (6424)', s().stops.length === 6424, `got ${s().stops.length}`);
-  assert('trips loaded (15826)', s().trips.length === 15826, `got ${s().trips.length}`);
-  assert('calendars loaded (7)', s().calendars.length === 7, `got ${s().calendars.length}`);
+  assert('agency name correct', s().agencies[0]?.agency_name === 'BOZEMAN');
+  assert('routes loaded (8)', s().routes.length === 8, `got ${s().routes.length}`);
+  assert('stops loaded (166)', s().stops.length === 166, `got ${s().stops.length}`);
+  assert('trips loaded (214)', s().trips.length === 214, `got ${s().trips.length}`);
+  assert('calendars loaded (2)', s().calendars.length === 2, `got ${s().calendars.length}`);
   assert('shapes loaded', s().shapes.length > 0, `got ${s().shapes.length}`);
   assert('stop_times loaded', s().stopTimes.length > 0, `got ${s().stopTimes.length}`);
-  assert('fare attributes loaded', s().fareAttributes.length > 0, `got ${s().fareAttributes.length}`);
+  // streamline has no fare_attributes.txt — fare round-trip is exercised separately in phase 12
   assert('feed info loaded', s().feedInfo !== null);
   assert('route stops built', s().routeStops.length > 0, `got ${s().routeStops.length}`);
 
   // ---- PHASE 2: DATA INTEGRITY ----
   console.log('\nPhase 2: Data Integrity');
-  const route1 = s().routes.find(r => r.route_short_name === '1');
-  assert('Route 1 exists', !!route1);
-  assert('Route 1 name = FREEPORT ROAD', route1?.route_long_name === 'FREEPORT ROAD');
+  const blueline = s().routes.find(r => r.route_short_name === 'Blueline');
+  assert('Blueline route exists', !!blueline);
+  assert('Blueline long name = Blueline', blueline?.route_long_name === 'Blueline');
 
   const routeIds = new Set(s().routes.map(r => r.route_id));
   const orphanTrips = s().trips.filter(t => !routeIds.has(t.route_id));
@@ -81,8 +87,8 @@ async function main() {
 
   // ---- PHASE 3: MODIFY AGENCY ----
   console.log('\nPhase 3: Modify Agency');
-  s().updateAgency(s().agencies[0].agency_id, { agency_phone: '412-555-1234' });
-  assert('phone updated', s().agencies[0].agency_phone === '412-555-1234');
+  s().updateAgency(s().agencies[0].agency_id, { agency_phone: '406-555-1234' });
+  assert('phone updated', s().agencies[0].agency_phone === '406-555-1234');
   s().updateFeedInfo({ feed_version: 'test-2026' });
   assert('feed version updated', s().feedInfo?.feed_version === 'test-2026');
 
@@ -103,12 +109,12 @@ async function main() {
   // ---- PHASE 5: MODIFY ROUTES ----
   console.log('\nPhase 5: Modify Routes');
   const origRouteCount = s().routes.length;
-  if (route1) {
-    s().updateRoute(route1.route_id, { route_color: 'FF0000', route_desc: 'Test modified' });
-    assert('route color updated', s().routes.find(r => r.route_id === route1.route_id)?.route_color === 'FF0000');
+  if (blueline) {
+    s().updateRoute(blueline.route_id, { route_color: 'FF0000', route_desc: 'Test modified' });
+    assert('route color updated', s().routes.find(r => r.route_id === blueline.route_id)?.route_color === 'FF0000');
   }
   s().addRoute({
-    route_id: 'test-route', agency_id: 'PRT', route_short_name: 'T99',
+    route_id: 'test-route', agency_id: '260', route_short_name: 'T99',
     route_long_name: 'TEST EXPRESS', route_type: 3, route_color: '00FF00', route_text_color: '000000',
   });
   assert('add route', s().routes.length === origRouteCount + 1);
@@ -143,7 +149,7 @@ async function main() {
   assert('add stop time', s().stopTimes.filter(st => st.trip_id === 'test-trip-1').length === 1);
 
   // Modify existing trip
-  const existTrip = s().trips.find(t => t.route_id === route1?.route_id);
+  const existTrip = s().trips.find(t => t.route_id === blueline?.route_id);
   if (existTrip) {
     const existST = s().stopTimes.find(st => st.trip_id === existTrip.trip_id);
     if (existST) {
@@ -206,9 +212,9 @@ async function main() {
   assert('round-trip routes', s().routes.length === preRoutes, `${preRoutes} → ${s().routes.length}`);
   assert('round-trip stops', s().stops.length === preStops, `${preStops} → ${s().stops.length}`);
   assert('round-trip trips', s().trips.length === preTrips, `${preTrips} → ${s().trips.length}`);
-  assert('round-trip agency phone', s().agencies[0]?.agency_phone === '412-555-1234');
+  assert('round-trip agency phone', s().agencies[0]?.agency_phone === '406-555-1234');
   assert('round-trip new route', !!s().routes.find(r => r.route_id === 'test-route'));
-  assert('round-trip route color', s().routes.find(r => r.route_id === route1?.route_id)?.route_color === 'FF0000');
+  assert('round-trip route color', s().routes.find(r => r.route_id === blueline?.route_id)?.route_color === 'FF0000');
 
   const postErrors = runValidation(s()).filter(m => m.severity === 'error');
   assert('round-trip no errors', postErrors.length === 0,
@@ -217,7 +223,6 @@ async function main() {
   // ---- PHASE 11: DELETES ----
   console.log('\nPhase 11: Delete Operations (with cascading)');
   const preDeleteTrips = s().trips.length;
-  const preDeleteStopTimes = s().stopTimes.length;
   s().removeRoute('test-route');
   assert('delete route', !s().routes.some(r => r.route_id === 'test-route'));
   assert('delete cascades routeStops', s().routeStops.filter(rs => rs.route_id === 'test-route').length === 0);

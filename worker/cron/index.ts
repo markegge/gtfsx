@@ -7,10 +7,8 @@ import { reapDeletedUsers, summarizeWeeklyMetrics, expireEnterpriseGrants } from
 // Keep tasks independent: a failure in one should not prevent others from
 // running. We therefore log-and-continue rather than rethrow.
 export async function runScheduled(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _event: ScheduledController,
   env: Env,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _ctx: ExecutionContext,
 ): Promise<void> {
   try {

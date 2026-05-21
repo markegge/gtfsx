@@ -673,4 +673,7 @@ function ConfirmModal({
   );
 }
 
+// Shared with DraftLinksPanel — extracting to a separate file would also work,
+// but the helper is tightly coupled to the snapshot/sync state used here.
+// eslint-disable-next-line react-refresh/only-export-components
 export { renderSnapshotZip };

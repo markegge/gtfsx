@@ -77,6 +77,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
+      # wrangler.jsonc declares `assets.directory: ./dist`; the miniflare pool
+      # refuses to start if it's missing. The worker API tests don't exercise
+      # asset serving, so an empty dist/ is enough — cheaper than a full build.
+      - run: mkdir -p dist
       # --fileParallelism=false is required: workerd has a WebSocket-disconnect
       # quirk under parallel runs that flakes worker tests. Serial is stable.
       - run: npx vitest run --fileParallelism=false

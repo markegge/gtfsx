@@ -1,10 +1,13 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { TopBar } from './TopBar';
 import { LeftRail } from './LeftRail';
 import { RightRail } from './RightRail';
 import { BottomPanel } from './BottomPanel';
 import { WelcomeBanner } from './WelcomeBanner';
-import { MapView } from '../map/MapView';
+// Mapbox GL (~450 KB) is the single largest contributor to main-thread
+// script-eval on first load. Lazy-loading it lets the editor chrome paint and
+// become interactive before the map bundle is fetched and initialized.
+const MapView = lazy(() => import('../map/MapView').then((m) => ({ default: m.MapView })));
 import { RouteDeleteDialog } from '../routes/RouteDeleteDialog';
 import { FloatingHelp } from './FloatingHelp';
 import { useStore } from '../../store';
@@ -46,7 +49,9 @@ export function AppShell() {
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <div className="flex-1 flex overflow-hidden min-h-0">
             <div className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
-              <MapView />
+              <Suspense fallback={<div className="flex-1 bg-sand/40" aria-hidden />}>
+                <MapView />
+              </Suspense>
               <FloatingHelp />
             </div>
             <RightRail />

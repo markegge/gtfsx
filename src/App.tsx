@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { SaveAsDialog } from './components/feeds/SaveAsDialog';
@@ -10,44 +10,53 @@ import { listProjects } from './services/projectsApi';
 import { ApiError } from './services/authApi';
 import { useStore } from './store';
 import { importGtfsZip, loadImportIntoStore } from './services/gtfsImport';
-import { LoginPage } from './components/auth/LoginPage';
-import { SignupPage } from './components/auth/SignupPage';
-import { VerifyEmailPage } from './components/auth/VerifyEmailPage';
-import { MagicLinkPage } from './components/auth/MagicLinkPage';
-import { ResetPasswordPage } from './components/auth/ResetPasswordPage';
-import { ChangeEmailPage } from './components/auth/ChangeEmailPage';
-import { AccountSettingsPage } from './components/auth/AccountSettingsPage';
 import { NotFoundPage } from './components/misc/NotFoundPage';
-import { BackendDisabledPage } from './components/misc/BackendDisabledPage';
-import { MyFeedsPage } from './components/feeds/MyFeedsPage';
 import { ConflictDialog } from './components/snapshots/ConflictDialog';
-import { AdminDashboardPage } from './components/admin/AdminDashboardPage';
-import { AdminUsersPage } from './components/admin/AdminUsersPage';
-import { AdminUserDetailPage } from './components/admin/AdminUserDetailPage';
-import { AdminOrgsPage } from './components/admin/AdminOrgsPage';
-import { AdminOrgDetailPage } from './components/admin/AdminOrgDetailPage';
-import { AdminAuditPage } from './components/admin/AdminAuditPage';
-import { AdminEventsPage } from './components/admin/AdminEventsPage';
-import { DeepLinkImportPage } from './components/import-export/DeepLinkImportPage';
 import { ImpersonationBanner } from './components/admin/ImpersonationBanner';
-import { OrgSettingsPage } from './components/orgs/OrgSettingsPage';
-import { AcceptInvitationPage } from './components/orgs/AcceptInvitationPage';
 import { RtBreakageDialog } from './components/distribution/RtBreakageDialog';
-import { PricingPage } from './components/billing/PricingPage';
-import { AccountBillingPage } from './components/billing/AccountBillingPage';
-import { WelcomePlanPage } from './components/billing/WelcomePlanPage';
 import { backendEnabled } from './utils/featureFlags';
 import { captureRefFromUrl, trackPageview } from './services/trackBeacon';
-import { CommunityRoot } from './components/community/CommunityRoot';
-import { CategoryIndex } from './components/community/CategoryIndex';
-import { ThreadList } from './components/community/ThreadList';
-import { ThreadView } from './components/community/ThreadView';
-import { ComposeThread } from './components/community/ComposeThread';
-import { ProfileEditor } from './components/community/ProfileEditor';
-import { ProfilePage } from './components/community/ProfilePage';
-import { DisplayNameGate } from './components/community/DisplayNameGate';
-import { HelpPage } from './components/help/HelpPage';
-import { SearchResults } from './components/community/SearchResults';
+
+// Route-level code splitting. The homepage (`/`) renders the editor, so its
+// shell stays eager (imported above); every other route is loaded on demand
+// so its code is kept out of the initial bundle. `React.lazy` needs a default
+// export, so each named page is remapped to `{ default }`.
+const LoginPage = lazy(() => import('./components/auth/LoginPage').then((m) => ({ default: m.LoginPage })));
+const SignupPage = lazy(() => import('./components/auth/SignupPage').then((m) => ({ default: m.SignupPage })));
+const VerifyEmailPage = lazy(() => import('./components/auth/VerifyEmailPage').then((m) => ({ default: m.VerifyEmailPage })));
+const MagicLinkPage = lazy(() => import('./components/auth/MagicLinkPage').then((m) => ({ default: m.MagicLinkPage })));
+const ResetPasswordPage = lazy(() => import('./components/auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
+const ChangeEmailPage = lazy(() => import('./components/auth/ChangeEmailPage').then((m) => ({ default: m.ChangeEmailPage })));
+const AccountSettingsPage = lazy(() => import('./components/auth/AccountSettingsPage').then((m) => ({ default: m.AccountSettingsPage })));
+const BackendDisabledPage = lazy(() => import('./components/misc/BackendDisabledPage').then((m) => ({ default: m.BackendDisabledPage })));
+const MyFeedsPage = lazy(() => import('./components/feeds/MyFeedsPage').then((m) => ({ default: m.MyFeedsPage })));
+const AdminDashboardPage = lazy(() => import('./components/admin/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
+const AdminUsersPage = lazy(() => import('./components/admin/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })));
+const AdminUserDetailPage = lazy(() => import('./components/admin/AdminUserDetailPage').then((m) => ({ default: m.AdminUserDetailPage })));
+const AdminOrgsPage = lazy(() => import('./components/admin/AdminOrgsPage').then((m) => ({ default: m.AdminOrgsPage })));
+const AdminOrgDetailPage = lazy(() => import('./components/admin/AdminOrgDetailPage').then((m) => ({ default: m.AdminOrgDetailPage })));
+const AdminAuditPage = lazy(() => import('./components/admin/AdminAuditPage').then((m) => ({ default: m.AdminAuditPage })));
+const AdminEventsPage = lazy(() => import('./components/admin/AdminEventsPage').then((m) => ({ default: m.AdminEventsPage })));
+const DeepLinkImportPage = lazy(() => import('./components/import-export/DeepLinkImportPage').then((m) => ({ default: m.DeepLinkImportPage })));
+const OrgSettingsPage = lazy(() => import('./components/orgs/OrgSettingsPage').then((m) => ({ default: m.OrgSettingsPage })));
+const AcceptInvitationPage = lazy(() => import('./components/orgs/AcceptInvitationPage').then((m) => ({ default: m.AcceptInvitationPage })));
+const PricingPage = lazy(() => import('./components/billing/PricingPage').then((m) => ({ default: m.PricingPage })));
+const AccountBillingPage = lazy(() => import('./components/billing/AccountBillingPage').then((m) => ({ default: m.AccountBillingPage })));
+const WelcomePlanPage = lazy(() => import('./components/billing/WelcomePlanPage').then((m) => ({ default: m.WelcomePlanPage })));
+const CommunityRoot = lazy(() => import('./components/community/CommunityRoot').then((m) => ({ default: m.CommunityRoot })));
+const CategoryIndex = lazy(() => import('./components/community/CategoryIndex').then((m) => ({ default: m.CategoryIndex })));
+const ThreadList = lazy(() => import('./components/community/ThreadList').then((m) => ({ default: m.ThreadList })));
+const ThreadView = lazy(() => import('./components/community/ThreadView').then((m) => ({ default: m.ThreadView })));
+const ComposeThread = lazy(() => import('./components/community/ComposeThread').then((m) => ({ default: m.ComposeThread })));
+const ProfileEditor = lazy(() => import('./components/community/ProfileEditor').then((m) => ({ default: m.ProfileEditor })));
+const ProfilePage = lazy(() => import('./components/community/ProfilePage').then((m) => ({ default: m.ProfilePage })));
+const DisplayNameGate = lazy(() => import('./components/community/DisplayNameGate').then((m) => ({ default: m.DisplayNameGate })));
+const HelpPage = lazy(() => import('./components/help/HelpPage').then((m) => ({ default: m.HelpPage })));
+const SearchResults = lazy(() => import('./components/community/SearchResults').then((m) => ({ default: m.SearchResults })));
+
+function RouteFallback() {
+  return <div className="p-8 text-warm-gray">Loading…</div>;
+}
 
 function PageviewTracker() {
   const location = useLocation();
@@ -271,6 +280,7 @@ function App() {
   if (!backendEnabled) {
     return (
       <BrowserRouter>
+        <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<EditorRoute />} />
           <Route path="/demo" element={<EditorRoute demo />} />
@@ -291,6 +301,7 @@ function App() {
           <Route path="/change-email" element={<BackendDisabledPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     );
   }
@@ -299,6 +310,7 @@ function App() {
     <BrowserRouter>
       <ImpersonationBanner />
       <PageviewTracker />
+      <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/" element={<EditorRoute />} />
         <Route path="/demo" element={<EditorRoute demo />} />
@@ -341,6 +353,7 @@ function App() {
         <Route path="/community/:catId/:threadKey" element={<CommunityRoot><DisplayNameGate><ThreadView /></DisplayNameGate></CommunityRoot>} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      </Suspense>
       {/* Global RT-breakage dialog — listens for `gb:rt-breakage` events from
           the PublishPanel and confirms before publishing a snapshot that would
           break the project's registered GTFS-RT feed. */}

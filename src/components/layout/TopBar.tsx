@@ -183,7 +183,10 @@ export function TopBar() {
                 onClick={async () => {
                   await db.projectData.clear();
                   await db.projects.clear();
-                  window.location.reload();
+                  // Navigate home (not reload) so resetting from a server-backed
+                  // editor route lands on a fresh project instead of re-loading
+                  // the same feed. Workspace persists in localStorage.
+                  window.location.href = import.meta.env.BASE_URL;
                 }}
                 className="flex-1 px-3 py-2 bg-red-500 text-white rounded-lg font-heading font-bold text-sm hover:bg-red-600 transition-colors"
               >

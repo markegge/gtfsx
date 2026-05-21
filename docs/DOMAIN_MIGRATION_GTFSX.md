@@ -70,7 +70,7 @@ Same shape as the prior `gtfsbuilder.net` → `gtfsstudio.net` runbook (`DOMAIN_
 ### Phase 4 — Resend sending domain (user) ✅
 
 - [x] `gtfsx.com` added to Resend and verified (user, 2026-05-18).
-- [ ] (Optional) Configure aliases for `noreply@gtfsx.com`, `support@gtfsx.com`, `sales@gtfsx.com`, `mark@gtfsx.com` — Resend doesn't require an actual inbox to send.
+- [ ] (Optional) Configure aliases for `noreply@gtfsx.com`, `support@gtfsx.com`, `hello@gtfsx.com`, `mark@gtfsx.com` — Resend doesn't require an actual inbox to send.
 - [ ] Keep the existing `gtfsstudio.net` Resend domain verified for the transition period. No emails are sent from `@gtfsstudio.net` after deploy (AUTH_EMAIL_FROM has flipped), but keeping it verified avoids ambiguity if we need to roll back.
 
 ### Phase 5 — Stripe (user) ⏳

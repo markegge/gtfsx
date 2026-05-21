@@ -80,7 +80,7 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
 
 const POPULAR_PLAN: Plan = 'team';
 const ENTERPRISE_MAIL =
-  'mailto:sales@gtfsx.com?subject=GTFS·X Enterprise inquiry&body=Hi%20—%20I%27d%20like%20to%20learn%20more%20about%20the%20Enterprise%20plan.';
+  'mailto:hello@gtfsx.com?subject=GTFS·X Enterprise inquiry&body=Hi%20—%20I%27d%20like%20to%20learn%20more%20about%20the%20Enterprise%20plan.';
 
 // Done-for-you services: primary CTA books a scoping call via Fantastical;
 // email is the secondary path, using the same inquiry-driven mailto pattern

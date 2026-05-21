@@ -32,6 +32,9 @@ backups/
 test-results/
 playwright-report/
 
+# Local task handoff / planning docs (not part of the repo)
+handoffs/
+
 # demand-dots build artifacts
 demand-dots/cache/
 demand-dots/.venv/

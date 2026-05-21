@@ -85,7 +85,7 @@ const PRODUCTS: ProductSpec[] = [
     id: 'gtfsb_enterprise',
     name: 'GTFS·X Enterprise',
     description:
-      'For state DOTs, RTAP networks, Cal-ITP, and large transit consortiums. Custom pricing, manually provisioned by staff. Contact sales@gtfsx.com.',
+      'For state DOTs, RTAP networks, Cal-ITP, and large transit consortiums. Custom pricing, manually provisioned by staff. Contact hello@gtfsx.com.',
     metadata: { app_id: 'gtfsb_enterprise', tier: 'enterprise' },
   },
 ];

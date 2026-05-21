@@ -53,7 +53,7 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
 ];
 
 const ENTERPRISE_MAIL =
-  'mailto:sales@gtfsx.com?subject=GTFS·X Enterprise inquiry&body=Hi%20—%20I%27d%20like%20to%20learn%20more%20about%20the%20Enterprise%20plan.';
+  'mailto:hello@gtfsx.com?subject=GTFS·X Enterprise inquiry&body=Hi%20—%20I%27d%20like%20to%20learn%20more%20about%20the%20Enterprise%20plan.';
 
 // Slugify an org name down to lowercase ASCII + dashes within the constraint
 // the server enforces (3-63 chars, must start with letter/digit).

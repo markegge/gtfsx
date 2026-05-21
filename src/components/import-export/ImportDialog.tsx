@@ -43,14 +43,20 @@ function fitMapToImport(data: ImportData) {
   // Defer so the map has at least one tick to ingest the new route/stop
   // layers before animating — otherwise fitBounds can race against the
   // initial mount and appear to do nothing.
-  setTimeout(() => (window as any).__mapFitBounds?.(bounds), 100);
+  setTimeout(() => window.__mapFitBounds?.(bounds), 100);
 }
 
 interface ImportDialogProps {
   onClose: () => void;
+  /** Overrides the success-screen primary button. When set, the button runs
+   * this handler (with a "Saving…" busy state) instead of merely closing —
+   * used by the org dashboard to persist the freshly imported feed as an
+   * org-owned project. Defaults to the editor's "Open in Editor" → onClose. */
+  onComplete?: () => void | Promise<void>;
+  completeLabel?: string;
 }
 
-export function ImportDialog({ onClose }: ImportDialogProps) {
+export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialogProps) {
   const [source, setSource] = useState<ImportSource>('upload');
   const [dragging, setDragging] = useState(false);
   const [parsing, setParsing] = useState(false);
@@ -70,6 +76,25 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
   const [importedCounts, setImportedCounts] = useState<{
     routes: number; stops: number; trips: number;
   } | null>(null);
+
+  // Async completion state (only used when onComplete is provided).
+  const [completing, setCompleting] = useState(false);
+  const [completeError, setCompleteError] = useState<string | null>(null);
+
+  const handleComplete = useCallback(async () => {
+    if (!onComplete) {
+      onClose();
+      return;
+    }
+    setCompleteError(null);
+    setCompleting(true);
+    try {
+      await onComplete();
+    } catch (e) {
+      setCompleteError(e instanceof Error ? e.message : 'Could not save feed');
+      setCompleting(false);
+    }
+  }, [onComplete, onClose]);
 
   /** Wholesale replace the current project with the imported feed. Matches
    * the first-time-import flow: clear all existing state, load the new feed,
@@ -106,8 +131,8 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
       setFileName(name);
       // Select all routes by default
       setSelectedRouteIds(new Set(data.routes.map((r) => r.route_id)));
-    } catch (e: any) {
-      setError(e.message || 'Failed to parse GTFS feed');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to parse GTFS feed');
     } finally {
       setParsing(false);
     }
@@ -230,7 +255,7 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
   // ── Success screen ─────────────────────────────────────────────────────────
   if (importedCounts) {
     return (
-      <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={completing ? undefined : onClose}>
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 bg-teal-light rounded-lg flex items-center justify-center text-xl">✓</div>
@@ -253,11 +278,17 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
               ),
             )}
           </div>
+          {completeError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4 text-sm text-red-700">
+              {completeError}
+            </div>
+          )}
           <button
-            onClick={onClose}
-            className="w-full px-4 py-2.5 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors"
+            onClick={handleComplete}
+            disabled={completing}
+            className="w-full px-4 py-2.5 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Open in Editor
+            {completing ? 'Saving…' : onComplete ? (completeLabel ?? 'Save feed') : 'Open in Editor'}
           </button>
         </div>
       </div>

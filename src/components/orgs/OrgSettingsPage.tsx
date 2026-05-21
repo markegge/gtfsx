@@ -38,6 +38,9 @@ import {
   type OrgBillingState,
 } from '../../services/billingApi';
 import { billingEnabled } from '../../utils/featureFlags';
+import { ImportDialog } from '../import-export/ImportDialog';
+import { createProject, saveWorkingState } from '../../services/projectsApi';
+import { buildSnapshot, setCurrentWorkingStateVersion } from '../../db/serverPersistence';
 
 function formatDate(ms: number | null | undefined): string {
   if (!ms) return '—';
@@ -63,6 +66,11 @@ export function OrgSettingsPage() {
   const removeUserOrg = useStore((s) => s.removeUserOrg);
   const activeWorkspace = useStore((s) => s.activeWorkspace);
   const setActiveWorkspace = useStore((s) => s.setActiveWorkspace);
+  const setProjectId = useStore((s) => s.setProjectId);
+  const setProjectName = useStore((s) => s.setProjectName);
+  const setActiveServerProject = useStore((s) => s.setActiveServerProject);
+  const upsertFeedProject = useStore((s) => s.upsertFeedProject);
+  const markSaved = useStore((s) => s.markSaved);
 
   const [detail, setDetail] = useState<OrgDetail | null>(null);
   const [myRole, setMyRole] = useState<OrgRole | null>(null);
@@ -72,6 +80,7 @@ export function OrgSettingsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const [editingMeta, setEditingMeta] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -177,7 +186,7 @@ export function OrgSettingsPage() {
   }, [matchingOrg, navigate, slug]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     if (orgsLoaded && matchingOrg) void refreshBilling();
   }, [orgsLoaded, matchingOrg, refreshBilling]);
 
@@ -404,6 +413,28 @@ export function OrgSettingsPage() {
     }
   };
 
+  // After the imported feed is loaded into the editor store, persist it as a
+  // new org-owned project (mirrors SaveAsDialog), then open it in the editor.
+  // ImportDialog renders the create error inline and keeps itself open on
+  // failure, so we let exceptions propagate.
+  const handleImportComplete = async () => {
+    const name = useStore.getState().projectName?.trim() || 'Imported Feed';
+    const project = await createProject({
+      name,
+      owner: { type: 'org', id: org.id },
+    });
+    setProjectId(project.id);
+    setProjectName(project.name);
+    const snapshot = buildSnapshot();
+    const { workingStateVersion } = await saveWorkingState(project.id, snapshot, 0);
+    setCurrentWorkingStateVersion(project.id, workingStateVersion);
+    setActiveServerProject(project.id);
+    upsertFeedProject({ ...project, workingStateVersion });
+    markSaved();
+    if (myRole) setActiveWorkspace({ type: 'org', orgId: org.id, role: myRole });
+    navigate(`/feeds/${encodeURIComponent(project.slug)}`);
+  };
+
   return (
     <div className="min-h-full bg-cream">
       <header className="h-14 bg-white border-b border-sand flex items-center px-3 sm:px-5 gap-2 sm:gap-3 shrink-0">
@@ -431,16 +462,21 @@ export function OrgSettingsPage() {
                 {detail.projectCount} feed{detail.projectCount === 1 ? '' : 's'}
               </div>
             </div>
-            {isAdmin && (
-              <button
-                onClick={() => setEditingMeta(true)}
-                className="w-9 h-9 rounded-md text-warm-gray hover:text-coral hover:bg-cream"
-                aria-label="Edit organization"
-                title="Edit"
-              >
-                ✎
-              </button>
-            )}
+            <div className="flex items-center gap-2 shrink-0">
+              {myRole && roleAtLeast(myRole, 'editor') && (
+                <AuthButton onClick={() => setShowImport(true)}>Import feed</AuthButton>
+              )}
+              {isAdmin && (
+                <button
+                  onClick={() => setEditingMeta(true)}
+                  className="w-9 h-9 rounded-md text-warm-gray hover:text-coral hover:bg-cream"
+                  aria-label="Edit organization"
+                  title="Edit"
+                >
+                  ✎
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -686,6 +722,14 @@ export function OrgSettingsPage() {
           </section>
         )}
       </main>
+
+      {showImport && (
+        <ImportDialog
+          onClose={() => setShowImport(false)}
+          onComplete={handleImportComplete}
+          completeLabel={`Save to ${org.name}`}
+        />
+      )}
 
       {editingMeta && (
         <EditOrgDialog

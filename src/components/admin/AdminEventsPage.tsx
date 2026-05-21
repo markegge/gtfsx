@@ -5,6 +5,7 @@ import { ErrorBanner } from './adminShared';
 import {
   getEventsSummary,
   type AdminEventsSummaryRow,
+  type AdminEventsSummaryTotals,
 } from '../../services/adminApi';
 import { ApiError } from '../../services/authApi';
 
@@ -43,7 +44,13 @@ export function AdminEventsPage() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [rows, setRows] = useState<AdminEventsSummaryRow[]>([]);
-  const [totals, setTotals] = useState({ visits: 0, pageViews: 0 });
+  const [totals, setTotals] = useState<AdminEventsSummaryTotals>({
+    visits: 0,
+    pageViews: 0,
+    editorSessions: 0,
+    exports: 0,
+    paywallViews: 0,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,7 +105,7 @@ export function AdminEventsPage() {
   return (
     <AdminLayout
       title="Events"
-      subtitle="Cookieless page-view analytics, grouped by inbound referral tag (?ref=)."
+      subtitle="Cookieless funnel analytics — visits, editor sessions, exports, and paywall views by inbound referral tag (?ref=)."
     >
       <div className="bg-white border border-sand rounded-2xl p-4 mb-5 flex flex-wrap items-end gap-3">
         <div className="flex gap-1 p-1 bg-cream rounded-lg">
@@ -154,10 +161,12 @@ export function AdminEventsPage() {
 
       <ErrorBanner>{error}</ErrorBanner>
 
-      <div className="grid grid-cols-3 gap-3 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
         <SummaryCard label="Visits" value={totals.visits} />
+        <SummaryCard label="Editor sessions" value={totals.editorSessions} />
+        <SummaryCard label="Feeds exported" value={totals.exports} />
+        <SummaryCard label="Paywall views" value={totals.paywallViews} />
         <SummaryCard label="Page views" value={totals.pageViews} />
-        <SummaryCard label="Distinct refs" value={totalRefs} />
       </div>
 
       <div className="bg-white border border-sand rounded-2xl overflow-hidden">
@@ -166,20 +175,23 @@ export function AdminEventsPage() {
             <tr className="bg-cream text-left text-[11px] uppercase tracking-wide text-warm-gray font-semibold">
               <th className="px-4 py-3">Referral (ref)</th>
               <th className="px-4 py-3 text-right">Visits</th>
+              <th className="px-4 py-3 text-right">Editor</th>
+              <th className="px-4 py-3 text-right">Exports</th>
+              <th className="px-4 py-3 text-right">Paywall</th>
               <th className="px-4 py-3 text-right">Page views</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-warm-gray">
+                <td colSpan={6} className="px-4 py-8 text-center text-warm-gray">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-warm-gray">
+                <td colSpan={6} className="px-4 py-8 text-center text-warm-gray">
                   No events in this window.
                 </td>
               </tr>
@@ -200,6 +212,15 @@ export function AdminEventsPage() {
                   <td className="px-4 py-3 text-right text-dark-brown font-semibold tabular-nums">
                     {row.visits.toLocaleString()}
                   </td>
+                  <td className="px-4 py-3 text-right text-dark-brown tabular-nums">
+                    {row.editorSessions.toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 text-right text-dark-brown tabular-nums">
+                    {row.exports.toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 text-right text-dark-brown tabular-nums">
+                    {row.paywallViews.toLocaleString()}
+                  </td>
                   <td className="px-4 py-3 text-right text-warm-gray tabular-nums">
                     {row.pageViews.toLocaleString()}
                   </td>
@@ -210,8 +231,10 @@ export function AdminEventsPage() {
       </div>
 
       <p className="mt-4 text-xs text-warm-gray leading-relaxed">
-        A <strong>visit</strong> is a distinct browser session (per tab). A <strong>page view</strong>
-        {' '}is every route change within those sessions. Inbound refs are captured from{' '}
+        Across {totalRefs.toLocaleString()} referral {totalRefs === 1 ? 'source' : 'sources'} in this window.
+        A <strong>visit</strong> is a distinct browser session (per tab); <strong>editor</strong> counts
+        sessions that opened the editor; <strong>exports</strong> and <strong>paywall</strong> views are raw
+        event counts; <strong>page views</strong> is every route change. Inbound refs are captured from{' '}
         <code className="font-mono">?ref=…</code> on the first request of each session and persist
         for the rest of that session.
       </p>

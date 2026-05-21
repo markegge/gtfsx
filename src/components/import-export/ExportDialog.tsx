@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useStore } from '../../store';
 import { exportGtfsZip, downloadBlob } from '../../services/gtfsExport';
 import { runValidation } from '../../services/validation';
+import { trackFeedExported } from '../../services/trackBeacon';
 import { Badge } from '../ui/Badge';
 
 interface ExportDialogProps {
@@ -74,6 +75,8 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
       const blob = await exportGtfsZip();
       const name = fileName.trim() || state.projectName.replace(/\s+/g, '_').toLowerCase();
       downloadBlob(blob, `${name}.zip`);
+      // The export succeeded and the download fired — record it (best-effort).
+      trackFeedExported();
       // Update project name to match exported filename
       if (fileName.trim() && fileName.trim() !== state.projectName.replace(/\s+/g, '_').toLowerCase()) {
         useStore.getState().setProjectName(fileName.trim());

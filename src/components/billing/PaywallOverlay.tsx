@@ -1,8 +1,9 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { planHasFeature, FEATURE_COPY, planDisplayName, cheapestPlanFor, type FeatureKey } from './planConfig';
 import { AuthButton } from '../auth/AuthButton';
+import { trackPaywallView } from '../../services/trackBeacon';
 import type { Plan } from '../../services/billingApi';
 
 interface PaywallOverlayProps {
@@ -34,6 +35,14 @@ export function PaywallOverlay({
   const navigate = useNavigate();
 
   const hasAccess = planHasFeature(currentPlan, feature);
+
+  // Record a paywall view whenever the overlay is shown for a feature the
+  // current plan can't access. Keyed on feature so switching gated panels
+  // (e.g. Costs → Title VI) counts as distinct views; best-effort, no PII.
+  useEffect(() => {
+    if (!hasAccess) trackPaywallView(feature);
+  }, [hasAccess, feature]);
+
   if (hasAccess) {
     return <>{children}</>;
   }

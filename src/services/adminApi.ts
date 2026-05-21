@@ -294,11 +294,22 @@ export interface AdminEventsSummaryRow {
   ref: string | null;
   visits: number;
   pageViews: number;
+  editorSessions: number;
+  exports: number;
+  paywallViews: number;
+}
+
+export interface AdminEventsSummaryTotals {
+  visits: number;
+  pageViews: number;
+  editorSessions: number;
+  exports: number;
+  paywallViews: number;
 }
 
 export interface AdminEventsSummaryResponse {
   rows: AdminEventsSummaryRow[];
-  totals: { visits: number; pageViews: number };
+  totals: AdminEventsSummaryTotals;
   from: number | null;
   to: number | null;
 }

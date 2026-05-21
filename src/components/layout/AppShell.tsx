@@ -8,6 +8,7 @@ import { MapView } from '../map/MapView';
 import { RouteDeleteDialog } from '../routes/RouteDeleteDialog';
 import { FloatingHelp } from './FloatingHelp';
 import { useStore } from '../../store';
+import { trackEditorLoaded } from '../../services/trackBeacon';
 
 function useRailKeyboardShortcuts() {
   useEffect(() => {
@@ -31,6 +32,11 @@ function useRailKeyboardShortcuts() {
 
 export function AppShell() {
   useRailKeyboardShortcuts();
+  // The editor shell only mounts on the editor routes (anonymous, demo, or
+  // server-backed), so one fire per mount marks an editor session.
+  useEffect(() => {
+    trackEditorLoaded();
+  }, []);
   return (
     <div className="h-full flex flex-col">
       <TopBar />

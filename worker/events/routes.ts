@@ -18,10 +18,14 @@ import { clientIp, rateLimit } from '../util/rateLimit';
 // header. We don't accept cross-origin POSTs.
 
 const TrackSchema = z.object({
-  kind: z.literal('page_view'),
+  // page_view is the original signal; the other three feed the marketing
+  // funnel (editor sessions, exports, paywall intent). See migration 0013.
+  kind: z.enum(['page_view', 'editor_loaded', 'feed_exported', 'paywall_view']),
   path: z.string().min(1).max(512),
   ref: z.string().min(1).max(128).nullable().optional(),
   sessionId: z.string().min(8).max(64),
+  // Optional sub-type, e.g. the feature key behind a paywall_view.
+  label: z.string().min(1).max(128).nullable().optional(),
 });
 
 async function parseJson<T extends z.ZodTypeAny>(
@@ -56,8 +60,8 @@ eventsRouter.post('/track', async (c) => {
 
   const country = c.req.header('CF-IPCountry') ?? null;
   await c.env.DB.prepare(
-    `INSERT INTO event (id, ts, kind, path, ref, session_id, country)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO event (id, ts, kind, path, ref, session_id, country, label)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       ulid(),
@@ -67,6 +71,7 @@ eventsRouter.post('/track', async (c) => {
       body.ref ?? null,
       body.sessionId,
       country,
+      body.label ?? null,
     )
     .run();
 

@@ -60,8 +60,12 @@ export function captureRefFromUrl(): void {
   }
 }
 
-export function trackPageview(path: string): void {
+type TrackKind = 'page_view' | 'editor_loaded' | 'feed_exported' | 'paywall_view';
+
+function send(kind: TrackKind, opts?: { path?: string; label?: string | null }): void {
   try {
+    const path =
+      opts?.path ?? (typeof window !== 'undefined' ? window.location.pathname : '/');
     void fetch('/api/events/track', {
       method: 'POST',
       headers: {
@@ -71,10 +75,11 @@ export function trackPageview(path: string): void {
       credentials: 'omit',
       keepalive: true,
       body: JSON.stringify({
-        kind: 'page_view',
+        kind,
         path,
         ref: getRef(),
         sessionId: getSessionId(),
+        label: opts?.label ?? null,
       }),
     }).catch(() => {
       // Network errors are expected (e.g. offline, ad blocker) — silent.
@@ -82,4 +87,24 @@ export function trackPageview(path: string): void {
   } catch {
     // Defensive: never let a tracking error surface to the user.
   }
+}
+
+export function trackPageview(path: string): void {
+  send('page_view', { path });
+}
+
+// Fires once when the editor shell mounts — lets us count "editor sessions"
+// (distinct session_ids with this event) separately from marketing-page visits.
+export function trackEditorLoaded(): void {
+  send('editor_loaded');
+}
+
+// Fires after a valid GTFS zip is downloaded — the "value delivered" proxy.
+export function trackFeedExported(): void {
+  send('feed_exported');
+}
+
+// Fires when a Pro/Team paywall is shown; `feature` is the gated feature key.
+export function trackPaywallView(feature: string): void {
+  send('paywall_view', { label: feature });
 }

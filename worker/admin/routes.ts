@@ -1180,8 +1180,11 @@ adminRouter.get('/events/summary', async (c) => {
     throw validationFailed('Invalid from/to (expected unix ms)');
   }
 
+  // Window-only filter now (no kind filter): one pass over the table pivots
+  // every event kind into its own column per ref, so a single row shows the
+  // whole funnel for an inbound source — visits → exports → paywall views.
   const binds: unknown[] = [];
-  const clauses: string[] = [`kind = 'page_view'`];
+  const clauses: string[] = [];
   if (from !== null) {
     clauses.push('ts >= ?');
     binds.push(from);
@@ -1192,38 +1195,56 @@ adminRouter.get('/events/summary', async (c) => {
   }
   const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
+  // SUM(CASE…) (not FILTER) for portability; editor_sessions counts distinct
+  // sessions that fired editor_loaded, the rest are raw event counts.
+  const aggCols = `
+    COUNT(DISTINCT session_id) AS visits,
+    SUM(CASE WHEN kind = 'page_view' THEN 1 ELSE 0 END) AS page_views,
+    COUNT(DISTINCT CASE WHEN kind = 'editor_loaded' THEN session_id END) AS editor_sessions,
+    SUM(CASE WHEN kind = 'feed_exported' THEN 1 ELSE 0 END) AS exports,
+    SUM(CASE WHEN kind = 'paywall_view' THEN 1 ELSE 0 END) AS paywall_views`;
+
+  type AggRow = {
+    visits: number;
+    page_views: number | null;
+    editor_sessions: number;
+    exports: number | null;
+    paywall_views: number | null;
+  };
+
   const rowsRes = await c.env.DB.prepare(
-    `SELECT COALESCE(ref, '') AS ref,
-            COUNT(DISTINCT session_id) AS visits,
-            COUNT(*) AS page_views
+    `SELECT COALESCE(ref, '') AS ref, ${aggCols}
        FROM event
        ${whereSql}
        GROUP BY COALESCE(ref, '')
        ORDER BY visits DESC, ref ASC`,
   )
     .bind(...binds)
-    .all<{ ref: string; visits: number; page_views: number }>();
+    .all<AggRow & { ref: string }>();
 
   const rows = (rowsRes.results ?? []).map((r) => ({
     ref: r.ref || null,
     visits: r.visits,
-    pageViews: r.page_views,
+    pageViews: r.page_views ?? 0,
+    editorSessions: r.editor_sessions,
+    exports: r.exports ?? 0,
+    paywallViews: r.paywall_views ?? 0,
   }));
 
   const totalsRes = await c.env.DB.prepare(
-    `SELECT COUNT(DISTINCT session_id) AS visits,
-            COUNT(*) AS page_views
-       FROM event
-       ${whereSql}`,
+    `SELECT ${aggCols} FROM event ${whereSql}`,
   )
     .bind(...binds)
-    .first<{ visits: number; page_views: number }>();
+    .first<AggRow>();
 
   return c.json({
     rows,
     totals: {
       visits: totalsRes?.visits ?? 0,
       pageViews: totalsRes?.page_views ?? 0,
+      editorSessions: totalsRes?.editor_sessions ?? 0,
+      exports: totalsRes?.exports ?? 0,
+      paywallViews: totalsRes?.paywall_views ?? 0,
     },
     from,
     to,

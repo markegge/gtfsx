@@ -16,9 +16,6 @@ export function StopEditPanel() {
   );
   const allStops = useStore((s) => s.stops);
   const updateStop = useStore((s) => s.updateStop);
-  const removeStop = useStore((s) => s.removeStop);
-  const setEditingStopId = useStore((s) => s.setEditingStopId);
-  const selectStop = useStore((s) => s.selectStop);
   const mapMode = useStore((s) => s.mapMode);
   const setMapMode = useStore((s) => s.setMapMode);
 
@@ -169,17 +166,6 @@ export function StopEditPanel() {
         onChange={(v) => updateStop(stop.stop_id, { zone_id: v || undefined })}
         placeholder="e.g. zone-1, downtown, juneau"
       />
-
-      <button
-        onClick={() => {
-          removeStop(stop.stop_id);
-          selectStop(null);
-          setEditingStopId(null);
-        }}
-        className="text-xs text-red-400 hover:text-red-600"
-      >
-        Delete stop
-      </button>
 
       <StopDeparturesSection />
     </div>

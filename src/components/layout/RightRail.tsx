@@ -15,6 +15,7 @@ import { TitleVIPanel } from '../titlevi/TitleVIPanel';
 import { FlexEditor } from '../flex/FlexEditor';
 import { PaywallOverlay } from '../billing/PaywallOverlay';
 import { useEditorPlan } from '../billing/useEditorPlan';
+import { EditActions } from '../ui/EditActions';
 
 const RIGHT_RAIL_DEFAULT_WIDTH = 460;
 const RIGHT_RAIL_MIN_WIDTH = 320;
@@ -110,7 +111,7 @@ function RouteDetailHeader() {
     return s.trips.filter((t) => t.route_id === id).length;
   });
   const setEditingRouteId = useStore((s) => s.setEditingRouteId);
-  const setRightRailOpen = useStore((s) => s.setRightRailOpen);
+  const setSidebarSection = useStore((s) => s.setSidebarSection);
   const selectRoute = useStore((s) => s.selectRoute);
   const duplicateRoute = useStore((s) => s.duplicateRoute);
   const tab = useStore((s) => s.routeDetailTab);
@@ -152,11 +153,11 @@ function RouteDetailHeader() {
         </div>
         <button
           onClick={() => {
-            // Closing the editor should also drop the route selection so it
-            // stops being highlighted on the map and no stale route lingers.
-            setRightRailOpen(false);
+            // Fully close the rail and drop the route selection so nothing
+            // stays highlighted on the map and no stale route lingers.
             setEditingRouteId(null);
             selectRoute(null);
+            setSidebarSection(null);
           }}
           className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
           title="Close editor"
@@ -173,20 +174,12 @@ function RouteDetailHeader() {
         <h2 className="font-heading font-extrabold text-xl text-dark-brown leading-tight truncate flex-1 min-w-0">
           {title}
         </h2>
-        <button
-          onClick={handleDuplicate}
-          className="px-2 h-7 rounded-md text-[12px] font-heading font-semibold text-warm-gray hover:bg-cream hover:text-coral transition-colors"
-          title="Duplicate this route"
-        >
-          Duplicate
-        </button>
-        <button
-          onClick={() => requestDeleteRoute(route.route_id)}
-          className="px-2 h-7 rounded-md text-[12px] font-heading font-semibold text-warm-gray hover:bg-red-50 hover:text-red-600 transition-colors"
-          title="Delete this route"
-        >
-          Delete
-        </button>
+        <EditActions
+          onDuplicate={handleDuplicate}
+          onDelete={() => requestDeleteRoute(route.route_id)}
+          duplicateTitle="Duplicate this route"
+          deleteTitle="Delete this route"
+        />
       </div>
       {/* Tabs strip */}
       <div className="px-3 flex items-end gap-1 -mb-px">
@@ -243,6 +236,9 @@ function StopEditHeader() {
   const setEditingStopId = useStore((s) => s.setEditingStopId);
   const setRouteDetailTab = useStore((s) => s.setRouteDetailTab);
   const setSidebarSection = useStore((s) => s.setSidebarSection);
+  const duplicateStop = useStore((s) => s.duplicateStop);
+  const removeStop = useStore((s) => s.removeStop);
+  const selectStop = useStore((s) => s.selectStop);
 
   if (!stop) return null;
 
@@ -298,13 +294,24 @@ function StopEditHeader() {
           </h2>
           <p className="text-[11px] text-warm-gray">Stop ID: {stop.stop_id}</p>
         </div>
-        <button
-          onClick={() => useStore.getState().setSidebarSection(null)}
-          className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
-          title="Close editor"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <EditActions
+            onDuplicate={() => {
+              const newId = duplicateStop(stop.stop_id);
+              if (newId) { selectStop(newId); setEditingStopId(newId); }
+            }}
+            onDelete={() => { removeStop(stop.stop_id); goBack(); }}
+            duplicateTitle="Duplicate this stop"
+            deleteTitle="Delete this stop"
+          />
+          <button
+            onClick={() => useStore.getState().setSidebarSection(null)}
+            className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
+            title="Close editor"
+          >
+            ✕
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -385,6 +392,8 @@ function CalendarDetailHeader() {
     s.calendars.find((c) => c.service_id === s.editingCalendarServiceId) ?? null,
   );
   const setEditingCalendarServiceId = useStore((s) => s.setEditingCalendarServiceId);
+  const duplicateCalendar = useStore((s) => s.duplicateCalendar);
+  const removeCalendar = useStore((s) => s.removeCalendar);
 
   if (!calendar) return null;
   const title = calendar._description || calendar.service_id;
@@ -410,10 +419,19 @@ function CalendarDetailHeader() {
           ✕
         </button>
       </div>
-      <div className="px-5 pt-1 pb-3">
-        <h2 className="font-heading font-extrabold text-xl text-dark-brown leading-tight truncate">
+      <div className="px-5 pt-1 pb-3 flex items-center gap-3">
+        <h2 className="font-heading font-extrabold text-xl text-dark-brown leading-tight truncate flex-1 min-w-0">
           {title}
         </h2>
+        <EditActions
+          onDuplicate={() => {
+            const newId = duplicateCalendar(calendar.service_id);
+            if (newId) setEditingCalendarServiceId(newId);
+          }}
+          onDelete={() => { removeCalendar(calendar.service_id); setEditingCalendarServiceId(null); }}
+          duplicateTitle="Duplicate this calendar"
+          deleteTitle="Delete this calendar"
+        />
       </div>
     </div>
   );

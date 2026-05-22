@@ -3,6 +3,7 @@ import { useStore } from '../../store';
 import { FormField } from '../ui/FormField';
 import { Badge } from '../ui/Badge';
 import { RailSubHeading, RailDivider } from '../ui/RailHeadings';
+import { EditActions } from '../ui/EditActions';
 import { generateId } from '../../services/idGenerator';
 import type { FareAttribute } from '../../types/gtfs';
 
@@ -71,6 +72,7 @@ export function FaresEditor() {
     updateFareAttribute,
     renameFareId,
     removeFareAttribute,
+    duplicateFareAttribute,
     addFareRule,
     removeFareRule,
     removeFareRuleAt,
@@ -184,7 +186,21 @@ export function FaresEditor() {
       {selectedFare && (
         <div>
           <RailDivider />
-          <RailSubHeading>Edit Fare</RailSubHeading>
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <RailSubHeading>Edit Fare</RailSubHeading>
+            <EditActions
+              onDuplicate={() => {
+                const newId = duplicateFareAttribute(selectedFare.fare_id);
+                if (newId) setSelectedFareId(newId);
+              }}
+              onDelete={() => {
+                removeFareAttribute(selectedFare.fare_id);
+                setSelectedFareId(null);
+              }}
+              duplicateTitle="Duplicate this fare"
+              deleteTitle="Delete this fare"
+            />
+          </div>
 
           {/* Fare type — encoded as a fare_id prefix (see TYPE_PREFIXES). */}
           <div className="mb-3">
@@ -439,17 +455,6 @@ export function FaresEditor() {
             </>
           )}
 
-          {/* Delete */}
-          <RailDivider />
-          <button
-            onClick={() => {
-              removeFareAttribute(selectedFare.fare_id);
-              setSelectedFareId(null);
-            }}
-            className="w-full py-2 rounded-lg border-2 border-red-300 text-red-500 text-sm font-semibold hover:bg-red-50 transition-colors"
-          >
-            Delete Fare
-          </button>
         </div>
       )}
     </div>

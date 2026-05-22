@@ -230,18 +230,10 @@ function CornerBadge({ n }: { n: number }) {
 function useNavClick() {
   const sidebarSection = useStore((s) => s.sidebarSection);
   const setSidebarSection = useStore((s) => s.setSidebarSection);
-  const rightRailOpen = useStore((s) => s.rightRailOpen);
-  const setRightRailOpen = useStore((s) => s.setRightRailOpen);
-  const editingRouteId = useStore((s) => s.editingRouteId);
   return (key: SidebarSection) => {
+    // Re-clicking the active section fully closes the rail (not minimize).
     if (sidebarSection === key) {
-      // Re-clicking the active section fully closes the rail (not minimize),
-      // EXCEPT while editing a route, where minimize-to-strip is intended.
-      if (editingRouteId) {
-        setRightRailOpen(!rightRailOpen);
-      } else {
-        setSidebarSection(null);
-      }
+      setSidebarSection(null);
     } else {
       setSidebarSection(key);
     }

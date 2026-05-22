@@ -128,6 +128,14 @@ async function buildResponse(env: Env, seo: ForumSeo): Promise<Response> {
         el.setAttribute('href', seo.canonicalUrl);
       },
     })
+    .on('h1[data-home-only]', {
+      // Drop the homepage's visually-hidden SEO H1 — forum pages have
+      // their own page-topic H1 in the injected body and should be the
+      // sole H1 the crawler sees.
+      element(el) {
+        el.remove();
+      },
+    })
     .on('head', {
       element(el) {
         el.append(`<meta name="robots" content="${robotsContent}"/>`, { html: true });

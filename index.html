@@ -6,7 +6,7 @@
     <link rel="apple-touch-icon" href="/favicon.svg?v=2" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GTFS·X – GTFS Builder and Editor</title>
-    <meta name="description" content="Free, browser-based GTFS feed editor. Build transit routes, stops, schedules, fares, and timetables with an interactive map. Import and export standard GTFS ZIP files. No account or installation required." />
+    <meta name="description" content="Free browser-based GTFS editor. Build routes, stops, schedules, fares, and timetables on an interactive map. Import and export standard GTFS ZIPs." />
     <link rel="canonical" href="https://www.gtfsx.com/" />
     <script>
       // Restore path after GitHub Pages 404 redirect
@@ -60,10 +60,20 @@
     </script>
   </head>
   <body>
+    <!-- Visually-hidden but indexable H1. The homepage IS the editor (no marketing
+         hero), so we surface the primary keyword cluster ("gtfs editor", "free gtfs
+         editor") in an H1 the crawlers see while staying invisible to sighted users.
+         Standard accessibility (clip-rect) pattern — endorsed by Google for this use.
+         `data-home-only` marks it for removal by the marketing + forum SSR rewriters
+         on non-homepage routes, which have their own page-topic H1s. -->
+    <h1 data-home-only style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;">Fast, Free GTFS Editor</h1>
     <div id="root"></div>
     <noscript>
       <div style="font-family: sans-serif; max-width: 760px; margin: 60px auto; padding: 0 20px; line-height: 1.6; color: #2A1F18;">
-        <h1 style="margin-bottom: 4px;">GTFS·X</h1>
+        <!-- Brand mark inside the no-JS fallback. Was an <h1> until 2026-05-22; demoted
+             to a styled <p> so crawlers (which render <noscript>) see only the page-topic
+             H1 instead of a duplicate brand H1. -->
+        <p style="font-size:2em;font-weight:bold;margin:0 0 4px;">GTFS·X</p>
         <p style="font-size: 1.15rem; color: #6B5A4D; margin-top: 0;">The online GTFS feed editor. Free to use; paid plans add publishing and analytical tools.</p>
 
         <p>GTFS·X is a free, browser-based editor for creating and editing GTFS (General Transit Feed Specification) feeds. Build complete transit schedules — agencies, routes, stops, timetables, fares, calendars, and demand-responsive zones — directly in your browser, with no account, no installation, and no data leaving your machine.</p>

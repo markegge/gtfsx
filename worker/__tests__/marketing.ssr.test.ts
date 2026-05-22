@@ -59,4 +59,17 @@ describe('/pricing and /demo SSR', () => {
     const html = await res.text();
     expect(html).toContain('"@type":"Product"');
   });
+
+  it('strips the homepage-only SEO H1 so /pricing has a single page-topic H1', async () => {
+    const res = await client.get('/pricing');
+    const html = await res.text();
+    // Match full <h1>…</h1> elements, not bare `<h1>` references that may
+    // appear in HTML comments (index.html's noscript block has one).
+    const h1s = html.match(/<h1\b[^>]*>[^<]*<\/h1>/g) ?? [];
+    expect(h1s.length).toBe(1);
+    expect(h1s[0]).toBe('<h1>GTFS·X Pricing</h1>');
+    // The h1[data-home-only] element itself must be gone (an HTML comment
+    // about it remains in the noscript block, so just check the element).
+    expect(html).not.toMatch(/<h1[^>]*data-home-only/);
+  });
 });

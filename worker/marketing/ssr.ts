@@ -74,7 +74,7 @@ function pricingSeo(env: Env): MarketingSeo {
   return {
     title: 'GTFS·X Pricing — Free Editor, Paid Publishing',
     description:
-      'GTFS·X pricing: a free browser-based editor forever, Pro at $49/mo, Team at $199/mo, and Enterprise for DOTs and consortiums. Paid plans add managed publishing and analysis.',
+      'GTFS·X pricing: free editor forever; Pro at $49/mo, Team at $199/mo, Enterprise for DOTs and consortiums. Paid plans add publishing and analysis.',
     canonicalUrl,
     jsonLd,
     body,
@@ -104,7 +104,7 @@ function demoSeo(env: Env): MarketingSeo {
   return {
     title: 'GTFS·X Demo — Try the Editor with a Sample Feed',
     description:
-      'Try the GTFS·X editor with a sample GTFS feed preloaded. Explore routes, stops, schedules, fares, and GTFS-Flex zones on an interactive map — no signup or installation required.',
+      'Try the GTFS·X editor with a sample GTFS feed preloaded. Edit routes, stops, schedules, fares, and Flex zones — no signup or installation required.',
     canonicalUrl,
     jsonLd,
     body,
@@ -162,6 +162,13 @@ async function buildResponse(env: Env, seo: MarketingSeo): Promise<Response> {
     .on('link[rel="canonical"]', {
       element(el) {
         el.setAttribute('href', seo.canonicalUrl);
+      },
+    })
+    .on('h1[data-home-only]', {
+      // Drop the homepage's visually-hidden SEO H1 — this route has its
+      // own page-topic H1 in the injected body and should be the sole H1.
+      element(el) {
+        el.remove();
       },
     })
     .on('head', {

@@ -37,6 +37,7 @@ export function MapView() {
   const mapMode = useStore((s) => s.mapMode);
   const editingShapeId = useStore((s) => s.editingShapeId);
   const editingFlexZoneId = useStore((s) => s.editingFlexZoneId);
+  const editingStopId = useStore((s) => s.editingStopId);
   const stops = useStore((s) => s.stops);
   const shapes = useStore((s) => s.shapes);
 
@@ -325,6 +326,23 @@ export function MapView() {
     });
     initialFitDoneRef.current = true;
   }, [stops, shapes]);
+
+  // When a stop goes into edit mode, zoom in to a tight view centered on it —
+  // past the cluster max-zoom, so on a large (clustered) feed the stop renders
+  // as an individual, selectable point rather than being swallowed by a
+  // cluster. Never zooms out if the user is already closer.
+  useEffect(() => {
+    if (!editingStopId) return;
+    const map = mapRef.current?.getMap?.();
+    if (!map) return;
+    const stop = useStore.getState().stops.find((s) => s.stop_id === editingStopId);
+    if (!stop) return;
+    map.flyTo({
+      center: [stop.stop_lon, stop.stop_lat],
+      zoom: Math.max(map.getZoom(), 15),
+      duration: 600,
+    });
+  }, [editingStopId]);
 
   // Cluster stops for large feeds. Gated on TOTAL stop count (stable per feed)
   // rather than per-viewport — toggling a Mapbox source's clustering on the fly

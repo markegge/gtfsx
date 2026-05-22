@@ -90,6 +90,9 @@ export function RouteLayer({ simplified = false }: { simplified?: boolean }) {
   }, [shapes, routes, trips, selectedRouteId, editingShapeId, mapMode, hiddenRouteIds, hiddenRouteTypes, hiddenShapeIds, simplified]);
 
   const isEditing = mapMode === 'edit_shape';
+  // Any route-editing context (detail panel open) — de-emphasize the other
+  // routes so the one being edited stands out, even on a large feed.
+  const isEditingRoute = !!editingRouteId;
 
   // Base line styling — dimmed when editing a shape
   const lineStyle: LayerProps = {
@@ -120,7 +123,9 @@ export function RouteLayer({ simplified = false }: { simplified?: boolean }) {
                   ['get', 'isSelected'], 0.3,
                   0.2,
                 ]
-              : ['case', ['get', 'isSelected'], 1, 0.7],
+              : isEditingRoute
+                ? ['case', ['get', 'isSelected'], 1, 0.2]
+                : ['case', ['get', 'isSelected'], 1, 0.7],
       ],
     },
     layout: {

@@ -13,6 +13,10 @@ export function StopLayer({ clustered = false }: { clustered?: boolean }) {
   const routeStops = useStore((s) => s.routeStops);
   const selectedStopId = useStore((s) => s.selectedStopId);
   const selectedRouteId = useStore((s) => s.selectedRouteId);
+  const editingStopId = useStore((s) => s.editingStopId);
+  // When a stop is being edited, de-emphasize the others so the one in focus
+  // stands out (works in both detailed and clustered modes, i.e. large feeds).
+  const isEditingStop = !!editingStopId;
   const mapMode = useStore((s) => s.mapMode);
   const isEditingShape = mapMode === 'edit_shape';
   const hiddenRouteIds = useStore((s) => s.hiddenRouteIds);
@@ -113,12 +117,14 @@ export function StopLayer({ clustered = false }: { clustered?: boolean }) {
         ['get', 'isFilteredOut'], '#B8AFA5',
         ['get', 'color'],
       ],
-      'circle-opacity': isEditingShape ? 0.15 : [
-        'case',
-        ['get', 'isFilteredOut'], 0.45,
-        ['get', 'isSelected'], 1,
-        0.9,
-      ],
+      'circle-opacity': isEditingShape ? 0.15 : isEditingStop
+        ? ['case', ['get', 'isSelected'], 1, 0.2]
+        : [
+            'case',
+            ['get', 'isFilteredOut'], 0.45,
+            ['get', 'isSelected'], 1,
+            0.9,
+          ],
     },
   };
 
@@ -149,11 +155,13 @@ export function StopLayer({ clustered = false }: { clustered?: boolean }) {
         ['get', 'isSelected'], ['get', 'color'],
         '#FFFFFF',
       ],
-      'circle-opacity': isEditingShape ? 0.15 : [
-        'case',
-        ['get', 'isFilteredOut'], 0.6,
-        1,
-      ],
+      'circle-opacity': isEditingShape ? 0.15 : isEditingStop
+        ? ['case', ['get', 'isSelected'], 1, 0.2]
+        : [
+            'case',
+            ['get', 'isFilteredOut'], 0.6,
+            1,
+          ],
     },
   };
 
@@ -247,11 +255,15 @@ export function StopLayer({ clustered = false }: { clustered?: boolean }) {
     type: 'circle',
     filter: ['!', ['has', 'point_count']],
     paint: {
-      'circle-radius': 4,
+      // Editing a stop enlarges the one in focus and shrinks the rest, so it
+      // stays findable even on a large (clustered) feed.
+      'circle-radius': isEditingStop ? ['case', ['get', 'isSelected'], 7, 3] : 4,
       'circle-color': ['get', 'color'],
       'circle-stroke-color': '#FFFFFF',
-      'circle-stroke-width': 1,
-      'circle-opacity': isEditingShape ? 0.2 : 0.95,
+      'circle-stroke-width': isEditingStop ? ['case', ['get', 'isSelected'], 2, 1] : 1,
+      'circle-opacity': isEditingShape ? 0.2 : isEditingStop
+        ? ['case', ['get', 'isSelected'], 1, 0.25]
+        : 0.95,
     },
   };
 
@@ -267,7 +279,7 @@ export function StopLayer({ clustered = false }: { clustered?: boolean }) {
   // them, each Source has a stable id for its whole lifetime.
   if (clustered) {
     return (
-      <Source key="stops-cluster" id="stops-cluster" type="geojson" data={geojson} cluster clusterMaxZoom={11} clusterRadius={50}>
+      <Source key="stops-cluster" id="stops-cluster" type="geojson" data={geojson} cluster clusterMaxZoom={10} clusterRadius={50}>
         <Layer {...clusterCircle} />
         <Layer {...clusterCount} />
         <Layer {...clusterPoint} />

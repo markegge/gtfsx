@@ -6,6 +6,9 @@ import type { Stop } from '../../types/gtfs';
 
 type DirectionFilter = 'both' | 0 | 1;
 
+// Sentinel route-filter value: stops not assigned to any route.
+const UNASSIGNED = '__unassigned__';
+
 /**
  * Global Stops inventory. Lists every stop in the feed with optional filters
  * by route, direction, calendar service_id, wheelchair boarding, and location
@@ -27,6 +30,7 @@ export function StopList() {
   const setCreatingStop = useStore((s) => s.setCreatingStop);
   const selectStop = useStore((s) => s.selectStop);
   const setMapStopFilter = useStore((s) => s.setMapStopFilter);
+  const removeStop = useStore((s) => s.removeStop);
 
   const [routeFilter, setRouteFilter] = useState<string>('');
   const [directionFilter, setDirectionFilter] = useState<DirectionFilter>('both');
@@ -34,17 +38,24 @@ export function StopList() {
   // -1 means "Any" for the integer-enum filters.
   const [wheelchairFilter, setWheelchairFilter] = useState<number>(-1);
   const [locationTypeFilter, setLocationTypeFilter] = useState<number>(-1);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  // True only when a real route is selected (not "All" or "Unassigned").
+  const routeSelected = !!routeFilter && routeFilter !== UNASSIGNED;
 
   // Direction/service filters only make sense scoped to a route.
-  const effectiveDirection: DirectionFilter = routeFilter ? directionFilter : 'both';
-  const effectiveService = routeFilter ? serviceFilter : '';
+  const effectiveDirection: DirectionFilter = routeSelected ? directionFilter : 'both';
+  const effectiveService = routeSelected ? serviceFilter : '';
 
-  const selectedRoute = routeFilter ? routes.find((r) => r.route_id === routeFilter) : null;
+  const selectedRoute = routeSelected ? routes.find((r) => r.route_id === routeFilter) : null;
 
   const filteredStops = useMemo<Stop[]>(() => {
     let pool = stops;
 
-    if (routeFilter) {
+    if (routeFilter === UNASSIGNED) {
+      const assignedIds = new Set(routeStops.map((rs) => rs.stop_id));
+      pool = pool.filter((s) => !assignedIds.has(s.stop_id));
+    } else if (routeFilter) {
       const assignedIds = new Set<string>();
       for (const rs of routeStops) {
         if (rs.route_id !== routeFilter) continue;
@@ -109,12 +120,46 @@ export function StopList() {
   // Drop the overlay when the panel unmounts (section change, rail close).
   useEffect(() => () => setMapStopFilter(null), [setMapStopFilter]);
 
+  // Any change to which stops are shown invalidates a pending delete confirm,
+  // so route every filter mutation through these wrappers.
+  const changeRouteFilter = (value: string) => {
+    setRouteFilter(value);
+    setServiceFilter('');
+    setConfirmingDelete(false);
+  };
+  const changeDirectionFilter = (value: DirectionFilter) => {
+    setDirectionFilter(value);
+    setConfirmingDelete(false);
+  };
+  const changeServiceFilter = (value: string) => {
+    setServiceFilter(value);
+    setConfirmingDelete(false);
+  };
+  const changeWheelchairFilter = (value: number) => {
+    setWheelchairFilter(value);
+    setConfirmingDelete(false);
+  };
+  const changeLocationTypeFilter = (value: number) => {
+    setLocationTypeFilter(value);
+    setConfirmingDelete(false);
+  };
+
   const clearFilters = () => {
     setRouteFilter('');
     setDirectionFilter('both');
     setServiceFilter('');
     setWheelchairFilter(-1);
     setLocationTypeFilter(-1);
+    setConfirmingDelete(false);
+  };
+
+  const deleteAllShown = () => {
+    // Snapshot ids first — removeStop mutates the store and cascades into
+    // stop_times / route_stops / transfers per stop.
+    const ids = sortedStops.map((s) => s.stop_id);
+    for (const id of ids) removeStop(id);
+    setConfirmingDelete(false);
+    setEditingStopId(null);
   };
 
   const openStopEditor = (stopId: string) => {
@@ -173,13 +218,11 @@ export function StopList() {
             )}
             <select
               value={routeFilter}
-              onChange={(e) => {
-                setRouteFilter(e.target.value);
-                setServiceFilter('');
-              }}
+              onChange={(e) => changeRouteFilter(e.target.value)}
               className="flex-1 min-w-0 px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral"
             >
-              <option value="">All stops in feed</option>
+              <option value="">All stops</option>
+              <option value={UNASSIGNED}>Unassigned stops</option>
               {routes.map((r) => (
                 <option key={r.route_id} value={r.route_id}>
                   {r.route_short_name || r.route_long_name || 'Untitled Route'}
@@ -189,7 +232,7 @@ export function StopList() {
           </div>
         </div>
 
-        {routeFilter && (
+        {routeSelected && (
           <>
             <div>
               <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
@@ -199,7 +242,7 @@ export function StopList() {
                 {(['both', 0, 1] as const).map((d) => (
                   <button
                     key={String(d)}
-                    onClick={() => setDirectionFilter(d)}
+                    onClick={() => changeDirectionFilter(d)}
                     className={`flex-1 px-2 py-1.5 text-xs font-semibold transition-colors
                       ${directionFilter === d ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'}
                       ${d !== 'both' ? 'border-l border-sand' : ''}`}
@@ -217,7 +260,7 @@ export function StopList() {
                 </label>
                 <select
                   value={serviceFilter}
-                  onChange={(e) => setServiceFilter(e.target.value)}
+                  onChange={(e) => changeServiceFilter(e.target.value)}
                   className="w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral"
                 >
                   <option value="">Any service</option>
@@ -253,7 +296,7 @@ export function StopList() {
             </label>
             <select
               value={wheelchairFilter}
-              onChange={(e) => setWheelchairFilter(Number(e.target.value))}
+              onChange={(e) => changeWheelchairFilter(Number(e.target.value))}
               className="w-full px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
             >
               <option value={-1}>Any</option>
@@ -268,7 +311,7 @@ export function StopList() {
             </label>
             <select
               value={locationTypeFilter}
-              onChange={(e) => setLocationTypeFilter(Number(e.target.value))}
+              onChange={(e) => changeLocationTypeFilter(Number(e.target.value))}
               className="w-full px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
             >
               <option value={-1}>Any</option>
@@ -319,6 +362,38 @@ export function StopList() {
                 </span>
               </button>
             ))}
+          </div>
+
+          <div className="mt-3 pt-3 border-t border-sand">
+            {confirmingDelete ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-[11px] text-warm-gray">
+                  Delete {sortedStops.length} shown stop{sortedStops.length === 1 ? '' : 's'}?
+                  This also removes their stop times, route placements, and transfers.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={deleteAllShown}
+                    className="flex-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors"
+                  >
+                    Delete {sortedStops.length}
+                  </button>
+                  <button
+                    onClick={() => setConfirmingDelete(false)}
+                    className="flex-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-sand text-warm-gray hover:text-dark-brown transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmingDelete(true)}
+                className="text-[11px] font-semibold text-red-600 hover:text-red-700 transition-colors"
+              >
+                Delete all shown stops
+              </button>
+            )}
           </div>
         </div>
       )}

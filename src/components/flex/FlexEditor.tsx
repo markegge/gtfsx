@@ -287,7 +287,7 @@ export function FlexEditor() {
       {/* Zone list */}
       {flexZones.length > 0 ? (
         <div className="space-y-1.5">
-          <p className="text-[11px] font-semibold text-dark-brown uppercase tracking-wide">
+          <p className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide">
             Service Areas ({flexZones.length})
           </p>
           {flexZones.map((zone) => {

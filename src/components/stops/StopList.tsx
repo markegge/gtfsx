@@ -199,7 +199,7 @@ export function StopList() {
     <div>
       <button
         onClick={() => setCreatingStop(true)}
-        className="w-full mb-3 px-4 py-2 rounded-lg font-heading font-bold text-sm bg-coral text-white hover:bg-[#d4603a] transition-colors"
+        className="w-full mb-3 flex items-center justify-center gap-1.5 px-3 py-2 border-2 border-dashed border-sand rounded-lg text-sm font-semibold text-warm-gray hover:border-coral hover:text-coral hover:bg-coral-light transition-colors"
       >
         + Create new stop
       </button>
@@ -223,7 +223,7 @@ export function StopList() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Filter stops…"
-          className="w-full px-2.5 py-1.5 border border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
+          className="w-full px-2.5 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
         />
         <div>
           <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">

@@ -179,6 +179,7 @@ function RouteDetailHeader() {
           onDelete={() => requestDeleteRoute(route.route_id)}
           duplicateTitle="Duplicate this route"
           deleteTitle="Delete this route"
+          confirmDelete={false}
         />
       </div>
       {/* Tabs strip */}

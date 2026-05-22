@@ -99,7 +99,7 @@ export function RouteList() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Filter routes…"
-            className="w-full mb-2 px-2.5 py-1.5 border border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
+            className="w-full mb-2 px-2.5 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
           />
 
           {/* Route-type pillbox — only when more than one mode is present */}
@@ -126,7 +126,11 @@ export function RouteList() {
 
           <div className="flex flex-col gap-1 mb-3">
             {filteredRoutes.length === 0 && (
-              <p className="text-xs text-warm-gray px-1 py-2">No routes match the current filter.</p>
+              <EmptyState
+                icon="🔍"
+                title="No routes match these filters"
+                description="Loosen the type or text filter above to see more routes."
+              />
             )}
             {filteredRoutes.map((route) => {
               const tripCount = trips.filter((t) => t.route_id === route.route_id).length;

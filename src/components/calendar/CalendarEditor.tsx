@@ -86,7 +86,7 @@ function isWeekdayService(cal: Calendar): boolean {
 
 export function CalendarEditor() {
   const {
-    calendars, addCalendar, updateCalendar, removeCalendar,
+    calendars, addCalendar, updateCalendar,
     calendarDates, addCalendarDate, removeCalendarDate,
     editingCalendarServiceId, setEditingCalendarServiceId,
   } = useStore();
@@ -356,16 +356,6 @@ export function CalendarEditor() {
             calendarDates={selectedDates}
             onRemoveException={(date) => removeCalendarDate(selected.service_id, date)}
           />
-
-          <button
-            onClick={() => {
-              removeCalendar(selected.service_id);
-              setEditingCalendarServiceId(null);
-            }}
-            className="mt-4 text-xs text-red-400 hover:text-red-600"
-          >
-            Delete this service pattern
-          </button>
         </div>
       )}
     </div>

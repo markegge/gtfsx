@@ -418,7 +418,7 @@ export function FaresEditor() {
                 <select
                   value={pendingOrigin}
                   onChange={(e) => setPendingOrigin(e.target.value)}
-                  className="px-2 py-1.5 border border-sand rounded-md text-xs bg-cream"
+                  className="px-2 py-1.5 border-2 border-sand rounded-md text-xs bg-cream"
                 >
                   <option value="">From zone…</option>
                   {zoneIds.map((z) => (
@@ -428,7 +428,7 @@ export function FaresEditor() {
                 <select
                   value={pendingDest}
                   onChange={(e) => setPendingDest(e.target.value)}
-                  className="px-2 py-1.5 border border-sand rounded-md text-xs bg-cream"
+                  className="px-2 py-1.5 border-2 border-sand rounded-md text-xs bg-cream"
                 >
                   <option value="">To zone…</option>
                   {zoneIds.map((z) => (

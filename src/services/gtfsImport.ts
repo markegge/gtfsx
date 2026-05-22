@@ -37,6 +37,40 @@ function num(v: unknown): number {
   return isNaN(n) ? 0 : n;
 }
 
+/** Uncompressed stop_times.txt byte size above which the in-browser editor is
+ * likely to be slow or crash the tab. A typical single-agency feed stays well
+ * under this; RTD-Denver-class regional feeds blow past it. The whole feed is
+ * held in memory (Zustand store) and re-serialized to IndexedDB, so stop_times
+ * — by far the largest table — is the load that matters. */
+export const LARGE_STOP_TIMES_BYTES = 40 * 1024 * 1024; // ~40 MB ≈ 700k–1M rows
+
+/** Cheap pre-flight: read the *uncompressed* size of stop_times.txt straight
+ * from the ZIP's central directory WITHOUT decompressing or parsing it, so the
+ * UI can warn before the expensive synchronous parse that actually hangs the
+ * tab. Falls back to a scaled compressed-archive estimate if the per-entry
+ * metadata isn't available. */
+export async function inspectGtfsZip(file: File): Promise<{
+  stopTimesBytes: number;
+  estimatedRows: number;
+  isLarge: boolean;
+}> {
+  const zip = await JSZip.loadAsync(file);
+  const entry = zip.file('stop_times.txt') ?? zip.file(/stop_times\.txt$/)[0] ?? null;
+  // JSZip records each entry's uncompressed size on the internal `_data`
+  // record; it isn't part of the public type, hence the cast. If it's ever
+  // missing, fall back to ~4× the compressed archive size as a rough proxy.
+  const meta = entry as unknown as { _data?: { uncompressedSize?: number } } | null;
+  const stopTimesBytes = meta?._data?.uncompressedSize ?? Math.round(file.size * 4);
+  // GTFS stop_times rows average roughly 55 bytes uncompressed; good enough
+  // to put an order-of-magnitude row count in front of the user.
+  const estimatedRows = Math.round(stopTimesBytes / 55);
+  return {
+    stopTimesBytes,
+    estimatedRows,
+    isLarge: stopTimesBytes > LARGE_STOP_TIMES_BYTES,
+  };
+}
+
 export async function importGtfsZip(file: File): Promise<{
   agencies: Agency[];
   calendars: Calendar[];

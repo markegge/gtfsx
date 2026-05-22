@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { importGtfsZip, loadImportIntoStore, mergeImportIntoStore } from '../../services/gtfsImport';
+import { importGtfsZip, inspectGtfsZip, loadImportIntoStore, mergeImportIntoStore } from '../../services/gtfsImport';
 import { useStore } from '../../store';
 import type { Route } from '../../types/gtfs';
 import { CatalogSearch, type CatalogFeed } from './CatalogSearch';
@@ -72,6 +72,13 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
   // Warnings from parsing
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
 
+  // Large-feed confirmation gate. Set by the pre-flight size check before the
+  // (expensive, main-thread-blocking) parse so the user can back out instead
+  // of hanging/crashing the tab.
+  const [pendingLarge, setPendingLarge] = useState<
+    { file: File; info: Awaited<ReturnType<typeof inspectGtfsZip>> } | null
+  >(null);
+
   // Success state
   const [importedCounts, setImportedCounts] = useState<{
     routes: number; stops: number; trips: number;
@@ -115,7 +122,9 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
     });
   }, []);
 
-  const parseFile = useCallback(async (file: File) => {
+  // The actual (expensive) parse. Always reached via parseFile so every entry
+  // point — upload, URL, catalog — goes through the size pre-flight first.
+  const runParse = useCallback(async (file: File) => {
     setParsing(true);
     setError(null);
     try {
@@ -137,6 +146,35 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
       setParsing(false);
     }
   }, [doReplaceImport]);
+
+  const parseFile = useCallback(async (file: File) => {
+    setError(null);
+    // Cheap pre-flight: if stop_times is large, gate behind a confirmation
+    // instead of charging into a parse that can hang or crash the tab. If the
+    // inspection itself fails, fall through and let the real parse surface it.
+    try {
+      const info = await inspectGtfsZip(file);
+      if (info.isLarge) {
+        setPendingLarge({ file, info });
+        return;
+      }
+    } catch {
+      /* ignore — proceed to the normal parse path */
+    }
+    await runParse(file);
+  }, [runParse]);
+
+  const proceedWithLarge = useCallback(() => {
+    if (!pendingLarge) return;
+    const { file } = pendingLarge;
+    setPendingLarge(null);
+    runParse(file);
+  }, [pendingLarge, runParse]);
+
+  const cancelLarge = useCallback(() => {
+    setPendingLarge(null);
+    setError(null);
+  }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -290,6 +328,45 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
           >
             {completing ? 'Saving…' : onComplete ? (completeLabel ?? 'Save feed') : 'Open in Editor'}
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Large-feed warning gate ────────────────────────────────────────────────
+  if (pendingLarge) {
+    const mb = Math.round(pendingLarge.info.stopTimesBytes / (1024 * 1024));
+    const rows = pendingLarge.info.estimatedRows;
+    return (
+      <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={parsing ? undefined : onClose}>
+        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center text-xl">⚠️</div>
+            <h3 className="font-heading font-bold text-lg text-dark-brown">This feed is very large</h3>
+          </div>
+          <p className="text-sm text-warm-gray leading-relaxed mb-2">
+            Its schedule data is about{' '}
+            <span className="font-semibold text-dark-brown">~{rows.toLocaleString()} stop-time rows</span>{' '}
+            (≈{mb} MB uncompressed). The browser-based editor holds the entire feed
+            in memory, so feeds this size may load slowly or crash the tab.
+          </p>
+          <p className="text-sm text-warm-gray leading-relaxed mb-5">
+            Consider a smaller or single-agency feed. You can still try to load it.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={cancelLarge}
+              className="flex-1 px-4 py-2.5 border border-sand text-warm-gray rounded-lg font-heading font-bold text-sm hover:text-dark-brown hover:border-coral transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={proceedWithLarge}
+              className="flex-1 px-4 py-2.5 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors"
+            >
+              Try anyway
+            </button>
+          </div>
         </div>
       </div>
     );

@@ -182,6 +182,7 @@ export function TopBar() {
               <button
                 onClick={async () => {
                   await db.projectData.clear();
+                  await db.projectBulk.clear();
                   await db.projects.clear();
                   // Navigate home (not reload) so resetting from a server-backed
                   // editor route lands on a fresh project instead of re-loading

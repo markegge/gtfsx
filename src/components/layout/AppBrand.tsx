@@ -42,6 +42,7 @@ export function AppBrand({
       // persists in localStorage so a signed-in user stays in the same org.
       db.projectData
         .clear()
+        .then(() => db.projectBulk.clear())
         .then(() => db.projects.clear())
         .then(() => {
           window.location.href = import.meta.env.BASE_URL;

@@ -70,6 +70,7 @@ export function SaveAsDialog({ onClose }: { onClose: () => void }) {
         try {
           await db.projects.delete(previousProjectId);
           await db.projectData.delete(previousProjectId);
+          await db.projectBulk.delete(previousProjectId);
           if (localStorage.getItem(LAST_PROJECT_KEY) === previousProjectId) {
             localStorage.removeItem(LAST_PROJECT_KEY);
           }

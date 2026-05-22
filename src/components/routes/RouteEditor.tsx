@@ -520,6 +520,22 @@ export function RouteEditor() {
                   : routeShapes.length > 0 ? 'Draw Another Shape' : 'Draw Route Shape'}
               </button>
 
+              {/* Snap-to-road applies to the draw action, so it lives with the
+                  Draw button — not as a stray checkbox at the bottom of the
+                  panel when both directions already have shapes. */}
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="checkbox"
+                  id="snap-to-road"
+                  checked={snapToRoadEnabled}
+                  onChange={(e) => setSnapToRoad(e.target.checked)}
+                  className="rounded"
+                />
+                <label htmlFor="snap-to-road" className="text-xs text-dark-brown">
+                  Snap to road
+                </label>
+              </div>
+
               {/* When the user has an outbound shape but no inbound, offer a
                   split alternative: pick a turnaround point on the existing
                   shape and cleave it into outbound + inbound halves. Common
@@ -548,19 +564,6 @@ export function RouteEditor() {
             </>
           );
         })()}
-
-        <div className="flex items-center gap-2 mt-2">
-          <input
-            type="checkbox"
-            id="snap-to-road"
-            checked={snapToRoadEnabled}
-            onChange={(e) => setSnapToRoad(e.target.checked)}
-            className="rounded"
-          />
-          <label htmlFor="snap-to-road" className="text-xs text-dark-brown">
-            Snap to road
-          </label>
-        </div>
       </div>
 
     </div>

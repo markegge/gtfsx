@@ -151,7 +151,13 @@ function RouteDetailHeader() {
           </span>
         </div>
         <button
-          onClick={() => setRightRailOpen(false)}
+          onClick={() => {
+            // Closing the editor should also drop the route selection so it
+            // stops being highlighted on the map and no stale route lingers.
+            setRightRailOpen(false);
+            setEditingRouteId(null);
+            selectRoute(null);
+          }}
           className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
           title="Close editor"
         >

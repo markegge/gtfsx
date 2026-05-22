@@ -3,7 +3,11 @@ import { Source, Layer } from 'react-map-gl/mapbox';
 import { useStore } from '../../store';
 import type { LayerProps } from 'react-map-gl/mapbox';
 
-export function StopLayer() {
+/** When `clustered` is true (set by MapView once too many stops are in the
+ * viewport for a very large feed), stops render as Mapbox-native clusters plus
+ * individual points, instead of the full per-stop styled circles. This keeps
+ * the map responsive when thousands of stops would otherwise be drawn at once. */
+export function StopLayer({ clustered = false }: { clustered?: boolean }) {
   const stops = useStore((s) => s.stops);
   const routes = useStore((s) => s.routes);
   const routeStops = useStore((s) => s.routeStops);
@@ -208,8 +212,71 @@ export function StopLayer() {
     },
   };
 
+  // ── Clustered mode (very large feeds, zoomed out) ──────────────────────────
+  // Mapbox aggregates nearby stops into clusters; individual stops only render
+  // where the viewport is sparse enough. The unclustered-point layer keeps the
+  // id "stop-circles" so the existing click-to-select handler still works.
+  const clusterCircle: LayerProps = {
+    id: 'stop-clusters',
+    type: 'circle',
+    filter: ['has', 'point_count'],
+    paint: {
+      'circle-color': '#3E7C8B',
+      'circle-opacity': 0.85,
+      'circle-stroke-color': '#FFFFFF',
+      'circle-stroke-width': 1.5,
+      'circle-radius': ['step', ['get', 'point_count'], 14, 50, 18, 200, 24, 1000, 30],
+    },
+  };
+  const clusterCount: LayerProps = {
+    id: 'stop-cluster-count',
+    type: 'symbol',
+    filter: ['has', 'point_count'],
+    layout: {
+      'text-field': ['get', 'point_count_abbreviated'],
+      'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+      'text-size': 12,
+    },
+    paint: { 'text-color': '#FFFFFF' },
+  };
+  // Individual (unclustered) stops within a clustered source. Distinct id from
+  // the detailed-mode 'stop-circles' so the two modes never collide; the click
+  // handler treats both as selectable stops.
+  const clusterPoint: LayerProps = {
+    id: 'stop-cluster-points',
+    type: 'circle',
+    filter: ['!', ['has', 'point_count']],
+    paint: {
+      'circle-radius': 4,
+      'circle-color': ['get', 'color'],
+      'circle-stroke-color': '#FFFFFF',
+      'circle-stroke-width': 1,
+      'circle-opacity': isEditingShape ? 0.2 : 0.95,
+    },
+  };
+
+  // Clustered mode uses a SEPARATE source id ('stops-cluster') so we never
+  // toggle the `cluster` option on an existing source (react-map-gl ignores
+  // that, and same-id remounts leave the map in a bad state). MapView only
+  // flips this on for large feeds, so the switch happens once on load, not
+  // while panning. Mapbox's clusterMaxZoom restores individual stops as you
+  // zoom in — i.e. detail where few stops are visible, clusters where many are.
+  // Distinct `key` per mode so React unmounts one <Source> and mounts the
+  // other on toggle. react-map-gl forbids changing a Source's `id` in place
+  // ("source id changed"), so without separate keys the id swap crashes; with
+  // them, each Source has a stable id for its whole lifetime.
+  if (clustered) {
+    return (
+      <Source key="stops-cluster" id="stops-cluster" type="geojson" data={geojson} cluster clusterMaxZoom={13} clusterRadius={50}>
+        <Layer {...clusterCircle} />
+        <Layer {...clusterCount} />
+        <Layer {...clusterPoint} />
+      </Source>
+    );
+  }
+
   return (
-    <Source id="stops" type="geojson" data={geojson}>
+    <Source key="stops-plain" id="stops" type="geojson" data={geojson}>
       <Layer {...selectionRing} />
       <Layer {...outerCircle} />
       <Layer {...innerCircle} />

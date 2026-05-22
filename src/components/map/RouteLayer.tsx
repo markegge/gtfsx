@@ -1,9 +1,31 @@
 import { useMemo } from 'react';
 import { Source, Layer } from 'react-map-gl/mapbox';
+import simplify from '@turf/simplify';
+import { lineString } from '@turf/helpers';
 import { useStore } from '../../store';
 import type { LayerProps } from 'react-map-gl/mapbox';
 
-export function RouteLayer() {
+// Ramer–Douglas–Peucker tolerance (degrees, ~20 m) used only when rendering a
+// very large feed zoomed out. Display-only — drops vertices that aren't
+// distinguishable at that scale; the stored shapes are never modified.
+const SIMPLIFY_TOLERANCE = 0.0002;
+
+/** Reduce a coordinate list for display. Geometry-only (no distance recalc),
+ * so it stays cheap even on dense regional shapes. */
+function simplifyCoords(coords: [number, number][]): [number, number][] {
+  if (coords.length <= 2) return coords;
+  try {
+    return simplify(lineString(coords), { tolerance: SIMPLIFY_TOLERANCE, highQuality: false })
+      .geometry.coordinates as [number, number][];
+  } catch {
+    return coords;
+  }
+}
+
+/** `simplified` is set by MapView once too many shape points are in the
+ * viewport for a very large feed; it swaps full geometry for a decimated copy
+ * so Mapbox isn't handed hundreds of thousands of coordinates at once. */
+export function RouteLayer({ simplified = false }: { simplified?: boolean }) {
   const shapes = useStore((s) => s.shapes);
   const routes = useStore((s) => s.routes);
   const trips = useStore((s) => s.trips);
@@ -53,13 +75,15 @@ export function RouteLayer() {
         },
         geometry: {
           type: 'LineString' as const,
-          coordinates: shape.points.map((p) => [p.shape_pt_lon, p.shape_pt_lat]),
+          coordinates: ((coords: [number, number][]) => (simplified ? simplifyCoords(coords) : coords))(
+            shape.points.map((p) => [p.shape_pt_lon, p.shape_pt_lat] as [number, number]),
+          ),
         },
       };
     }).filter((f): f is NonNullable<typeof f> => f !== null);
 
     return { type: 'FeatureCollection' as const, features };
-  }, [shapes, routes, trips, selectedRouteId, editingShapeId, mapMode, hiddenRouteIds, hiddenShapeIds]);
+  }, [shapes, routes, trips, selectedRouteId, editingShapeId, mapMode, hiddenRouteIds, hiddenShapeIds, simplified]);
 
   const isEditing = mapMode === 'edit_shape';
 

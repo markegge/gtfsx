@@ -79,6 +79,11 @@ export function MapView() {
   // Cursor: pointer when hovering over a clickable feature in select mode
   const [hoveringFeature, setHoveringFeature] = useState(false);
   const [hoveringStop, setHoveringStop] = useState(false);
+  // Very-large-feed map perf: once too many stops / shape points fall in the
+  // current viewport, cluster stops and render simplified shapes so Mapbox
+  // isn't asked to draw everything at once. Recomputed on map move.
+  const [clusterStops, setClusterStops] = useState(false);
+  const [simplifyShapes, setSimplifyShapes] = useState(false);
   // Stop move state (for didDragStop compat with click handler)
   const didDragStopRef = useRef(false);
 
@@ -86,15 +91,26 @@ export function MapView() {
   // "any data?" boolean flips — avoids re-running on every stop edit.
   const hasAnyData = stops.length > 0 || shapes.length > 0;
   const initialView = useMemo(() => {
-    const allLats: number[] = [];
-    const allLons: number[] = [];
-    stops.forEach((s) => { allLats.push(s.stop_lat); allLons.push(s.stop_lon); });
-    shapes.forEach((s) => s.points.forEach((p) => { allLats.push(p.shape_pt_lat); allLons.push(p.shape_pt_lon); }));
+    // Track min/max in a single pass. NB: do NOT collect into arrays and spread
+    // into Math.min(...arr) — a regional feed has hundreds of thousands of
+    // shape points, and spreading that many args overflows the call stack
+    // (RangeError) and crashes the map.
+    let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+    let any = false;
+    const consider = (lat: number, lon: number) => {
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lon < minLon) minLon = lon;
+      if (lon > maxLon) maxLon = lon;
+      any = true;
+    };
+    for (const s of stops) consider(s.stop_lat, s.stop_lon);
+    for (const s of shapes) for (const p of s.points) consider(p.shape_pt_lat, p.shape_pt_lon);
 
-    if (allLats.length > 0) {
+    if (any) {
       return {
-        latitude: (Math.min(...allLats) + Math.max(...allLats)) / 2,
-        longitude: (Math.min(...allLons) + Math.max(...allLons)) / 2,
+        latitude: (minLat + maxLat) / 2,
+        longitude: (minLon + maxLon) / 2,
         zoom: 12,
       };
     }
@@ -309,6 +325,47 @@ export function MapView() {
     });
     initialFitDoneRef.current = true;
   }, [stops, shapes]);
+
+  // Cluster stops for large feeds. Gated on TOTAL stop count (stable per feed)
+  // rather than per-viewport — toggling a Mapbox source's clustering on the fly
+  // is fragile, whereas a stable flag means the clustered source mounts once.
+  // Mapbox's clusterMaxZoom then restores individual stops as you zoom in, so
+  // you still get detail where few stops are visible and clusters where many are.
+  const LARGE_STOP_COUNT = 2000;
+  useEffect(() => {
+    setClusterStops(stops.length > LARGE_STOP_COUNT);
+  }, [stops.length]);
+
+  // Simplify shape geometry once too many shape points fall in the viewport.
+  // This only swaps the source's `data` (cheap, no source recreation), so it's
+  // safe to flip on every move. Counting short-circuits at the threshold and
+  // runs on moveend/idle, so it stays cheap even for RTD-scale feeds.
+  const SHAPE_SIMPLIFY_LIMIT = 20000; // > this many shape points visible → simplify
+  useEffect(() => {
+    const map = mapRef.current?.getMap?.();
+    if (!map) return;
+    const recompute = () => {
+      const b = map.getBounds();
+      if (!b) return;
+      const west = b.getWest(), east = b.getEast(), south = b.getSouth(), north = b.getNorth();
+      let ptCount = 0;
+      let simplifyNow = false;
+      outer: for (const sh of useStore.getState().shapes) {
+        for (const p of sh.points) {
+          if (p.shape_pt_lon >= west && p.shape_pt_lon <= east &&
+              p.shape_pt_lat >= south && p.shape_pt_lat <= north &&
+              ++ptCount > SHAPE_SIMPLIFY_LIMIT) { simplifyNow = true; break outer; }
+        }
+      }
+      setSimplifyShapes(simplifyNow);
+    };
+    // 'idle' covers the data-driven initial fit (incl. duration:0) that
+    // 'moveend' can miss; the setter bails when unchanged, so no loop.
+    map.on('moveend', recompute);
+    map.on('idle', recompute);
+    recompute();
+    return () => { map.off('moveend', recompute); map.off('idle', recompute); };
+  }, [shapes]);
 
   // Expose map flyTo on window for sidebar components
   useEffect(() => {
@@ -769,7 +826,25 @@ export function MapView() {
 
     // Select mode
     if (currentState.mapMode === 'select') {
-      const stopFeature = e.features?.find((f: MapboxGeoJSONFeature) => f.layer?.id === 'stop-circles');
+      // Clicked a stop cluster (large-feed clustered mode) → zoom in to expand it.
+      const clusterFeature = e.features?.find((f: MapboxGeoJSONFeature) => f.layer?.id === 'stop-clusters');
+      if (clusterFeature?.properties) {
+        const map = mapRef.current?.getMap?.();
+        const source = map?.getSource('stop-cluster') as
+          | { getClusterExpansionZoom: (id: number, cb: (err: unknown, zoom: number) => void) => void }
+          | undefined;
+        const clusterId = clusterFeature.properties.cluster_id;
+        if (map && source && typeof clusterId === 'number') {
+          source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+            if (err) return;
+            map.easeTo({ center: [e.lngLat.lng, e.lngLat.lat], zoom, duration: 500 });
+          });
+        }
+        return;
+      }
+
+      const stopFeature = e.features?.find((f: MapboxGeoJSONFeature) =>
+        f.layer?.id === 'stop-circles' || f.layer?.id === 'stop-cluster-points');
       if (stopFeature?.properties) {
         const sid = stopFeature.properties.stop_id;
         currentState.selectStop(sid);
@@ -855,7 +930,7 @@ export function MapView() {
         onClick={handleMapClick}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        interactiveLayerIds={mapMode === 'edit_shape' || mapMode === 'edit_flex_zone' || mapMode === 'draw_flex_zone' ? [] : ['stop-circles', 'route-lines', 'flex-zone-fill']}
+        interactiveLayerIds={mapMode === 'edit_shape' || mapMode === 'edit_flex_zone' || mapMode === 'draw_flex_zone' ? [] : ['stop-circles', 'stop-cluster-points', 'stop-clusters', 'route-lines', 'flex-zone-fill']}
       >
         <NavigationControl position="bottom-right" />
         <DrawControl
@@ -866,8 +941,8 @@ export function MapView() {
         <DemandDotsLayer visible={showDemandDots} />
         <CoverageLayer />
         <FlexLayer />
-        <RouteLayer />
-        <StopLayer />
+        <RouteLayer simplified={simplifyShapes} />
+        <StopLayer clustered={clusterStops} />
 
         {popupStopId && (
           <StopPopup

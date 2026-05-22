@@ -230,11 +230,10 @@ function CornerBadge({ n }: { n: number }) {
 function useNavClick() {
   const sidebarSection = useStore((s) => s.sidebarSection);
   const setSidebarSection = useStore((s) => s.setSidebarSection);
-  const rightRailOpen = useStore((s) => s.rightRailOpen);
-  const setRightRailOpen = useStore((s) => s.setRightRailOpen);
   return (key: SidebarSection) => {
+    // Re-clicking the active section fully closes the rail (not minimize).
     if (sidebarSection === key) {
-      setRightRailOpen(!rightRailOpen);
+      setSidebarSection(null);
     } else {
       setSidebarSection(key);
     }

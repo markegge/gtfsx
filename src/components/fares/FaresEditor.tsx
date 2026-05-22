@@ -3,6 +3,7 @@ import { useStore } from '../../store';
 import { FormField } from '../ui/FormField';
 import { Badge } from '../ui/Badge';
 import { RailSubHeading, RailDivider } from '../ui/RailHeadings';
+import { EditActions } from '../ui/EditActions';
 import { generateId } from '../../services/idGenerator';
 import type { FareAttribute } from '../../types/gtfs';
 
@@ -71,6 +72,7 @@ export function FaresEditor() {
     updateFareAttribute,
     renameFareId,
     removeFareAttribute,
+    duplicateFareAttribute,
     addFareRule,
     removeFareRule,
     removeFareRuleAt,
@@ -89,8 +91,15 @@ export function FaresEditor() {
   zoneIds.sort();
 
   const [selectedFareId, setSelectedFareId] = useState<string | null>(null);
+  const [fareTab, setFareTab] = useState<'details' | 'rules'>('details');
   const [pendingOrigin, setPendingOrigin] = useState('');
   const [pendingDest, setPendingDest] = useState('');
+
+  // Open a fare on its Edit Fare tab (used by the list and by + Add Fare).
+  const openFare = (id: string | null) => {
+    setSelectedFareId(id);
+    setFareTab('details');
+  };
 
   const handleAddFare = () => {
     const fare: FareAttribute = {
@@ -101,7 +110,7 @@ export function FaresEditor() {
       transfers: '',
     };
     addFareAttribute(fare);
-    setSelectedFareId(fare.fare_id);
+    openFare(fare.fare_id);
   };
 
   const selectedFare = fareAttributes.find((f) => f.fare_id === selectedFareId);
@@ -130,6 +139,8 @@ export function FaresEditor() {
 
   return (
     <div>
+      {!selectedFare && (
+       <>
       {fareAttributes.length === 0 && (
         <div className="mb-4 p-3 rounded-lg bg-gold-light border-2 border-amber-300">
           <p className="text-amber-700 text-sm font-semibold">
@@ -148,7 +159,7 @@ export function FaresEditor() {
           return (
             <button
               key={fare.fare_id}
-              onClick={() => setSelectedFareId(isSelected ? null : fare.fare_id)}
+              onClick={() => openFare(isSelected ? null : fare.fare_id)}
               className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors
                 ${isSelected
                   ? 'bg-coral-light text-coral font-semibold'
@@ -179,13 +190,59 @@ export function FaresEditor() {
       >
         + Add Fare
       </button>
+       </>
+      )}
 
-      {/* Edit form for selected fare */}
+      {/* Fare detail — breadcrumb + tabbed sub-panel (replaces the list, like
+          the route/stop editors) */}
       {selectedFare && (
         <div>
-          <RailDivider />
-          <RailSubHeading>Edit Fare</RailSubHeading>
+          {/* Breadcrumb */}
+          <nav className="text-[13px] text-warm-gray flex items-center gap-1.5 mb-1">
+            <button onClick={() => setSelectedFareId(null)} className="hover:text-coral transition-colors">‹</button>
+            <button onClick={() => setSelectedFareId(null)} className="hover:text-coral transition-colors">Fares</button>
+            <span className="opacity-50">›</span>
+            <span className="text-dark-brown font-semibold truncate">
+              {selectedFare.currency_type} {selectedFare.price}
+            </span>
+          </nav>
 
+          {/* Title + actions */}
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <h2 className="font-heading font-extrabold text-lg text-dark-brown leading-tight truncate flex-1 min-w-0">
+              {selectedFare.currency_type} {selectedFare.price}
+            </h2>
+            <EditActions
+              onDuplicate={() => {
+                const newId = duplicateFareAttribute(selectedFare.fare_id);
+                if (newId) openFare(newId);
+              }}
+              onDelete={() => {
+                removeFareAttribute(selectedFare.fare_id);
+                setSelectedFareId(null);
+              }}
+              duplicateTitle="Duplicate this fare"
+              deleteTitle="Delete this fare"
+            />
+          </div>
+
+          {/* Sub-tabs */}
+          <div className="flex gap-1 mb-4 border-b border-sand">
+            {(['details', 'rules'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setFareTab(t)}
+                className={`px-3 py-2 font-heading font-bold text-[13px] border-b-2 transition-colors ${
+                  fareTab === t ? 'text-coral border-coral' : 'text-warm-gray border-transparent hover:text-dark-brown'
+                }`}
+              >
+                {t === 'details' ? 'Edit Fare' : 'Route Rules'}
+              </button>
+            ))}
+          </div>
+
+          {fareTab === 'details' && (
+           <>
           {/* Fare type — encoded as a fare_id prefix (see TYPE_PREFIXES). */}
           <div className="mb-3">
             <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
@@ -285,10 +342,12 @@ export function FaresEditor() {
             type="number"
           />
 
-          {/* Fare rules — route associations */}
-          <RailDivider />
-          <RailSubHeading>Route Rules</RailSubHeading>
+          </>
+          )}
 
+          {fareTab === 'rules' && (
+           <>
+          {/* Fare rules — route associations */}
           <div className="mb-3">
             <button
               onClick={handleSetAllRoutes}
@@ -402,7 +461,7 @@ export function FaresEditor() {
                 <select
                   value={pendingOrigin}
                   onChange={(e) => setPendingOrigin(e.target.value)}
-                  className="px-2 py-1.5 border border-sand rounded-md text-xs bg-cream"
+                  className="px-2 py-1.5 border-2 border-sand rounded-md text-xs bg-cream"
                 >
                   <option value="">From zone…</option>
                   {zoneIds.map((z) => (
@@ -412,7 +471,7 @@ export function FaresEditor() {
                 <select
                   value={pendingDest}
                   onChange={(e) => setPendingDest(e.target.value)}
-                  className="px-2 py-1.5 border border-sand rounded-md text-xs bg-cream"
+                  className="px-2 py-1.5 border-2 border-sand rounded-md text-xs bg-cream"
                 >
                   <option value="">To zone…</option>
                   {zoneIds.map((z) => (
@@ -438,18 +497,9 @@ export function FaresEditor() {
               </div>
             </>
           )}
+          </>
+          )}
 
-          {/* Delete */}
-          <RailDivider />
-          <button
-            onClick={() => {
-              removeFareAttribute(selectedFare.fare_id);
-              setSelectedFareId(null);
-            }}
-            className="w-full py-2 rounded-lg border-2 border-red-300 text-red-500 text-sm font-semibold hover:bg-red-50 transition-colors"
-          >
-            Delete Fare
-          </button>
         </div>
       )}
     </div>

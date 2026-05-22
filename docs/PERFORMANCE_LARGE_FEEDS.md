@@ -1,6 +1,7 @@
 # Performance: Handling Large GTFS Feeds
 
-**Status:** Phase 0 shipped (import size warning). Phases 1–4 proposed.
+**Status:** Phase 0 shipped to `main` (import size warning). Phases 1 & 2
+implemented on branch `perf/large-feeds-worker-persistence`. Phases 3–4 proposed.
 **Motivation:** Large regional feeds (e.g. RTD Denver, `mdb-178`) hang the tab
 and then crash. The culprit is not stops or routes — it's `stop_times.txt`,
 which for these feeds is millions of rows.
@@ -45,7 +46,7 @@ large, may crash the tab" choice before any expensive work runs.
 
 ---
 
-## Phase 1 — Parse off the main thread (HIGH impact, ~1–1.5 days)
+## Phase 1 — Parse off the main thread (DONE — branch)
 
 **Goal:** the UI never freezes during import; show real progress.
 
@@ -67,7 +68,16 @@ incremental or defer it.
 **Outcome:** kills the "hang" perception and the parse-phase freeze. Does *not*
 by itself fix the memory ceiling — that's Phase 2.
 
-## Phase 2 — Stop the persistence memory spike (HIGH impact, ~1 day)
+**As built:** pure parser extracted to `src/services/gtfsParse.ts`; worker in
+`src/services/gtfsImport.worker.ts`; client `parseGtfsInWorker()` in
+`gtfsImport.ts` with a main-thread fallback. Progress is currently coarse
+(phase + stop_times row count every ~250k rows) rather than streaming
+PapaParse — sufficient to show motion off-thread. The PapaParse parse is still
+one synchronous call, but now inside the worker, so the main thread stays live.
+The @turf shape-distance recompute also runs in the worker now; revisit if it
+proves slow on shape-dense feeds (incremental/deferred computation is the fallback).
+
+## Phase 2 — Stop the persistence memory spike (DONE — branch)
 
 **Goal:** importing a large feed doesn't OOM on the IndexedDB write.
 

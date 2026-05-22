@@ -1,15 +1,32 @@
 import { db } from './dexie';
 import { useStore } from '../store';
+import type { StopTime, Shape } from '../types/gtfs';
 
-const DATA_KEYS = [
+// The heavy tables — millions of rows for a regional feed. Persisted in their
+// own IndexedDB record and only rewritten when they actually change.
+const BULK_KEYS = ['stopTimes', 'shapes'] as const;
+
+// Everything else — small enough to snapshot on every autosave.
+const SMALL_KEYS = [
   'agencies', 'calendars', 'calendarDates', 'routes', 'routeStops',
-  'stops', 'trips', 'stopTimes', 'shapes', 'feedInfo',
+  'stops', 'trips', 'feedInfo',
   'fareAttributes', 'fareRules',
   'fareAreas', 'stopAreas', 'fareNetworks', 'routeNetworks',
   'timeframes', 'riderCategories', 'fareMedia',
   'fareProducts', 'fareLegRules', 'fareTransferRules',
   'projectId', 'projectName',
 ] as const;
+
+// Union used for "did any persisted data change?" detection in the autosave
+// subscription.
+const DATA_KEYS = [...SMALL_KEYS, ...BULK_KEYS] as const;
+
+// Reference tracking so we skip the (potentially huge) bulk write when only
+// small tables changed. The store replaces these arrays by reference on edit,
+// so an identity check is a reliable "did stop_times/shapes change?" signal.
+let lastBulkProjectId: string | null = null;
+let lastSavedStopTimes: StopTime[] | null = null;
+let lastSavedShapes: Shape[] | null = null;
 
 // localStorage key for the most recently autosaved anonymous projectId.
 // EditorRoute reads this on mount so refresh / reopen restores the draft —
@@ -21,7 +38,7 @@ export const LAST_PROJECT_KEY = 'gtfs:lastProjectId';
 export async function saveProject() {
   const state = useStore.getState();
   const snapshot: Record<string, unknown> = {};
-  for (const key of DATA_KEYS) {
+  for (const key of SMALL_KEYS) {
     snapshot[key] = state[key];
   }
 
@@ -31,10 +48,31 @@ export async function saveProject() {
     lastModified: Date.now(),
   });
 
+  // Store the small-tables snapshot as a structured object — IndexedDB
+  // clones it natively, so we never build a multi-hundred-MB JSON string.
   await db.projectData.put({
     projectId: state.projectId,
-    storeSnapshot: JSON.stringify(snapshot),
+    storeSnapshot: snapshot,
   });
+
+  // Only rewrite the heavy stop_times/shapes record when it actually changed
+  // (or when we've switched projects). Routine edits never touch it, so this
+  // turns the per-second autosave from "re-serialize the whole feed" into a
+  // cheap small-snapshot write.
+  const bulkChanged =
+    state.projectId !== lastBulkProjectId ||
+    state.stopTimes !== lastSavedStopTimes ||
+    state.shapes !== lastSavedShapes;
+  if (bulkChanged) {
+    await db.projectBulk.put({
+      projectId: state.projectId,
+      stopTimes: state.stopTimes,
+      shapes: state.shapes,
+    });
+    lastBulkProjectId = state.projectId;
+    lastSavedStopTimes = state.stopTimes;
+    lastSavedShapes = state.shapes;
+  }
 
   // Remember which anonymous draft this tab was editing so the next page
   // load (refresh, browser restart, or just reopening the tab) reloads
@@ -62,7 +100,18 @@ export async function loadProject(projectId: string) {
   const data = await db.projectData.get(projectId);
   if (!data) return false;
 
-  const snapshot = JSON.parse(data.storeSnapshot);
+  // v2 rows store the snapshot as a structured object; legacy v1 rows store a
+  // JSON string (with stopTimes/shapes inline). Handle both.
+  const snapshot = typeof data.storeSnapshot === 'string'
+    ? JSON.parse(data.storeSnapshot)
+    : (data.storeSnapshot as Record<string, unknown> & {
+        stopTimes?: StopTime[]; shapes?: Shape[];
+      });
+  const bulk = await db.projectBulk.get(projectId);
+  // Prefer the dedicated bulk record; fall back to the inline arrays a legacy
+  // snapshot still carries.
+  const stopTimes = bulk?.stopTimes ?? snapshot.stopTimes;
+  const shapes = bulk?.shapes ?? snapshot.shapes;
   const state = useStore.getState();
 
   if (snapshot.agencies) state.setAgencies(snapshot.agencies);
@@ -72,8 +121,8 @@ export async function loadProject(projectId: string) {
   if (snapshot.routeStops) state.setRouteStops(snapshot.routeStops);
   if (snapshot.stops) state.setStops(snapshot.stops);
   if (snapshot.trips) state.setTrips(snapshot.trips);
-  if (snapshot.stopTimes) state.setStopTimes(snapshot.stopTimes);
-  if (snapshot.shapes) state.setShapes(snapshot.shapes);
+  if (stopTimes) state.setStopTimes(stopTimes);
+  if (shapes) state.setShapes(shapes);
   if (snapshot.feedInfo !== undefined) state.setFeedInfo(snapshot.feedInfo);
   if (snapshot.fareAttributes) state.setFareAttributes(snapshot.fareAttributes);
   if (snapshot.fareRules) state.setFareRules(snapshot.fareRules);
@@ -89,6 +138,13 @@ export async function loadProject(projectId: string) {
   if (snapshot.fareTransferRules) state.setFareTransferRules(snapshot.fareTransferRules);
   if (snapshot.projectName) state.setProjectName(snapshot.projectName);
   if (snapshot.projectId) state.setProjectId(snapshot.projectId);
+
+  // Seed the bulk-write trackers to the just-loaded references so the next
+  // autosave doesn't needlessly rewrite stop_times/shapes we only just read.
+  const loaded = useStore.getState();
+  lastBulkProjectId = projectId;
+  lastSavedStopTimes = loaded.stopTimes;
+  lastSavedShapes = loaded.shapes;
 
   state.markSaved();
   return true;

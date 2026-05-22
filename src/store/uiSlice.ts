@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { SidebarSection, BottomPanelTab, MapMode, StopPlacementMode, RouteDetailTab } from '../types/ui';
+import type { SidebarSection, BottomPanelTab, MapMode, StopPlacementMode, RouteDetailTab, StopDetailTab } from '../types/ui';
 
 export interface UISlice {
   sidebarSection: SidebarSection | null;
@@ -37,13 +37,18 @@ export interface UISlice {
   mapStopFilter: { matched: string[] } | null;
   snapToRoad: boolean;
   hiddenRouteIds: string[];
+  // route_type values toggled OFF in the Routes panel's type filter. Empty =
+  // no filter (all types shown). Routes of a hidden type are dimmed on the map.
+  hiddenRouteTypes: number[];
   hiddenShapeIds: string[];
   leftRailWidth: number;
   rightRailOpen: boolean;
   rightRailWidth: number;
   routeDetailTab: RouteDetailTab;
+  stopDetailTab: StopDetailTab;
   routeDeleteConfirmId: string | null;
   toggleRouteVisibility: (routeId: string) => void;
+  toggleRouteType: (routeType: number) => void;
   toggleShapeVisibility: (shapeId: string) => void;
   setSidebarSection: (section: SidebarSection | null) => void;
   setBottomPanelOpen: (open: boolean) => void;
@@ -70,6 +75,7 @@ export interface UISlice {
   setRightRailOpen: (open: boolean) => void;
   setRightRailWidth: (w: number) => void;
   setRouteDetailTab: (tab: RouteDetailTab) => void;
+  setStopDetailTab: (tab: StopDetailTab) => void;
   setRouteDeleteConfirmId: (id: string | null) => void;
 }
 
@@ -95,6 +101,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   mapStopFilter: null,
   snapToRoad: true,
   hiddenRouteIds: [],
+  hiddenRouteTypes: [],
   hiddenShapeIds: [],
   // Default width is set responsively in App init based on viewport — 96 for
   // medium screens, 260 for wide ones. The store falls back to 96 if it loads
@@ -103,11 +110,17 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   rightRailOpen: false,
   rightRailWidth: 460,
   routeDetailTab: 'details',
+  stopDetailTab: 'details',
   routeDeleteConfirmId: null,
   toggleRouteVisibility: (routeId) => set((state) => {
     const idx = state.hiddenRouteIds.indexOf(routeId);
     if (idx === -1) state.hiddenRouteIds.push(routeId);
     else state.hiddenRouteIds.splice(idx, 1);
+  }),
+  toggleRouteType: (routeType) => set((state) => {
+    const idx = state.hiddenRouteTypes.indexOf(routeType);
+    if (idx === -1) state.hiddenRouteTypes.push(routeType);
+    else state.hiddenRouteTypes.splice(idx, 1);
   }),
   toggleShapeVisibility: (shapeId) => set((state) => {
     const idx = state.hiddenShapeIds.indexOf(shapeId);
@@ -152,7 +165,11 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setEditingRouteId: (id) => set((state) => { state.editingRouteId = id; }),
   setEditingShapeId: (id) => set((state) => { state.editingShapeId = id; }),
   setEditingFlexZoneId: (id) => set((state) => { state.editingFlexZoneId = id; }),
-  setEditingStopId: (id) => set((state) => { state.editingStopId = id; }),
+  setEditingStopId: (id) => set((state) => {
+    state.editingStopId = id;
+    // Open each stop on its Details tab rather than wherever the last one left off.
+    if (id) state.stopDetailTab = 'details';
+  }),
   setEditingCalendarServiceId: (id) => set((state) => { state.editingCalendarServiceId = id; }),
   setCreatingStop: (creating) => set((state) => {
     state.creatingStop = creating;
@@ -166,5 +183,6 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setRightRailOpen: (open) => set((state) => { state.rightRailOpen = open; }),
   setRightRailWidth: (w) => set((state) => { state.rightRailWidth = w; }),
   setRouteDetailTab: (tab) => set((state) => { state.routeDetailTab = tab; }),
+  setStopDetailTab: (tab) => set((state) => { state.stopDetailTab = tab; }),
   setRouteDeleteConfirmId: (id) => set((state) => { state.routeDeleteConfirmId = id; }),
 });

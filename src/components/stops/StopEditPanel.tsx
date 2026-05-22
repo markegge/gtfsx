@@ -1,3 +1,5 @@
+import nearestPointOnLine from '@turf/nearest-point-on-line';
+import { lineString, point } from '@turf/helpers';
 import { useStore } from '../../store';
 import { FormField } from '../ui/FormField';
 import { WHEELCHAIR_BOARDING, LOCATION_TYPES, COMMON_STOP_TIMEZONES } from '../../utils/constants';
@@ -16,13 +18,40 @@ export function StopEditPanel() {
   );
   const allStops = useStore((s) => s.stops);
   const updateStop = useStore((s) => s.updateStop);
-  const removeStop = useStore((s) => s.removeStop);
-  const setEditingStopId = useStore((s) => s.setEditingStopId);
-  const selectStop = useStore((s) => s.selectStop);
   const mapMode = useStore((s) => s.mapMode);
   const setMapMode = useStore((s) => s.setMapMode);
+  const shapes = useStore((s) => s.shapes);
+  const tab = useStore((s) => s.stopDetailTab);
 
   if (!stop) return null;
+
+  // Trips tab: just the per-stop schedule (header tabs switch between this and
+  // the editable details below).
+  if (tab === 'trips') return <StopDeparturesSection />;
+
+  // Snap the stop onto the nearest point of any route shape — the stop-editing
+  // analogue of "snap to road" when drawing a shape.
+  const snapToNearestShape = () => {
+    const p = point([stop.stop_lon, stop.stop_lat]);
+    let bestCoord: [number, number] | null = null;
+    let bestDist = Infinity;
+    for (const sh of shapes) {
+      if (sh.points.length < 2) continue;
+      const line = lineString(sh.points.map((pt) => [pt.shape_pt_lon, pt.shape_pt_lat] as [number, number]));
+      const snapped = nearestPointOnLine(line, p, { units: 'meters' });
+      const d = snapped.properties.dist ?? Infinity;
+      if (d < bestDist) {
+        bestDist = d;
+        bestCoord = snapped.geometry.coordinates as [number, number];
+      }
+    }
+    if (bestCoord) {
+      updateStop(stop.stop_id, {
+        stop_lon: Math.round(bestCoord[0] * 1e6) / 1e6,
+        stop_lat: Math.round(bestCoord[1] * 1e6) / 1e6,
+      });
+    }
+  };
 
   // parent_station can only be set on non-station stops, and only points to
   // location_type=1 stations. Filter the candidate list accordingly.
@@ -51,36 +80,63 @@ export function StopEditPanel() {
         value={stop.stop_desc || ''}
         onChange={(v) => updateStop(stop.stop_id, { stop_desc: v })}
       />
-      <div className="grid grid-cols-2 gap-3">
-        <FormField
-          label="Latitude"
-          value={String(stop.stop_lat)}
-          onChange={(v) => updateStop(stop.stop_id, { stop_lat: Number(v) })}
-          type="number"
-        />
-        <FormField
-          label="Longitude"
-          value={String(stop.stop_lon)}
-          onChange={(v) => updateStop(stop.stop_id, { stop_lon: Number(v) })}
-          type="number"
-        />
-      </div>
+      <div className="mb-3">
+        <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-2">
+          Stop Location
+        </label>
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <div>
+            <label className="block text-[10px] text-warm-gray mb-0.5">Latitude</label>
+            <input
+              type="number"
+              value={String(stop.stop_lat)}
+              onChange={(e) => updateStop(stop.stop_id, { stop_lat: Number(e.target.value) })}
+              className="w-full px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] text-warm-gray mb-0.5">Longitude</label>
+            <input
+              type="number"
+              value={String(stop.stop_lon)}
+              onChange={(e) => updateStop(stop.stop_id, { stop_lon: Number(e.target.value) })}
+              className="w-full px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
+            />
+          </div>
+        </div>
 
-      <button
-        onClick={() => setMapMode(mapMode === 'move_stop' ? 'select' : 'move_stop')}
-        className={`w-full mb-1 px-4 py-2 rounded-lg font-heading font-bold text-sm transition-colors
-          ${mapMode === 'move_stop'
-            ? 'bg-coral text-white hover:opacity-90'
-            : 'bg-sand text-brown hover:bg-coral-light hover:text-coral'
-          }`}
-      >
-        {mapMode === 'move_stop' ? '✓ Save Location' : 'Move Stop Location'}
-      </button>
-      {mapMode === 'move_stop' && (
-        <p className="text-[11px] text-warm-gray mb-3 px-1">
-          Drag the stop on the map, or click a new location. Your changes save automatically — press Save Location when you're done.
-        </p>
-      )}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setMapMode(mapMode === 'move_stop' ? 'select' : 'move_stop')}
+            className={`flex-1 px-3 py-2 rounded-lg font-heading font-bold text-sm border-2 transition-colors flex items-center justify-center gap-1.5
+              ${mapMode === 'move_stop'
+                ? 'bg-coral text-white border-coral hover:opacity-90'
+                : 'bg-white text-coral border-coral hover:bg-coral-light'
+              }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <circle cx="12" cy="12" r="7" />
+              <line x1="12" y1="1" x2="12" y2="4" />
+              <line x1="12" y1="20" x2="12" y2="23" />
+              <line x1="1" y1="12" x2="4" y2="12" />
+              <line x1="20" y1="12" x2="23" y2="12" />
+            </svg>
+            {mapMode === 'move_stop' ? 'Save Location' : 'Move Stop'}
+          </button>
+          <button
+            onClick={snapToNearestShape}
+            title="Snap this stop onto the nearest route shape"
+            className="px-3 py-2 rounded-lg font-heading font-bold text-sm border-2 border-sand bg-white text-warm-gray hover:border-coral hover:text-coral transition-colors"
+          >
+            Snap
+          </button>
+        </div>
+        {mapMode === 'move_stop' && (
+          <p className="text-[11px] text-warm-gray mt-1.5 px-1">
+            Drag the stop on the map, or click a new location. Changes save automatically — press Save Location when done.
+          </p>
+        )}
+      </div>
 
       <div className="mb-3">
         <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
@@ -169,19 +225,6 @@ export function StopEditPanel() {
         onChange={(v) => updateStop(stop.stop_id, { zone_id: v || undefined })}
         placeholder="e.g. zone-1, downtown, juneau"
       />
-
-      <button
-        onClick={() => {
-          removeStop(stop.stop_id);
-          selectStop(null);
-          setEditingStopId(null);
-        }}
-        className="text-xs text-red-400 hover:text-red-600"
-      >
-        Delete stop
-      </button>
-
-      <StopDeparturesSection />
     </div>
   );
 }

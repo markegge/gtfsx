@@ -1,12 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { importGtfsZip, inspectGtfsZip, loadImportIntoStore, mergeImportIntoStore } from '../../services/gtfsImport';
+import { parseGtfsInWorker, inspectGtfsZip, loadImportIntoStore, mergeImportIntoStore, type ImportData } from '../../services/gtfsImport';
 import { useStore } from '../../store';
 import type { Route } from '../../types/gtfs';
 import { CatalogSearch, type CatalogFeed } from './CatalogSearch';
 
 type ImportSource = 'upload' | 'url' | 'catalog';
 
-type ImportData = Awaited<ReturnType<typeof importGtfsZip>>;
 type ImportMode = 'replace' | 'merge';
 
 /** Compute a [[west, south], [east, north]] bounding box covering all stops
@@ -60,6 +59,9 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
   const [source, setSource] = useState<ImportSource>('upload');
   const [dragging, setDragging] = useState(false);
   const [parsing, setParsing] = useState(false);
+  // Live parse phase from the worker (e.g. "Parsing stop times…"), shown in
+  // place of a static "Parsing…" so large feeds don't look frozen.
+  const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [urlInput, setUrlInput] = useState('');
 
@@ -126,9 +128,12 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
   // point — upload, URL, catalog — goes through the size pre-flight first.
   const runParse = useCallback(async (file: File) => {
     setParsing(true);
+    setProgress(null);
     setError(null);
     try {
-      const data = await importGtfsZip(file);
+      const data = await parseGtfsInWorker(file, ({ phase, rows }) =>
+        setProgress(rows ? `${phase} ${rows.toLocaleString()} rows` : phase),
+      );
       const name = file.name.replace(/\.zip$/i, '');
       setImportWarnings(data.warnings);
       // If the project is empty, skip the options screen and import immediately
@@ -144,6 +149,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
       setError(e instanceof Error ? e.message : 'Failed to parse GTFS feed');
     } finally {
       setParsing(false);
+      setProgress(null);
     }
   }, [doReplaceImport]);
 
@@ -335,7 +341,11 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
 
   // ── Large-feed warning gate ────────────────────────────────────────────────
   if (pendingLarge) {
-    const mb = Math.round(pendingLarge.info.stopTimesBytes / (1024 * 1024));
+    // Combined heavy-table footprint (stop_times + shapes) — what actually
+    // strains memory — rounded for display.
+    const mb = Math.round(
+      (pendingLarge.info.stopTimesBytes + pendingLarge.info.shapesBytes) / (1024 * 1024),
+    );
     const rows = pendingLarge.info.estimatedRows;
     return (
       <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={parsing ? undefined : onClose}>
@@ -528,7 +538,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
               ${dragging ? 'border-coral bg-coral-light' : 'border-sand bg-cream hover:border-coral hover:bg-coral-light'}`}
           >
             {parsing ? (
-              <p className="text-warm-gray">Parsing…</p>
+              <p className="text-warm-gray">{progress ?? 'Parsing…'}</p>
             ) : (
               <>
                 <div className="text-5xl mb-4">🚌</div>
@@ -571,14 +581,14 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
               disabled={parsing || !urlInput.trim()}
               className="mt-4 w-full px-4 py-2.5 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {parsing ? 'Fetching…' : 'Fetch feed'}
+              {parsing ? (progress ?? 'Fetching…') : 'Fetch feed'}
             </button>
           </div>
         )}
 
         {source === 'catalog' && (
           parsing ? (
-            <div className="border border-sand rounded-lg p-12 text-center text-warm-gray">Parsing feed…</div>
+            <div className="border border-sand rounded-lg p-12 text-center text-warm-gray">{progress ?? 'Parsing feed…'}</div>
           ) : (
             <CatalogSearch onSelect={handleCatalogSelect} />
           )

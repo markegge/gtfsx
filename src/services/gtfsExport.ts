@@ -259,7 +259,15 @@ export async function exportGtfsZip(): Promise<Blob> {
   // stops before wiring them up (and broke round-trip fidelity — a stop
   // added but not yet placed would vanish on save → reload).
   if (state.stops.length > 0) {
-    zip.file('stops.txt', toCSV(state.stops.map(stripUIFields)));
+    // Round coordinates to 6 decimals (~0.1 m) — plenty for transit, and keeps
+    // stops.txt clean instead of carrying float noise from map drags.
+    const round6 = (n: unknown) => (typeof n === 'number' ? Math.round(n * 1e6) / 1e6 : n);
+    zip.file('stops.txt', toCSV(state.stops.map((s) => {
+      const clean = stripUIFields(s);
+      clean.stop_lat = round6(clean.stop_lat);
+      clean.stop_lon = round6(clean.stop_lon);
+      return clean;
+    })));
   }
 
   // trips.txt — populate trip_headsign from route direction names if not already set

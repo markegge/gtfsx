@@ -9,6 +9,9 @@ export interface FareSlice {
   /** Rename a fare_id and cascade the change to any referencing fare_rules. */
   renameFareId: (oldId: string, newId: string) => void;
   removeFareAttribute: (fare_id: string) => void;
+  /** Clone a fare attribute (and its fare_rules) under a new unique fare_id.
+   * Returns the new fare_id, or null if the source doesn't exist. */
+  duplicateFareAttribute: (fare_id: string) => string | null;
   setFareAttributes: (fares: FareAttribute[]) => void;
   addFareRule: (rule: FareRule) => void;
   updateFareRule: (index: number, updates: Partial<FareRule>) => void;
@@ -20,10 +23,27 @@ export interface FareSlice {
   setFareRules: (rules: FareRule[]) => void;
 }
 
-export const createFareSlice: StateCreator<FareSlice, [['zustand/immer', never]], [], FareSlice> = (set) => ({
+export const createFareSlice: StateCreator<FareSlice, [['zustand/immer', never]], [], FareSlice> = (set, get) => ({
   fareAttributes: [],
   fareRules: [],
   addFareAttribute: (fare) => set((state) => { state.fareAttributes.push(fare); }),
+  duplicateFareAttribute: (fare_id) => {
+    const s0 = get();
+    const orig = s0.fareAttributes.find((f) => f.fare_id === fare_id);
+    if (!orig) return null;
+    const existing = new Set(s0.fareAttributes.map((f) => f.fare_id));
+    let newId = `${fare_id}_copy`;
+    let n = 2;
+    while (existing.has(newId)) newId = `${fare_id}_copy${n++}`;
+    const ruleCopies = s0.fareRules
+      .filter((r) => r.fare_id === fare_id)
+      .map((r) => ({ ...r, fare_id: newId }));
+    set((state) => {
+      state.fareAttributes.push({ ...orig, fare_id: newId });
+      state.fareRules.push(...ruleCopies);
+    });
+    return newId;
+  },
   updateFareAttribute: (fare_id, updates) => set((state) => {
     const idx = state.fareAttributes.findIndex((f) => f.fare_id === fare_id);
     if (idx !== -1) Object.assign(state.fareAttributes[idx], updates);

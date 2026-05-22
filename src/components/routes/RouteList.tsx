@@ -1,5 +1,5 @@
 
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import { RouteDetailPanel } from './RouteDetailPanel';
@@ -13,7 +13,31 @@ export function RouteList() {
     selectedRouteId, selectRoute,
     editingRouteId, setEditingRouteId,
     hiddenRouteIds, toggleRouteVisibility,
+    hiddenRouteTypes, toggleRouteType,
   } = useStore();
+
+  // Quick text filter (short name / long name / description).
+  const [text, setText] = useState('');
+
+  // Distinct route_types present in the feed, in a stable order. The type
+  // pillbox only appears when there's more than one mode to filter between.
+  const presentTypes = useMemo(
+    () => [...new Set(routes.map((r) => r.route_type))].sort((a, b) => a - b),
+    [routes],
+  );
+
+  const filteredRoutes = useMemo(() => {
+    const q = text.trim().toLowerCase();
+    return routes.filter((r) => {
+      if (hiddenRouteTypes.includes(r.route_type)) return false;
+      if (!q) return true;
+      return (
+        r.route_short_name?.toLowerCase().includes(q) ||
+        r.route_long_name?.toLowerCase().includes(q) ||
+        r.route_desc?.toLowerCase().includes(q)
+      );
+    });
+  }, [routes, hiddenRouteTypes, text]);
 
   const handleAdd = () => {
     const usedColors = routes.map((r) => r.route_color);
@@ -66,10 +90,49 @@ export function RouteList() {
       ) : (
         <>
           <div className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-2">
-            Routes ({routes.length})
+            Routes ({filteredRoutes.length === routes.length ? routes.length : `${filteredRoutes.length} of ${routes.length}`})
           </div>
+
+          {/* Quick text filter */}
+          <input
+            type="text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Filter routes…"
+            className="w-full mb-2 px-2.5 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
+          />
+
+          {/* Route-type pillbox — only when more than one mode is present */}
+          {presentTypes.length > 1 && (
+            <div className="flex flex-wrap gap-1 mb-3">
+              {presentTypes.map((t) => {
+                const active = !hiddenRouteTypes.includes(t);
+                return (
+                  <button
+                    key={t}
+                    onClick={() => toggleRouteType(t)}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors
+                      ${active
+                        ? 'bg-coral text-white border-coral'
+                        : 'bg-white text-warm-gray border-sand hover:border-coral hover:text-dark-brown'}`}
+                    title={active ? 'Filtering on — click to hide this type' : 'Hidden — click to show'}
+                  >
+                    {ROUTE_TYPES[t] || `Type ${t}`}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <div className="flex flex-col gap-1 mb-3">
-            {routes.map((route) => {
+            {filteredRoutes.length === 0 && (
+              <EmptyState
+                icon="🔍"
+                title="No routes match these filters"
+                description="Loosen the type or text filter above to see more routes."
+              />
+            )}
+            {filteredRoutes.map((route) => {
               const tripCount = trips.filter((t) => t.route_id === route.route_id).length;
               const stopCount = new Set(
                 routeStops.filter((rs) => rs.route_id === route.route_id).map((rs) => rs.stop_id)

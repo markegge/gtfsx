@@ -14,16 +14,28 @@ import type {
 } from '../types/gtfs';
 import type { FlexZone, BookingRule } from '../store/flexSlice';
 
-/** Populate shape_dist_traveled from the lat/lon geometry. Mirrors
- *  shapeSlice.recalcShapeDistances so the import path doesn't need the
- *  store mutator — we're still building the Shape array here. */
+/** Populate shape_dist_traveled (cumulative metres) from the lat/lon geometry.
+ *  Mirrors shapeSlice.recalcShapeDistances so the import path doesn't need the
+ *  store mutator — we're still building the Shape array here.
+ *
+ *  Accumulates per-segment distances in a single pass: O(n). (The previous
+ *  version rebuilt and re-measured the whole polyline at every point — O(n²) —
+ *  which made dense regional feeds like RTD Denver take minutes to import.)
+ *  Result is identical: turf `length` sums consecutive-point haversine
+ *  distances, so summing each segment equals measuring the line up to point i. */
 function fillShapeDistances(points: ShapePoint[]): ShapePoint[] {
   if (points.length < 2) return points;
-  const coords = points.map((p) => [p.shape_pt_lon, p.shape_pt_lat] as [number, number]);
   points[0].shape_dist_traveled = 0;
+  let cumulative = 0;
   for (let i = 1; i < points.length; i++) {
-    const subLine = lineString(coords.slice(0, i + 1));
-    points[i].shape_dist_traveled = length(subLine, { units: 'meters' });
+    const prev = points[i - 1];
+    const cur = points[i];
+    const segment = lineString([
+      [prev.shape_pt_lon, prev.shape_pt_lat],
+      [cur.shape_pt_lon, cur.shape_pt_lat],
+    ]);
+    cumulative += length(segment, { units: 'meters' });
+    cur.shape_dist_traveled = cumulative;
   }
   return points;
 }
@@ -50,37 +62,47 @@ function describeService(...days: number[]): string {
   return 'Custom';
 }
 
-/** Uncompressed stop_times.txt byte size above which the in-browser editor is
- * likely to be slow or crash the tab. A typical single-agency feed stays well
- * under this; RTD-Denver-class regional feeds blow past it. The whole feed is
- * held in memory (Zustand store) and re-serialized to IndexedDB, so stop_times
- * — by far the largest table — is the load that matters. */
-export const LARGE_STOP_TIMES_BYTES = 40 * 1024 * 1024; // ~40 MB ≈ 700k–1M rows
+/** Combined uncompressed size of the heavy tables (stop_times + shapes) above
+ * which the in-browser editor is likely to be slow or crash the tab. The whole
+ * feed is held in memory (Zustand store) and rendered un-virtualized, and
+ * stop_times + shapes are by far the largest tables. A typical single-agency
+ * feed stays well under this; RTD-Denver-class regional feeds (≈35 MB
+ * stop_times + ≈26 MB shapes) blow past it. Tuned so RTD trips it with margin
+ * while ordinary feeds don't. */
+export const LARGE_FEED_BYTES = 25 * 1024 * 1024; // ~25 MB of stop_times + shapes
 
-/** Cheap pre-flight: read the *uncompressed* size of stop_times.txt straight
- * from the ZIP's central directory WITHOUT decompressing or parsing it, so the
- * UI can warn before the expensive synchronous parse that actually hangs the
- * tab. Falls back to a scaled compressed-archive estimate if the per-entry
- * metadata isn't available. */
+/** Cheap pre-flight: read the *uncompressed* sizes of stop_times.txt and
+ * shapes.txt straight from the ZIP's central directory WITHOUT decompressing
+ * or parsing them, so the UI can warn before the expensive parse + in-memory
+ * load that hangs/crashes the tab. Falls back to a scaled compressed-archive
+ * estimate if the per-entry metadata isn't available. */
 export async function inspectGtfsZip(file: File): Promise<{
   stopTimesBytes: number;
+  shapesBytes: number;
   estimatedRows: number;
   isLarge: boolean;
 }> {
   const zip = await JSZip.loadAsync(file);
-  const entry = zip.file('stop_times.txt') ?? zip.file(/stop_times\.txt$/)[0] ?? null;
   // JSZip records each entry's uncompressed size on the internal `_data`
-  // record; it isn't part of the public type, hence the cast. If it's ever
-  // missing, fall back to ~4× the compressed archive size as a rough proxy.
-  const meta = entry as unknown as { _data?: { uncompressedSize?: number } } | null;
-  const stopTimesBytes = meta?._data?.uncompressedSize ?? Math.round(file.size * 4);
+  // record; it isn't part of the public type, hence the cast.
+  const uncompressedSize = (name: string, re: RegExp): number => {
+    const entry = zip.file(name) ?? zip.file(re)[0] ?? null;
+    const meta = entry as unknown as { _data?: { uncompressedSize?: number } } | null;
+    return meta?._data?.uncompressedSize ?? 0;
+  };
+  const stopTimesBytes = uncompressedSize('stop_times.txt', /stop_times\.txt$/);
+  const shapesBytes = uncompressedSize('shapes.txt', /shapes\.txt$/);
+  // If stop_times metadata is somehow missing, fall back to ~4× the compressed
+  // archive size as a rough proxy for the heavy-table footprint.
+  const heavyBytes = stopTimesBytes > 0 ? stopTimesBytes + shapesBytes : Math.round(file.size * 4);
   // GTFS stop_times rows average roughly 55 bytes uncompressed; good enough
   // to put an order-of-magnitude row count in front of the user.
   const estimatedRows = Math.round(stopTimesBytes / 55);
   return {
     stopTimesBytes,
+    shapesBytes,
     estimatedRows,
-    isLarge: stopTimesBytes > LARGE_STOP_TIMES_BYTES,
+    isLarge: heavyBytes > LARGE_FEED_BYTES,
   };
 }
 

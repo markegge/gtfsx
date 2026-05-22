@@ -341,7 +341,11 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
 
   // ── Large-feed warning gate ────────────────────────────────────────────────
   if (pendingLarge) {
-    const mb = Math.round(pendingLarge.info.stopTimesBytes / (1024 * 1024));
+    // Combined heavy-table footprint (stop_times + shapes) — what actually
+    // strains memory — rounded for display.
+    const mb = Math.round(
+      (pendingLarge.info.stopTimesBytes + pendingLarge.info.shapesBytes) / (1024 * 1024),
+    );
     const rows = pendingLarge.info.estimatedRows;
     return (
       <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={parsing ? undefined : onClose}>

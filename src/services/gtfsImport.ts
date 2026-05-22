@@ -5,13 +5,13 @@ import { useStore } from '../store';
 import {
   importGtfsZip,
   inspectGtfsZip,
-  LARGE_STOP_TIMES_BYTES,
+  LARGE_FEED_BYTES,
   type ImportData,
   type ImportProgress,
   type ImportWorkerResponse,
 } from './gtfsParse';
 
-export { importGtfsZip, inspectGtfsZip, LARGE_STOP_TIMES_BYTES };
+export { importGtfsZip, inspectGtfsZip, LARGE_FEED_BYTES };
 export type { ImportData, ImportProgress };
 
 /** Parse a GTFS zip in a Web Worker so the main thread stays responsive on

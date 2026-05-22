@@ -21,8 +21,13 @@ export function StopEditPanel() {
   const mapMode = useStore((s) => s.mapMode);
   const setMapMode = useStore((s) => s.setMapMode);
   const shapes = useStore((s) => s.shapes);
+  const tab = useStore((s) => s.stopDetailTab);
 
   if (!stop) return null;
+
+  // Trips tab: just the per-stop schedule (header tabs switch between this and
+  // the editable details below).
+  if (tab === 'trips') return <StopDeparturesSection />;
 
   // Snap the stop onto the nearest point of any route shape — the stop-editing
   // analogue of "snap to road" when drawing a shape.
@@ -220,8 +225,6 @@ export function StopEditPanel() {
         onChange={(v) => updateStop(stop.stop_id, { zone_id: v || undefined })}
         placeholder="e.g. zone-1, downtown, juneau"
       />
-
-      <StopDeparturesSection />
     </div>
   );
 }

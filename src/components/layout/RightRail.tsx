@@ -238,6 +238,8 @@ function StopEditHeader() {
   const setSidebarSection = useStore((s) => s.setSidebarSection);
   const duplicateStop = useStore((s) => s.duplicateStop);
   const removeStop = useStore((s) => s.removeStop);
+  const stopDetailTab = useStore((s) => s.stopDetailTab);
+  const setStopDetailTab = useStore((s) => s.setStopDetailTab);
   const selectStop = useStore((s) => s.selectStop);
 
   if (!stop) return null;
@@ -312,6 +314,22 @@ function StopEditHeader() {
             ✕
           </button>
         </div>
+      </div>
+      {/* Details / Trips tabs (mirrors the route editor's tab strip). */}
+      <div className="flex gap-1 mt-3 -mb-3.5">
+        {(['details', 'trips'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setStopDetailTab(t)}
+            className={`px-3 py-2 font-heading font-bold text-[13px] border-b-2 transition-colors ${
+              stopDetailTab === t
+                ? 'text-coral border-coral'
+                : 'text-warm-gray border-transparent hover:text-dark-brown'
+            }`}
+          >
+            {t === 'details' ? 'Details' : 'Trips'}
+          </button>
+        ))}
       </div>
     </div>
   );

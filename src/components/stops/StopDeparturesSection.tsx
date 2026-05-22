@@ -126,9 +126,9 @@ export function StopDeparturesSection() {
   const hasAnyServiceData = (stopTimesByStop.get(editingStopId) || []).length > 0;
 
   return (
-    <div className="mt-4 pt-3 border-t border-sand">
+    <div>
       <h4 className="font-heading font-bold text-sm text-dark-brown mb-2">
-        Arrivals &amp; departures
+        Trips
       </h4>
 
       {!hasAnyServiceData ? (

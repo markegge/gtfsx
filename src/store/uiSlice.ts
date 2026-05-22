@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { SidebarSection, BottomPanelTab, MapMode, StopPlacementMode, RouteDetailTab } from '../types/ui';
+import type { SidebarSection, BottomPanelTab, MapMode, StopPlacementMode, RouteDetailTab, StopDetailTab } from '../types/ui';
 
 export interface UISlice {
   sidebarSection: SidebarSection | null;
@@ -45,6 +45,7 @@ export interface UISlice {
   rightRailOpen: boolean;
   rightRailWidth: number;
   routeDetailTab: RouteDetailTab;
+  stopDetailTab: StopDetailTab;
   routeDeleteConfirmId: string | null;
   toggleRouteVisibility: (routeId: string) => void;
   toggleRouteType: (routeType: number) => void;
@@ -74,6 +75,7 @@ export interface UISlice {
   setRightRailOpen: (open: boolean) => void;
   setRightRailWidth: (w: number) => void;
   setRouteDetailTab: (tab: RouteDetailTab) => void;
+  setStopDetailTab: (tab: StopDetailTab) => void;
   setRouteDeleteConfirmId: (id: string | null) => void;
 }
 
@@ -108,6 +110,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   rightRailOpen: false,
   rightRailWidth: 460,
   routeDetailTab: 'details',
+  stopDetailTab: 'details',
   routeDeleteConfirmId: null,
   toggleRouteVisibility: (routeId) => set((state) => {
     const idx = state.hiddenRouteIds.indexOf(routeId);
@@ -162,7 +165,11 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setEditingRouteId: (id) => set((state) => { state.editingRouteId = id; }),
   setEditingShapeId: (id) => set((state) => { state.editingShapeId = id; }),
   setEditingFlexZoneId: (id) => set((state) => { state.editingFlexZoneId = id; }),
-  setEditingStopId: (id) => set((state) => { state.editingStopId = id; }),
+  setEditingStopId: (id) => set((state) => {
+    state.editingStopId = id;
+    // Open each stop on its Details tab rather than wherever the last one left off.
+    if (id) state.stopDetailTab = 'details';
+  }),
   setEditingCalendarServiceId: (id) => set((state) => { state.editingCalendarServiceId = id; }),
   setCreatingStop: (creating) => set((state) => {
     state.creatingStop = creating;
@@ -176,5 +183,6 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setRightRailOpen: (open) => set((state) => { state.rightRailOpen = open; }),
   setRightRailWidth: (w) => set((state) => { state.rightRailWidth = w; }),
   setRouteDetailTab: (tab) => set((state) => { state.routeDetailTab = tab; }),
+  setStopDetailTab: (tab) => set((state) => { state.stopDetailTab = tab; }),
   setRouteDeleteConfirmId: (id) => set((state) => { state.routeDeleteConfirmId = id; }),
 });

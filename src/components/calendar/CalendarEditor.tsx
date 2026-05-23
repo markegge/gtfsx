@@ -214,6 +214,9 @@ export function CalendarEditor() {
                   );
                 })}
               </div>
+              <div className="mt-1.5 text-[11px] text-warm-gray tabular-nums">
+                {formatGtfsDate(cal.start_date)} → {formatGtfsDate(cal.end_date)}
+              </div>
             </button>
           ))}
         </div>

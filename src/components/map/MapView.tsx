@@ -23,6 +23,7 @@ import type { ShapePoint } from '../../types/gtfs';
 import { generateId } from '../../services/idGenerator';
 import { snapToRoad } from '../../services/snapToRoad';
 import { simplifyShapePoints } from '../../services/simplifyShape';
+import { suggestStopName } from '../../services/suggestStopName';
 import nearestPointOnLine from '@turf/nearest-point-on-line';
 import distance from '@turf/distance';
 import length from '@turf/length';
@@ -821,13 +822,26 @@ export function MapView() {
       }
 
       const stopId = generateId('stop');
+      const defaultName = `Stop ${currentState.stops.length + 1}`;
       currentState.addStop({
         stop_id: stopId,
-        stop_name: `Stop ${currentState.stops.length + 1}`,
+        stop_name: defaultName,
         stop_lat: round6(stopLat),
         stop_lon: round6(stopLon),
         location_type: 0,
         wheelchair_boarding: 0,
+      });
+
+      // Fire-and-forget: try to auto-name the stop after the nearest
+      // intersection ("1st Ave and Main St"). Only overwrites the default
+      // placeholder, so a user who's already typing in the name isn't
+      // clobbered. Suggestion service silently returns null on network/no-token.
+      void suggestStopName(stopLon, stopLat).then((name) => {
+        if (!name) return;
+        const cur = useStore.getState().stops.find((s) => s.stop_id === stopId);
+        if (cur && cur.stop_name === defaultName) {
+          useStore.getState().updateStop(stopId, { stop_name: name });
+        }
       });
 
       if (hasRoute && currentState.selectedRouteId) {

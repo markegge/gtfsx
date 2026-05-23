@@ -69,6 +69,13 @@ function pricingSeo(env: Env): MarketingSeo {
       <li><strong>Enterprise — custom.</strong> For state DOTs, RTAP networks, and large consortiums. Custom feed/seat limits, unlimited managed publishing, phone + email support with SLA.</li>
     </ul>
     <p><a href="mailto:hello@gtfsx.com?subject=GTFS%C2%B7X%20%E2%80%94%20Fix%20my%20feed">Fix my feed for me</a> — prefer a done-for-you service? We can build or repair your GTFS feed.</p>
+    <h2>How GTFS·X compares</h2>
+    <ul>
+      <li><a href="/compare/trillium/">vs. Trillium (Optibus)</a> — managed GTFS service vs. self-serve editor.</li>
+      <li><a href="/compare/remix/">vs. Remix by Via</a> — network planning suite vs. GTFS-first tool.</li>
+      <li><a href="/compare/gtfs-builder-rtap/">vs. National RTAP GTFS Builder</a> — free spreadsheet builder vs. map-based editor.</li>
+      <li><a href="/compare/spare-flex-builder/">vs. Spare GTFS-Flex Builder</a> — microtransit-only builder vs. full GTFS + Flex authoring.</li>
+    </ul>
     <p><a href="/">Open the editor</a> · <a href="/about/">About GTFS·X</a></p>
   `;
   return {

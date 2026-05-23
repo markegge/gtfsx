@@ -35,6 +35,8 @@ export type RouteDetailTab = 'details' | 'stops' | 'trips' | 'costs';
 
 export type StopDetailTab = 'details' | 'trips';
 
+export type CalendarDetailTab = 'details' | 'routes';
+
 export interface ValidationMessage {
   id: string;
   severity: 'error' | 'warning';

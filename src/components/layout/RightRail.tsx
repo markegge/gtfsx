@@ -413,6 +413,8 @@ function CalendarDetailHeader() {
   const setEditingCalendarServiceId = useStore((s) => s.setEditingCalendarServiceId);
   const duplicateCalendar = useStore((s) => s.duplicateCalendar);
   const removeCalendar = useStore((s) => s.removeCalendar);
+  const calendarDetailTab = useStore((s) => s.calendarDetailTab);
+  const setCalendarDetailTab = useStore((s) => s.setCalendarDetailTab);
 
   if (!calendar) return null;
   const title = calendar._description || calendar.service_id;
@@ -451,6 +453,22 @@ function CalendarDetailHeader() {
           duplicateTitle="Duplicate this calendar"
           deleteTitle="Delete this calendar"
         />
+      </div>
+      {/* Details / Routes tabs (mirrors the route + stop editors' tab strips). */}
+      <div className="flex gap-1 px-3 -mb-px">
+        {(['details', 'routes'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setCalendarDetailTab(t)}
+            className={`px-3 py-2 font-heading font-bold text-[13px] border-b-2 transition-colors ${
+              calendarDetailTab === t
+                ? 'text-coral border-coral'
+                : 'text-warm-gray border-transparent hover:text-dark-brown'
+            }`}
+          >
+            {t === 'details' ? 'Details' : 'Routes'}
+          </button>
+        ))}
       </div>
     </div>
   );

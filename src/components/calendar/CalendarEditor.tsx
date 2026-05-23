@@ -89,6 +89,8 @@ export function CalendarEditor() {
     calendars, addCalendar, updateCalendar,
     calendarDates, addCalendarDate, removeCalendarDate,
     editingCalendarServiceId, setEditingCalendarServiceId,
+    trips, routes, selectRoute, setBottomPanelOpen, setBottomPanelTab,
+    calendarDetailTab,
   } = useStore();
 
   // If the editingCalendarServiceId points at a calendar that no longer
@@ -222,6 +224,66 @@ export function CalendarEditor() {
         >
           + Add Service Pattern
         </button>
+      </div>
+    );
+  }
+
+  // Routes tab — list every route that has at least one trip on this service
+  // pattern, with a quick jump to its timetable. Cheap: one pass over trips.
+  if (selected && calendarDetailTab === 'routes') {
+    const counts = new Map<string, number>();
+    for (const t of trips) {
+      if (t.service_id === selected.service_id) {
+        counts.set(t.route_id, (counts.get(t.route_id) ?? 0) + 1);
+      }
+    }
+    const routesForService = routes
+      .filter((r) => counts.has(r.route_id))
+      .sort((a, b) => (a.route_short_name || a.route_long_name || a.route_id)
+        .localeCompare(b.route_short_name || b.route_long_name || b.route_id));
+    return (
+      <div>
+        <p className="text-[11px] text-warm-gray uppercase tracking-wide font-semibold mb-2">
+          Routes on this service ({routesForService.length})
+        </p>
+        {routesForService.length === 0 ? (
+          <p className="text-xs text-warm-gray">
+            No trips are assigned to this service pattern yet.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {routesForService.map((r) => {
+              const n = counts.get(r.route_id) ?? 0;
+              const name = r.route_short_name || r.route_long_name || 'Untitled Route';
+              return (
+                <div
+                  key={r.route_id}
+                  className="flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-cream transition-colors"
+                >
+                  <span
+                    className="w-3 h-3 rounded shrink-0"
+                    style={{ backgroundColor: `#${r.route_color}` }}
+                    aria-hidden
+                  />
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="font-semibold text-sm text-dark-brown truncate">{name}</span>
+                    <span className="text-[11px] text-warm-gray">{n} trip{n === 1 ? '' : 's'}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      selectRoute(r.route_id);
+                      setBottomPanelOpen(true);
+                      setBottomPanelTab('timetable');
+                    }}
+                    className="px-2.5 h-7 rounded-md border border-sand bg-white text-[12px] font-heading font-semibold text-warm-gray hover:border-coral hover:text-coral transition-colors"
+                  >
+                    View timetable
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }

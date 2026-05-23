@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { SidebarSection, BottomPanelTab, MapMode, StopPlacementMode, RouteDetailTab, StopDetailTab } from '../types/ui';
+import type { SidebarSection, BottomPanelTab, MapMode, StopPlacementMode, RouteDetailTab, StopDetailTab, CalendarDetailTab } from '../types/ui';
 
 export interface UISlice {
   sidebarSection: SidebarSection | null;
@@ -46,6 +46,7 @@ export interface UISlice {
   rightRailWidth: number;
   routeDetailTab: RouteDetailTab;
   stopDetailTab: StopDetailTab;
+  calendarDetailTab: CalendarDetailTab;
   routeDeleteConfirmId: string | null;
   toggleRouteVisibility: (routeId: string) => void;
   toggleRouteType: (routeType: number) => void;
@@ -76,6 +77,7 @@ export interface UISlice {
   setRightRailWidth: (w: number) => void;
   setRouteDetailTab: (tab: RouteDetailTab) => void;
   setStopDetailTab: (tab: StopDetailTab) => void;
+  setCalendarDetailTab: (tab: CalendarDetailTab) => void;
   setRouteDeleteConfirmId: (id: string | null) => void;
 }
 
@@ -111,6 +113,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   rightRailWidth: 460,
   routeDetailTab: 'details',
   stopDetailTab: 'details',
+  calendarDetailTab: 'details',
   routeDeleteConfirmId: null,
   toggleRouteVisibility: (routeId) => set((state) => {
     const idx = state.hiddenRouteIds.indexOf(routeId);
@@ -170,7 +173,11 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     // Open each stop on its Details tab rather than wherever the last one left off.
     if (id) state.stopDetailTab = 'details';
   }),
-  setEditingCalendarServiceId: (id) => set((state) => { state.editingCalendarServiceId = id; }),
+  setEditingCalendarServiceId: (id) => set((state) => {
+    state.editingCalendarServiceId = id;
+    // Open each calendar on its Details tab rather than wherever the last one left off.
+    if (id) state.calendarDetailTab = 'details';
+  }),
   setCreatingStop: (creating) => set((state) => {
     state.creatingStop = creating;
     // Entering creating mode clears any open edit-stop sub-panel so the
@@ -184,5 +191,6 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setRightRailWidth: (w) => set((state) => { state.rightRailWidth = w; }),
   setRouteDetailTab: (tab) => set((state) => { state.routeDetailTab = tab; }),
   setStopDetailTab: (tab) => set((state) => { state.stopDetailTab = tab; }),
+  setCalendarDetailTab: (tab) => set((state) => { state.calendarDetailTab = tab; }),
   setRouteDeleteConfirmId: (id) => set((state) => { state.routeDeleteConfirmId = id; }),
 });

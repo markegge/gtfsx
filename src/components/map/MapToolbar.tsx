@@ -48,6 +48,12 @@ export function MapToolbar() {
 
   const handlePlaceStop = () => {
     const state = useStore.getState();
+    // Toggle off — clicking Add Stop while already in place_stop mode exits
+    // back to select, so the user has a one-click "I'm done placing" gesture.
+    if (state.mapMode === 'place_stop') {
+      state.setMapMode('select');
+      return;
+    }
     ensureActiveRoute();
     state.setSidebarSection('stops');
     state.setMapMode('place_stop');

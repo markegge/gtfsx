@@ -14,6 +14,9 @@ declare global {
     __shapeEditDiscard?: () => void;
     __flexZoneEditSave?: () => void;
     __flexZoneEditDiscard?: () => void;
+    /** Cancel an in-progress Draw Route, discard any partial line, and return
+     *  to select mode. Used by the toolbar's Draw Route toggle. */
+    __cancelDrawRoute?: () => void;
     __flexZoneExpand?: string;
     __drawingDirection?: 0 | 1;
     /** Read-only Zustand store reference exposed for browser-console debugging. */

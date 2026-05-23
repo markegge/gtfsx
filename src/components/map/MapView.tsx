@@ -425,11 +425,20 @@ export function MapView() {
     window.__shapeEditDiscard = discardShapeEdit;
     window.__flexZoneEditSave = saveFlexZoneEdit;
     window.__flexZoneEditDiscard = discardFlexZoneEdit;
+    // Cancel an in-progress Draw Route — used by the toolbar to toggle the
+    // Draw Route button off without requiring the user to finish the line.
+    // Mirrors the cleanup the ESC handler does when no vertices remain.
+    window.__cancelDrawRoute = () => {
+      if (drawRef.current) drawRef.current.deleteAll();
+      useStore.getState().setDrawingRouteId(null);
+      useStore.getState().setMapMode('select');
+    };
     return () => {
       delete window.__shapeEditSave;
       delete window.__shapeEditDiscard;
       delete window.__flexZoneEditSave;
       delete window.__flexZoneEditDiscard;
+      delete window.__cancelDrawRoute;
     };
   }, [saveShapeEdit, discardShapeEdit, saveFlexZoneEdit, discardFlexZoneEdit]);
 

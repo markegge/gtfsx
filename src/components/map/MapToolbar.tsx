@@ -38,6 +38,13 @@ export function MapToolbar() {
 
   const handleDrawRoute = () => {
     const state = useStore.getState();
+    // Toggle off — clicking Draw Route while already in draw_route mode exits
+    // without drawing anything. The typical exit is still draw + double-click;
+    // this is the escape hatch when you opened the mode by mistake.
+    if (state.mapMode === 'draw_route') {
+      window.__cancelDrawRoute?.();
+      return;
+    }
     const routeId = ensureActiveRoute();
     window.__drawingDirection = state.stopPlacementDirection;
     state.setDrawingRouteId(routeId);

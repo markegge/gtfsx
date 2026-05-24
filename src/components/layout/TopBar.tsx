@@ -32,6 +32,10 @@ export function TopBar() {
   const [showSaveAs, setShowSaveAs] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Mobile-only: Save / Import / Export collapse into a single overflow menu
+  // (alongside the user-menu avatar) so the top bar stops overflowing on
+  // phones. Below the same 600px breakpoint the rails use.
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Status reflects BACKEND save state — IndexedDB autosaves don't promote
   // a draft to "Saved." Anonymous editors get a distinct label so the dot
@@ -113,12 +117,12 @@ export function TopBar() {
           {saveStatus}
         </div>
 
-        {/* Save button */}
+        {/* Save button — hidden on phones; folded into the mobile menu below. */}
         {backendEnabled && (
           <button
             onClick={handleSaveClick}
             disabled={saving || (!isDirty && !!activeServerProjectId)}
-            className="px-3 py-1.5 rounded-lg font-heading font-bold text-xs bg-teal text-white hover:bg-[#0e7e75] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            className="hidden min-[600px]:inline-block px-3 py-1.5 rounded-lg font-heading font-bold text-xs bg-teal text-white hover:bg-[#0e7e75] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
             title={
               !currentUser
                 ? 'Sign in to save'
@@ -138,10 +142,10 @@ export function TopBar() {
 
         <div className="flex-1" />
 
-        {/* Editor actions */}
+        {/* Editor actions — hidden on phones; available in the mobile menu. */}
         <button
           onClick={() => setShowImport(true)}
-          className="px-3 sm:px-4 py-2 rounded-lg font-heading font-bold text-sm bg-sand text-brown hover:bg-coral-light hover:text-coral transition-colors whitespace-nowrap shrink-0"
+          className="hidden min-[600px]:inline-block px-3 sm:px-4 py-2 rounded-lg font-heading font-bold text-sm bg-sand text-brown hover:bg-coral-light hover:text-coral transition-colors whitespace-nowrap shrink-0"
         >
           Import
         </button>
@@ -149,11 +153,61 @@ export function TopBar() {
           onClick={() => setShowExport(true)}
           disabled={!hasContent}
           title={hasContent ? 'Export GTFS feed' : 'Add some routes or stops before exporting'}
-          className="px-3 sm:px-4 py-2 rounded-lg font-heading font-bold text-sm bg-coral text-white hover:bg-[#d4603a] transition-colors whitespace-nowrap shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-coral"
+          className="hidden min-[600px]:inline-block px-3 sm:px-4 py-2 rounded-lg font-heading font-bold text-sm bg-coral text-white hover:bg-[#d4603a] transition-colors whitespace-nowrap shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-coral"
         >
           <span className="hidden sm:inline">Export GTFS</span>
           <span className="sm:hidden">Export</span>
         </button>
+
+        {/* Mobile-only overflow menu containing Save / Import / Export. */}
+        <div className="min-[600px]:hidden relative shrink-0">
+          <button
+            onClick={() => setMobileMenuOpen((v) => !v)}
+            aria-label="Menu"
+            className="w-9 h-9 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+          {mobileMenuOpen && (
+            <>
+              {/* Click-outside backdrop. */}
+              <div
+                className="fixed inset-0 z-30"
+                onClick={() => setMobileMenuOpen(false)}
+                aria-hidden
+              />
+              <div className="absolute right-0 top-full mt-1 z-40 min-w-[180px] bg-white border border-sand rounded-lg shadow-lg p-1 flex flex-col">
+                {backendEnabled && (
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); handleSaveClick(); }}
+                    disabled={saving || (!isDirty && !!activeServerProjectId)}
+                    className="text-left px-3 py-2 rounded-md text-sm font-heading font-semibold text-dark-brown hover:bg-cream disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {saving ? 'Saving…' : 'Save'}
+                  </button>
+                )}
+                <button
+                  onClick={() => { setMobileMenuOpen(false); setShowImport(true); }}
+                  className="text-left px-3 py-2 rounded-md text-sm font-heading font-semibold text-dark-brown hover:bg-cream"
+                >
+                  Import
+                </button>
+                <button
+                  onClick={() => { setMobileMenuOpen(false); setShowExport(true); }}
+                  disabled={!hasContent}
+                  title={hasContent ? 'Export GTFS feed' : 'Add some routes or stops before exporting'}
+                  className="text-left px-3 py-2 rounded-md text-sm font-heading font-semibold text-coral hover:bg-coral-light disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Export GTFS
+                </button>
+              </div>
+            </>
+          )}
+        </div>
 
         <UserMenu />
       </div>

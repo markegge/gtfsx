@@ -38,14 +38,12 @@ function initialsFromName(nameOrEmail: string): string {
 }
 
 /**
- * Shared account menu — renders the signed-in user popover (workspace switcher,
- * My Feeds, Account settings, Admin console, Sign out) when there's a user,
- * or the "Sign in" CTA otherwise. Use this on every page that needs
- * consistent account navigation.
- *
- * Returns null when backend features are disabled.
+ * The list of menu items for the account / signed-in user — extracted so the
+ * mobile hamburger can render them inside its own dropdown without duplicating
+ * the markup. Each item invokes `onClose?.()` before navigating so the host
+ * popover can dismiss. Renders the CreateOrgDialog modal as a sibling.
  */
-export function UserMenu() {
+export function UserMenuItems({ onClose }: { onClose?: () => void } = {}) {
   const navigate = useNavigate();
   const currentUser = useStore((s) => s.currentUser);
   const userOrgs = useStore((s) => s.userOrgs);
@@ -54,224 +52,173 @@ export function UserMenu() {
   const upsertUserOrg = useStore((s) => s.upsertUserOrg);
   const clearAuth = useStore((s) => s.clearAuth);
   const [showCreateOrg, setShowCreateOrg] = useState(false);
-
-  if (!backendEnabled) return null;
+  const close = () => onClose?.();
+  const go = (path: string) => { close(); navigate(path); };
 
   if (!currentUser) {
     return (
-      <div className="flex items-center pl-2 sm:pl-3 ml-1 border-l border-sand h-9">
-        <Popover.Root>
-          <Popover.Trigger asChild>
-            <button
-              title="Sign in or sign up"
-              aria-label="Sign in or sign up"
-              className="w-9 h-9 rounded-full bg-white border-2 border-sand text-warm-gray hover:border-coral hover:text-coral transition-colors flex items-center justify-center shrink-0"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-                <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="2" />
-                <path
-                  d="M5 20c0-3.5 3-6.5 7-6.5s7 3 7 6.5"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </button>
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Content
-              align="end"
-              sideOffset={8}
-              className="bg-white rounded-xl shadow-lg border border-sand p-2 w-56 z-50"
-            >
-              <button
-                onClick={() => navigate('/login')}
-                className="w-full text-left px-3 py-2 rounded-md hover:bg-cream transition-colors"
-              >
-                <div className="text-sm font-heading font-bold text-coral">Sign in</div>
-                <div className="text-[11px] text-warm-gray">Existing users</div>
-              </button>
-              <button
-                onClick={() => navigate('/signup')}
-                className="w-full text-left px-3 py-2 rounded-md hover:bg-cream transition-colors"
-              >
-                <div className="text-sm font-heading font-bold text-teal">Sign up</div>
-                <div className="text-[11px] text-warm-gray">Create a new account</div>
-              </button>
-              <div className="border-t border-sand my-1" />
-              <button
-                onClick={() => navigate('/pricing')}
-                className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
-              >
-                Pricing &amp; plans
-              </button>
-              <a
-                href="/about/"
-                className="block w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
-              >
-                About
-              </a>
-            </Popover.Content>
-          </Popover.Portal>
-        </Popover.Root>
-      </div>
+      <>
+        <button
+          onClick={() => go('/login')}
+          className="w-full text-left px-3 py-2 rounded-md hover:bg-cream transition-colors"
+        >
+          <div className="text-sm font-heading font-bold text-coral">Sign in</div>
+          <div className="text-[11px] text-warm-gray">Existing users</div>
+        </button>
+        <button
+          onClick={() => go('/signup')}
+          className="w-full text-left px-3 py-2 rounded-md hover:bg-cream transition-colors"
+        >
+          <div className="text-sm font-heading font-bold text-teal">Sign up</div>
+          <div className="text-[11px] text-warm-gray">Create a new account</div>
+        </button>
+        <div className="border-t border-sand my-1" />
+        <button
+          onClick={() => go('/pricing')}
+          className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
+        >
+          Pricing &amp; plans
+        </button>
+        <a
+          href="/about/"
+          onClick={close}
+          className="block w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
+        >
+          About
+        </a>
+      </>
     );
   }
 
   return (
     <>
-      <div className="flex items-center pl-2 sm:pl-3 ml-1 border-l border-sand h-9">
-      <Popover.Root>
-        <Popover.Trigger asChild>
-          <button
-            className="w-9 h-9 rounded-full bg-coral text-white font-heading font-bold text-sm flex items-center justify-center hover:bg-[#d4603a] transition-colors shrink-0"
-            title={currentUser.email}
-            aria-label="Account menu"
-          >
-            {initialsFromName(currentUser.displayName || currentUser.email)}
-          </button>
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content
-            align="end"
-            sideOffset={8}
-            className="bg-white rounded-xl shadow-lg border border-sand p-2 w-64 z-50"
-          >
-            <div className="px-3 py-2 border-b border-sand mb-1">
-              <div className="text-sm font-semibold text-dark-brown truncate">
-                {currentUser.displayName}
-              </div>
-              <div className="text-xs text-warm-gray truncate">{currentUser.email}</div>
-            </div>
-
-            <div className="px-3 pt-2 pb-1 text-[11px] font-semibold text-warm-gray uppercase tracking-wide">
-              Workspace
-            </div>
-            <button
-              onClick={() => {
-                setActiveWorkspace({ type: 'personal' });
-                navigate('/feeds');
-              }}
-              className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors flex items-center justify-between gap-2 ${
-                activeWorkspace.type === 'personal'
-                  ? 'bg-cream text-dark-brown font-semibold'
-                  : 'text-dark-brown hover:bg-cream'
-              }`}
-            >
-              <span className="truncate">My personal feeds</span>
-              {activeWorkspace.type === 'personal' && <span className="text-coral text-xs">✓</span>}
-            </button>
-            {userOrgs.map((org) => {
-              const active = activeWorkspace.type === 'org' && activeWorkspace.orgId === org.id;
-              return (
-                <button
-                  key={org.id}
-                  onClick={() => {
-                    setActiveWorkspace({ type: 'org', orgId: org.id, role: org.role });
-                    navigate('/feeds');
-                  }}
-                  className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors flex items-center justify-between gap-2 ${
-                    active ? 'bg-cream text-dark-brown font-semibold' : 'text-dark-brown hover:bg-cream'
-                  }`}
-                >
-                  <span className="truncate flex-1">{org.name}</span>
-                  <RoleBadge role={org.role} />
-                </button>
-              );
-            })}
-            {currentUser.plan === 'team' || currentUser.plan === 'enterprise' ? (
-              <button
-                onClick={() => setShowCreateOrg(true)}
-                className="w-full text-left px-3 py-1.5 rounded-md text-sm text-coral hover:bg-cream transition-colors"
-              >
-                + Create organization…
-              </button>
-            ) : (
-              <button
-                onClick={() => navigate('/upgrade?feature=org_workspace')}
-                className="w-full text-left px-3 py-1.5 rounded-md text-sm text-coral hover:bg-cream transition-colors flex items-center justify-between gap-2"
-                title="Organizations are a Team plan feature"
-              >
-                <span>+ Create organization…</span>
-                <span className="text-[10px] font-bold uppercase tracking-wide bg-cream text-warm-gray px-1.5 py-0.5 rounded border border-sand">
-                  Team
-                </span>
-              </button>
-            )}
-
-            <div className="border-t border-sand my-1" />
-            <button
-              onClick={() => navigate('/feeds')}
-              className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
-            >
-              My Feeds
-            </button>
-            <button
-              onClick={() => navigate('/community')}
-              className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors flex items-center justify-between gap-2"
-            >
-              <span>Community</span>
-              <span className="text-[10px] font-bold uppercase tracking-wide bg-teal-light text-teal px-1.5 py-0.5 rounded">
-                New
-              </span>
-            </button>
-            <button
-              onClick={() => navigate('/account')}
-              className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
-            >
-              Account settings
-            </button>
-            <button
-              onClick={() => navigate('/account/billing')}
-              className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors flex items-center justify-between gap-2"
-            >
-              <span>Billing & plan</span>
-              {currentUser.plan && currentUser.plan !== 'free' && (
-                <PlanBadge plan={currentUser.plan} />
-              )}
-            </button>
-            {activeWorkspace.type === 'org' &&
-              (() => {
-                const activeOrg = userOrgs.find((o) => o.id === activeWorkspace.orgId);
-                if (!activeOrg) return null;
-                // Org settings + billing live on the same page now — single
-                // entry, with the plan badge on the right.
-                return (
-                  <button
-                    onClick={() => navigate(`/orgs/${encodeURIComponent(activeOrg.slug)}`)}
-                    className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors flex items-center justify-between gap-2"
-                  >
-                    <span>Organization settings &amp; billing</span>
-                    {activeOrg.plan && activeOrg.plan !== 'free' && <PlanBadge plan={activeOrg.plan} />}
-                  </button>
-                );
-              })()}
-            {currentUser.staff && (
-              <button
-                onClick={() => navigate('/admin')}
-                className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
-              >
-                Admin console
-              </button>
-            )}
-            <button
-              onClick={async () => {
-                try {
-                  await apiLogout();
-                } catch {
-                  // ignore — still clear local state
-                }
-                clearAuth();
-                navigate('/');
-              }}
-              className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
-            >
-              Sign out
-            </button>
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
+      <div className="px-3 py-2 border-b border-sand mb-1">
+        <div className="text-sm font-semibold text-dark-brown truncate">
+          {currentUser.displayName}
+        </div>
+        <div className="text-xs text-warm-gray truncate">{currentUser.email}</div>
       </div>
+
+      <div className="px-3 pt-2 pb-1 text-[11px] font-semibold text-warm-gray uppercase tracking-wide">
+        Workspace
+      </div>
+      <button
+        onClick={() => {
+          setActiveWorkspace({ type: 'personal' });
+          go('/feeds');
+        }}
+        className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors flex items-center justify-between gap-2 ${
+          activeWorkspace.type === 'personal'
+            ? 'bg-cream text-dark-brown font-semibold'
+            : 'text-dark-brown hover:bg-cream'
+        }`}
+      >
+        <span className="truncate">My personal feeds</span>
+        {activeWorkspace.type === 'personal' && <span className="text-coral text-xs">✓</span>}
+      </button>
+      {userOrgs.map((org) => {
+        const active = activeWorkspace.type === 'org' && activeWorkspace.orgId === org.id;
+        return (
+          <button
+            key={org.id}
+            onClick={() => {
+              setActiveWorkspace({ type: 'org', orgId: org.id, role: org.role });
+              go('/feeds');
+            }}
+            className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors flex items-center justify-between gap-2 ${
+              active ? 'bg-cream text-dark-brown font-semibold' : 'text-dark-brown hover:bg-cream'
+            }`}
+          >
+            <span className="truncate flex-1">{org.name}</span>
+            <RoleBadge role={org.role} />
+          </button>
+        );
+      })}
+      {currentUser.plan === 'team' || currentUser.plan === 'enterprise' ? (
+        <button
+          onClick={() => setShowCreateOrg(true)}
+          className="w-full text-left px-3 py-1.5 rounded-md text-sm text-coral hover:bg-cream transition-colors"
+        >
+          + Create organization…
+        </button>
+      ) : (
+        <button
+          onClick={() => go('/upgrade?feature=org_workspace')}
+          className="w-full text-left px-3 py-1.5 rounded-md text-sm text-coral hover:bg-cream transition-colors flex items-center justify-between gap-2"
+          title="Organizations are a Team plan feature"
+        >
+          <span>+ Create organization…</span>
+          <span className="text-[10px] font-bold uppercase tracking-wide bg-cream text-warm-gray px-1.5 py-0.5 rounded border border-sand">
+            Team
+          </span>
+        </button>
+      )}
+
+      <div className="border-t border-sand my-1" />
+      <button
+        onClick={() => go('/feeds')}
+        className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
+      >
+        My Feeds
+      </button>
+      <button
+        onClick={() => go('/community')}
+        className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors flex items-center justify-between gap-2"
+      >
+        <span>Community</span>
+        <span className="text-[10px] font-bold uppercase tracking-wide bg-teal-light text-teal px-1.5 py-0.5 rounded">
+          New
+        </span>
+      </button>
+      <button
+        onClick={() => go('/account')}
+        className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
+      >
+        Account settings
+      </button>
+      <button
+        onClick={() => go('/account/billing')}
+        className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors flex items-center justify-between gap-2"
+      >
+        <span>Billing & plan</span>
+        {currentUser.plan && currentUser.plan !== 'free' && (
+          <PlanBadge plan={currentUser.plan} />
+        )}
+      </button>
+      {activeWorkspace.type === 'org' &&
+        (() => {
+          const activeOrg = userOrgs.find((o) => o.id === activeWorkspace.orgId);
+          if (!activeOrg) return null;
+          return (
+            <button
+              onClick={() => go(`/orgs/${encodeURIComponent(activeOrg.slug)}`)}
+              className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors flex items-center justify-between gap-2"
+            >
+              <span>Organization settings &amp; billing</span>
+              {activeOrg.plan && activeOrg.plan !== 'free' && <PlanBadge plan={activeOrg.plan} />}
+            </button>
+          );
+        })()}
+      {currentUser.staff && (
+        <button
+          onClick={() => go('/admin')}
+          className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
+        >
+          Admin console
+        </button>
+      )}
+      <button
+        onClick={async () => {
+          close();
+          try { await apiLogout(); } catch { /* still clear local */ }
+          clearAuth();
+          navigate('/');
+        }}
+        className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
+      >
+        Sign out
+      </button>
+
       {showCreateOrg && (
         <CreateOrgDialog
           onClose={() => setShowCreateOrg(false)}
@@ -284,6 +231,51 @@ export function UserMenu() {
         />
       )}
     </>
+  );
+}
+
+/**
+ * Shared account menu — renders the signed-in user popover (workspace switcher,
+ * My Feeds, Account settings, Admin console, Sign out) when there's a user,
+ * or the "Sign in" CTA otherwise. Use this on every page that needs
+ * consistent account navigation.
+ *
+ * Returns null when backend features are disabled.
+ */
+export function UserMenu() {
+  const currentUser = useStore((s) => s.currentUser);
+  if (!backendEnabled) return null;
+  const triggerClasses = currentUser
+    ? 'w-9 h-9 rounded-full bg-coral text-white font-heading font-bold text-sm flex items-center justify-center hover:bg-[#d4603a] transition-colors shrink-0'
+    : 'w-9 h-9 rounded-full bg-white border-2 border-sand text-warm-gray hover:border-coral hover:text-coral transition-colors flex items-center justify-center shrink-0';
+  return (
+    <div className="flex items-center pl-2 sm:pl-3 ml-1 border-l border-sand h-9">
+      <Popover.Root>
+        <Popover.Trigger asChild>
+          <button
+            className={triggerClasses}
+            title={currentUser ? currentUser.email : 'Sign in or sign up'}
+            aria-label={currentUser ? 'Account menu' : 'Sign in or sign up'}
+          >
+            {currentUser ? initialsFromName(currentUser.displayName || currentUser.email) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="2" />
+                <path d="M5 20c0-3.5 3-6.5 7-6.5s7 3 7 6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            align="end"
+            sideOffset={8}
+            className={`bg-white rounded-xl shadow-lg border border-sand p-2 ${currentUser ? 'w-64' : 'w-56'} z-50`}
+          >
+            <UserMenuItems />
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+    </div>
   );
 }
 

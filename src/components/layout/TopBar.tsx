@@ -10,7 +10,7 @@ import { patchProject } from '../../services/projectsApi';
 import { saveProjectNow } from '../../db/serverPersistence';
 import { backendEnabled } from '../../utils/featureFlags';
 import { AppBrand } from './AppBrand';
-import { UserMenu } from './UserMenu';
+import { UserMenu, UserMenuItems } from './UserMenu';
 
 // Re-export RoleBadge for callers that imported it from TopBar previously.
 export { RoleBadge } from './UserMenu';
@@ -180,7 +180,7 @@ export function TopBar() {
                 onClick={() => setMobileMenuOpen(false)}
                 aria-hidden
               />
-              <div className="absolute right-0 top-full mt-1 z-40 min-w-[180px] bg-white border border-sand rounded-lg shadow-lg p-1 flex flex-col">
+              <div className="absolute right-0 top-full mt-1 z-40 w-64 max-h-[80vh] overflow-y-auto bg-white border border-sand rounded-xl shadow-lg p-2 flex flex-col">
                 {backendEnabled && (
                   <button
                     onClick={() => { setMobileMenuOpen(false); handleSaveClick(); }}
@@ -204,12 +204,23 @@ export function TopBar() {
                 >
                   Export GTFS
                 </button>
+                {backendEnabled && (
+                  <>
+                    <div className="border-t border-sand my-1" />
+                    {/* All UserMenu items inline — account, workspaces, sign in/out, etc. */}
+                    <UserMenuItems onClose={() => setMobileMenuOpen(false)} />
+                  </>
+                )}
               </div>
             </>
           )}
         </div>
 
-        <UserMenu />
+        {/* UserMenu (avatar) — desktop only; on phones its items live inside
+            the hamburger above so the bar stops overflowing. */}
+        <div className="hidden min-[600px]:flex">
+          <UserMenu />
+        </div>
       </div>
 
       {showImport && <ImportDialog onClose={() => setShowImport(false)} />}

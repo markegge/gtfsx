@@ -515,6 +515,19 @@ export function RightRail() {
   const widthPx = clamp(storedWidth, RIGHT_RAIL_MIN_WIDTH, RIGHT_RAIL_MAX_WIDTH);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Below this width (phones) the 320 px+ rail squeezes the map to almost
+  // nothing — switch to a full-screen overlay (under the top bar) so panels
+  // are usable. Same 600 px threshold the LeftRail already uses.
+  const NARROW_VIEWPORT = 600;
+  const [isNarrow, setIsNarrow] = useState(
+    typeof window !== 'undefined' && window.innerWidth < NARROW_VIEWPORT,
+  );
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < NARROW_VIEWPORT);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   const isShapeEditing =
     mapMode === 'draw_route' ||
     mapMode === 'edit_shape' ||
@@ -566,7 +579,10 @@ export function RightRail() {
 
   // Section selected but rail closed: render the reopen strip so the user can
   // snap back to the same section without re-clicking the left rail.
+  // On narrow viewports the strip just eats space — the user reopens via the
+  // left rail's section icon, which is anchored on mobile already.
   if (!rightRailOpen) {
+    if (isNarrow) return null;
     const sectionTitle = SECTION_TITLES[section] ?? 'Editor';
     return (
       <button
@@ -592,12 +608,19 @@ export function RightRail() {
 
   return (
     <aside
-      className={`relative shrink-0 bg-white border-l border-sand flex flex-col overflow-hidden ${
-        isDragging ? '' : 'transition-[width] duration-150'
-      }`}
-      style={{ width: widthPx }}
+      className={
+        isNarrow
+          // On phones, take the whole space under the top bar so the panel is
+          // actually usable. Higher z so it sits over the map + bottom panel.
+          ? 'fixed top-14 inset-x-0 bottom-0 z-30 bg-white border-l border-sand flex flex-col overflow-hidden'
+          : `relative shrink-0 bg-white border-l border-sand flex flex-col overflow-hidden ${
+              isDragging ? '' : 'transition-[width] duration-150'
+            }`
+      }
+      style={isNarrow ? undefined : { width: widthPx }}
     >
-      <div
+      {/* Drag-to-resize handle — desktop only (no mouse on phones). */}
+      {!isNarrow && <div
         onMouseDown={startDrag}
         onDoubleClick={() => setRightRailWidth(RIGHT_RAIL_DEFAULT_WIDTH)}
         role="separator"
@@ -607,7 +630,7 @@ export function RightRail() {
         className={`absolute top-0 left-0 h-full w-1.5 cursor-col-resize z-10 transition-colors ${
           isDragging ? 'bg-coral/40' : 'bg-transparent hover:bg-coral/20'
         }`}
-      />
+      />}
       {isDragging && <div className="fixed inset-0 z-50 cursor-col-resize" />}
       {creatingNewStop
         ? <CreateStopHeader />

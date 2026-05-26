@@ -75,10 +75,14 @@ const PRODUCTS: ProductSpec[] = [
     metadata: { app_id: 'gtfsb_pro', tier: 'pro' },
   },
   {
+    // Internal product id stays 'gtfsb_team' so existing subscriptions and the
+    // worker tier matrix continue to resolve. Customer-facing name was renamed
+    // Team → Agency in the May-2026 pricing v2 — receipts and portal copy
+    // pick up the new name from the Product.name field.
     id: 'gtfsb_team',
-    name: 'GTFS·X Team',
+    name: 'GTFS·X Agency',
     description:
-      'For transit agencies and consultants. Unlimited saved feeds, publish up to 5, full analysis tools (Title VI + propensity heatmap), unlimited team members in your organization, and cross-org membership for consultants serving multiple clients.',
+      'For transit agencies and consultants planning routes and service. Unlimited saved feeds, publish up to 5, the full planning suite (demographic coverage, cost estimation, Title VI, ridership propensity), unlimited team members in your organization, and cross-org membership for consultants serving multiple clients.',
     metadata: { app_id: 'gtfsb_team', tier: 'team' },
   },
   {
@@ -129,11 +133,16 @@ interface PriceSpec {
   interval: 'month' | 'year';
 }
 
+// Pricing v2 (May 2026): Agency tier moved $199→$299/mo and $1,999→$2,499/yr.
+// Stripe Prices are immutable — to bump the amount we create new Price objects
+// under fresh lookup keys (`_v2`), keep the originals around (active=true) so
+// existing subscribers continue to bill at the old amount, and point the env
+// vars at the new IDs so all new checkouts go through the v2 prices.
 const PRICES: PriceSpec[] = [
-  { lookupKey: 'gtfsb_pro_monthly',  productId: 'gtfsb_pro',  envName: 'STRIPE_PRICE_PRO_MONTHLY',  unitAmount: 4900,   interval: 'month' },
-  { lookupKey: 'gtfsb_pro_annual',   productId: 'gtfsb_pro',  envName: 'STRIPE_PRICE_PRO_ANNUAL',   unitAmount: 49900,  interval: 'year'  },
-  { lookupKey: 'gtfsb_team_monthly', productId: 'gtfsb_team', envName: 'STRIPE_PRICE_TEAM_MONTHLY', unitAmount: 19900,  interval: 'month' },
-  { lookupKey: 'gtfsb_team_annual',  productId: 'gtfsb_team', envName: 'STRIPE_PRICE_TEAM_ANNUAL',  unitAmount: 199900, interval: 'year'  },
+  { lookupKey: 'gtfsb_pro_monthly',     productId: 'gtfsb_pro',  envName: 'STRIPE_PRICE_PRO_MONTHLY',  unitAmount: 4900,   interval: 'month' },
+  { lookupKey: 'gtfsb_pro_annual',      productId: 'gtfsb_pro',  envName: 'STRIPE_PRICE_PRO_ANNUAL',   unitAmount: 49900,  interval: 'year'  },
+  { lookupKey: 'gtfsb_team_monthly_v2', productId: 'gtfsb_team', envName: 'STRIPE_PRICE_TEAM_MONTHLY', unitAmount: 29900,  interval: 'month' },
+  { lookupKey: 'gtfsb_team_annual_v2',  productId: 'gtfsb_team', envName: 'STRIPE_PRICE_TEAM_ANNUAL',  unitAmount: 249900, interval: 'year'  },
 ];
 
 async function upsertPrice(spec: PriceSpec): Promise<Stripe.Price> {

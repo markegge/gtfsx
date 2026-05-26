@@ -61,13 +61,27 @@ export function MapToolbar() {
       state.setMapMode('select');
       return;
     }
+    // If we're coming from Draw Route, discard the in-progress line and reset
+    // the draw control. Otherwise mapbox-gl-draw stays in draw_line_string and
+    // keeps capturing clicks, leaving the user effectively still in draw mode.
+    if (state.mapMode === 'draw_route') {
+      window.__cancelDrawRoute?.();
+    }
     ensureActiveRoute();
     state.setSidebarSection('stops');
     state.setMapMode('place_stop');
   };
 
   const handleSelect = () => {
-    useStore.getState().setMapMode('select');
+    const state = useStore.getState();
+    // Same cleanup as Add Stop — clicking Select while drawing should fully
+    // exit draw_route (clear partial line + drawingRouteId), not just toggle
+    // the store mode while mapbox-gl-draw keeps eating clicks.
+    if (state.mapMode === 'draw_route') {
+      window.__cancelDrawRoute?.();
+      return;
+    }
+    state.setMapMode('select');
   };
 
   const tools = [

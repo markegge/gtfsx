@@ -75,10 +75,13 @@
     "MAPBOX_TOKEN": "pk.eyJ1IjoibWFya2VnZ2UiLCJhIjoiY21wYjlrdnhlMDRuZjJzb21mMXQwZTJlaSJ9.qCTIAgzwRD4nt6F2YA4OuQ",
     // Stripe live-mode price + portal config IDs (created 2026-05-15 via
     // scripts/setup-stripe.ts --live). Test-mode equivalents live in env.staging.
+    // Agency (DB id 'team') prices bumped to v2 amounts ($299/mo, $2,499/yr)
+    // on 2026-05-26 — see docs/PRICING_RESTRUCTURE.md. v1 prices stay active
+    // in Stripe so existing $199 subscribers keep their original billing.
     "STRIPE_PRICE_PRO_MONTHLY": "price_1TXTFcJHDvzBbFH9B1BaGXCH",
     "STRIPE_PRICE_PRO_ANNUAL": "price_1TXTFcJHDvzBbFH9YOIUkooo",
-    "STRIPE_PRICE_TEAM_MONTHLY": "price_1TXTFcJHDvzBbFH9e7adVXSl",
-    "STRIPE_PRICE_TEAM_ANNUAL": "price_1TXTFdJHDvzBbFH9wdClSu1F",
+    "STRIPE_PRICE_TEAM_MONTHLY": "price_1TbRauJHDvzBbFH9a7IfPEfq",
+    "STRIPE_PRICE_TEAM_ANNUAL": "price_1TbRauJHDvzBbFH9M4hZs9Bn",
     "STRIPE_PORTAL_CONFIG_ID": "bpc_1TXTFdJHDvzBbFH9qciNWCsV"
     // Secrets (set via `wrangler secret put`):
     //   RESEND_API_KEY

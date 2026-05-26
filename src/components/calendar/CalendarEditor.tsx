@@ -90,6 +90,7 @@ export function CalendarEditor() {
     calendarDates, addCalendarDate, removeCalendarDate,
     editingCalendarServiceId, setEditingCalendarServiceId,
     trips, routes, selectRoute, setBottomPanelOpen, setBottomPanelTab,
+    setTimetableServiceId,
     calendarDetailTab,
   } = useStore();
 
@@ -275,6 +276,11 @@ export function CalendarEditor() {
                   <button
                     onClick={() => {
                       selectRoute(r.route_id);
+                      // Sync the timetable's calendar dropdown to the calendar
+                      // the user is viewing — otherwise it lands on whatever
+                      // service was last selected (usually the first one),
+                      // hiding the trips the user expects to see.
+                      setTimetableServiceId(selected.service_id);
                       setBottomPanelOpen(true);
                       setBottomPanelTab('timetable');
                     }}

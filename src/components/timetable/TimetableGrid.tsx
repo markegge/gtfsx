@@ -49,8 +49,11 @@ export function TimetableGrid() {
   const splitArrDep = useStore((s) => s.timetableSplitArrDep);
   const setSplitArrDep = useStore((s) => s.setTimetableSplitArrDep);
 
-  // Service pattern selector state
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  // Service pattern selector — lives in the store so cross-panel handlers
+  // (Calendars > Routes > "View timetable") can switch the timetable to the
+  // calendar the user just clicked. null falls back to the first calendar.
+  const selectedServiceId = useStore((s) => s.timetableServiceId);
+  const setSelectedServiceId = useStore((s) => s.setTimetableServiceId);
 
   // Active service pattern — allow any calendar, default to first
   const activeServiceId = useMemo(() => {

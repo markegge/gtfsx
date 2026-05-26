@@ -955,6 +955,29 @@ export function MapView() {
     }
   }, []);
 
+  // Double-clicking in Add Stop mode mirrors the draw_line_string convention:
+  // the gesture both commits a stop AND ends the mode. The two singletons of
+  // the dblclick pair have each already fired handleMapClick (placing two
+  // near-duplicate stops at the same lat/lon), so we remove the second one
+  // and switch back to select. With doubleClickZoom disabled in this mode,
+  // the gesture doesn't also zoom the map.
+  const handleMapDblClick = useCallback((e: MapMouseEvent & { features?: MapboxGeoJSONFeature[] }) => {
+    const state = useStore.getState();
+    if (state.mapMode !== 'place_stop') return;
+    e.preventDefault?.();
+    if (lastPlacedStopRef.current) {
+      const sid = lastPlacedStopRef.current;
+      const sr = state.selectedRouteId;
+      if (sr) {
+        state.removeRouteStop(sr, sid, 0);
+        state.removeRouteStop(sr, sid, 1);
+      }
+      state.removeStop(sid);
+      lastPlacedStopRef.current = null;
+    }
+    state.setMapMode('select');
+  }, []);
+
   const handleMouseMove = useCallback((e: MapMouseEvent & { features?: MapboxGeoJSONFeature[] }) => {
     if (mapMode === 'select') {
       setHoveringFeature(!!(e.features && e.features.length > 0));
@@ -996,6 +1019,10 @@ export function MapView() {
         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
         cursor={cursor}
         onClick={handleMapClick}
+        onDblClick={handleMapDblClick}
+        // Disable native zoom-on-double-click while placing stops so the
+        // dblclick gesture cleanly exits the mode instead of also zooming.
+        doubleClickZoom={mapMode !== 'place_stop'}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         interactiveLayerIds={mapMode === 'edit_shape' || mapMode === 'edit_flex_zone' || mapMode === 'draw_flex_zone' ? [] : ['stop-circles', 'stop-cluster-points', 'stop-clusters', 'route-lines', 'flex-zone-fill']}

@@ -67,9 +67,29 @@ export function MapToolbar() {
     if (state.mapMode === 'draw_route') {
       window.__cancelDrawRoute?.();
     }
-    ensureActiveRoute();
+
+    // Default the place-stop dialog's "Assign to" target to the most recently
+    // drawn shape (its route + direction) if nothing's selected yet — that's
+    // almost always what the user is about to add stops to.
+    if (!state.selectedRouteId && state.shapes.length > 0) {
+      const latestShape = state.shapes[state.shapes.length - 1];
+      const trip = state.trips.find((t) => t.shape_id === latestShape.shape_id);
+      if (trip) {
+        state.selectRoute(trip.route_id);
+        state.setStopPlacementDirection(trip.direction_id);
+      }
+    } else {
+      ensureActiveRoute();
+    }
+
     state.setSidebarSection('stops');
     state.setMapMode('place_stop');
+    // Keep the map roomy on tablets / small laptops: the new place-stop
+    // dialog under the banner has everything the user needs to add a stop,
+    // so collapse the right-rail Stops panel by default below 960 px.
+    if (typeof window !== 'undefined' && window.innerWidth < 960) {
+      state.setRightRailOpen(false);
+    }
   };
 
   const handleSelect = () => {

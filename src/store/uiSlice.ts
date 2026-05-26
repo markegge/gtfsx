@@ -8,6 +8,10 @@ export interface UISlice {
   mapMode: MapMode;
   stopPlacementMode: StopPlacementMode;
   stopPlacementDirection: 0 | 1;
+  /** Optional override name for the NEXT stop placed via the Add Stop tool.
+   * Cleared after a single placement so each stop can have its own name (or
+   * fall back to the auto-suggested intersection name). */
+  nextStopName: string | null;
   timetableDirectionId: 0 | 1;
   /** Advanced toggle on the timetable: when true, each stop cell exposes
    *  separate arrival and departure inputs so users can author dwell time at
@@ -58,6 +62,7 @@ export interface UISlice {
   setMapMode: (mode: MapMode) => void;
   setStopPlacementMode: (mode: StopPlacementMode) => void;
   setStopPlacementDirection: (dir: 0 | 1) => void;
+  setNextStopName: (name: string | null) => void;
   setTimetableDirectionId: (dir: 0 | 1) => void;
   setTimetableSplitArrDep: (v: boolean) => void;
   selectRoute: (id: string | null) => void;
@@ -88,6 +93,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   mapMode: 'select',
   stopPlacementMode: 'snap_to_route',
   stopPlacementDirection: 0,
+  nextStopName: null,
   timetableDirectionId: 0,
   timetableSplitArrDep: false,
   selectedRouteId: null,
@@ -159,6 +165,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setMapMode: (mode) => set((state) => { state.mapMode = mode; }),
   setStopPlacementMode: (mode) => set((state) => { state.stopPlacementMode = mode; }),
   setStopPlacementDirection: (dir) => set((state) => { state.stopPlacementDirection = dir; }),
+  setNextStopName: (name) => set((state) => { state.nextStopName = name; }),
   setTimetableDirectionId: (dir) => set((state) => { state.timetableDirectionId = dir; }),
   setTimetableSplitArrDep: (v) => set((state) => { state.timetableSplitArrDep = v; }),
   selectRoute: (id) => set((state) => { state.selectedRouteId = id; }),

@@ -831,27 +831,35 @@ export function MapView() {
       }
 
       const stopId = generateId('stop');
+      // Precedence for the stop_name: user-typed override in the place-stop
+      // dialog wins; otherwise default placeholder + async intersection
+      // suggestion. The override is single-use — clear it so the next stop
+      // gets a fresh suggestion (or its own typed name).
+      const override = currentState.nextStopName?.trim();
       const defaultName = `Stop ${currentState.stops.length + 1}`;
+      const initialName = override || defaultName;
       currentState.addStop({
         stop_id: stopId,
-        stop_name: defaultName,
+        stop_name: initialName,
         stop_lat: round6(stopLat),
         stop_lon: round6(stopLon),
         location_type: 0,
         wheelchair_boarding: 0,
       });
+      if (override) currentState.setNextStopName(null);
 
       // Fire-and-forget: try to auto-name the stop after the nearest
       // intersection ("1st Ave and Main St"). Only overwrites the default
-      // placeholder, so a user who's already typing in the name isn't
-      // clobbered. Suggestion service silently returns null on network/no-token.
-      void suggestStopName(stopLon, stopLat).then((name) => {
-        if (!name) return;
-        const cur = useStore.getState().stops.find((s) => s.stop_id === stopId);
-        if (cur && cur.stop_name === defaultName) {
-          useStore.getState().updateStop(stopId, { stop_name: name });
-        }
-      });
+      // placeholder — skipped entirely if the user supplied a name override.
+      if (!override) {
+        void suggestStopName(stopLon, stopLat).then((name) => {
+          if (!name) return;
+          const cur = useStore.getState().stops.find((s) => s.stop_id === stopId);
+          if (cur && cur.stop_name === defaultName) {
+            useStore.getState().updateStop(stopId, { stop_name: name });
+          }
+        });
+      }
 
       if (hasRoute && currentState.selectedRouteId) {
         const existingStops = currentState.routeStops.filter(

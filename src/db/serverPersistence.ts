@@ -173,16 +173,12 @@ export async function wipeLocalProject(projectId: string): Promise<void> {
 export async function loadProjectFromServer(projectId: string): Promise<void> {
   const { snapshot, version } = await fetchWorkingState(projectId);
   setCurrentWorkingStateVersion(projectId, version);
-  if (snapshot) {
-    applySnapshotToStore(snapshot);
-  } else {
-    // Brand-new project with no working state yet. Reset the store so the
-    // previous project's routes / stops / calendars don't bleed through,
-    // then mark clean so the metadata setters that ran beforehand don't
-    // leave the editor "dirty".
-    resetStoreEntities();
-    useStore.getState().markSaved();
-  }
+  // Apply whatever the server returned, or an empty object for brand-new
+  // projects with no working state yet. Going through applySnapshotToStore
+  // either way means the new project always gets the full reset — selection
+  // state, validation messages, coverage data, hidden-route filters — not
+  // just the entity slices.
+  applySnapshotToStore(snapshot ?? {});
 }
 
 /**

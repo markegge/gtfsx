@@ -100,7 +100,13 @@ const BUILD_FEED_MAIL =
 export function PricingPage() {
   const navigate = useNavigate();
   const currentUser = useStore((s) => s.currentUser);
-  const [interval, setInterval] = useState<'month' | 'year'>('month');
+  // Each paid card has its own monthly/annual toggle so users can compare
+  // (e.g. Pro monthly vs Agency annual) side-by-side without forcing both
+  // into the same billing cadence. Keyed by plan id; defaults to monthly.
+  const [intervals, setIntervals] = useState<Record<string, 'month' | 'year'>>({});
+  const intervalFor = (plan: string): 'month' | 'year' => intervals[plan] ?? 'month';
+  const setIntervalFor = (plan: string, i: 'month' | 'year') =>
+    setIntervals((prev) => ({ ...prev, [plan]: i }));
   const [plans, setPlans] = useState<PlanCatalogEntry[]>(FALLBACK_PLANS);
   const [serverBillingEnabled, setServerBillingEnabled] = useState<boolean>(billingEnabled);
   const [talkToSalesOpen, setTalkToSalesOpen] = useState(false);
@@ -123,7 +129,7 @@ export function PricingPage() {
   const free = plans.find((p) => p.plan === 'free') ?? FALLBACK_PLANS[0];
   const enterprise = plans.find((p) => p.plan === 'enterprise') ?? FALLBACK_PLANS.at(-1)!;
 
-  function priceLabel(p: PlanCatalogEntry): { amount: string; per: string } {
+  function priceLabel(p: PlanCatalogEntry, interval: 'month' | 'year'): { amount: string; per: string } {
     const monthly = p.monthlyPriceUsd;
     const annual = p.annualPriceUsd;
     if (monthly === null || annual === null) return { amount: 'Custom', per: '' };
@@ -135,32 +141,19 @@ export function PricingPage() {
     <AuthLayout title="Pricing" subtitle="The fast, free GTFS editor. Paid plans add Premium Feed Management and Route Planning Features." wide>
       <div className="space-y-8">
         <TestModeBanner />
-        <div className="flex items-center justify-between gap-4">
-          <div className="text-sm text-warm-gray">
-            All paid plans include Premium Feed Management and Route Planning Features. The editor and GTFS-Flex authoring are always free.
-          </div>
-          <div className="inline-flex rounded-full border border-sand bg-cream p-1 text-xs">
-            {(['month', 'year'] as const).map((i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setInterval(i)}
-                className={`rounded-full px-3 py-1.5 font-semibold transition-colors ${
-                  interval === i ? 'bg-coral text-white' : 'text-warm-gray hover:text-brown'
-                }`}
-              >
-                {i === 'month' ? 'Monthly' : 'Annual · save 2 months'}
-              </button>
-            ))}
-          </div>
+        <div className="text-sm text-warm-gray">
+          The editor and GTFS-Flex authoring are always free. Pro adds hosting and publishing; Agency adds the full route-planning suite.
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[free, ...selfServePlans, enterprise].map((p) => {
-            const label = priceLabel(p);
             const popular = p.plan === POPULAR_PLAN;
             const isFree = p.plan === 'free';
             const isEnterprise = p.plan === 'enterprise';
+            // Toggle only shows on paid self-serve plans (both prices exist).
+            const showToggle = !isFree && !isEnterprise && p.monthlyPriceUsd !== null && p.annualPriceUsd !== null;
+            const cardInterval = intervalFor(p.plan);
+            const label = priceLabel(p, cardInterval);
             return (
               <div
                 key={p.plan}
@@ -186,6 +179,27 @@ export function PricingPage() {
                       the price doesn't look like a hard commitment. */}
                   {popular && (
                     <p className="mt-1 text-xs font-semibold text-coral">14-day free trial · cancel anytime</p>
+                  )}
+                  {/* Per-card monthly/annual toggle. Each paid card carries
+                      its own toggle so users can compare e.g. Pro monthly vs
+                      Agency annual side-by-side. Agency annual saves ~3.6
+                      months vs monthly; Pro annual saves ~1.8. The exact
+                      figure isn't shown here — it's visible in the price. */}
+                  {showToggle && (
+                    <div className="mt-3 inline-flex rounded-full border border-sand bg-white p-0.5 text-[11px]">
+                      {(['month', 'year'] as const).map((i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setIntervalFor(p.plan, i)}
+                          className={`rounded-full px-2.5 py-1 font-semibold transition-colors ${
+                            cardInterval === i ? 'bg-coral text-white' : 'text-warm-gray hover:text-brown'
+                          }`}
+                        >
+                          {i === 'month' ? 'Monthly' : 'Annual'}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <ul className="mt-4 space-y-2 text-sm text-brown flex-1">
@@ -228,11 +242,15 @@ export function PricingPage() {
                     <AuthButton
                       fullWidth
                       onClick={() => {
+                        // Carry the per-card toggle through to the upgrade
+                        // flow so the user lands on their chosen billing
+                        // cadence (was previously a single shared interval).
+                        const target = `/upgrade?plan=${p.plan}&interval=${cardInterval}`;
                         if (!currentUser) {
-                          navigate(`/login?next=${encodeURIComponent(`/upgrade?plan=${p.plan}&interval=${interval}`)}`);
+                          navigate(`/login?next=${encodeURIComponent(target)}`);
                           return;
                         }
-                        navigate(`/upgrade?plan=${p.plan}&interval=${interval}`);
+                        navigate(target);
                       }}
                     >
                       {currentUser ? `Upgrade to ${p.displayName}` : `Start with ${p.displayName}`}

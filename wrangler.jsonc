@@ -110,10 +110,14 @@
     { "pattern": "www.gtfsbuilder.net", "custom_domain": true },
     { "pattern": "feeds.gtfsbuilder.net", "custom_domain": true }
   ],
-  // Scheduled Worker invocations. See worker/cron/index.ts.
-  // 03:00 UTC daily: account-deletion reaper + weekly metrics rollup.
+  // Scheduled Worker invocations. See worker/cron/index.ts (dispatches on
+  // event.cron).
+  //   "0 3 * * *" — 03:00 UTC daily: account-deletion reaper + weekly
+  //                 metrics rollup + enterprise-grant expiry.
+  //   "0 9 * * *" — 09:00 UTC daily (03:00 MT during MDT, 02:00 MT during
+  //                 MST): Google Ads Offline Conversion Import.
   "triggers": {
-    "crons": ["0 3 * * *"]
+    "crons": ["0 3 * * *", "0 9 * * *"]
   },
   // ─── Staging environment ───────────────────────────────────────────────────
   // `wrangler deploy --env staging` deploys a separate Worker

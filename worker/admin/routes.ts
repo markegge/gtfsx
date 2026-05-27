@@ -1356,3 +1356,222 @@ ${tableRows}
 
   return c.html(html);
 });
+
+// ─── OCI status (Google Ads Offline Conversion Import) ────────────────────
+//
+// Shows the live state of the daily uploader: how many gclid-stamped events
+// are pending, how many were uploaded in the last 7 days, how many failed
+// permanently. The "Run upload now" button POSTs to /events/oci-run — useful
+// for smoke-testing after Mark finishes the OAuth setup in
+// worker/marketing/ads/README.md without waiting for the 09:00 UTC cron.
+
+interface OciPendingRow { kind: string; n: number }
+interface OciUploadedRow { kind: string; n: number }
+interface OciFailedRow {
+  id: string;
+  kind: string;
+  gclid: string;
+  ts: number;
+  oci_attempts: number;
+  oci_last_error: string | null;
+}
+
+adminRouter.get('/events/oci-status', async (c) => {
+  const staff = c.var.user!;
+  await rateLimit(c.env, { key: `admin:events:${staff.id}`, limit: 60, windowSec: 60 });
+
+  const now = Date.now();
+  const ninetyDaysAgo = now - 90 * 24 * 60 * 60 * 1000;
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+
+  // Pending: in-window, gclid set, never uploaded, not flagged failed.
+  const pendingRes = await c.env.DB.prepare(
+    `SELECT kind, COUNT(*) AS n FROM event
+      WHERE gclid IS NOT NULL
+        AND oci_uploaded_at IS NULL
+        AND kind IN ('feed_exported', 'paywall_view')
+        AND ts > ?
+      GROUP BY kind`,
+  ).bind(ninetyDaysAgo).all<OciPendingRow>();
+
+  // Uploaded in last 7 days, by kind.
+  const uploadedRes = await c.env.DB.prepare(
+    `SELECT kind, COUNT(*) AS n FROM event
+      WHERE oci_uploaded_at IS NOT NULL
+        AND oci_uploaded_at > 0
+        AND oci_uploaded_at >= ?
+      GROUP BY kind`,
+  ).bind(sevenDaysAgo).all<OciUploadedRow>();
+
+  // Sentinel -1 means "permanently failed after MAX_ATTEMPTS". Surface the
+  // latest failures so Mark can investigate without grepping logs.
+  const failedRes = await c.env.DB.prepare(
+    `SELECT id, kind, gclid, ts,
+            COALESCE(oci_attempts, 0) AS oci_attempts,
+            oci_last_error
+       FROM event
+      WHERE oci_uploaded_at = -1
+      ORDER BY ts DESC
+      LIMIT 25`,
+  ).all<OciFailedRow>();
+
+  // Quick configured-yes/no signal so the page tells the truth about whether
+  // the cron can do anything. We don't expose values — just presence.
+  const cfgPresent =
+    !!c.env.GOOGLE_ADS_DEVELOPER_TOKEN
+    && !!c.env.GOOGLE_ADS_CLIENT_ID
+    && !!c.env.GOOGLE_ADS_CLIENT_SECRET
+    && !!c.env.GOOGLE_ADS_REFRESH_TOKEN
+    && !!c.env.GOOGLE_ADS_CUSTOMER_ID
+    && !!c.env.GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED
+    && !!c.env.GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW;
+
+  const pending = pendingRes.results ?? [];
+  const uploaded = uploadedRes.results ?? [];
+  const failed = failedRes.results ?? [];
+
+  const pendingTotal = pending.reduce((s, r) => s + r.n, 0);
+  const uploadedTotal = uploaded.reduce((s, r) => s + r.n, 0);
+
+  const renderCounts = (rows: { kind: string; n: number }[]) => {
+    if (rows.length === 0) return `<em style="color:#888;">none</em>`;
+    return rows.map((r) =>
+      `<div><strong>${r.n}</strong> ${escapeHtml(r.kind)}</div>`,
+    ).join('');
+  };
+
+  const failedRows = failed.length === 0
+    ? `<tr><td colspan="5" style="text-align:center;color:#666;padding:24px;">No permanently failed uploads.</td></tr>`
+    : failed.map((r) => `<tr>`
+        + `<td>${escapeHtml(r.kind)}</td>`
+        + `<td style="font-family:monospace;font-size:12px;word-break:break-all;">${escapeHtml(r.gclid)}</td>`
+        + `<td>${new Date(r.ts).toISOString().replace('T', ' ').slice(0, 19)}Z</td>`
+        + `<td style="text-align:right;">${r.oci_attempts}</td>`
+        + `<td style="font-family:monospace;font-size:12px;">${escapeHtml(r.oci_last_error ?? '')}</td>`
+        + `</tr>`).join('\n');
+
+  const cfgBanner = cfgPresent
+    ? `<p class="lead" style="color:#155724;background:#d4edda;padding:8px 12px;border-radius:4px;">OCI is configured — daily cron at 09:00 UTC.</p>`
+    : `<p class="lead" style="color:#721c24;background:#f8d7da;padding:8px 12px;border-radius:4px;">OCI is <strong>not configured</strong>. Set the GOOGLE_ADS_* secrets — see <code>worker/marketing/ads/README.md</code>.</p>`;
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>OCI status — GTFS·X admin</title>
+  <meta name="robots" content="noindex,nofollow">
+  <style>
+    body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 24px; color: #222; max-width: 980px; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    h2 { font-size: 15px; margin: 24px 0 8px; }
+    p.lead { margin: 0 0 16px; color: #555; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border-bottom: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; vertical-align: top; }
+    th { background: #f9fafb; font-weight: 600; }
+    code { background: #f3f4f6; padding: 1px 4px; border-radius: 3px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 8px; }
+    .card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; }
+    .card .label { color: #666; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .card .total { font-size: 24px; font-weight: 700; margin: 4px 0 8px; }
+    button.run { background: #2563eb; color: #fff; border: none; padding: 10px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    button.run:disabled { background: #93c5fd; cursor: wait; }
+    pre.result { background: #f3f4f6; padding: 12px; border-radius: 4px; font-size: 12px; max-height: 240px; overflow: auto; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Google Ads OCI status</h1>
+  <p class="lead">Daily uploader pushes gclid-stamped <code>feed_exported</code> and <code>paywall_view</code> events to Google Ads — see <code>worker/marketing/ads/oci.ts</code>.</p>
+  ${cfgBanner}
+
+  <div class="cards">
+    <div class="card">
+      <div class="label">Pending (≤90 days)</div>
+      <div class="total">${pendingTotal}</div>
+      ${renderCounts(pending)}
+    </div>
+    <div class="card">
+      <div class="label">Uploaded last 7 days</div>
+      <div class="total">${uploadedTotal}</div>
+      ${renderCounts(uploaded)}
+    </div>
+    <div class="card">
+      <div class="label">Permanently failed</div>
+      <div class="total">${failed.length}</div>
+      <div style="color:#666;font-size:12px;">After 3 attempts, rows are flagged and stop retrying.</div>
+    </div>
+  </div>
+
+  <h2>Manual trigger</h2>
+  <p style="color:#555;">Run the uploader now instead of waiting for the 09:00 UTC cron. Same path the cron uses.</p>
+  <button class="run" id="run-btn">Run upload now</button>
+  <pre class="result" id="result" hidden></pre>
+
+  <h2>Permanently failed rows (latest 25)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:120px;">Kind</th>
+        <th>gclid</th>
+        <th style="width:170px;">Event time (UTC)</th>
+        <th style="width:60px;text-align:right;">Attempts</th>
+        <th>Last error</th>
+      </tr>
+    </thead>
+    <tbody>
+${failedRows}
+    </tbody>
+  </table>
+
+  <script>
+    document.getElementById('run-btn').addEventListener('click', async function () {
+      var btn = this;
+      var out = document.getElementById('result');
+      btn.disabled = true; btn.textContent = 'Running…';
+      out.hidden = false; out.textContent = 'POST /api/admin/events/oci-run …';
+      try {
+        var res = await fetch('/api/admin/events/oci-run', {
+          method: 'POST',
+          headers: { 'X-GB-Client': 'web' },
+          credentials: 'include',
+        });
+        var body = await res.text();
+        out.textContent = 'HTTP ' + res.status + '\\n\\n' + body;
+      } catch (err) {
+        out.textContent = 'Network error: ' + (err && err.message ? err.message : err);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Run upload now';
+      }
+    });
+  </script>
+</body>
+</html>`;
+
+  return c.html(html);
+});
+
+// Manual-trigger endpoint for the "Run upload now" button on the status
+// page. Same code path as the cron. Bounded by the same staff-only gate +
+// admin events rate limit (the upload itself is rate-bounded by Google's
+// API, but we don't want a staff user to accidentally hammer it).
+adminRouter.post('/events/oci-run', async (c) => {
+  const staff = c.var.user!;
+  await rateLimit(c.env, { key: `admin:oci-run:${staff.id}`, limit: 6, windowSec: 60 });
+  const { uploadPendingConversions } = await import('../marketing/ads/oci');
+  const result = await uploadPendingConversions(c.env);
+  await logAudit(c.env, {
+    actorUserId: staff.id,
+    subjectType: 'user',
+    subjectId: staff.id,
+    action: 'admin.oci.run',
+    metadata: {
+      configured: result.configured,
+      attempted: result.attempted,
+      uploaded: result.uploaded,
+      failedThisRun: result.failedThisRun,
+      markedPermanentlyFailed: result.markedPermanentlyFailed,
+      skippedExpired: result.skippedExpired,
+    },
+    ip: clientIp(c.req.raw),
+  });
+  return c.json(result);
+});

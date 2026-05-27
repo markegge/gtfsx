@@ -170,7 +170,7 @@ export function PricingPage() {
               >
                 {popular && (
                   <span className="absolute -top-3 left-4 rounded-full bg-coral px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
-                    Best value
+                    Free trial
                   </span>
                 )}
                 <div>
@@ -182,6 +182,11 @@ export function PricingPage() {
                     <span className="font-heading text-3xl font-extrabold text-brown">{label.amount}</span>
                     {label.per && <span className="text-xs text-warm-gray">{label.per}</span>}
                   </div>
+                  {/* Agency tier ships with a 14-day trial; show it inline so
+                      the price doesn't look like a hard commitment. */}
+                  {popular && (
+                    <p className="mt-1 text-xs font-semibold text-coral">14-day free trial · cancel anytime</p>
+                  )}
                 </div>
                 <ul className="mt-4 space-y-2 text-sm text-brown flex-1">
                   {p.features.map((f) => (

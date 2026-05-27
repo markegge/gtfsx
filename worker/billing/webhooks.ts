@@ -12,12 +12,17 @@ import { sha256Hex } from '../util/crypto';
 import { logAudit } from '../util/audit';
 import type { Plan, OwnerType } from '../projects/quotas';
 import { isPlan } from '../projects/quotas';
+import { sendTrialEndingEmail } from '../email';
+import { PLAN_CATALOG } from './plans';
 
 const RELEVANT_EVENTS = [
   'checkout.session.completed',
   'customer.subscription.created',
   'customer.subscription.updated',
   'customer.subscription.deleted',
+  // Fires ~3 days before a trial ends. Used to send the trial-ending
+  // reminder email. Subscribed via scripts/setup-stripe.ts.
+  'customer.subscription.trial_will_end',
   'invoice.paid',
   'invoice.payment_failed',
 ] as const;
@@ -123,6 +128,9 @@ async function dispatchEvent(env: Env, event: Stripe.Event): Promise<void> {
       return;
     case 'customer.subscription.deleted':
       await handleSubscriptionDeleted(env, event.data.object as Stripe.Subscription);
+      return;
+    case 'customer.subscription.trial_will_end':
+      await handleTrialWillEnd(env, event.data.object as Stripe.Subscription);
       return;
     case 'invoice.paid':
       await handleInvoicePaid(env, event.data.object as Stripe.Invoice);
@@ -424,5 +432,85 @@ async function handleInvoicePaymentFailed(env: Env, invoice: Stripe.Invoice): Pr
     subjectId: subRow.owner_id,
     action: 'billing.invoice_failed',
     metadata: { stripeSubscriptionId: subId, amount: invoice.amount_due },
+  });
+}
+
+// ─── Trial-ending reminder ────────────────────────────────────────────────
+//
+// Stripe fires customer.subscription.trial_will_end ~3 days before a trial
+// ends. Email the user who initiated the checkout (captured in subscription
+// metadata at checkout time) so they have a concrete heads-up + a path to
+// either keep Agency, switch to Pro, or cancel. Idempotency is handled by
+// the outer stripe_event row insert — duplicate deliveries skip the
+// dispatcher entirely.
+async function handleTrialWillEnd(env: Env, sub: Stripe.Subscription): Promise<void> {
+  const trialEndUnix = sub.trial_end;
+  if (!trialEndUnix) return; // Defensive — Stripe only fires this for trials.
+
+  const initiatedBy = sub.metadata?.initiated_by_user_id;
+  if (!initiatedBy) {
+    console.warn(`[billing] trial_will_end on ${sub.id}: no initiated_by_user_id on subscription metadata`);
+    return;
+  }
+
+  // Send to the user who initiated the checkout (their billing context).
+  const userRow = await env.DB.prepare(
+    `SELECT email FROM user WHERE id = ?`,
+  ).bind(initiatedBy).first<{ email: string }>();
+  if (!userRow?.email) {
+    console.warn(`[billing] trial_will_end on ${sub.id}: user ${initiatedBy} not found`);
+    return;
+  }
+
+  // The subscription's metadata.owner_type is 'org' for Agency; look up the
+  // slug so the "Manage subscription" link points at the org's billing page.
+  let manageLink = `${env.APP_ORIGIN}/account/billing`;
+  const ownerType = sub.metadata?.owner_type;
+  const ownerId = sub.metadata?.owner_id;
+  if (ownerType === 'org' && ownerId) {
+    const orgRow = await env.DB.prepare(
+      `SELECT slug FROM organization WHERE id = ?`,
+    ).bind(ownerId).first<{ slug: string }>();
+    if (orgRow?.slug) {
+      manageLink = `${env.APP_ORIGIN}/orgs/${encodeURIComponent(orgRow.slug)}/billing`;
+    }
+  }
+
+  // Format the trial end date in the user's apparent locale. We don't know
+  // their tz, so use UTC — close enough for a "your trial ends Tuesday" cue.
+  const trialEndDate = new Date(trialEndUnix * 1000).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+
+  // Pull the displayed monthly price from the catalog rather than hardcoding.
+  const targetPlan = sub.metadata?.target_plan as Plan | undefined;
+  const planEntry = PLAN_CATALOG.find((p) => p.plan === targetPlan);
+  const monthlyPriceLabel = planEntry?.monthlyPriceUsd
+    ? `$${planEntry.monthlyPriceUsd}/mo`
+    : 'the subscription rate';
+
+  try {
+    await sendTrialEndingEmail(env, userRow.email, {
+      trialEndDate,
+      monthlyPriceLabel,
+      manageLink,
+      switchToProLink: `${env.APP_ORIGIN}/pricing#pro`,
+    });
+  } catch (err) {
+    console.error(`[billing] trial_will_end email failed for ${sub.id}:`, err);
+    // Don't rethrow — Stripe would re-deliver the webhook on a 5xx and
+    // re-send the email. Logging here is enough; we'd rather the webhook
+    // ack succeed and the audit row record the attempt.
+  }
+
+  await logAudit(env, {
+    actorUserId: null,
+    subjectType: (sub.metadata?.owner_type === 'org' ? 'org' : 'user') as 'user' | 'org',
+    subjectId: sub.metadata?.owner_id ?? initiatedBy,
+    action: 'billing.trial_will_end_notified',
+    metadata: { stripeSubscriptionId: sub.id, trialEnd: trialEndUnix },
   });
 }

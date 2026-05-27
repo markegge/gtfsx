@@ -111,6 +111,48 @@ export async function sendInvitationEmail(
   });
 }
 
+/**
+ * Trial-ending reminder. Fired from the Stripe `customer.subscription.
+ * trial_will_end` webhook (~3 days before trial end). Two CTAs: keep the
+ * Agency plan (no action needed) or switch to Pro (link to /pricing).
+ */
+export async function sendTrialEndingEmail(
+  env: Env,
+  to: string,
+  opts: {
+    /** Display date like "May 31, 2026". */
+    trialEndDate: string;
+    /** "$299/mo" or similar — already formatted for display. */
+    monthlyPriceLabel: string;
+    /** App URL for managing the subscription (Stripe portal or org billing page). */
+    manageLink: string;
+    /** App URL for switching to Pro (typically /pricing#pro). */
+    switchToProLink: string;
+  },
+): Promise<void> {
+  const date = escapeHtml(opts.trialEndDate);
+  const price = escapeHtml(opts.monthlyPriceLabel);
+  const manage = escapeHtml(opts.manageLink);
+  const pro = escapeHtml(opts.switchToProLink);
+  await send(env, {
+    to,
+    subject: `Your GTFS·X Agency trial ends ${opts.trialEndDate}`,
+    html: wrap(`
+      <p>Your 14-day Agency trial ends on <strong>${date}</strong>. The card on file will be charged ${price} on that date unless you change plans or cancel before then.</p>
+      <p style="margin: 18px 0;"><a href="${manage}" style="display: inline-block; background: #8a5a3b; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none;">Manage subscription</a></p>
+      <p>Don't need the full planning suite? You can switch to the Pro plan ($49/mo) instead — keeps your published feeds and embeds, drops the planning analyses:</p>
+      <p style="margin: 12px 0;"><a href="${pro}" style="color: #8a5a3b;">Switch to Pro →</a></p>
+      <p style="color: #666; font-size: 13px;">Or do nothing and stay on Agency. Either is fine.</p>
+    `),
+    text:
+      `Your 14-day Agency trial ends on ${opts.trialEndDate}.\n\n` +
+      `The card on file will be charged ${opts.monthlyPriceLabel} on that date unless you change plans or cancel before then.\n\n` +
+      `Manage your subscription: ${opts.manageLink}\n` +
+      `Switch to Pro ($49/mo): ${opts.switchToProLink}\n\n` +
+      `Or do nothing and stay on Agency. Either is fine.`,
+  });
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')

@@ -254,7 +254,17 @@ billingRouter.post('/checkout', async (c) => {
           owner_type: body.ownerType,
           owner_id: body.ownerId,
           target_plan: body.plan,
+          // Captured here too (not just on the session) so trial_will_end
+          // webhook handlers can email the right user — the webhook event
+          // delivers a Subscription, not a checkout session.
+          initiated_by_user_id: user.id,
         },
+        // 14-day free trial on Agency (internal id 'team'). Card up front
+        // per Stripe defaults — payment fails closed at trial end if the
+        // card is invalid (Stripe pauses the subscription and emits
+        // invoice.payment_failed which the existing handler logs). No trial
+        // on Pro — its value is testable in an hour on the Free tier already.
+        ...(body.plan === 'team' ? { trial_period_days: 14 } : {}),
       },
       success_url: `${c.env.APP_ORIGIN}${billingPath}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${c.env.APP_ORIGIN}${billingPath}?checkout=canceled`,

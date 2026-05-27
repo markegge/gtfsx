@@ -395,9 +395,9 @@ A nightly cron checks `plan_renewal_at` on enterprise grants and downgrades to F
 ### 5.4 Conversion flow design
 
 - Paywalled CTA is always a single click away from completing checkout. The CTA writes the user's intent (which feature they want) into the upgrade modal so the modal can lead with the cheapest plan that unlocks it.
-- Trials: don't add trials in v1. They complicate Stripe state and the price points are low enough that monthly cancellation is the implicit "trial." Reconsider after 6 months of conversion data.
+- ~~Trials: don't add trials in v1.~~ **Reversed May 2026.** Agency now ships with a 14-day trial, card up front. Pro stays no-trial — its value is testable in an hour on the Free tier already. Rationale: Agency's planning-suite features (cost, coverage, Title VI, propensity) can't be evaluated on Free at all, and the $299/mo price point needs a no-commitment evaluation path to compete with Remix on the small-agency demand we're targeting via Google Ads. Implementation: `subscription_data.trial_period_days: 14` on Agency checkout sessions; `customer.subscription.trial_will_end` webhook fires the T-3 reminder email; Stripe enforces one trial per customer.
 - Annual vs monthly: default toggle to monthly; show "Save with annual" hint.
-- Show "Most popular" badge on Team tier on the pricing page (this is opinion-shaping, not data-driven — adjust later).
+- Show "Free trial" badge on Agency tier on the pricing page (was "Most popular", then briefly "Best value", landed on "Free trial" with the May 2026 trial launch).
 - Have a discreet "Looking for an Enterprise plan?" link at the bottom of the pricing page that opens a mailto: with a prefilled subject. No public Enterprise pricing.
 
 ### 5.5 Existing UI changes

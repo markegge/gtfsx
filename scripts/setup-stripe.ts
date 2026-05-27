@@ -244,6 +244,9 @@ const WEBHOOK_EVENTS: Stripe.WebhookEndpointCreateParams.EnabledEvent[] = [
   'customer.subscription.created',
   'customer.subscription.updated',
   'customer.subscription.deleted',
+  // Fires ~3 days before a trial ends. Drives the trial-ending reminder
+  // email (worker/billing/webhooks.ts → handleTrialWillEnd).
+  'customer.subscription.trial_will_end',
   'invoice.paid',
   'invoice.payment_failed',
 ];
@@ -256,7 +259,26 @@ let signingSecret: string | null = null;
 
 if (matchingHook && !rotateWebhook) {
   webhookId = matchingHook.id;
-  console.log(`  Reusing existing webhook ${webhookId} (signing secret preserved).`);
+  // Sync enabled_events without rotating the signing secret. Without this,
+  // adding an event to WEBHOOK_EVENTS and re-running the script silently
+  // leaves the live webhook subscribed to the old set — the new handler
+  // would never fire in prod. update() on enabled_events doesn't generate
+  // a new secret, so existing deployments keep working.
+  const liveEvents = new Set(matchingHook.enabled_events);
+  const targetEvents = new Set(WEBHOOK_EVENTS as string[]);
+  const sameSet =
+    liveEvents.size === targetEvents.size &&
+    [...targetEvents].every((e) => liveEvents.has(e));
+  if (!sameSet) {
+    await stripe.webhookEndpoints.update(webhookId, { enabled_events: WEBHOOK_EVENTS });
+    const added = [...targetEvents].filter((e) => !liveEvents.has(e));
+    const removed = [...liveEvents].filter((e) => !targetEvents.has(e));
+    console.log(`  Reusing existing webhook ${webhookId} (signing secret preserved); synced enabled_events.`);
+    if (added.length) console.log(`    + ${added.join(', ')}`);
+    if (removed.length) console.log(`    - ${removed.join(', ')}`);
+  } else {
+    console.log(`  Reusing existing webhook ${webhookId} (signing secret preserved).`);
+  }
   console.log(`  Re-run with --rotate-webhook to delete + recreate (rotates signing secret).`);
 } else {
   if (matchingHook) {

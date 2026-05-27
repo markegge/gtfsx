@@ -92,7 +92,9 @@ export function CalendarEditor() {
     trips, routes, selectRoute, setBottomPanelOpen, setBottomPanelTab,
     setTimetableServiceId,
     calendarDetailTab,
+    selectedHolidayNames, setSelectedHolidayNames,
   } = useStore();
+  const selectedHolidaySet = useMemo(() => new Set(selectedHolidayNames), [selectedHolidayNames]);
 
   // If the editingCalendarServiceId points at a calendar that no longer
   // exists (deleted from elsewhere), drop the stale reference so we fall
@@ -165,9 +167,15 @@ export function CalendarEditor() {
     );
   }
 
+  // Only the holidays the user has checked AND that fall within this
+  // calendar's date range are eligible to be added. Plain const (no
+  // useMemo) — this lives after a conditional early return above, and
+  // the underlying lists are tiny.
+  const eligibleHolidays = holidaysInRange.filter((h) => selectedHolidaySet.has(h.name));
+
   const handleAddUSHolidays = () => {
     if (!selected) return;
-    for (const holiday of holidaysInRange) {
+    for (const holiday of eligibleHolidays) {
       if (!existingDateSet.has(holiday.gtfsDate)) {
         addCalendarDate({
           service_id: selected.service_id,
@@ -178,8 +186,9 @@ export function CalendarEditor() {
     }
   };
 
-  const alreadyAddedCount = holidaysInRange.filter((h) => existingDateSet.has(h.gtfsDate)).length;
-  const allHolidaysAdded = holidaysInRange.length > 0 && alreadyAddedCount === holidaysInRange.length;
+  const eligibleAlreadyAdded = eligibleHolidays.filter((h) => existingDateSet.has(h.gtfsDate)).length;
+  const eligibleToAdd = eligibleHolidays.length - eligibleAlreadyAdded;
+  const allEligibleAdded = eligibleHolidays.length > 0 && eligibleToAdd === 0;
 
   // Holiday warning nudge
   const showHolidayWarning = selected && isWeekdayService(selected) && selectedDates.length === 0;
@@ -297,6 +306,137 @@ export function CalendarEditor() {
     );
   }
 
+  // Exceptions tab — service-date overrides (holidays / one-off additions).
+  // Lives in its own subpanel so Details stays a compact form of operating
+  // days, dates, and description. Holiday picker is a checkbox grid backed
+  // by session-persisted state so the user doesn't re-check the same boxes
+  // every time they jump between calendars in a session.
+  if (selected && calendarDetailTab === 'exceptions') {
+    const toggleHoliday = (name: string) => {
+      const next = selectedHolidaySet.has(name)
+        ? selectedHolidayNames.filter((n) => n !== name)
+        : [...selectedHolidayNames, name];
+      setSelectedHolidayNames(next);
+    };
+    return (
+      <div className="flex flex-col gap-4">
+        {/* Holiday warning nudge — same trigger as before, just relocated. */}
+        {showHolidayWarning && (
+          <div className="p-2.5 bg-gold-light rounded-lg border border-gold flex items-start gap-2">
+            <span className="text-base leading-none mt-0.5">&#9888;</span>
+            <p className="text-xs text-brown leading-snug">
+              Consider adding holiday exceptions — transit typically doesn't run on major holidays.
+            </p>
+          </div>
+        )}
+
+        {/* Existing exception list */}
+        <div>
+          <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-2">
+            Service exceptions
+          </label>
+          {selectedDates.length === 0 ? (
+            <p className="text-xs text-warm-gray italic">No exceptions set.</p>
+          ) : (
+            selectedDates.map((cd) => (
+              <div key={cd.date} className="flex items-center gap-2 mb-1.5">
+                <span className="text-sm flex-1">{formatGtfsDate(cd.date)}</span>
+                <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded
+                  ${cd.exception_type === 2 ? 'bg-red-100 text-red-700' : 'bg-teal-light text-teal'}`}>
+                  {cd.exception_type === 2 ? 'No Service' : 'Added'}
+                </span>
+                <button
+                  onClick={() => removeCalendarDate(selected.service_id, cd.date)}
+                  className="text-warm-gray hover:text-red-500 text-sm"
+                >
+                  ×
+                </button>
+              </div>
+            ))
+          )}
+          <div className="flex gap-2 mt-2">
+            <input
+              type="date"
+              id="exception-date"
+              className="flex-1 px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
+            />
+            <button
+              onClick={() => {
+                const input = document.getElementById('exception-date') as HTMLInputElement;
+                if (input.value) {
+                  addCalendarDate({
+                    service_id: selected.service_id,
+                    date: toGtfsDate(input.value),
+                    exception_type: 2,
+                  });
+                  input.value = '';
+                }
+              }}
+              className="px-3 py-1.5 bg-sand rounded-lg text-xs font-semibold text-brown hover:bg-coral-light hover:text-coral transition-colors"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+
+        {/* US holiday picker — checkbox per holiday, with Select all/none. */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide">
+              Add US holidays
+            </label>
+            <div className="flex gap-2 text-[11px]">
+              <button
+                onClick={() => setSelectedHolidayNames(US_HOLIDAYS.map((h) => h.name))}
+                className="font-semibold text-warm-gray hover:text-coral transition-colors"
+              >
+                Select all
+              </button>
+              <span className="text-warm-gray/50">·</span>
+              <button
+                onClick={() => setSelectedHolidayNames([])}
+                className="font-semibold text-warm-gray hover:text-coral transition-colors"
+              >
+                None
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mb-3">
+            {US_HOLIDAYS.map((h) => (
+              <label
+                key={h.name}
+                className="flex items-center gap-2 text-xs text-dark-brown cursor-pointer select-none"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedHolidaySet.has(h.name)}
+                  onChange={() => toggleHoliday(h.name)}
+                  className="accent-coral"
+                />
+                {h.name}
+              </label>
+            ))}
+          </div>
+          <button
+            onClick={handleAddUSHolidays}
+            disabled={allEligibleAdded || eligibleHolidays.length === 0}
+            className={`w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors
+              ${allEligibleAdded || eligibleHolidays.length === 0
+                ? 'bg-sand/60 text-warm-gray/60 cursor-not-allowed'
+                : 'bg-gold-light text-brown border border-gold hover:bg-gold hover:text-dark-brown'
+              }`}
+          >
+            {eligibleHolidays.length === 0
+              ? 'No selected holidays fall in this calendar’s date range'
+              : allEligibleAdded
+                ? `All selected holidays added (${eligibleHolidays.length})`
+                : `Add selected holidays (${eligibleToAdd} to add${eligibleAlreadyAdded > 0 ? `, ${eligibleAlreadyAdded} already added` : ''})`}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Detail view — the existing edit form for the selected pattern.
   return (
     <div>
@@ -346,80 +486,9 @@ export function CalendarEditor() {
             </div>
           </div>
 
-          {/* Holiday warning nudge */}
-          {showHolidayWarning && (
-            <div className="mt-3 p-2.5 bg-gold-light rounded-lg border border-gold flex items-start gap-2">
-              <span className="text-base leading-none mt-0.5">&#9888;</span>
-              <p className="text-xs text-brown leading-snug">
-                Consider adding holiday exceptions — transit typically doesn't run on major holidays.
-              </p>
-            </div>
-          )}
-
-          {/* Calendar Dates (Exceptions) */}
-          <div className="mt-4">
-            <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-2">
-              Exceptions (Holidays)
-            </label>
-            {selectedDates.map((cd) => (
-              <div key={cd.date} className="flex items-center gap-2 mb-1.5">
-                <span className="text-sm flex-1">{formatGtfsDate(cd.date)}</span>
-                <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded
-                  ${cd.exception_type === 2 ? 'bg-red-100 text-red-700' : 'bg-teal-light text-teal'}`}>
-                  {cd.exception_type === 2 ? 'No Service' : 'Added'}
-                </span>
-                <button
-                  onClick={() => removeCalendarDate(selected.service_id, cd.date)}
-                  className="text-warm-gray hover:text-red-500 text-sm"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            <div className="flex gap-2 mt-2">
-              <input
-                type="date"
-                id="exception-date"
-                className="flex-1 px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
-              />
-              <button
-                onClick={() => {
-                  const input = document.getElementById('exception-date') as HTMLInputElement;
-                  if (input.value) {
-                    addCalendarDate({
-                      service_id: selected.service_id,
-                      date: toGtfsDate(input.value),
-                      exception_type: 2,
-                    });
-                    input.value = '';
-                  }
-                }}
-                className="px-3 py-1.5 bg-sand rounded-lg text-xs font-semibold text-brown hover:bg-coral-light hover:text-coral transition-colors"
-              >
-                Add
-              </button>
-            </div>
-
-            {/* Add US Holidays button */}
-            <button
-              onClick={handleAddUSHolidays}
-              disabled={allHolidaysAdded}
-              className={`mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors
-                ${allHolidaysAdded
-                  ? 'bg-sand/60 text-warm-gray/60 cursor-not-allowed'
-                  : 'bg-gold-light text-brown border border-gold hover:bg-gold hover:text-dark-brown'
-                }`}
-            >
-              {allHolidaysAdded
-                ? `All US Holidays Added (${holidaysInRange.length})`
-                : `Add US Holidays (${holidaysInRange.length - alreadyAddedCount} to add)`}
-              {!allHolidaysAdded && alreadyAddedCount > 0 && (
-                <span className="text-[10px] text-warm-gray ml-1">
-                  ({alreadyAddedCount} already added)
-                </span>
-              )}
-            </button>
-          </div>
+          {/* Exceptions UI (holiday warning + list + US-holiday picker) was
+              relocated to its own Calendars > Exceptions subpanel so this
+              tab stays a focused operating-days/date-range form. */}
 
           {/* Calendar Preview */}
           <CalendarPreview

@@ -454,9 +454,9 @@ function CalendarDetailHeader() {
           deleteTitle="Delete this calendar"
         />
       </div>
-      {/* Details / Routes tabs (mirrors the route + stop editors' tab strips). */}
+      {/* Details / Routes / Exceptions tabs (mirrors the route + stop editors' tab strips). */}
       <div className="flex gap-1 px-3 -mb-px">
-        {(['details', 'routes'] as const).map((t) => (
+        {(['details', 'routes', 'exceptions'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setCalendarDetailTab(t)}
@@ -466,7 +466,7 @@ function CalendarDetailHeader() {
                 : 'text-warm-gray border-transparent hover:text-dark-brown'
             }`}
           >
-            {t === 'details' ? 'Details' : 'Routes'}
+            {t === 'details' ? 'Details' : t === 'routes' ? 'Routes' : 'Exceptions'}
           </button>
         ))}
       </div>

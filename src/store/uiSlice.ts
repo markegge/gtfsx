@@ -57,6 +57,12 @@ export interface UISlice {
   routeDetailTab: RouteDetailTab;
   stopDetailTab: StopDetailTab;
   calendarDetailTab: CalendarDetailTab;
+  /** Holiday names checked in the Calendars > Exceptions "Add US holidays"
+   *  picker. Persisted in-memory across calendars within a session so the
+   *  user doesn't re-check the same boxes per calendar — defaults to the
+   *  six big federal holidays transit typically skips. Resets on page
+   *  reload (intentionally session-scoped, not durable). */
+  selectedHolidayNames: string[];
   routeDeleteConfirmId: string | null;
   toggleRouteVisibility: (routeId: string) => void;
   toggleRouteType: (routeType: number) => void;
@@ -90,6 +96,7 @@ export interface UISlice {
   setRouteDetailTab: (tab: RouteDetailTab) => void;
   setStopDetailTab: (tab: StopDetailTab) => void;
   setCalendarDetailTab: (tab: CalendarDetailTab) => void;
+  setSelectedHolidayNames: (names: string[]) => void;
   setRouteDeleteConfirmId: (id: string | null) => void;
 }
 
@@ -128,6 +135,16 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   routeDetailTab: 'details',
   stopDetailTab: 'details',
   calendarDetailTab: 'details',
+  // Six federal holidays transit typically suspends service on — kept in sync
+  // with the US_HOLIDAYS catalog names in CalendarEditor.tsx.
+  selectedHolidayNames: [
+    "New Year's Day",
+    'Memorial Day',
+    'Independence Day',
+    'Labor Day',
+    'Thanksgiving',
+    'Christmas Day',
+  ],
   routeDeleteConfirmId: null,
   toggleRouteVisibility: (routeId) => set((state) => {
     const idx = state.hiddenRouteIds.indexOf(routeId);
@@ -208,5 +225,6 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setRouteDetailTab: (tab) => set((state) => { state.routeDetailTab = tab; }),
   setStopDetailTab: (tab) => set((state) => { state.stopDetailTab = tab; }),
   setCalendarDetailTab: (tab) => set((state) => { state.calendarDetailTab = tab; }),
+  setSelectedHolidayNames: (names) => set((state) => { state.selectedHolidayNames = names; }),
   setRouteDeleteConfirmId: (id) => set((state) => { state.routeDeleteConfirmId = id; }),
 });

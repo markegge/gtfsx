@@ -24,6 +24,7 @@ import { generateId } from '../../services/idGenerator';
 import { snapToRoad } from '../../services/snapToRoad';
 import { simplifyShapePoints } from '../../services/simplifyShape';
 import { suggestStopName } from '../../services/suggestStopName';
+import { ensureDefaultCalendar } from '../../services/defaultCalendar';
 import nearestPointOnLine from '@turf/nearest-point-on-line';
 import distance from '@turf/distance';
 import length from '@turf/length';
@@ -603,7 +604,11 @@ export function MapView() {
 
         const route = st.routes.find((r) => r.route_id === currentDrawingRouteId);
         const routeName = route?.route_short_name || route?.route_long_name || '';
-        const serviceId = st.calendars[0]?.service_id || 'service-1';
+        // Materialize a Default Calendar on the fly if the project has no
+        // calendars yet — otherwise the trip we're about to add would point
+        // at the hardcoded "service-1" placeholder and the timetable would
+        // show two unrelated services later.
+        const serviceId = ensureDefaultCalendar();
         const svcIdx = st.calendars.findIndex((c) => c.service_id === serviceId) + 1 || 1;
         const prefix = (routeName || 'trip').replace(/\s+/g, '').slice(0, 4).toLowerCase();
         const existingIds = new Set(st.trips.map((t) => t.trip_id));

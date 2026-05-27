@@ -1,6 +1,6 @@
 import { type KeyboardEvent, useEffect, useMemo, useCallback, useState, useRef } from 'react';
-import { format } from 'date-fns';
 import { useStore } from '../../store';
+import { ensureDefaultCalendar } from '../../services/defaultCalendar';
 import { formatTimeShort, normalizeTimeInput, gtfsTimeToSeconds, secondsToGtfsTime } from '../../utils/time';
 import { directionName } from '../../utils/constants';
 import type { Route, StopTime } from '../../types/gtfs';
@@ -34,7 +34,6 @@ function uniqueTripId(baseId: string, existingIds: Set<string>): string {
 export function TimetableGrid() {
   const {
     selectedRouteId, selectRoute, routes, trips, stops, routeStops, calendars,
-    addCalendar,
     setStopTime, addTrip, duplicateTrip, removeTrip, updateTrip, renameTripId,
     interpolateStopTimes,
   } = useStore();
@@ -57,27 +56,16 @@ export function TimetableGrid() {
   const selectedServiceId = useStore((s) => s.timetableServiceId);
   const setSelectedServiceId = useStore((s) => s.setTimetableServiceId);
 
-  // First-touch UX: a user who built a route + stops and jumped straight
-  // to the timetable used to get trips stamped with service_id="" (no
-  // calendar exists, so addTrip's fallback collapses to empty). Materialize
-  // a sensible "Default Calendar" — 7-day service, 2 years validity — so
-  // every trip created from here on has a real service_id and the export
-  // round-trips. Only fires when the project genuinely has no calendars;
-  // imported feeds keep theirs untouched.
+  // Safety net: a user who somehow lands on the timetable with no calendars
+  // gets one auto-created. The primary path (draw_route's finishDrawing)
+  // already materializes a Default Calendar via the same helper, so this
+  // mostly fires on imported feeds with zero calendars or as defensive
+  // coverage if the route-create path is bypassed.
   useEffect(() => {
     if (calendars.length > 0) return;
     if (!selectedRouteId || routes.length === 0) return;
-    const now = new Date();
-    const end = new Date(now.getFullYear() + 2, now.getMonth(), now.getDate());
-    addCalendar({
-      service_id: 'default',
-      monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1,
-      saturday: 1, sunday: 1,
-      start_date: format(now, 'yyyyMMdd'),
-      end_date: format(end, 'yyyyMMdd'),
-      _description: 'Default Calendar',
-    });
-  }, [calendars.length, selectedRouteId, routes.length, addCalendar]);
+    ensureDefaultCalendar();
+  }, [calendars.length, selectedRouteId, routes.length]);
 
   // Active service pattern — allow any calendar, default to first
   const activeServiceId = useMemo(() => {

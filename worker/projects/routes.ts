@@ -879,6 +879,30 @@ projectsRouter.delete('/:id/snapshots/:vid', async (c) => {
   await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history', user);
   const snapshot = await requireOwnedSnapshot(c.env, row.id, vid);
 
+  // Snapshot deletes were silently failing with "Something went wrong" when
+  // the snapshot had ever been published. publication_history.snapshot_id
+  // references feed_snapshot(id) with no ON DELETE clause, so audit rows
+  // (which intentionally outlive a publish/unpublish cycle) blocked the
+  // DELETE on a foreign-key constraint.
+  //
+  // The publication table itself has the same gap; if the user hasn't
+  // unpublished, refuse with a clear 409 instead of letting the constraint
+  // produce a confusing client-side error.
+  const stillPublished = await c.env.DB.prepare(
+    `SELECT 1 FROM publication WHERE project_id = ? AND snapshot_id = ?`,
+  ).bind(row.id, snapshot.id).first<{ '1': number }>();
+  if (stillPublished) {
+    throw conflict('This snapshot is currently published. Unpublish the feed first.');
+  }
+
+  // NULL out the snapshot reference on any history rows so the audit trail
+  // ("publish at T", "unpublish at T+1") survives but the snapshot can be
+  // removed. snapshot_id was declared nullable in migration 0003 (originally
+  // version_id, renamed in 0012).
+  await c.env.DB.prepare(
+    `UPDATE publication_history SET snapshot_id = NULL WHERE snapshot_id = ?`,
+  ).bind(snapshot.id).run();
+
   await deleteFeedBlob(c.env, snapshot.state_r2_key);
   if (snapshot.zip_r2_key) {
     await deleteFeedBlob(c.env, snapshot.zip_r2_key);

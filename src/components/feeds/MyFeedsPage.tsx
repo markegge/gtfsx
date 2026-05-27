@@ -22,6 +22,7 @@ import { ApiError } from '../../services/authApi';
 import { roleAtLeast } from '../../services/orgsApi';
 import { ImportDialog } from '../import-export/ImportDialog';
 import { buildSnapshot, resetStoreEntities, setCurrentWorkingStateVersion, wipeLocalProject } from '../../db/serverPersistence';
+import { generateId } from '../../services/idGenerator';
 
 function formatDate(ms: number | null | undefined): string {
   if (!ms) return '—';
@@ -252,6 +253,41 @@ export function MyFeedsPage() {
             // the old data under the new project's id. Clear both.
             resetStoreEntities();
             await wipeLocalProject(p.id);
+
+            // Org-owned feeds: pre-seed an agency stamped with the org's name.
+            // Every GTFS feed needs an agency, and the org name is almost
+            // always the right agency_name for the agency creating it. Saves
+            // the user a step on the very first edit. Personal-workspace
+            // creates skip this (no obvious name to seed with).
+            if (activeWorkspace.type === 'org') {
+              const org = userOrgs.find((o) => o.id === activeWorkspace.orgId);
+              if (org) {
+                useStore.getState().addAgency({
+                  agency_id: generateId('agency'),
+                  agency_name: org.name,
+                  agency_url: '',
+                  // Default zone matches AgencyEditor's handleAdd — the user
+                  // changes it in the agency form if needed.
+                  agency_timezone: 'America/Denver',
+                });
+                // Persist the seeded agency to the server BEFORE navigating
+                // so the editor mount's loadProjectFromServer fetches a
+                // snapshot that includes it. Otherwise applySnapshotToStore
+                // would reset entities (per the recent leak fix) and the
+                // agency would only re-appear on the next reload.
+                try {
+                  const snapshot = buildSnapshot();
+                  const { workingStateVersion } = await saveWorkingState(p.id, snapshot, 0);
+                  setCurrentWorkingStateVersion(p.id, workingStateVersion);
+                  upsertFeedProject({ ...p, workingStateVersion });
+                  markSaved();
+                } catch {
+                  // If the seed save fails (offline, conflict, etc.) the
+                  // editor still loads — just with no agency, same as the
+                  // pre-feature behaviour. Don't block navigation on this.
+                }
+              }
+            }
             navigate(`/feeds/${encodeURIComponent(p.slug)}`);
           }}
         />

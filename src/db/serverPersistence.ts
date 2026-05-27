@@ -4,6 +4,7 @@ import {
   saveWorkingState,
   ConflictError,
 } from '../services/projectsApi';
+import { db } from './dexie';
 
 // Editor state that round-trips through the server snapshot. Notably excludes
 // projectId and projectName: those are project-level metadata served by
@@ -58,6 +59,42 @@ export function buildSnapshot(): Record<string, unknown> {
   return snapshot;
 }
 
+/**
+ * Empty every entity slice the editor reads from. Use before loading a new
+ * project so the previous one's routes/stops/calendars don't leak through.
+ * Specifically guards two cases that were biting the create/delete flows:
+ *   - a partial snapshot (missing key) — applySnapshotToStore's per-key
+ *     guards would otherwise leave the old data untouched.
+ *   - a brand-new project (null snapshot) — loadProjectFromServer needs to
+ *     start clean rather than showing whatever feed was previously open.
+ */
+export function resetStoreEntities() {
+  const state = useStore.getState();
+  state.setAgencies([] as never);
+  state.setCalendars([] as never);
+  state.setCalendarDates([] as never);
+  state.setRoutes([] as never);
+  state.setRouteStops([] as never);
+  state.setStops([] as never);
+  state.setTrips([] as never);
+  state.setStopTimes([] as never);
+  state.setShapes([] as never);
+  state.setFeedInfo(null as never);
+  state.setFareAttributes([] as never);
+  state.setFareRules([] as never);
+  state.setFareAreas([] as never);
+  state.setStopAreas([] as never);
+  state.setFareNetworks([] as never);
+  state.setRouteNetworks([] as never);
+  state.setTimeframes([] as never);
+  state.setRiderCategories([] as never);
+  state.setFareMedia([] as never);
+  state.setFareProducts([] as never);
+  state.setFareLegRules([] as never);
+  state.setFareTransferRules([] as never);
+  state.setFlexZones([] as never);
+}
+
 export function applySnapshotToStore(snapshot: Record<string, unknown>) {
   const state = useStore.getState();
 
@@ -77,6 +114,11 @@ export function applySnapshotToStore(snapshot: Record<string, unknown>) {
   state.setValidationMessages([]);
   state.setCoverageData(null);
   state.setCoverageError(null);
+
+  // Pre-clear every entity slice so a partial snapshot (missing a key)
+  // doesn't leak the previous project's rows. The per-key Array.isArray
+  // guards below then refill from whatever the snapshot does carry.
+  resetStoreEntities();
 
   const g = (k: DataKey) => snapshot[k];
   if (Array.isArray(g('agencies'))) state.setAgencies(g('agencies') as never);
@@ -106,14 +148,39 @@ export function applySnapshotToStore(snapshot: Record<string, unknown>) {
   state.markSaved();
 }
 
+/**
+ * Drop a project's locally-cached working state from IndexedDB. Use after
+ * server-side delete so a future autosave or reload doesn't resurrect the
+ * removed feed; also use from the create-new-feed flow to make sure the
+ * fresh editor starts from a clean local snapshot.
+ *
+ * Cheap and idempotent — Dexie .delete() on a missing key is a no-op.
+ * Failures are swallowed: this is a cleanup, not a critical path, and a
+ * stuck IndexedDB shouldn't keep the user from creating or deleting.
+ */
+export async function wipeLocalProject(projectId: string): Promise<void> {
+  try {
+    await Promise.all([
+      db.projects.delete(projectId),
+      db.projectData.delete(projectId),
+      db.projectBulk.delete(projectId),
+    ]);
+  } catch (err) {
+    console.warn('[wipeLocalProject] failed', { projectId, err });
+  }
+}
+
 export async function loadProjectFromServer(projectId: string): Promise<void> {
   const { snapshot, version } = await fetchWorkingState(projectId);
   setCurrentWorkingStateVersion(projectId, version);
   if (snapshot) {
     applySnapshotToStore(snapshot);
   } else {
-    // Brand-new project with no working state yet — still mark clean so any
-    // metadata setters that ran beforehand don't leave the editor "dirty".
+    // Brand-new project with no working state yet. Reset the store so the
+    // previous project's routes / stops / calendars don't bleed through,
+    // then mark clean so the metadata setters that ran beforehand don't
+    // leave the editor "dirty".
+    resetStoreEntities();
     useStore.getState().markSaved();
   }
 }

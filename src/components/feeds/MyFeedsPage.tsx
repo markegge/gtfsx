@@ -21,7 +21,7 @@ import {
 import { ApiError } from '../../services/authApi';
 import { roleAtLeast } from '../../services/orgsApi';
 import { ImportDialog } from '../import-export/ImportDialog';
-import { buildSnapshot, setCurrentWorkingStateVersion } from '../../db/serverPersistence';
+import { buildSnapshot, resetStoreEntities, setCurrentWorkingStateVersion, wipeLocalProject } from '../../db/serverPersistence';
 
 function formatDate(ms: number | null | undefined): string {
   if (!ms) return '—';
@@ -242,9 +242,16 @@ export function MyFeedsPage() {
       {showCreate && (
         <CreateFeedDialog
           onClose={() => setShowCreate(false)}
-          onCreated={(p) => {
+          onCreated={async (p) => {
             upsertFeedProject(p);
             setShowCreate(false);
+            // The previous project's routes/stops/calendars are still in the
+            // in-memory store and in IndexedDB. Without a wipe, the new
+            // editor would briefly render that stale data before the empty
+            // server snapshot loads — and an autosave could even persist
+            // the old data under the new project's id. Clear both.
+            resetStoreEntities();
+            await wipeLocalProject(p.id);
             navigate(`/feeds/${encodeURIComponent(p.slug)}`);
           }}
         />
@@ -311,6 +318,9 @@ export function MyFeedsPage() {
             try {
               await deleteProject(id);
               removeFeedProject(id);
+              // Drop the locally-cached working state too, so a future
+              // reload / autosave can't resurrect the deleted feed.
+              await wipeLocalProject(id);
             } catch (err) {
               const msg = err instanceof ApiError ? err.message : 'Delete failed';
               alert(msg);

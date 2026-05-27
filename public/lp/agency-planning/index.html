@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Transit Planning Software for Small Agencies | GTFS·X</title>
+    <meta name="description" content="Route planning, demographic analysis, and Title VI compliance for small and mid-size transit agencies. Replace Remix at 1/6 the cost. Agency tier $2,499/yr." />
+    <link rel="canonical" href="https://www.gtfsx.com/lp/agency-planning/" />
+    <meta property="og:title" content="Transit Planning Software for Small Agencies" />
+    <meta property="og:description" content="Route planning, demographics, Title VI — without Remix-tier pricing. GTFS·X Agency tier $2,499/yr." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://www.gtfsx.com/lp/agency-planning/" />
+    <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@gtfsxapp" />
+    <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --accent-ink:#fff; --rule:#EADBC8; --card:#fff; }
+      * { box-sizing: border-box; }
+      html, body { overflow-x: hidden; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.55; }
+      a { color: var(--accent); }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
+      .site-header nav a:hover { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:10px; }
+      .site-header .cta { background:var(--accent); color:var(--accent-ink); padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:600; font-size:14px; white-space:nowrap; min-height:44px; display:inline-flex; align-items:center; }
+      @media (max-width: 720px) {
+        .site-header nav { display:none; }
+        .site-header { padding: 0 12px; gap:8px; }
+        .site-header .brand img { height:30px; }
+      }
+      section { padding: 56px 24px; }
+      section > .inner { max-width: 980px; margin: 0 auto; }
+      @media (max-width: 640px) { section { padding: 36px 20px; } }
+      .hero { padding-top: 64px; padding-bottom: 32px; }
+      /* Slightly smaller min than editor LP because this H1 is longer
+         ("Transit planning software for small and mid-size agencies") and
+         the handoff requires ≤3 lines at 320 px. */
+      .hero h1 { font-size: clamp(25px, 5vw, 48px); line-height: 1.15; letter-spacing: -0.015em; margin: 0 0 16px; text-wrap: balance; }
+      .hero .subhead { font-size: clamp(17px, 2.2vw, 22px); color: var(--muted); margin: 0 0 28px; max-width: 720px; }
+      .cta-row { display:flex; flex-wrap:wrap; gap:14px; align-items:center; }
+      .btn-primary { background:var(--accent); color:var(--accent-ink); padding:14px 24px; border-radius:8px; text-decoration:none; font-weight:700; font-size:17px; display:inline-flex; align-items:center; min-height:48px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+      .btn-primary:hover { filter: brightness(0.96); }
+      .btn-secondary { color:var(--muted); text-decoration:none; font-weight:600; padding:10px 8px; }
+      .btn-secondary:hover { color:var(--ink); }
+      .hero .subtext { color: var(--muted); font-size: 14px; margin: 14px 0 0; }
+      .video-wrap { background: #000; border-radius: 12px; overflow: hidden; max-width: 980px; margin: 0 auto; aspect-ratio: 16 / 9; }
+      .video-wrap video { width: 100%; height: 100%; display: block; background:#000; }
+      .video-note { color: var(--muted); font-size: 13px; text-align: center; margin: 12px 0 0; }
+      .features { background: #fff; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+      .features h2 { font-size: 22px; margin: 0 0 24px; }
+      .feature-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+      @media (max-width: 640px) { .feature-grid { grid-template-columns: 1fr; gap: 20px; } }
+      .feature .icon { display:inline-flex; width:36px; height:36px; align-items:center; justify-content:center; background:var(--bg); border:1px solid var(--rule); border-radius:8px; color:var(--accent); margin-bottom:12px; }
+      .feature h3 { font-size: 17px; margin: 0 0 6px; }
+      .feature p { color: var(--muted); margin: 0; font-size: 15px; }
+      /* pricing comparison — table on desktop, cards on mobile */
+      .compare h2 { font-size: 22px; margin: 0 0 16px; }
+      .compare-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+      .compare-table th, .compare-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--rule); font-size: 14px; }
+      .compare-table th { background: var(--bg); font-weight: 700; }
+      .compare-table th.us { color: var(--accent); }
+      .compare-table tr:last-child td { border-bottom: 0; }
+      .compare-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+      .compare-note { color: var(--muted); font-size: 13px; margin-top: 12px; }
+      .compare-cards { display: none; }
+      @media (max-width: 640px) {
+        .compare-table { display: none; }
+        .compare-cards { display: grid; gap: 12px; }
+        .compare-card { background: #fff; border: 1px solid var(--rule); border-radius: 8px; padding: 16px; }
+        .compare-card.us { border-color: var(--accent); border-width: 2px; }
+        .compare-card h3 { margin: 0 0 4px; font-size: 16px; }
+        .compare-card .price { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+        .compare-card.us .price { color: var(--accent); }
+        .compare-card ul { margin: 0; padding-left: 16px; color: var(--muted); font-size: 14px; }
+        .compare-card li { margin: 2px 0; }
+      }
+      .trust { padding-top: 36px; padding-bottom: 36px; }
+      .trust p { text-align: center; color: var(--muted); font-size: 15px; max-width: 720px; margin: 0 auto; }
+      .cta-secondary { text-align: center; }
+      .cta-secondary h2 { font-size: 24px; margin: 0 0 20px; }
+      .faq { background: #fff; border-top: 1px solid var(--rule); }
+      .faq h2 { font-size: 22px; margin: 0 0 16px; }
+      details { border-bottom: 1px solid var(--rule); padding: 14px 0; }
+      details > summary { cursor: pointer; font-weight: 600; font-size: 16px; list-style: none; padding-right: 28px; position: relative; min-height: 28px; }
+      details > summary::-webkit-details-marker { display: none; }
+      details > summary::after { content: "+"; position: absolute; right: 0; top: 0; color: var(--muted); font-size: 20px; line-height: 1; }
+      details[open] > summary::after { content: "−"; }
+      details > div { color: var(--muted); padding-top: 10px; font-size: 15px; }
+      details > div a { color: var(--accent); }
+      footer { background:#fff; border-top:1px solid var(--rule); color: var(--muted); font-size: 14px; padding: 24px; }
+      footer .inner { max-width: 980px; margin: 0 auto; display:flex; flex-wrap:wrap; gap:18px; }
+      footer a { color: var(--muted); text-decoration: none; }
+      footer a:hover { color: var(--ink); }
+      .sticky-cta { display: none; }
+      @media (max-width: 640px) {
+        .sticky-cta {
+          display: flex; position: fixed; left: 0; right: 0; bottom: 0;
+          background: #fff; border-top: 1px solid var(--rule);
+          padding: 10px 12px; z-index: 20; gap: 10px;
+          box-shadow: 0 -2px 12px rgba(0,0,0,0.04);
+        }
+        .sticky-cta a { flex: 1; justify-content: center; }
+        body { padding-bottom: 80px; }
+      }
+    </style>
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "GTFS·X Agency",
+  "description": "Transit-planning suite for small and mid-size agencies: map-based route planning, demographic and ridership-propensity analysis, Title VI equity reports, and cost estimation.",
+  "brand": { "@type": "Brand", "name": "GTFS·X" },
+  "url": "https://www.gtfsx.com/lp/agency-planning/",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "image": "https://www.gtfsx.com/og-default.png",
+  "offers": [
+    { "@type": "Offer", "name": "Agency", "price": "2499", "priceCurrency": "USD", "description": "Annual subscription. Includes route planning, demographics, Title VI, cost estimation, and Pro hosting features." }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "GTFS·X", "item": "https://www.gtfsx.com/" },
+    { "@type": "ListItem", "position": 2, "name": "Landing pages", "item": "https://www.gtfsx.com/lp/" },
+    { "@type": "ListItem", "position": 3, "name": "Agency Planning", "item": "https://www.gtfsx.com/lp/agency-planning/" }
+  ]
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "How does GTFS·X Agency compare to Remix?", "acceptedAnswer": { "@type": "Answer", "text": "Same core map-based planning, demographics, and Title VI. ~1/6 the annual cost ($2,499 vs. $20K+). Trade-off: GTFS·X is leaner — fewer enterprise features (multi-user permissioning, white-label, professional services) — but the planning fundamentals are equivalent. See /compare/remix/ for details." } },
+    { "@type": "Question", "name": "Can I try the Agency features without signing up?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. The editor is free; demographics and Title VI analysis run inside a free trial of the Agency tier. No credit card required." } },
+    { "@type": "Question", "name": "What's included in Agency tier?", "acceptedAnswer": { "@type": "Answer", "text": "Route planning + demographics + Title VI + cost estimation + Pro hosting features. Multi-org membership (good for consultants serving multiple agencies). Email support." } },
+    { "@type": "Question", "name": "Do you offer professional services?", "acceptedAnswer": { "@type": "Answer", "text": "No. We're software. If you need consulting, we can refer you to AICP-credentialed planners (including the founder)." } },
+    { "@type": "Question", "name": "What about FTA reporting requirements?", "acceptedAnswer": { "@type": "Answer", "text": "Title VI equity analysis is built in. Disparate-impact and disparate-burden reports follow FTA Circular 4702.1B structure. NTD-ready service-hour reporting is on the roadmap." } },
+    { "@type": "Question", "name": "What if we outgrow the Agency tier?", "acceptedAnswer": { "@type": "Answer", "text": "The product scales to large-agency volumes. The \"outgrow\" path is usually adding enterprise features (SSO, audit logs, dedicated support), which we'd add as needed. Talk to us before you decide you've outgrown it." } }
+  ]
+}
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a href="/" class="brand" aria-label="GTFS·X home">
+        <img src="/gtfsx-lockup.svg" alt="GTFS·X" />
+      </a>
+      <nav>
+        <a href="/pricing/">Pricing</a>
+        <a href="/docs/">Docs</a>
+      </nav>
+      <div class="actions">
+        <a href="/pricing/#agency" class="cta" data-cta="lp_agency_primary_cta">See pricing</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="inner">
+          <h1>Transit planning software for small and mid-size agencies</h1>
+          <p class="subhead">Route planning, demographic analysis, and Title VI compliance — without Remix-tier pricing.</p>
+          <div class="cta-row">
+            <a href="https://www.gtfsx.com/pricing/#agency" class="btn-primary" data-cta="lp_agency_primary_cta">See pricing →</a>
+          </div>
+          <p class="subtext">Agency tier $2,499/yr. Free editor first — try before you upgrade.</p>
+        </div>
+      </section>
+
+      <section style="padding-top:8px;padding-bottom:32px;">
+        <div class="inner">
+          <div class="video-wrap">
+            <video
+              controls
+              preload="metadata"
+              poster="/assets/docs/demographic-coverage-hero.png"
+              playsinline
+            >
+              <source src="https://videos.gtfsx.com/lp-agency-demo.mp4" type="video/mp4" />
+              Your browser can't play HTML5 video. <a href="https://videos.gtfsx.com/lp-agency-demo.mp4">Download the demo (MP4)</a>.
+            </video>
+          </div>
+          <p class="video-note">2-minute demo: laying out a route, overlaying ACS demographics, and running a Title VI report.</p>
+        </div>
+      </section>
+
+      <section class="features">
+        <div class="inner">
+          <h2>The planning suite, without the enterprise price tag</h2>
+          <div class="feature-grid">
+            <div class="feature">
+              <span class="icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+              </span>
+              <h3>Map-based route planning</h3>
+              <p>Sketch routes, snap shapes to roads, estimate service hours and cost. Built for service planners.</p>
+            </div>
+            <div class="feature">
+              <span class="icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </span>
+              <h3>Demographics &amp; rider propensity</h3>
+              <p>Layer ACS data on your routes. Quantify coverage, estimate ridership, plan service equitably.</p>
+            </div>
+            <div class="feature">
+              <span class="icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6l3 0 0 12-3 0z"/><path d="M9 3l3 0 0 18-3 0z"/><path d="M15 9l3 0 0 12-3 0z"/></svg>
+              </span>
+              <h3>Title VI compliance</h3>
+              <p>FTA-aligned equity analysis. Disparate-impact and disparate-burden reports for direct recipients and subrecipients.</p>
+            </div>
+            <div class="feature">
+              <span class="icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="10" y2="10"/><line x1="13" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="13" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="10" y2="18"/><line x1="13" y1="18" x2="16" y2="18"/></svg>
+              </span>
+              <h3>Cost estimation built in</h3>
+              <p>Estimate revenue hours and operating cost for any route alternative. Compare proposed networks side by side.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="compare">
+        <div class="inner">
+          <h2>How GTFS·X Agency compares</h2>
+          <table class="compare-table">
+            <thead>
+              <tr>
+                <th>&nbsp;</th>
+                <th class="us">GTFS·X Agency</th>
+                <th>Remix</th>
+                <th>Optibus</th>
+                <th>Trillium</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Annual cost</td>
+                <td class="num"><strong>$2,499</strong></td>
+                <td class="num">$20,000+</td>
+                <td class="num">$25,000+</td>
+                <td class="num">$5,000-10,000+</td>
+              </tr>
+              <tr><td>Route planning</td><td>✓</td><td>✓</td><td>✓</td><td>(managed)</td></tr>
+              <tr><td>Demographics</td><td>✓</td><td>✓</td><td>✓</td><td>—</td></tr>
+              <tr><td>Title VI</td><td>✓</td><td>✓</td><td>partial</td><td>—</td></tr>
+              <tr><td>Self-serve</td><td>✓</td><td>✓</td><td>✓</td><td>—</td></tr>
+            </tbody>
+          </table>
+
+          <div class="compare-cards" aria-hidden="false">
+            <div class="compare-card us">
+              <h3>GTFS·X Agency</h3>
+              <div class="price">$2,499/yr</div>
+              <ul>
+                <li>Route planning ✓</li>
+                <li>Demographics ✓</li>
+                <li>Title VI ✓</li>
+                <li>Self-serve ✓</li>
+              </ul>
+            </div>
+            <div class="compare-card">
+              <h3>Remix</h3>
+              <div class="price">$20,000+/yr</div>
+              <ul>
+                <li>Route planning ✓</li>
+                <li>Demographics ✓</li>
+                <li>Title VI ✓</li>
+                <li>Self-serve ✓</li>
+              </ul>
+            </div>
+            <div class="compare-card">
+              <h3>Optibus</h3>
+              <div class="price">$25,000+/yr</div>
+              <ul>
+                <li>Route planning ✓</li>
+                <li>Demographics ✓</li>
+                <li>Title VI: partial</li>
+                <li>Self-serve ✓</li>
+              </ul>
+            </div>
+            <div class="compare-card">
+              <h3>Trillium</h3>
+              <div class="price">$5,000-10,000+/yr</div>
+              <ul>
+                <li>Route planning: managed</li>
+                <li>Demographics: —</li>
+                <li>Title VI: —</li>
+                <li>Self-serve: —</li>
+              </ul>
+            </div>
+          </div>
+
+          <p class="compare-note">Pricing estimates as of 2026. See <a href="/compare/remix/">/compare/remix/</a> and <a href="/compare/trillium/">/compare/trillium/</a> for honest side-by-side comparisons.</p>
+        </div>
+      </section>
+
+      <section class="trust">
+        <div class="inner">
+          <p>Built by transit planners (AICP) for transit planners. Used by small and mid-size agencies across the US.</p>
+        </div>
+      </section>
+
+      <section class="cta-secondary">
+        <div class="inner">
+          <h2>Ready to evaluate?</h2>
+          <div class="cta-row" style="justify-content:center;">
+            <a href="https://www.gtfsx.com/pricing/#agency" class="btn-primary" data-cta="lp_agency_primary_cta">See Agency pricing</a>
+            <a href="/compare/remix/" class="btn-secondary" data-cta="lp_agency_compare_remix">Compare to Remix →</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="faq">
+        <div class="inner">
+          <h2>FAQ</h2>
+          <details>
+            <summary>How does GTFS·X Agency compare to Remix?</summary>
+            <div>Same core map-based planning, demographics, and Title VI. ~1/6 the annual cost ($2,499 vs. $20K+). Trade-off: GTFS·X is leaner — fewer enterprise features (multi-user permissioning, white-label, professional services) — but the planning fundamentals are equivalent. See <a href="/compare/remix/">/compare/remix/</a> for details.</div>
+          </details>
+          <details>
+            <summary>Can I try the Agency features without signing up?</summary>
+            <div>Yes. The editor is free; demographics and Title VI analysis run inside a free trial of the Agency tier. No credit card required.</div>
+          </details>
+          <details>
+            <summary>What's included in Agency tier?</summary>
+            <div>Route planning + demographics + Title VI + cost estimation + Pro hosting features. Multi-org membership (good for consultants serving multiple agencies). Email support.</div>
+          </details>
+          <details>
+            <summary>Do you offer professional services?</summary>
+            <div>No. We're software. If you need consulting, we can refer you to AICP-credentialed planners (including the founder).</div>
+          </details>
+          <details>
+            <summary>What about FTA reporting requirements?</summary>
+            <div>Title VI equity analysis is built in. Disparate-impact and disparate-burden reports follow FTA Circular 4702.1B structure. NTD-ready service-hour reporting is on the roadmap.</div>
+          </details>
+          <details>
+            <summary>What if we outgrow the Agency tier?</summary>
+            <div>The product scales to large-agency volumes. The "outgrow" path is usually adding enterprise features (SSO, audit logs, dedicated support), which we'd add as needed. Talk to us before you decide you've outgrown it.</div>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="inner">
+        <a href="/">Editor</a>
+        <a href="/pricing/">Pricing</a>
+        <a href="/docs/">Docs</a>
+        <a href="/compare/remix/">vs. Remix</a>
+        <a href="/compare/trillium/">vs. Trillium</a>
+        <a href="/about/">About</a>
+      </div>
+    </footer>
+
+    <div class="sticky-cta">
+      <a href="https://www.gtfsx.com/pricing/#agency" class="btn-primary" data-cta="lp_agency_primary_cta">See Agency pricing →</a>
+    </div>
+
+    <!--
+      Inline analytics beacon — mirrors src/services/trackBeacon.ts. Cookieless,
+      first-touch gclid/ref capture; page_view on load; cta_click on any element
+      with [data-cta] (label = attribute value). Captured gclid feeds the OCI
+      uploader (bundle 7).
+    -->
+    <script>
+    (function () {
+      var SK = 'gb_track_session', RK = 'gb_track_ref', GK = 'gb_track_gclid';
+      function rid() {
+        var b = new Uint8Array(16);
+        (self.crypto || self.msCrypto).getRandomValues(b);
+        var s = ''; for (var i = 0; i < b.length; i++) s += (b[i] < 16 ? '0' : '') + b[i].toString(16);
+        return s;
+      }
+      function get(k) { try { return sessionStorage.getItem(k); } catch (_) { return null; } }
+      function set(k, v) { try { sessionStorage.setItem(k, v); } catch (_) {} }
+      function sid() { var i = get(SK); if (!i) { i = rid(); set(SK, i); } return i; }
+      function capture(param, key, max) {
+        try {
+          if (get(key) !== null) return;
+          var p = new URLSearchParams(location.search);
+          var raw = p.get(param);
+          if (!raw) return;
+          var t = raw.trim().slice(0, max);
+          if (!t) return;
+          set(key, t);
+          p.delete(param);
+          var qs = p.toString();
+          history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+        } catch (_) {}
+      }
+      function send(kind, label) {
+        try {
+          fetch('/api/events/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-GB-Client': 'web' },
+            credentials: 'omit',
+            keepalive: true,
+            body: JSON.stringify({
+              kind: kind,
+              path: location.pathname,
+              ref: get(RK),
+              sessionId: sid(),
+              label: label || null,
+              gclid: get(GK)
+            })
+          }).catch(function () {});
+        } catch (_) {}
+      }
+      capture('ref', RK, 128);
+      capture('gclid', GK, 256);
+      send('page_view');
+      document.addEventListener('click', function (e) {
+        var t = e.target;
+        while (t && t !== document.body) {
+          if (t.getAttribute && t.getAttribute('data-cta')) {
+            send('cta_click', t.getAttribute('data-cta'));
+            return;
+          }
+          t = t.parentNode;
+        }
+      }, { capture: true, passive: true });
+    })();
+    </script>
+  </body>
+</html>

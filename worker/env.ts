@@ -36,6 +36,24 @@ export interface Env {
   TURNSTILE_SECRET_KEY?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SIGNING_SECRET?: string;
+
+  // Google Ads Offline Conversion Import. All optional — when any are
+  // missing the uploader logs and exits without running, so the rest of
+  // the worker stays healthy. See worker/marketing/ads/README.md for the
+  // one-time OAuth setup and `wrangler secret put` commands.
+  GOOGLE_ADS_DEVELOPER_TOKEN?: string;
+  GOOGLE_ADS_CLIENT_ID?: string;
+  GOOGLE_ADS_CLIENT_SECRET?: string;
+  GOOGLE_ADS_REFRESH_TOKEN?: string;
+  // The GTFS·X Google Ads account id without hyphens, e.g. "1001841562"
+  // (UI shows "100-184-1562"). Doubles as login-customer-id for the
+  // Ads API request — we don't operate under a manager account.
+  GOOGLE_ADS_CUSTOMER_ID?: string;
+  // Numeric conversion_action IDs created in the Google Ads UI; we
+  // hard-code them in env rather than fetching dynamically every run.
+  // Get from Goals → Summary → click the action → URL contains the ID.
+  GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED?: string;
+  GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW?: string;
 }
 
 // Hono context variables populated by middleware. Typed as a module augmentation

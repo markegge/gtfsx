@@ -15,7 +15,7 @@ import { ConflictDialog } from './components/snapshots/ConflictDialog';
 import { ImpersonationBanner } from './components/admin/ImpersonationBanner';
 import { RtBreakageDialog } from './components/distribution/RtBreakageDialog';
 import { backendEnabled } from './utils/featureFlags';
-import { captureRefFromUrl, trackPageview } from './services/trackBeacon';
+import { captureGclidFromUrl, captureRefFromUrl, trackPageview } from './services/trackBeacon';
 
 // Route-level code splitting. The homepage (`/`) renders the editor, so its
 // shell stays eager (imported above); every other route is loaded on demand
@@ -262,6 +262,7 @@ function App() {
     if (backendEnabled) {
       useStore.getState().hydrateAuth().catch(() => {});
       captureRefFromUrl();
+      captureGclidFromUrl();
     }
   }, []);
 

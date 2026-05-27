@@ -1250,3 +1250,109 @@ adminRouter.get('/events/summary', async (c) => {
     to,
   });
 });
+
+// ─── Ads attribution reconciliation ────────────────────────────────────────
+//
+// Lists every gclid-stamped event grouped by ISO week + event kind. Used to
+// reconcile Google Ads click reports against backend conversions (see
+// docs/GOOGLE_ADS_PLAN.md §2.2). Server-rendered HTML — no JS, no charts; this
+// is a weekly manual workflow, not a dashboard. Returns plain text instead of
+// JSON because Mark pastes the table into a reconciliation spreadsheet.
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+interface AdsAttribRow {
+  week: string;
+  kind: string;
+  n: number;
+  sample_gclids: string;
+}
+
+adminRouter.get('/events/ads-attribution', async (c) => {
+  const staff = c.var.user!;
+  await rateLimit(c.env, { key: `admin:events:${staff.id}`, limit: 60, windowSec: 60 });
+
+  // Per-row count + the 5 most recent sample gclids. group_concat preserves
+  // insertion order in SQLite; ORDER BY in a window function isn't available
+  // in D1, so we rely on the outer per-group sort (most recent ts first via
+  // a subquery LIMIT 5) to get sensible samples.
+  const rowsRes = await c.env.DB.prepare(
+    `SELECT
+        strftime('%Y-W%W', ts / 1000, 'unixepoch') AS week,
+        kind,
+        COUNT(*) AS n,
+        (
+          SELECT GROUP_CONCAT(g, ', ') FROM (
+            SELECT gclid AS g
+              FROM event e2
+             WHERE e2.gclid IS NOT NULL
+               AND strftime('%Y-W%W', e2.ts / 1000, 'unixepoch') = strftime('%Y-W%W', event.ts / 1000, 'unixepoch')
+               AND e2.kind = event.kind
+             ORDER BY e2.ts DESC
+             LIMIT 5
+          )
+        ) AS sample_gclids
+       FROM event
+       WHERE gclid IS NOT NULL
+       GROUP BY week, kind
+       ORDER BY week DESC, n DESC, kind ASC`,
+  ).all<AdsAttribRow>();
+
+  const rows = rowsRes.results ?? [];
+
+  const tableRows = rows.length === 0
+    ? `<tr><td colspan="4" style="text-align:center;color:#666;padding:24px;">No gclid-stamped events yet.</td></tr>`
+    : rows.map((r) => {
+        return `<tr>`
+          + `<td>${escapeHtml(r.week)}</td>`
+          + `<td>${escapeHtml(r.kind)}</td>`
+          + `<td style="text-align:right;">${r.n}</td>`
+          + `<td style="font-family:monospace;font-size:12px;word-break:break-all;">${escapeHtml(r.sample_gclids ?? '')}</td>`
+          + `</tr>`;
+      }).join('\n');
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Ads attribution — GTFS·X admin</title>
+  <meta name="robots" content="noindex,nofollow">
+  <style>
+    body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 24px; color: #222; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    p.lead { margin: 0 0 16px; color: #555; }
+    table { border-collapse: collapse; width: 100%; max-width: 980px; }
+    th, td { border-bottom: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; vertical-align: top; }
+    th { background: #f9fafb; font-weight: 600; }
+    tr:hover td { background: #fafafa; }
+    code { background: #f3f4f6; padding: 1px 4px; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>Google Ads attribution</h1>
+  <p class="lead">Backend events with a captured <code>gclid</code>, grouped by ISO week and event kind. Reconcile against the Google Ads click report each Monday — see <code>docs/GOOGLE_ADS_PLAN.md</code> §2.2.</p>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:90px;">Week</th>
+        <th style="width:160px;">Event kind</th>
+        <th style="width:70px;text-align:right;">Count</th>
+        <th>Sample gclids (up to 5, most recent first)</th>
+      </tr>
+    </thead>
+    <tbody>
+${tableRows}
+    </tbody>
+  </table>
+</body>
+</html>`;
+
+  return c.html(html);
+});

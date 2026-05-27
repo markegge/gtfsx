@@ -27,6 +27,11 @@ const TrackSchema = z.object({
   sessionId: z.string().min(8).max(64),
   // Optional sub-type, e.g. the feature key behind a paywall_view.
   label: z.string().min(1).max(128).nullable().optional(),
+  // Google Ads click identifier — captured from ?gclid= on the landing URL
+  // and forwarded with every event in the session. First-touch wins. Length
+  // isn't formally documented by Google; ~50 chars is typical, 256 is a safe
+  // ceiling. See migration 0014. Not linked to user_id.
+  gclid: z.string().min(1).max(256).nullable().optional(),
 });
 
 async function parseJson<T extends z.ZodTypeAny>(
@@ -61,8 +66,8 @@ eventsRouter.post('/track', async (c) => {
 
   const country = c.req.header('CF-IPCountry') ?? null;
   await c.env.DB.prepare(
-    `INSERT INTO event (id, ts, kind, path, ref, session_id, country, label)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO event (id, ts, kind, path, ref, session_id, country, label, gclid)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       ulid(),
@@ -73,6 +78,7 @@ eventsRouter.post('/track', async (c) => {
       body.sessionId,
       country,
       body.label ?? null,
+      body.gclid ?? null,
     )
     .run();
 

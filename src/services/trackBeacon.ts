@@ -9,6 +9,7 @@
 
 const SESSION_KEY = 'gb_track_session';
 const REF_KEY = 'gb_track_ref';
+const GCLID_KEY = 'gb_track_gclid';
 
 function randomId(): string {
   // 16 bytes of entropy as hex — plenty for a session id.
@@ -38,6 +39,14 @@ function getRef(): string | null {
   }
 }
 
+function getGclid(): string | null {
+  try {
+    return sessionStorage.getItem(GCLID_KEY);
+  } catch {
+    return null;
+  }
+}
+
 // On first call of the session, look for `?ref=...` in the current URL,
 // persist it for the rest of the session, and strip it from the address bar
 // so it doesn't leak into shared links.
@@ -51,6 +60,29 @@ export function captureRefFromUrl(): void {
     if (!trimmed) return;
     sessionStorage.setItem(REF_KEY, trimmed);
     params.delete('ref');
+    const qs = params.toString();
+    const newUrl =
+      window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash;
+    window.history.replaceState(null, '', newUrl);
+  } catch {
+    // sessionStorage blocked or URL manipulation failed — ignore.
+  }
+}
+
+// Same pattern as captureRefFromUrl, but for Google Ads' ?gclid= identifier.
+// First-touch wins: if a gclid is already stored for the session, leave it
+// alone — a user who arrived via an ad, browsed, and returned organically
+// should still be credited to the original ad click.
+export function captureGclidFromUrl(): void {
+  try {
+    if (sessionStorage.getItem(GCLID_KEY) !== null) return;
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('gclid');
+    if (!raw) return;
+    const trimmed = raw.trim().slice(0, 256);
+    if (!trimmed) return;
+    sessionStorage.setItem(GCLID_KEY, trimmed);
+    params.delete('gclid');
     const qs = params.toString();
     const newUrl =
       window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash;
@@ -80,6 +112,7 @@ function send(kind: TrackKind, opts?: { path?: string; label?: string | null }):
         ref: getRef(),
         sessionId: getSessionId(),
         label: opts?.label ?? null,
+        gclid: getGclid(),
       }),
     }).catch(() => {
       // Network errors are expected (e.g. offline, ad blocker) — silent.

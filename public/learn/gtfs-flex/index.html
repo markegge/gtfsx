@@ -39,9 +39,16 @@
       .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
       .site-header .user-slot .user-avatar:hover { filter:brightness(0.95); }
       @media (max-width: 720px) {
-        .site-header nav, .site-header .cta { display:none; }
+        .site-header nav { display:none; }
         .site-header .brand-name { font-size:1.25rem; }
         .site-header .brand img { height:30px; width:auto; }
+        /* Keep "Open editor" visible on mobile — this page is a Phase-1
+           Google Ads landing page; without an above-the-fold primary action,
+           ad traffic bounces. Shrunk to fit alongside the brand at 320 px. */
+        .site-header { padding: 0 12px; gap:10px; }
+        .site-header .cta { padding:11px 12px; font-size:13px; border-radius:6px; white-space:nowrap; line-height:1; min-height:44px; display:inline-flex; align-items:center; }
+        .site-header .actions { gap:8px; }
+        .site-header .user-slot a { white-space:nowrap; font-size:13px; }
       }
       main { padding-top: 40px; padding-bottom: 60px; }
       h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; }

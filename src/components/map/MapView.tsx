@@ -54,6 +54,10 @@ export function MapView() {
   // Popup state
   const [popupStopId, setPopupStopId] = useState<string | null>(null);
   const [popupRouteId, setPopupRouteId] = useState<string | null>(null);
+  // shape_id of the clicked route polyline — drives the popup's Edit Shape
+  // button. Captured at click time so a per-shape variant on the same route
+  // is reachable without having to disambiguate after the fact.
+  const [popupShapeId, setPopupShapeId] = useState<string | null>(null);
   const [popupLngLat, setPopupLngLat] = useState<{ lng: number; lat: number } | null>(null);
   const [popupDirectionId, setPopupDirectionId] = useState<0 | 1>(0);
   const [popupFlexZoneId, setPopupFlexZoneId] = useState<string | null>(null);
@@ -863,9 +867,11 @@ export function MapView() {
       if (routeFeature?.properties) {
         const rid = routeFeature.properties.route_id;
         const did = routeFeature.properties.direction_id;
+        const sid = routeFeature.properties.shape_id;
         currentState.selectRoute(rid);
         setPopupRouteId(rid);
         setPopupDirectionId(typeof did === 'number' ? did as 0 | 1 : 0);
+        setPopupShapeId(typeof sid === 'string' && sid ? sid : null);
         setPopupStopId(null);
         setPopupFlexZoneId(null);
         setPopupLngLat({ lng: e.lngLat.lng, lat: e.lngLat.lat });
@@ -986,8 +992,9 @@ export function MapView() {
           <RoutePopup
             routeId={popupRouteId}
             directionId={popupDirectionId}
+            shapeId={popupShapeId ?? undefined}
             lngLat={popupLngLat}
-            onClose={() => setPopupRouteId(null)}
+            onClose={() => { setPopupRouteId(null); setPopupShapeId(null); }}
           />
         )}
 

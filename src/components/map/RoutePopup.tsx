@@ -6,15 +6,25 @@ import { ROUTE_TYPES } from '../../utils/constants';
 interface RoutePopupProps {
   routeId: string;
   directionId: 0 | 1;
+  /** shape_id of the clicked polyline, when the popup originated from a
+   *  route-line click. Used to drive the "Edit Shape" button — when absent
+   *  (e.g. the popup ever opens from another source) the button hides. */
+  shapeId?: string;
   lngLat: { lng: number; lat: number };
   onClose: () => void;
 }
 
-export function RoutePopup({ routeId, directionId, lngLat, onClose }: RoutePopupProps) {
+export function RoutePopup({ routeId, directionId, shapeId, lngLat, onClose }: RoutePopupProps) {
   const route = useStore((s) => s.routes.find((r) => r.route_id === routeId));
   const trips = useStore((s) => s.trips);
   const routeStops = useStore((s) => s.routeStops);
-  const { setSidebarSection, selectRoute, setEditingRouteId } = useStore();
+  const {
+    setSidebarSection,
+    selectRoute,
+    setEditingRouteId,
+    setRouteDetailTab,
+    setPendingShapeEditId,
+  } = useStore();
 
   // Intentionally does NOT touch stopTimes. The old popup listed each trip's
   // first departure, which meant filtering the entire stop_times table once per
@@ -63,29 +73,52 @@ export function RoutePopup({ routeId, directionId, lngLat, onClose }: RoutePopup
         </p>
 
         {/* Action buttons */}
-        <div className="border-t border-sand pt-2 flex gap-2">
-          <button
-            onClick={() => {
-              selectRoute(routeId);
-              setEditingRouteId(routeId);
-              setSidebarSection('routes');
-              onClose();
-            }}
-            className="flex-1 px-3 py-1.5 bg-coral-light text-coral rounded-lg text-xs font-heading font-bold hover:bg-coral hover:text-white transition-colors"
-          >
-            Edit Route
-          </button>
-          <button
-            onClick={() => {
-              selectRoute(routeId);
-              useStore.getState().setBottomPanelOpen(true);
-              useStore.getState().setBottomPanelTab('timetable');
-              onClose();
-            }}
-            className="flex-1 px-3 py-1.5 bg-purple-light text-purple rounded-lg text-xs font-heading font-bold hover:bg-purple hover:text-white transition-colors"
-          >
-            Edit Timetable
-          </button>
+        <div className="border-t border-sand pt-2 flex flex-col gap-2">
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                selectRoute(routeId);
+                setEditingRouteId(routeId);
+                setSidebarSection('routes');
+                onClose();
+              }}
+              className="flex-1 px-3 py-1.5 bg-coral-light text-coral rounded-lg text-xs font-heading font-bold hover:bg-coral hover:text-white transition-colors"
+            >
+              Edit Route
+            </button>
+            <button
+              onClick={() => {
+                selectRoute(routeId);
+                useStore.getState().setBottomPanelOpen(true);
+                useStore.getState().setBottomPanelTab('timetable');
+                onClose();
+              }}
+              className="flex-1 px-3 py-1.5 bg-purple-light text-purple rounded-lg text-xs font-heading font-bold hover:bg-purple hover:text-white transition-colors"
+            >
+              Edit Timetable
+            </button>
+          </div>
+          {shapeId && (
+            <button
+              onClick={() => {
+                // Land on Routes > Shapes tab and hand the shape id off via
+                // pendingShapeEditId — RouteShapesTab's effect picks it up
+                // and runs the standard Edit flow (dense-shape warning if
+                // applicable). Intentionally no flyTo / fitBounds: the
+                // shape is already on screen because the user just clicked
+                // it.
+                selectRoute(routeId);
+                setEditingRouteId(routeId);
+                setSidebarSection('routes');
+                setRouteDetailTab('shapes');
+                setPendingShapeEditId(shapeId);
+                onClose();
+              }}
+              className="w-full px-3 py-1.5 bg-coral text-white rounded-lg text-xs font-heading font-bold hover:bg-[#d4603a] transition-colors"
+            >
+              Edit Shape
+            </button>
+          )}
         </div>
       </div>
     </Popup>

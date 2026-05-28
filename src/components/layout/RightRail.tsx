@@ -111,6 +111,17 @@ function RouteDetailHeader() {
     if (!id) return 0;
     return s.trips.filter((t) => t.route_id === id).length;
   });
+  // Count unique shape_ids referenced by this route's trips — matches what
+  // RouteShapesTab actually lists. Trips without a shape_id are excluded.
+  const shapesCount = useStore((s) => {
+    const id = s.editingRouteId;
+    if (!id) return 0;
+    const ids = new Set<string>();
+    for (const t of s.trips) {
+      if (t.route_id === id && t.shape_id) ids.add(t.shape_id);
+    }
+    return ids.size;
+  });
   const setEditingRouteId = useStore((s) => s.setEditingRouteId);
   const setSidebarSection = useStore((s) => s.setSidebarSection);
   const selectRoute = useStore((s) => s.selectRoute);
@@ -124,6 +135,7 @@ function RouteDetailHeader() {
     route.route_short_name || route.route_long_name || 'Untitled Route';
 
   const counts: Partial<Record<RouteDetailTab, number>> = {
+    shapes: shapesCount,
     stops: stopsCount,
     trips: tripsCount,
   };

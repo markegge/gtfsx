@@ -67,6 +67,12 @@ export interface UISlice {
    *  while a shape edit was in progress. The confirm-discard dialog reads
    *  this and either applies it (confirmPendingNav) or drops it (cancel). */
   pendingNav: PendingNav | null;
+  /** Shape id the user wants to enter edit mode on, set by a component
+   *  outside RouteShapesTab (e.g. the RoutePopup "Edit Shape" button).
+   *  RouteShapesTab watches this on mount / change, dispatches its
+   *  existing handleEditShape (which runs the dense-shape warning), then
+   *  clears it. */
+  pendingShapeEditId: string | null;
   /** Holiday names checked in the Calendars > Exceptions "Add US holidays"
    *  picker. Persisted in-memory across calendars within a session so the
    *  user doesn't re-check the same boxes per calendar — defaults to the
@@ -109,6 +115,7 @@ export interface UISlice {
   setCalendarDetailTab: (tab: CalendarDetailTab) => void;
   confirmPendingNav: () => void;
   cancelPendingNav: () => void;
+  setPendingShapeEditId: (id: string | null) => void;
   setSelectedHolidayNames: (names: string[]) => void;
   setRouteDeleteConfirmId: (id: string | null) => void;
 }
@@ -150,6 +157,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   stopDetailTab: 'details',
   calendarDetailTab: 'details',
   pendingNav: null,
+  pendingShapeEditId: null,
   // Six federal holidays transit typically suspends service on — kept in sync
   // with the US_HOLIDAYS catalog names in CalendarEditor.tsx.
   selectedHolidayNames: [
@@ -288,6 +296,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     state.pendingNav = null;
   }),
   cancelPendingNav: () => set((state) => { state.pendingNav = null; }),
+  setPendingShapeEditId: (id) => set((state) => { state.pendingShapeEditId = id; }),
   setStopDetailTab: (tab) => set((state) => { state.stopDetailTab = tab; }),
   setCalendarDetailTab: (tab) => set((state) => { state.calendarDetailTab = tab; }),
   setSelectedHolidayNames: (names) => set((state) => { state.selectedHolidayNames = names; }),

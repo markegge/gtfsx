@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { generateId } from '../../services/idGenerator';
 import { snapToRoad } from '../../services/snapToRoad';
 import { simplifyShapePoints, SIMPLIFY_LEVELS } from '../../services/simplifyShape';
 import { duplicateShapePoints } from '../../services/shapeHelpers';
-import { directionName } from '../../utils/constants';
 
 /**
  * Shapes subpanel for the Routes editor. Extracted out of RouteEditor.tsx so
@@ -39,6 +38,11 @@ export function RouteShapesTab() {
 
   const editingShapeId = useStore((s) => s.editingShapeId);
   const mapMode = useStore((s) => s.mapMode);
+  // Cross-component handoff: the RoutePopup's "Edit Shape" button writes a
+  // shape id here and navigates the rail to Shapes; this tab runs its
+  // normal handleEditShape on mount, which includes the dense-shape warning.
+  const pendingShapeEditId = useStore((s) => s.pendingShapeEditId);
+  const setPendingShapeEditId = useStore((s) => s.setPendingShapeEditId);
 
   const route = routes.find((r) => r.route_id === selectedRouteId);
 
@@ -53,20 +57,6 @@ export function RouteShapesTab() {
     }).filter((s) => s.shape);
   }, [selectedRouteId, trips, shapes]);
 
-  if (!route) return null;
-
-  const handleDrawShape = () => {
-    // Default direction 0 for all new shapes — the per-draw direction
-    // picker was retired since routes can carry unlimited shape variants.
-    // The user re-assigns direction per trip from the Trips tab.
-    // Mirrors MapToolbar's place-stop pattern (sentinel pattern is
-    // documented in src/types/window.d.ts).
-    // eslint-disable-next-line react-hooks/immutability
-    window.__drawingDirection = 0;
-    setDrawingRouteId(route.route_id);
-    setMapMode('draw_route');
-  };
-
   const handleEditShape = (shapeId: string) => {
     const shape = shapes.find((s) => s.shape_id === shapeId);
     if (shape && shape.points.length > 100) {
@@ -75,6 +65,36 @@ export function RouteShapesTab() {
     }
     setEditingShapeId(shapeId);
     setMapMode('edit_shape');
+  };
+
+  // When the RoutePopup signals "edit this shape", run the same flow as
+  // an in-panel Edit click (warning for dense shapes, immediate edit
+  // otherwise), then clear the pending marker. Sits before the !route
+  // early return so hook order stays stable across renders.
+  useEffect(() => {
+    if (!pendingShapeEditId) return;
+    if (!shapes.some((s) => s.shape_id === pendingShapeEditId)) {
+      setPendingShapeEditId(null);
+      return;
+    }
+    handleEditShape(pendingShapeEditId);
+    setPendingShapeEditId(null);
+    // handleEditShape is closed over the current state — depending on it
+    // would loop. The pending id is the only meaningful trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingShapeEditId]);
+
+  if (!route) return null;
+
+  const handleDrawShape = () => {
+    // Default direction 0 for all new shapes — the per-draw direction
+    // picker was retired since routes can carry unlimited shape variants.
+    // The user re-assigns direction per trip from the Trips tab.
+    // Mirrors MapToolbar's place-stop pattern (sentinel pattern is
+    // documented in src/types/window.d.ts).
+    window.__drawingDirection = 0;
+    setDrawingRouteId(route.route_id);
+    setMapMode('draw_route');
   };
 
   const handleEditAnywayShape = (shapeId: string) => {
@@ -176,7 +196,7 @@ export function RouteShapesTab() {
                   />
                   <div className={`flex-1 min-w-0 transition-opacity ${isShapeHidden ? 'opacity-40' : ''}`}>
                     <span className="text-dark-brown font-medium text-xs">
-                      {trip?.trip_headsign || directionName(route, trip?.direction_id ?? 0)}
+                      {trip?.trip_headsign || 'Untitled shape'}
                     </span>
                     <span className="text-[10px] text-warm-gray ml-1.5">
                       {shape!.points.length} pts · {shapeTrips.length} trip{shapeTrips.length !== 1 ? 's' : ''}

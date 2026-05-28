@@ -1,0 +1,7 @@
+# Treat TypeScript/JS sources as text so git shows readable diffs even when a
+# file is dense with Unicode glyphs (e.g. run-tests.ts uses ✓ ✗ → ≤ · ×, which
+# trips git's binary heuristic).
+*.ts  text diff
+*.tsx text diff
+*.js  text diff
+*.jsx text diff

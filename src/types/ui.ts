@@ -33,6 +33,13 @@ export type StopPlacementMode = 'snap_to_route' | 'freehand';
 
 export type RouteDetailTab = 'details' | 'stops' | 'trips' | 'shapes' | 'costs';
 
+/** A navigation request the user made while a shape edit was in progress.
+ *  Stashed in the store so the confirm-discard dialog can replay it after
+ *  the user chooses Discard (or drop it on Keep editing). */
+export type PendingNav =
+  | { kind: 'tab'; tab: RouteDetailTab }
+  | { kind: 'section'; section: SidebarSection | null };
+
 export type StopDetailTab = 'details' | 'trips';
 
 export type CalendarDetailTab = 'details' | 'routes' | 'exceptions';

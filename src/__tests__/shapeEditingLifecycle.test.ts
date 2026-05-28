@@ -95,8 +95,8 @@ describe('Enter and leave edit_shape mode', () => {
 
 // ─── The "stuck in edit mode" bug ───────────────────────────────────────────
 
-describe('Switching tabs / sections while editing exits the mode', () => {
-  it('routeDetailTab change off "shapes" resets mapMode + editingShapeId', () => {
+describe('Switching tabs / sections while editing queues a confirm', () => {
+  it('routeDetailTab change off "shapes" queues a pendingNav and does NOT change the tab', () => {
     seedRoute();
     seedShape('s1', 'rA');
     const s = useStore.getState();
@@ -107,12 +107,48 @@ describe('Switching tabs / sections while editing exits the mode', () => {
     s.setRouteDetailTab('details');
 
     const after = useStore.getState();
-    expect(after.mapMode).toBe('select');
-    expect(after.editingShapeId).toBeNull();
-    expect(after.routeDetailTab).toBe('details');
+    // Still on the shapes tab — confirm dialog renders, change is queued.
+    expect(after.routeDetailTab).toBe('shapes');
+    expect(after.mapMode).toBe('edit_shape');
+    expect(after.editingShapeId).toBe('s1');
+    expect(after.pendingNav).toEqual({ kind: 'tab', tab: 'details' });
   });
 
-  it('routeDetailTab change between non-shapes tabs is a no-op for shape edit state', () => {
+  it('confirmPendingNav applies the queued tab and resets the edit', () => {
+    seedRoute();
+    seedShape('s1', 'rA');
+    const s = useStore.getState();
+    s.setRouteDetailTab('shapes');
+    s.setEditingShapeId('s1');
+    s.setMapMode('edit_shape');
+    s.setRouteDetailTab('details'); // queued
+    s.confirmPendingNav();
+
+    const after = useStore.getState();
+    expect(after.routeDetailTab).toBe('details');
+    expect(after.mapMode).toBe('select');
+    expect(after.editingShapeId).toBeNull();
+    expect(after.pendingNav).toBeNull();
+  });
+
+  it('cancelPendingNav drops the queue and leaves the user in edit mode', () => {
+    seedRoute();
+    seedShape('s1', 'rA');
+    const s = useStore.getState();
+    s.setRouteDetailTab('shapes');
+    s.setEditingShapeId('s1');
+    s.setMapMode('edit_shape');
+    s.setRouteDetailTab('details');
+    s.cancelPendingNav();
+
+    const after = useStore.getState();
+    expect(after.routeDetailTab).toBe('shapes');
+    expect(after.mapMode).toBe('edit_shape');
+    expect(after.editingShapeId).toBe('s1');
+    expect(after.pendingNav).toBeNull();
+  });
+
+  it('routeDetailTab change between non-shapes tabs (no edit in progress) applies immediately', () => {
     const s = useStore.getState();
     s.setRouteDetailTab('details');
     s.setMapMode('select');
@@ -121,11 +157,11 @@ describe('Switching tabs / sections while editing exits the mode', () => {
     s.setRouteDetailTab('trips');
 
     const after = useStore.getState();
-    expect(after.mapMode).toBe('select');
-    expect(after.editingShapeId).toBeNull();
+    expect(after.routeDetailTab).toBe('trips');
+    expect(after.pendingNav).toBeNull();
   });
 
-  it('sidebarSection change off "routes" resets edit_shape mode', () => {
+  it('sidebarSection change off "routes" while editing queues a pendingNav', () => {
     seedRoute();
     seedShape('s1', 'rA');
     const s = useStore.getState();
@@ -136,31 +172,37 @@ describe('Switching tabs / sections while editing exits the mode', () => {
     s.setSidebarSection('stops');
 
     const after = useStore.getState();
-    expect(after.mapMode).toBe('select');
-    expect(after.editingShapeId).toBeNull();
+    expect(after.sidebarSection).toBe('routes');
+    expect(after.mapMode).toBe('edit_shape');
+    expect(after.pendingNav).toEqual({ kind: 'section', section: 'stops' });
   });
 
-  it('sidebarSection back to "routes" preserves the cleared state — no rebound', () => {
+  it('confirmPendingNav (section variant) restores the full setSidebarSection side-effects', () => {
     seedRoute();
     seedShape('s1', 'rA');
     const s = useStore.getState();
     s.setSidebarSection('routes');
     s.setEditingShapeId('s1');
     s.setMapMode('edit_shape');
-    s.setSidebarSection('stops'); // reset above
-    s.setSidebarSection('routes'); // back
+    s.setSidebarSection('stops'); // queued
+    s.confirmPendingNav();
 
     const after = useStore.getState();
-    // We don't re-enter edit mode on re-arrival — user has to click Edit again.
+    expect(after.sidebarSection).toBe('stops');
+    expect(after.rightRailOpen).toBe(true);
     expect(after.mapMode).toBe('select');
     expect(after.editingShapeId).toBeNull();
   });
 });
 
 // ─── Trim mode lifecycle ────────────────────────────────────────────────────
+//
+// Trim mode is a single-click action with no in-progress state to lose, so
+// tab / section changes pass through without the confirm-discard dialog —
+// unlike edit_shape, which queues a pendingNav.
 
-describe('Trim mode follows the same lifecycle rules', () => {
-  it('routeDetailTab change off "shapes" resets trim_shape mode', () => {
+describe('Trim mode passes through without a confirm', () => {
+  it('routeDetailTab change off "shapes" immediately resets trim_shape mode', () => {
     seedRoute();
     seedShape('s1', 'rA');
     const s = useStore.getState();
@@ -171,11 +213,13 @@ describe('Trim mode follows the same lifecycle rules', () => {
     s.setRouteDetailTab('details');
 
     const after = useStore.getState();
+    expect(after.routeDetailTab).toBe('details');
     expect(after.mapMode).toBe('select');
     expect(after.editingShapeId).toBeNull();
+    expect(after.pendingNav).toBeNull();
   });
 
-  it('sidebarSection change off "routes" resets trim_shape mode', () => {
+  it('sidebarSection change off "routes" immediately resets trim_shape mode', () => {
     seedRoute();
     seedShape('s1', 'rA');
     const s = useStore.getState();
@@ -186,8 +230,10 @@ describe('Trim mode follows the same lifecycle rules', () => {
     s.setSidebarSection('agency');
 
     const after = useStore.getState();
+    expect(after.sidebarSection).toBe('agency');
     expect(after.mapMode).toBe('select');
     expect(after.editingShapeId).toBeNull();
+    expect(after.pendingNav).toBeNull();
   });
 });
 

@@ -43,6 +43,9 @@ export function MapView() {
   // Only destructure values used for rendering; handlers read from useStore.getState() directly
   const mapMode = useStore((s) => s.mapMode);
   const editingShapeId = useStore((s) => s.editingShapeId);
+  // Queued tab/section change while in edit_shape — the dialog below renders
+  // when this is set and either confirms or cancels the queued nav.
+  const pendingNav = useStore((s) => s.pendingNav);
   const editingFlexZoneId = useStore((s) => s.editingFlexZoneId);
   const editingStopId = useStore((s) => s.editingStopId);
   const stops = useStore((s) => s.stops);
@@ -1050,6 +1053,51 @@ export function MapView() {
 
       {/* (Shape-split confirm modal removed — replaced by Duplicate + Trim
           in the Routes Shapes subpanel.) */}
+
+      {/* Discard shape changes confirmation triggered by a queued navigation
+          (pendingNav) — user tried to switch tabs / sidebar sections while
+          editing a shape. saveShapeEdit / discardShapeEdit do the cleanup
+          before applying the queued nav so the new tab renders with a clean
+          map. */}
+      {pendingNav && (
+        <div className="absolute inset-0 flex items-center justify-center z-20">
+          <div
+            className="absolute inset-0 bg-black/20"
+            onClick={() => useStore.getState().cancelPendingNav()}
+          />
+          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-xs mx-4">
+            <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
+              Discard shape changes?
+            </h3>
+            <p className="text-sm text-warm-gray mb-4">
+              Your edits to this shape will be lost.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  // Persist the pending edit, then apply the queued nav.
+                  saveShapeEdit();
+                  useStore.getState().confirmPendingNav();
+                }}
+                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
+              >
+                Keep Changes
+              </button>
+              <button
+                onClick={() => {
+                  // Drop the edit-draw state, then apply the queued nav.
+                  // confirmPendingNav resets mapMode/editingShapeId so the
+                  // MapView mode-transition effect clears drawRef.
+                  useStore.getState().confirmPendingNav();
+                }}
+                className="flex-1 px-3 py-2 bg-red-500 text-white rounded-lg font-heading font-bold text-sm hover:bg-red-600 transition-colors"
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Discard shape changes confirmation */}
       {showDiscardConfirm && (

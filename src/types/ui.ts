@@ -25,13 +25,13 @@ export type MapMode =
   | 'move_stop'
   | 'edit_vertices'
   | 'edit_shape'
-  | 'split_shape'
+  | 'trim_shape'
   | 'draw_flex_zone'
   | 'edit_flex_zone';
 
 export type StopPlacementMode = 'snap_to_route' | 'freehand';
 
-export type RouteDetailTab = 'details' | 'stops' | 'trips' | 'costs';
+export type RouteDetailTab = 'details' | 'stops' | 'trips' | 'shapes' | 'costs';
 
 export type StopDetailTab = 'details' | 'trips';
 

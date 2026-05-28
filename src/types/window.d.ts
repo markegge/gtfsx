@@ -19,6 +19,11 @@ declare global {
     __cancelDrawRoute?: () => void;
     __flexZoneExpand?: string;
     __drawingDirection?: 0 | 1;
+    /** Set by the Routes > Shapes tab's Trim button before entering
+     *  'trim_shape' map mode. MapView's click handler reads these to know
+     *  which shape to mutate and which side to cut from. */
+    __trimShapeId?: string;
+    __trimShapeSide?: 'start' | 'end';
     /** Read-only Zustand store reference exposed for browser-console debugging. */
     __gtfsStore?: unknown;
     /** Test-only: trigger the in-page integration tests. Optional zipPath

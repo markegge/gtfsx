@@ -3,6 +3,7 @@ import { useStore } from '../../store';
 import { RouteEditor } from './RouteEditor';
 import { RouteStopsTab } from './RouteStopsTab';
 import { RouteTripsTab } from './RouteTripsTab';
+import { RouteShapesTab } from './RouteShapesTab';
 import { RouteCostsTab } from './RouteCostsTab';
 import type { RouteDetailTab } from '../../types/ui';
 
@@ -77,6 +78,8 @@ export function RouteDetailPanel() {
       return <RouteStopsTab />;
     case 'trips':
       return <RouteTripsTab />;
+    case 'shapes':
+      return <RouteShapesTab />;
     case 'costs':
       return <RouteCostsTab />;
     default:

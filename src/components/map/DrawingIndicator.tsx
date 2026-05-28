@@ -27,6 +27,7 @@ export function DrawingIndicator() {
     edit_vertices: 'Editing Shape — Drag vertices to adjust',
     move_stop: 'Moving Stop — Click the map or drag the stop to reposition. Press Esc to cancel.',
     edit_shape: 'Editing Shape — Drag vertices, click midpoints to add, Delete key to remove. Click Save when done.',
+    trim_shape: 'Trimming Shape — Click a point on the shape to set the cut',
     draw_flex_zone: 'Drawing Flex Zone — Click to add vertices, double-click to close polygon',
     edit_flex_zone: 'Editing Flex Zone — Drag vertices, click midpoints to add, Delete key to remove',
   };

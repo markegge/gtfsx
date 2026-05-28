@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 
-const SUPPORT_EMAIL = 'support@gtfsbuilder.net';
+const SUPPORT_EMAIL = 'support@gtfsx.com';
 const SUPPORT_PHONE = '(406) 548-4488';
 const SUPPORT_PHONE_TEL = '+14065484488';
 

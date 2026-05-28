@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { ImportDialog } from '../import-export/ImportDialog';
 import { ExportDialog } from '../import-export/ExportDialog';
@@ -25,6 +25,11 @@ export function TopBar() {
   const stopsCount = useStore((s) => s.stops.length);
   const agenciesCount = useStore((s) => s.agencies.length);
   const navigate = useNavigate();
+  // /demo is a read-only preview surface — drop the Save button so
+  // visitors don't get prompted to upgrade or create an account just
+  // to exit a "save attempt." Import / Export and the rest of the
+  // editor stay visible.
+  const isDemo = useLocation().pathname.startsWith('/demo');
   const [showImport, setShowImport] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -117,8 +122,9 @@ export function TopBar() {
           {saveStatus}
         </div>
 
-        {/* Save button — hidden on phones; folded into the mobile menu below. */}
-        {backendEnabled && (
+        {/* Save button — hidden on phones; folded into the mobile menu below.
+            Also hidden on /demo (read-only preview, no project to save). */}
+        {backendEnabled && !isDemo && (
           <button
             onClick={handleSaveClick}
             disabled={saving || (!isDirty && !!activeServerProjectId)}
@@ -181,7 +187,7 @@ export function TopBar() {
                 aria-hidden
               />
               <div className="absolute right-0 top-full mt-1 z-40 w-64 max-h-[80vh] overflow-y-auto bg-white border border-sand rounded-xl shadow-lg p-2 flex flex-col">
-                {backendEnabled && (
+                {backendEnabled && !isDemo && (
                   <button
                     onClick={() => { setMobileMenuOpen(false); handleSaveClick(); }}
                     disabled={saving || (!isDirty && !!activeServerProjectId)}

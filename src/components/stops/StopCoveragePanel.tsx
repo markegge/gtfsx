@@ -1,9 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import distance from '@turf/distance';
 import { point } from '@turf/helpers';
 import { useStore } from '../../store';
 import { calculateCoverage } from '../../services/coverageAnalysis';
+import { fetchCensusData, lookupFips, type BlockGroupData } from '../../services/demographics';
 import { directionName } from '../../utils/constants';
+
+// Module-level cache so navigating between stops in the same county doesn't
+// re-fetch Census data. Keyed by `${stateFips}-${countyFips}`. Survives
+// component unmounts but is wiped on page reload.
+const blockGroupCache = new Map<string, BlockGroupData[]>();
 
 /**
  * Per-stop Coverage subpanel.
@@ -32,7 +38,16 @@ export function StopCoveragePanel() {
   const routes = useStore((s) => s.routes);
   const routeStops = useStore((s) => s.routeStops);
   const coverageData = useStore((s) => s.coverageData);
-  const setSidebarSection = useStore((s) => s.setSidebarSection);
+  // Per-stop Census fetch. Reuses system Coverage's blockGroups when
+  // present; otherwise looks up FIPS for THIS stop and fetches its county.
+  // Cached at the module level so adjacent stops in the same county don't
+  // re-fetch. Result lives in local state — we don't write to coverageData
+  // because that holds the system-level analysis (systemResult,
+  // routeResults, bufferGeoJSON) and partial population would break it.
+  const [localBlockGroups, setLocalBlockGroups] = useState<BlockGroupData[] | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const lastFetchKey = useRef<string | null>(null);
 
   const stop = useMemo(
     () => stops.find((s) => s.stop_id === editingStopId) ?? null,
@@ -108,10 +123,50 @@ export function StopCoveragePanel() {
     return out;
   }, [stop, routeStops, stops, routes]);
 
+  // Resolved block groups — system Coverage's cache wins; otherwise the
+  // per-stop fetch result.
+  const blockGroups = coverageData?.blockGroups ?? localBlockGroups;
+
+  // Fire a per-stop Census fetch when we need block groups and don't have
+  // them yet. Cheap to short-circuit when the system Coverage panel has
+  // already populated coverageData.
+  useEffect(() => {
+    if (!stop) return;
+    if (coverageData?.blockGroups) return;
+    if (localBlockGroups) return;
+    if (fetching) return;
+    const key = `${stop.stop_id}`; // re-fetch when stop changes
+    if (lastFetchKey.current === key) return;
+    lastFetchKey.current = key;
+
+    let cancelled = false;
+    (async () => {
+      setFetchError(null);
+      setFetching(true);
+      try {
+        const { stateFips, countyFips } = await lookupFips(stop.stop_lat, stop.stop_lon);
+        const cacheKey = `${stateFips}-${countyFips}`;
+        let bgs = blockGroupCache.get(cacheKey);
+        if (!bgs) {
+          bgs = await fetchCensusData(stateFips, countyFips);
+          blockGroupCache.set(cacheKey, bgs);
+        }
+        if (!cancelled) setLocalBlockGroups(bgs);
+      } catch (err) {
+        if (!cancelled) {
+          setFetchError(err instanceof Error ? err.message : 'Failed to fetch Census data');
+        }
+      } finally {
+        if (!cancelled) setFetching(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [stop, coverageData, localBlockGroups, fetching]);
+
   const coverageResult = useMemo(() => {
-    if (!stop || !coverageData) return null;
-    return calculateCoverage([stop], coverageData.blockGroups, bufferMiles);
-  }, [stop, coverageData, bufferMiles]);
+    if (!stop || !blockGroups) return null;
+    return calculateCoverage([stop], blockGroups, bufferMiles);
+  }, [stop, blockGroups, bufferMiles]);
 
   if (!stop) return null;
 
@@ -196,17 +251,15 @@ export function StopCoveragePanel() {
           </div>
         </div>
 
-        {!coverageData ? (
-          <div className="bg-cream rounded-lg p-3">
-            <p className="text-xs text-warm-gray mb-2">
-              Run system Coverage analysis first — it fetches the Census block-group data this panel needs.
-            </p>
-            <button
-              onClick={() => setSidebarSection('coverage')}
-              className="text-xs text-coral font-semibold hover:underline"
-            >
-              Open Coverage panel →
-            </button>
+        {fetching ? (
+          <div className="bg-cream rounded-lg p-3 text-center">
+            <div className="inline-block w-4 h-4 border-2 border-teal border-t-transparent rounded-full animate-spin mb-1" />
+            <p className="text-xs text-warm-gray">Fetching Census data for this county…</p>
+          </div>
+        ) : fetchError ? (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-xs text-red-700 font-medium">Couldn't load Census data</p>
+            <p className="text-[11px] text-red-600 mt-0.5">{fetchError}</p>
           </div>
         ) : coverageResult ? (
           <div className="bg-cream rounded-lg p-3 grid grid-cols-3 gap-2 text-xs">

@@ -485,7 +485,14 @@ export function MapView() {
     } else if (currentMode === 'draw_route') {
       drawRef.current.changeMode('draw_line_string');
     } else if (currentMode === 'select') {
+      // Clean up any leftover draw features so an interrupted edit
+      // (e.g. user switched tabs without hitting Save/Cancel — see the
+      // setRouteDetailTab / setSidebarSection guards in uiSlice) doesn't
+      // leave the editing polyline visible on the map.
+      try { drawRef.current.deleteAll(); } catch { /* ignore */ }
       try { drawRef.current.changeMode('simple_select'); } catch { /* ignore */ }
+      editDrawFeatureIdRef.current = null;
+      originalShapePointsRef.current = null;
     }
   }, [mapMode, editingShapeId, editingFlexZoneId]);
 

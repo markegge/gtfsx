@@ -180,6 +180,14 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     if (section !== 'stops' && (state.mapMode === 'place_stop' || state.mapMode === 'move_stop')) {
       state.mapMode = 'select';
     }
+    // Shape edit / trim modes only have controls inside Routes > Shapes.
+    // Leaving Routes without these guards stranded the user in edit_shape
+    // (no Save button visible, map still capturing clicks). Discard any
+    // in-progress edit and reset to select so the user is never stuck.
+    if (section !== 'routes' && (state.mapMode === 'edit_shape' || state.mapMode === 'trim_shape')) {
+      state.mapMode = 'select';
+      state.editingShapeId = null;
+    }
     // The stop edit / create sub-panels are contextual to the user's current
     // flow — switching nav sections discards them so the new section's body
     // renders.
@@ -231,7 +239,17 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setLeftRailWidth: (w) => set((state) => { state.leftRailWidth = w; }),
   setRightRailOpen: (open) => set((state) => { state.rightRailOpen = open; }),
   setRightRailWidth: (w) => set((state) => { state.rightRailWidth = w; }),
-  setRouteDetailTab: (tab) => set((state) => { state.routeDetailTab = tab; }),
+  setRouteDetailTab: (tab) => set((state) => {
+    state.routeDetailTab = tab;
+    // Save / Cancel for shape edits live in the Shapes tab — leaving it
+    // mid-edit would strand the user in edit_shape with no controls
+    // visible (the original "stuck in edit mode" bug). Exit the mode
+    // when the user switches off the Shapes tab. Same for trim_shape.
+    if (tab !== 'shapes' && (state.mapMode === 'edit_shape' || state.mapMode === 'trim_shape')) {
+      state.mapMode = 'select';
+      state.editingShapeId = null;
+    }
+  }),
   setStopDetailTab: (tab) => set((state) => { state.stopDetailTab = tab; }),
   setCalendarDetailTab: (tab) => set((state) => { state.calendarDetailTab = tab; }),
   setSelectedHolidayNames: (names) => set((state) => { state.selectedHolidayNames = names; }),

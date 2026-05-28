@@ -101,12 +101,15 @@ export function RoutePopup({ routeId, directionId, shapeId, lngLat, onClose }: R
           {shapeId && (
             <button
               onClick={() => {
-                // Land on Routes > Shapes tab and hand the shape id off via
-                // pendingShapeEditId — RouteShapesTab's effect picks it up
-                // and runs the standard Edit flow (dense-shape warning if
-                // applicable). Intentionally no flyTo / fitBounds: the
-                // shape is already on screen because the user just clicked
-                // it.
+                // Suppress the next route-fit BEFORE we change any state
+                // that would trigger it. useFocusRouteOnMap reads + clears
+                // this flag the first time it runs. Window-based one-shot
+                // rather than store-based: it has to outlive the effect
+                // ordering race between RouteShapesTab (which clears
+                // pendingShapeEditId synchronously in its effect) and
+                // RouteDetailPanel (whose useFocusRouteOnMap reads the
+                // store after that clear).
+                window.__suppressNextRouteFit = true;
                 selectRoute(routeId);
                 setEditingRouteId(routeId);
                 setSidebarSection('routes');

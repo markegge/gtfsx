@@ -24,6 +24,14 @@ declare global {
      *  which shape to mutate and which side to cut from. */
     __trimShapeId?: string;
     __trimShapeSide?: 'start' | 'end';
+    /** One-shot flag set by RoutePopup before its Edit Shape handoff so
+     *  useFocusRouteOnMap doesn't auto-fit to the entire route — the user
+     *  was already zoomed into the segment they want to edit. Cleared by
+     *  the first effect that reads it. Lives on window rather than the
+     *  store because store-based signals race with the effect order
+     *  between RouteShapesTab (which clears them) and RouteDetailPanel
+     *  (which reads them). */
+    __suppressNextRouteFit?: boolean;
     /** Read-only Zustand store reference exposed for browser-console debugging. */
     __gtfsStore?: unknown;
     /** Test-only: trigger the in-page integration tests. Optional zipPath

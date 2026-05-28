@@ -31,14 +31,15 @@ function useFocusRouteOnMap(routeId: string | null, tab: RouteDetailTab) {
 
   useEffect(() => {
     if (!routeId) return;
-    // When the RoutePopup hands off an Edit-Shape request, the user almost
-    // always clicked the popup because they were already zoomed into the
-    // exact segment they want to edit. Skip the auto-fit so we don't yank
-    // their viewport. Read non-reactively (getState, not a subscription)
-    // — RouteShapesTab clears pendingShapeEditId on the next render, and
-    // a reactive read would re-fire this effect with the cleared value
-    // and run the fit anyway.
-    if (useStore.getState().pendingShapeEditId) return;
+    // RoutePopup's "Edit Shape" handoff sets this flag on window before any
+    // state mutation. Honor it as a one-shot: skip this fit, then clear so
+    // the next ordinary tab/route change still auto-fits. Avoids the store
+    // race (RouteShapesTab clears pendingShapeEditId before this effect
+    // reads it).
+    if (window.__suppressNextRouteFit) {
+      window.__suppressNextRouteFit = false;
+      return;
+    }
     const fitBounds = (window as { __mapFitBounds?: (b: Bounds, opts?: { padding?: number; maxZoom?: number }) => void })
       .__mapFitBounds;
     if (!fitBounds) return;

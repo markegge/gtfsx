@@ -28,15 +28,17 @@ function useFocusRouteOnMap(routeId: string | null, tab: RouteDetailTab) {
   const trips = useStore((s) => s.trips);
   const stops = useStore((s) => s.stops);
   const routeStops = useStore((s) => s.routeStops);
-  // When the RoutePopup hands off an Edit-Shape request, the user almost
-  // always clicked the popup because they were already zoomed into the
-  // exact segment they want to edit. Skipping the auto-fit in that case
-  // keeps their viewport stable.
-  const pendingShapeEditId = useStore((s) => s.pendingShapeEditId);
 
   useEffect(() => {
     if (!routeId) return;
-    if (pendingShapeEditId) return;
+    // When the RoutePopup hands off an Edit-Shape request, the user almost
+    // always clicked the popup because they were already zoomed into the
+    // exact segment they want to edit. Skip the auto-fit so we don't yank
+    // their viewport. Read non-reactively (getState, not a subscription)
+    // — RouteShapesTab clears pendingShapeEditId on the next render, and
+    // a reactive read would re-fire this effect with the cleared value
+    // and run the fit anyway.
+    if (useStore.getState().pendingShapeEditId) return;
     const fitBounds = (window as { __mapFitBounds?: (b: Bounds, opts?: { padding?: number; maxZoom?: number }) => void })
       .__mapFitBounds;
     if (!fitBounds) return;
@@ -69,7 +71,7 @@ function useFocusRouteOnMap(routeId: string | null, tab: RouteDetailTab) {
     if (isValidBounds(bounds)) {
       fitBounds(bounds, { padding: 80, maxZoom: 14 });
     }
-  }, [routeId, tab, shapes, trips, stops, routeStops, pendingShapeEditId]);
+  }, [routeId, tab, shapes, trips, stops, routeStops]);
 }
 
 export function RouteDetailPanel() {

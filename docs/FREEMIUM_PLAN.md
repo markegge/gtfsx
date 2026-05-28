@@ -52,7 +52,7 @@ This document defines what needs to be built to turn the current backend (auth, 
 | **Anonymous** (no account) | $0 | 0 (local IndexedDB only) | None | None | None | Community board |
 | **Free** (account) | $0 | Up to 3 | None — self-hosted ZIP export only | None | Personal workspace only | Community board |
 | **Pro** | $49/mo or $499/yr | Up to 10 | 1 feed | None (moved to Agency in v2) | Personal workspace only | Email (best-effort) |
-| **Agency** (DB id: `team`) | $299/mo or $2,499/yr | Unlimited | Up to 5 feeds | Full: demographic coverage, cost estimation, Title VI, propensity heatmap | One org with unlimited seats | Email (1-2 BD target) |
+| **Agency** (DB id: `team`) | $299/mo or $2,499/yr | Unlimited | Up to 5 feeds | Full: demographic coverage, cost estimation, stop analysis, Title VI, propensity heatmap | One org with unlimited seats | Email (1-2 BD target) |
 | **Consultant (solo)** | $79/mo or $790/yr per seat | Unlimited | Up to 5 feeds per seat | Full | Member of unlimited orgs (cross-org access) | Email (1-2 BD target) |
 | **Consultant Firm** | $79/mo or $790/yr × N seats | Unlimited | Up to 5 feeds per seat | Full | Firm org; each member can join unlimited external client orgs | Email (1-2 BD target) |
 | **Enterprise** | $25k-150k/yr (custom) | Unlimited under license | Unlimited, branded | Full + custom | Unlimited orgs + agencies under license | Phone + email with SLA |
@@ -74,6 +74,7 @@ Annual prices = ~10× monthly (2 months free). Display monthly price prominently
 | GTFS-Flex authoring | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Demographic coverage analysis | — | — | — | ✅ | ✅ | ✅ |
 | Cost estimation analysis | — | — | — | ✅ | ✅ | ✅ |
+| Stop analysis (spacing, balancing, service intensity, accessibility) | — | — | — | ✅ | ✅ | ✅ |
 | Title VI equity analysis | — | — | — | ✅ | ✅ | ✅ |
 | Propensity heatmap | — | — | — | ✅ | ✅ | ✅ |
 | Org workspace (multi-user) | — | — | — | ✅ | ✅ (as member) | ✅ |

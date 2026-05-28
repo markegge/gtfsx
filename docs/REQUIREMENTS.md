@@ -21,7 +21,7 @@ If you are picking this project up cold: read this overview, then `docs/BACKEND_
 Four sections corresponding to the major capability areas:
 
 1. **GTFS feed editing** — the map + form + timetable workflows that produce a valid GTFS feed.
-2. **Analysis and route development** — the things you do *with* a feed before you publish it: demand dots, demographic coverage, Title VI equity, cost estimation.
+2. **Analysis and route development** — the things you do *with* a feed before you publish it: demand dots, demographic coverage, Title VI equity, stop-level diagnostics (spacing, balancing, service intensity, accessibility), cost estimation.
 3. **Account and organization management** — auth, orgs, multi-tenant workspaces, branding, admin console.
 4. **Feed publication and distribution** — versioning, canonical publish, draft links, catalog submissions, and rider-facing embeds + mini-site.
 
@@ -168,6 +168,7 @@ Coverage is detailed in [`docs/FLEX_ROADMAP.md`](./FLEX_ROADMAP.md) which is the
 ### 1.8 Validation, import, export
 
 - ✅ Real-time validator running against canonical GTFS rules — surfaces errors (block export) and warnings (exportable but flagged).
+- ✅ Accessibility completeness check — a single aggregate warning when board points are missing `wheelchair_boarding`; cross-links to the per-route breakdown in Stop Analysis (§2.5).
 - ✅ Click-to-navigate from a validation message to the offending entity.
 - ✅ Auto-fix path in the export dialog for orphan references (trips → missing routes, stop_times → missing stops, etc.).
 - ✅ Import GTFS ZIP — parses every supported file, preserves unknown columns where possible, populates the editor.
@@ -195,19 +196,23 @@ Resolution: TIGER block (TABBLOCK20) geometries, with ACS variables apportioned 
 
 ### 2.2 Demographic coverage
 
-Walkshed-based apportioned coverage analysis — for each stop, how many people / households / workers live within a configurable buffer (default 0.5 miles). Apportions ACS block-group totals via a circle–circle overlap formula (`coverageAnalysis.ts`).
+Apportioned **buffer coverage** — for the system, each route, or a single stop, how many people / households / workers live within a configurable straight-line buffer (¼ mi default, ½ mi for light rail). ACS block-group totals are apportioned via a circle–circle overlap formula (`coverageAnalysis.ts`), not a binary centroid-in-buffer test. Straight-line buffers approximate walking reach; true street-network walksheds (isochrones) are a planned enhancement, not yet built — the UI labels coverage as "buffer," not "walkshed."
 
-- ✅ Tract centroids bundled per state in `public/census/TR<FIPS>.txt`.
-- ✅ ACS variables fetched live from `api.census.gov` (B03002 race, B25044 vehicles, B23025 workers, etc.).
-- ✅ `CoveragePanel` UI with covered population, household, worker totals + Title VI summary tabs.
-- ✅ Map overlay showing which block groups are covered, shaded by apportionment fraction.
+- ✅ Tract centroids bundled per state in `public/census/TR<FIPS>.txt` (CORS-free); block groups inherit their parent tract's centroid.
+- ✅ ACS 5-year (2022) variables fetched live from `api.census.gov` (`demographics.ts`): population (B01003), housing units (B25001), workers (B08301), race/ethnicity (B03002), low-income <200% FPL (C17002), zero-vehicle households (B25044), and age 65+/under-18 (B01001). Variables are chosen to be tabulated at **block-group** geography — tract-only tables (B08201 vehicles, B09001 under-18) are deliberately avoided because they return null at block-group level.
+- ✅ `CoveragePanel` (system + per-route) with covered population/household/worker totals plus a **demographic profile** table reporting five equity shares (minority, low-income, zero-vehicle, senior, youth) as coverage-vs-county-baseline ratios.
+- ✅ Per-stop Coverage tab (`StopCoveragePanel`) — distance to adjacent stops on each route, plus this stop's own buffer demographics and equity shares.
+- ✅ Map overlay shading the covered block-group buffers.
+- 🔲 Network-distance walksheds (OSM / isochrone service) — deferred; straight-line buffers only for now.
 
 ### 2.3 Title VI equity analysis
 
-Implements the methodology in [`Title VI Transit Service Analysis - Calculation Procedures Memo.md`](./Title%20VI%20Transit%20Service%20Analysis%20-%20Calculation%20Procedures%20Memo.md): apportions daily trips per stop to nearby block groups, classifies block groups as minority or non-minority against the regional minority share, and reports the ratio of average daily trips received by each group.
+Implements the methodology in [`Title VI Transit Service Analysis - Calculation Procedures Memo.md`](./Title%20VI%20Transit%20Service%20Analysis%20-%20Calculation%20Procedures%20Memo.md): apportions daily trips per stop to nearby block groups, classifies block groups against a regional threshold, and reports the ratio of average daily trips received by each group.
 
 - ✅ End-to-end calculation in `titleVI.ts` reusing `coverageAnalysis`'s overlap math.
-- ✅ `TitleVIPanel` summarising per-group population, average daily trips, and the minority/non-minority ratio.
+- ✅ Minority / non-minority comparison against the regional minority share (FTA Circular 4702.1B).
+- ✅ Low-income (Environmental Justice) comparison alongside it — block groups classified against the regional <200% FPL share (C17002), same apportioned-trips methodology.
+- ✅ `TitleVIPanel` summarising per-group population, average daily trips, and both ratios (a ratio below ~0.80 flags a potential disparity).
 
 ### 2.4 Cost estimation
 
@@ -218,6 +223,17 @@ Estimates annual operating cost from feed structure + per-route inputs.
 - ✅ `CostSummary` panel surfaces the totals.
 - 🔲 Scenario comparison ("what if we add a Saturday run?").
 - 🔲 Deadhead-factor inputs beyond a global multiplier.
+
+### 2.5 Stop analysis
+
+A dedicated **Stop Analysis** panel (`StopAnalysisPanel`, gated under the `analysis_basic` plan) with four collapsible, CSV-exportable diagnostics computed client-side from the in-memory feed (`stopAnalysis.ts`). All thresholds are UI-configurable. Inter-stop distance is great-circle (Haversine) in feet — `shape_dist_traveled` is intentionally not used, because GTFS leaves its unit undefined and it can't be trusted across arbitrary feeds.
+
+- ✅ **Stop spacing distribution** — system histogram + per-route medians of consecutive-stop spacing on each route's dominant trip pattern (longest trip per direction), compared against APTA / TransitWiki benchmarks (too-close < 600 ft, target ~750–1,320 ft, hard max 2,640 ft).
+- ✅ **Stop balancing candidates** — consecutive same-route pairs closer than a threshold (default 600 ft), flagged for consolidation with an order-of-magnitude daily time saving (dwell seconds × trips/day). Terminals and stations are excluded; the lower-service stop is the removal candidate.
+- ✅ **Service intensity per stop** — trips/day, span of service, and peak vs. off-peak median headway on the busiest weekday (or a chosen service day). Also surfaced on the per-stop Trips tab.
+- ✅ **Accessibility completeness** — share of board points with `wheelchair_boarding` populated, plus a per-route breakdown of the gaps; cross-links to the validator warning (§1.8).
+- ✅ Contextual map highlighting (`StopAnalysisLayer`): amber removal candidates, a trips/day colour ramp, and accessibility-gap pins.
+- 🚫 Stop-level ridership estimates — deliberately not synthesised; honest answer requires APC data.
 
 ---
 
@@ -420,7 +436,7 @@ The editor guides users through this default path, though every section is reach
 5. Fares                  →  How much does it cost to ride? (prompted if missing)
 6. Timetables             →  What are the trip times?
 7. Flex zones (optional)  →  Demand-responsive areas + booking rules
-8. Analysis               →  Demand dots, demographic coverage, Title VI, cost
+8. Analysis               →  Demand dots, coverage, Title VI, stop analysis, cost
 9. Validate & publish     →  Errors → fix; warnings → optional. Publish to a stable URL.
 10. Embed                 →  Copy iframe snippets into the agency website.
 ```

@@ -335,6 +335,10 @@ async function serveCanonicalZip(request: Request, env: Env, slug: string): Prom
     'Cache-Control': 'public, max-age=3600, s-maxage=3600',
     ETag: etag,
     'Last-Modified': lastModified,
+    // Published feeds are public — let any browser tab read them cross-origin
+    // (e.g. www.gtfsx.com/demo fetching feeds.gtfsx.com/svt-demo/gtfs.zip,
+    // or any third-party tool that wants to preview a feed).
+    'Access-Control-Allow-Origin': '*',
   };
   const size = object.size;
   if (size) headers['Content-Length'] = String(size);

@@ -1,4 +1,4 @@
-
+import { useEffect, useRef } from 'react';
 
 interface FormFieldProps {
   label: string;
@@ -9,9 +9,21 @@ interface FormFieldProps {
   required?: boolean;
   error?: string;
   disabled?: boolean;
+  /** Focus the input on mount and select its current text so a pre-seeded
+   *  default value is one-keystroke replaceable (e.g. the date-stamped
+   *  default in the Save Snapshot dialog). */
+  autoFocus?: boolean;
 }
 
-export function FormField({ label, value, onChange, placeholder, type = 'text', required, error, disabled }: FormFieldProps) {
+export function FormField({ label, value, onChange, placeholder, type = 'text', required, error, disabled, autoFocus }: FormFieldProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!autoFocus) return;
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+  }, [autoFocus]);
   return (
     <div className="mb-3">
       <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
@@ -19,6 +31,7 @@ export function FormField({ label, value, onChange, placeholder, type = 'text', 
         {required && <span className="text-coral ml-0.5">*</span>}
       </label>
       <input
+        ref={inputRef}
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}

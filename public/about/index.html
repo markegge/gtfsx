@@ -52,6 +52,18 @@
       li { margin: 0.3rem 0; }
       footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; }
       footer a { color: var(--muted); }
+      /* About Us section — author bio with photo. */
+      .about-us { display:flex; gap:20px; align-items:flex-start; margin-top: 1.4rem; padding: 18px; background:#fff; border:1px solid var(--rule); border-radius:12px; }
+      .about-us img { width:120px; height:120px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+      .about-us .bio { flex:1; min-width:0; }
+      .about-us .bio p { margin: 0 0 8px; }
+      .about-us .bio .name { font-weight: 700; color: var(--ink); }
+      .about-us .bio .links { margin-top: 8px; font-size: 0.95rem; }
+      .about-us .bio .links a { margin-right: 14px; }
+      @media (max-width: 560px) {
+        .about-us { flex-direction: column; align-items: center; text-align: center; }
+        .about-us img { width: 140px; height: 140px; }
+      }
     </style>
     <script type="application/ld+json">
     {
@@ -149,6 +161,18 @@
 
       <h2>Get started</h2>
       <p>The fastest way to understand the tool is to <a href="/">open the editor</a> and click around. If you want a guided walkthrough, see the <a href="/docs/quick-start/">quick start guide</a> or the full <a href="/docs/">documentation</a>. If you're new to GTFS itself, the <a href="/learn/gtfs/">What is GTFS?</a> primer is a good place to start.</p>
+
+      <h2>About us</h2>
+      <div class="about-us">
+        <img src="/assets/about/mark-egge.jpg" alt="Photo of Mark Egge" loading="lazy" />
+        <div class="bio">
+          <p><span class="name">GTFS·X is created by Mark Egge, AICP.</span> Mark is a transportation planner, technologist, and chair of the board for his local transit agency. GTFS·X was born out of the need for better GTFS authoring tools.</p>
+          <p class="links">
+            <a href="mailto:mark@gtfsx.com">mark@gtfsx.com</a>
+            <a href="https://www.linkedin.com/in/markegge" target="_blank" rel="noopener">LinkedIn</a>
+          </p>
+        </div>
+      </div>
     </main>
     <footer>
       <a href="/">Editor</a>

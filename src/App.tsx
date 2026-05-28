@@ -68,11 +68,15 @@ function PageviewTracker() {
   return null;
 }
 
+// /demo pulls from the canonical published feed at feeds.gtfsx.com/svt-demo/
+// rather than a bundled streamline.zip — keeps the demo in sync with the
+// published Sunny Valley Transit example and matches the slug the embed
+// example site uses, so /demo and /embed-demo always show the same data.
 async function loadDemoFeed() {
-  const res = await fetch(`${import.meta.env.BASE_URL}streamline.zip`);
+  const res = await fetch('https://feeds.gtfsx.com/svt-demo/gtfs.zip');
   if (!res.ok) throw new Error('Demo feed not found');
   const blob = await res.blob();
-  const file = new File([blob], 'streamline.zip', { type: 'application/zip' });
+  const file = new File([blob], 'svt-demo.zip', { type: 'application/zip' });
   const data = await importGtfsZip(file);
   loadImportIntoStore(data);
   useStore.getState().setProjectName('Streamline Transit — Demo');

@@ -299,6 +299,16 @@ export function SnapshotHistoryPanel() {
   );
 }
 
+function defaultSnapshotLabel(): string {
+  // Locale-formatted "May 28, 2026, 8:00 AM" — sortable by date, readable
+  // at a glance, and instantly meaningful for the common "I'm just
+  // snapshotting today's state" workflow.
+  return new Date().toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+}
+
 function SaveSnapshotDialog({
   onSave,
   onCancel,
@@ -308,7 +318,10 @@ function SaveSnapshotDialog({
   onCancel: () => void;
   busy: boolean;
 }) {
-  const [label, setLabel] = useState('');
+  // Default the label to today's date+time so the field is never empty —
+  // user can hit Save immediately for a date-stamped snapshot, or type
+  // over the pre-selected text for a custom label.
+  const [label, setLabel] = useState(defaultSnapshotLabel);
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50">
       <div className="absolute inset-0 bg-black/20" onClick={onCancel} />
@@ -318,10 +331,11 @@ function SaveSnapshotDialog({
           Captures the current feed state. Snapshots are immutable once saved.
         </p>
         <FormField
-          label="Label (optional)"
+          label="Label"
           value={label}
           onChange={setLabel}
           placeholder="e.g. March 2026 service change"
+          autoFocus
         />
         <div className="flex justify-end gap-2 mt-2">
           <AuthButton variant="secondary" onClick={onCancel} disabled={busy}>

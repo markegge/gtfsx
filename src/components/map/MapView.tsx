@@ -1040,31 +1040,42 @@ export function MapView() {
       />
       <DrawingIndicator />
 
-      {/* Shape-edit map controls. Live on the map (not the rail) so they're
-          always reachable while editing — closing the rail or switching tabs
-          no longer strands the user. Delete-vertex hides when no vertex is
-          selected; Save / Cancel are always visible. */}
+      {/* Shape-edit top banner + inline Save Shape / Cancel buttons. Lives
+          on the map (not the rail) so it's always reachable — closing the
+          rail or switching tabs no longer strands the user. Banner stays
+          beside the buttons in one cluster so the user reads instruction
+          + action together. */}
       {mapMode === 'edit_shape' && (
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 flex gap-2">
-          {editVertexSelected && (
-            <button
-              onClick={() => { if (drawRef.current) drawRef.current.trash(); }}
-              className="px-4 py-2 bg-white text-red-600 rounded-full text-xs font-heading font-bold shadow-md hover:bg-red-50 transition-colors border border-red-200"
-            >
-              Delete Selected Vertex
-            </button>
-          )}
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+          <div className="bg-coral text-white px-5 py-2 rounded-full text-[13px] font-heading font-semibold shadow-md flex items-center gap-2">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+            Editing Shape — Drag vertices, click midpoints to add
+          </div>
           <button
             onClick={discardShapeEdit}
-            className="px-4 py-2 bg-white text-warm-gray rounded-full text-xs font-heading font-bold shadow-md hover:bg-sand transition-colors border border-sand"
+            className="px-4 py-2 bg-white text-warm-gray rounded-full text-[13px] font-heading font-bold shadow-md hover:bg-sand transition-colors border border-sand"
           >
             Cancel
           </button>
           <button
             onClick={saveShapeEdit}
-            className="px-4 py-2 bg-coral text-white rounded-full text-xs font-heading font-bold shadow-md hover:bg-[#d4603a] transition-colors"
+            className="px-4 py-2 bg-coral text-white rounded-full text-[13px] font-heading font-bold shadow-md hover:bg-[#d4603a] transition-colors"
           >
             Save Shape
+          </button>
+        </div>
+      )}
+
+      {/* Delete Selected Vertex stays at the bottom of the map — only shows
+          when the user actually has a vertex / midpoint selected in mapbox-
+          gl-draw, so it doesn't sit there unreachable. */}
+      {mapMode === 'edit_shape' && editVertexSelected && (
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10">
+          <button
+            onClick={() => { if (drawRef.current) drawRef.current.trash(); }}
+            className="px-4 py-2 bg-white text-red-600 rounded-full text-xs font-heading font-bold shadow-md hover:bg-red-50 transition-colors border border-red-200"
+          >
+            Delete Selected Vertex
           </button>
         </div>
       )}

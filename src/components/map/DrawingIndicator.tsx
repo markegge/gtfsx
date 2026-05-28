@@ -6,6 +6,10 @@ export function DrawingIndicator() {
   const mapMode = useStore((s) => s.mapMode);
 
   if (mapMode === 'select') return null;
+  // edit_shape's banner is rendered together with the Save Shape / Cancel
+  // buttons by MapView, so they sit in a single top-center cluster instead
+  // of separately. Skip here so we don't render the banner twice.
+  if (mapMode === 'edit_shape') return null;
 
   // place_stop renders the pill + a compact dialog (route assignment, snap
   // toggle, optional name) — all the inputs the placement reads, anchored

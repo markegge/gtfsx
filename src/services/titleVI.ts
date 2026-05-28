@@ -3,7 +3,7 @@ import { point } from '@turf/helpers';
 import type { BlockGroupData } from './demographics';
 import type { Stop } from '../types/gtfs';
 import type { AppStore } from '../store';
-import { BG_RADIUS_MILES, circleOverlapFraction } from './coverageAnalysis';
+import { BG_RADIUS_MILES, circleOverlapFraction, computeBgRadii } from './coverageAnalysis';
 
 /**
  * Two-tier buffer per FTA-aligned local practice: stops with peak-hour headways
@@ -145,15 +145,19 @@ export function calculateTitleVI(
     bufferMiles: stopBuffers.get(s.stop_id) ?? GENERAL_BUFFER_MILES,
   }));
 
+  // Adaptive per-tract apportionment radius — same model the coverage panel
+  // uses, so the two analyses agree and rural tracts aren't dead zones.
+  const radii = computeBgRadii(blockGroups);
   const levels: BlockGroupServiceLevel[] = [];
 
   for (const bg of blockGroups) {
     const bgPoint = point([bg.lon, bg.lat]);
+    const bgRadius = radii.get(bg.geoid) ?? BG_RADIUS_MILES;
     let dailyTrips = 0;
 
     for (const { pt, dailyTrips: stopTrips, bufferMiles } of stopPoints) {
       const d = distance(bgPoint, pt, { units: 'miles' });
-      const fraction = circleOverlapFraction(d, bufferMiles, BG_RADIUS_MILES);
+      const fraction = circleOverlapFraction(d, bufferMiles, bgRadius);
       if (fraction > 0) dailyTrips += fraction * stopTrips;
     }
 

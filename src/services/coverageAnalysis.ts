@@ -44,12 +44,62 @@ function share(numerator: number, denominator: number): number | null {
 }
 
 /**
- * Approximate radius of a census block group for apportionment.
- * US block groups average ~1,500 people and ~0.3–0.6 sq mi in urban/suburban
- * areas, corresponding to a radius of ~0.3–0.45 mi. Use 0.5 as a conservative
- * default that also accommodates suburban tracts whose centroid files we use.
+ * Baseline / minimum radius of the circle a census unit is modelled as for
+ * apportionment. US block groups average ~1,500 people and ~0.3–0.6 sq mi in
+ * urban/suburban areas (radius ~0.3–0.45 mi); 0.5 is a conservative default.
+ *
+ * This is the FLOOR. The effective radius is adaptive — see computeBgRadii.
+ * A fixed 0.5 mi badly underestimates the spatial extent of large suburban /
+ * rural tracts (we only have tract centroids, not polygons), which left a
+ * "dead zone": a ¼-mi stop buffer captured nothing beyond 0.75 mi from the
+ * nearest centroid, so ~18% of stops in the demo feed reported 0 population at
+ * ¼ mi while ½ mi worked. Growing the radius where centroids are sparse closes
+ * that gap without changing dense urban cores (which stay clamped at 0.5).
  */
 export const BG_RADIUS_MILES = 0.5;
+/** Upper clamp so an isolated rural tract doesn't spread over the whole map. */
+export const BG_RADIUS_MAX_MILES = 3.0;
+
+/**
+ * Effective per-census-unit circle radius for apportionment. Block groups
+ * inherit their parent tract's centroid, so many share one coordinate; we work
+ * on the distinct centroids (tracts) to keep this O(tracts²), then map back.
+ *
+ * Radius = the great-circle distance to the nearest *other* centroid, clamped
+ * to [BG_RADIUS_MILES, BG_RADIUS_MAX_MILES]. Using the full spacing (rather
+ * than half) makes each tract's disc reach its neighbours' centroids, so the
+ * discs overlap and tile with no gaps — a stop anywhere between centroids
+ * always overlaps at least one. Verified to eliminate the ¼-mi dead zone
+ * (0 of 166 stops report 0 pop at ¼ mi on the demo feed, vs 30 before) while
+ * leaving dense urban cores at the 0.5-mi floor. Half-spacing left ~23 gaps.
+ */
+export function computeBgRadii(blockGroups: BlockGroupData[]): Map<string, number> {
+  const coordKey = (bg: { lat: number; lon: number }) => `${bg.lat},${bg.lon}`;
+  const uniq = new Map<string, { lat: number; lon: number }>();
+  for (const bg of blockGroups) {
+    const k = coordKey(bg);
+    if (!uniq.has(k)) uniq.set(k, { lat: bg.lat, lon: bg.lon });
+  }
+  const pts = [...uniq.entries()].map(([k, c]) => ({ k, pt: point([c.lon, c.lat]) }));
+
+  const radiusByKey = new Map<string, number>();
+  for (let i = 0; i < pts.length; i++) {
+    let nearest = Infinity;
+    for (let j = 0; j < pts.length; j++) {
+      if (i === j) continue;
+      const d = distance(pts[i].pt, pts[j].pt, { units: 'miles' });
+      if (d < nearest) nearest = d;
+    }
+    const r = nearest === Infinity
+      ? BG_RADIUS_MILES
+      : Math.min(BG_RADIUS_MAX_MILES, Math.max(BG_RADIUS_MILES, nearest));
+    radiusByKey.set(pts[i].k, r);
+  }
+
+  const radii = new Map<string, number>();
+  for (const bg of blockGroups) radii.set(bg.geoid, radiusByKey.get(coordKey(bg)) ?? BG_RADIUS_MILES);
+  return radii;
+}
 
 /**
  * Fraction of a circle of radius bgRadius (block group) that overlaps with a
@@ -141,6 +191,7 @@ export function calculateCoverage(
   bufferMiles: number,
 ): CoverageResult {
   const stopPoints = stops.map((s) => point([s.stop_lon, s.stop_lat]));
+  const radii = computeBgRadii(blockGroups);
   const fractions = new Map<string, number>();
 
   for (const bg of blockGroups) {
@@ -150,7 +201,7 @@ export function calculateCoverage(
       const d = distance(bgPoint, sp, { units: 'miles' });
       if (d < minDist) minDist = d;
     }
-    const fraction = circleOverlapFraction(minDist, bufferMiles, BG_RADIUS_MILES);
+    const fraction = circleOverlapFraction(minDist, bufferMiles, radii.get(bg.geoid) ?? BG_RADIUS_MILES);
     if (fraction > 0) fractions.set(bg.geoid, fraction);
   }
 

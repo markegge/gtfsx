@@ -1,8 +1,24 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../../store';
-import { formatTimeShort } from '../../utils/time';
+import { formatTimeShort, gtfsTimeToSeconds } from '../../utils/time';
 import { directionName } from '../../utils/constants';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
+
+const PEAK_WINDOWS: Array<[number, number]> = [[6 * 3600, 9 * 3600], [15 * 3600, 18 * 3600]];
+const OFFPEAK_WINDOWS: Array<[number, number]> = [[10 * 3600, 14 * 3600]];
+
+function medianGapMin(secs: number[], windows: Array<[number, number]>): number | null {
+  const gaps: number[] = [];
+  for (const [start, end] of windows) {
+    const inWin = secs.filter((s) => s >= start && s < end).sort((a, b) => a - b);
+    for (let i = 1; i < inWin.length; i++) gaps.push(inWin[i] - inWin[i - 1]);
+  }
+  if (gaps.length === 0) return null;
+  gaps.sort((a, b) => a - b);
+  const m = Math.floor(gaps.length / 2);
+  const med = gaps.length % 2 ? gaps[m] : (gaps[m - 1] + gaps[m]) / 2;
+  return med / 60;
+}
 
 type SortMode = 'time' | 'route';
 type TimeField = 'departure' | 'arrival';
@@ -109,14 +125,23 @@ export function StopDeparturesSection() {
   const stats = useMemo(() => {
     if (departures.length < 2) return null;
     const routeGroups = new Map<string, number>();
+    const tripIds = new Set<string>();
+    const secs: number[] = [];
     for (const d of departures) {
       routeGroups.set(d.routeName, (routeGroups.get(d.routeName) || 0) + 1);
+      tripIds.add(d.tripId);
+      secs.push(gtfsTimeToSeconds(d.timeSortKey));
     }
+    // Sort ascending for a clean first/last regardless of the table's sort mode.
+    const sortedTimes = [...departures].sort((a, b) => a.timeSortKey.localeCompare(b.timeSortKey));
     return {
       total: departures.length,
+      tripsPerDay: tripIds.size,
       routeCount: routeGroups.size,
-      first: departures[0]?.time,
-      last: departures[departures.length - 1]?.time,
+      first: sortedTimes[0]?.time,
+      last: sortedTimes[sortedTimes.length - 1]?.time,
+      headwayPeak: medianGapMin(secs, PEAK_WINDOWS),
+      headwayOffpeak: medianGapMin(secs, OFFPEAK_WINDOWS),
     };
   }, [departures]);
 
@@ -192,9 +217,14 @@ export function StopDeparturesSection() {
           </label>
 
           {stats && (
-            <p className="text-[11px] text-warm-gray mb-2">
-              {stats.total} departure{stats.total === 1 ? '' : 's'} across {stats.routeCount} route{stats.routeCount === 1 ? '' : 's'} · {stats.first}–{stats.last}
-            </p>
+            <div className="mb-2 space-y-0.5">
+              <p className="text-[11px] text-warm-gray">
+                {stats.total} departure{stats.total === 1 ? '' : 's'} · {stats.tripsPerDay} trips/day across {stats.routeCount} route{stats.routeCount === 1 ? '' : 's'} · {stats.first}–{stats.last}
+              </p>
+              <p className="text-[11px] text-warm-gray">
+                Headway — peak {stats.headwayPeak == null ? '—' : `~${Math.round(stats.headwayPeak)} min`} · off-peak {stats.headwayOffpeak == null ? '—' : `~${Math.round(stats.headwayOffpeak)} min`}
+              </p>
+            </div>
           )}
 
           {departures.length === 0 ? (

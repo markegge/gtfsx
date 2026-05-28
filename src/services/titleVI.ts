@@ -21,6 +21,8 @@ export interface BlockGroupServiceLevel {
   dailyTrips: number;
   minorityShare: number;
   isMinority: boolean;
+  lowIncomeShare: number;
+  isLowIncome: boolean;
   population: number;
 }
 
@@ -40,6 +42,12 @@ export interface TitleVIResult {
    * < 1.0 means minority BGs receive less service on average.
    */
   ratio: number;
+  /** Regional low-income (<200% FPL) share — threshold for the EJ comparison. */
+  regionalLowIncomeShare: number;
+  lowIncome: TitleVIGroup;
+  nonLowIncome: TitleVIGroup;
+  /** Ratio of low-income to non-low-income avg. daily trips (FTA EJ analysis). */
+  lowIncomeRatio: number;
   blockGroupLevels: BlockGroupServiceLevel[];
 }
 
@@ -125,6 +133,11 @@ export function calculateTitleVI(
   const regionMinorityPop = bgsWithRace.reduce((s, bg) => s + bg.minorityPop, 0);
   const regionalMinorityShare = regionTotalPop > 0 ? regionMinorityPop / regionTotalPop : 0;
 
+  // 3b. Regional low-income (<200% FPL) share — the EJ-population threshold.
+  const regionPovertyUniverse = blockGroups.reduce((s, bg) => s + bg.povertyUniverse, 0);
+  const regionLowIncome = blockGroups.reduce((s, bg) => s + bg.lowIncomePop, 0);
+  const regionalLowIncomeShare = regionPovertyUniverse > 0 ? regionLowIncome / regionPovertyUniverse : 0;
+
   // 4 & 5. For each block group compute apportioned daily trips and classify
   const stopPoints = stops.map((s) => ({
     pt: point([s.stop_lon, s.stop_lat]),
@@ -145,38 +158,47 @@ export function calculateTitleVI(
     }
 
     const minorityShare = bg.totalRacePop > 0 ? bg.minorityPop / bg.totalRacePop : 0;
+    const lowIncomeShare = bg.povertyUniverse > 0 ? bg.lowIncomePop / bg.povertyUniverse : 0;
     levels.push({
       geoid: bg.geoid,
       dailyTrips,
       minorityShare,
       isMinority: minorityShare >= regionalMinorityShare,
+      lowIncomeShare,
+      isLowIncome: lowIncomeShare >= regionalLowIncomeShare,
       population: bg.population,
     });
   }
 
   // 6. Aggregate by group
-  const minorityLevels    = levels.filter((l) => l.isMinority);
-  const nonMinorityLevels = levels.filter((l) => !l.isMinority);
-
   const avgTrips = (arr: BlockGroupServiceLevel[]) =>
     arr.length > 0 ? arr.reduce((s, l) => s + l.dailyTrips, 0) / arr.length : 0;
+  const sumPop = (arr: BlockGroupServiceLevel[]) => arr.reduce((s, l) => s + l.population, 0);
+  const group = (arr: BlockGroupServiceLevel[]): TitleVIGroup => ({
+    count: arr.length,
+    avgDailyTrips: avgTrips(arr),
+    totalPop: sumPop(arr),
+  });
 
-  const minorityAvg    = avgTrips(minorityLevels);
-  const nonMinorityAvg = avgTrips(nonMinorityLevels);
+  const minorityLevels     = levels.filter((l) => l.isMinority);
+  const nonMinorityLevels  = levels.filter((l) => !l.isMinority);
+  const lowIncomeLevels     = levels.filter((l) => l.isLowIncome);
+  const nonLowIncomeLevels  = levels.filter((l) => !l.isLowIncome);
+
+  const minorityAvg     = avgTrips(minorityLevels);
+  const nonMinorityAvg  = avgTrips(nonMinorityLevels);
+  const lowIncomeAvg    = avgTrips(lowIncomeLevels);
+  const nonLowIncomeAvg = avgTrips(nonLowIncomeLevels);
 
   return {
     regionalMinorityShare,
-    minority: {
-      count:        minorityLevels.length,
-      avgDailyTrips: minorityAvg,
-      totalPop:     minorityLevels.reduce((s, l) => s + l.population, 0),
-    },
-    nonMinority: {
-      count:        nonMinorityLevels.length,
-      avgDailyTrips: nonMinorityAvg,
-      totalPop:     nonMinorityLevels.reduce((s, l) => s + l.population, 0),
-    },
+    minority: group(minorityLevels),
+    nonMinority: group(nonMinorityLevels),
     ratio: nonMinorityAvg > 0 ? minorityAvg / nonMinorityAvg : 0,
+    regionalLowIncomeShare,
+    lowIncome: group(lowIncomeLevels),
+    nonLowIncome: group(nonLowIncomeLevels),
+    lowIncomeRatio: nonLowIncomeAvg > 0 ? lowIncomeAvg / nonLowIncomeAvg : 0,
     blockGroupLevels: levels,
   };
 }

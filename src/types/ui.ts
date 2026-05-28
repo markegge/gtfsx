@@ -7,7 +7,18 @@ export type SidebarSection =
   | 'flex'
   | 'costs'
   | 'coverage'
-  | 'titlevi';
+  | 'titlevi'
+  | 'stop-analysis';
+
+/**
+ * Contextual map highlight driven by the Stop Analysis panel. `balancing` and
+ * `accessibility` highlight a stop-id set; `intensity` colours stops on a
+ * trips/day ramp (maxTrips sets the ramp ceiling). null = no overlay.
+ */
+export type StopAnalysisOverlay =
+  | { kind: 'balancing'; stopIds: string[] }
+  | { kind: 'accessibility'; stopIds: string[] }
+  | { kind: 'intensity'; trips: Record<string, number>; maxTrips: number };
 
 export type BottomPanelTab =
   | 'timetable'

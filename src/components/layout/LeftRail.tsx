@@ -22,6 +22,7 @@ const FLEX: NavItem[] = [
 ];
 const ANALYSIS: NavItem[] = [
   { key: 'costs', label: 'Costs', tile: 'tile-gold' },
+  { key: 'stop-analysis', label: 'Stop Analysis', tile: 'tile-coral' },
   { key: 'coverage', label: 'Coverage', tile: 'tile-teal' },
   { key: 'titlevi', label: 'Title VI', tile: 'tile-purple' },
 ];
@@ -104,6 +105,13 @@ const ICON_PATHS: Record<SidebarSection, ReactNode> = {
       <rect x="5" y="3" width="14" height="18" rx="2" />
       <rect x="8" y="6" width="8" height="3" rx="0.5" />
       <path d="M9 13h.01M12 13h.01M15 13h.01M9 17h.01M12 17h.01M15 17h.01" />
+    </>
+  ),
+  // Stop Analysis — bar chart with a magnifier accent
+  'stop-analysis': (
+    <>
+      <path d="M4 20V10M9 20V4M14 20v-7M19 20v-4" />
+      <path d="M3 20h18" />
     </>
   ),
   // Coverage — concentric reach

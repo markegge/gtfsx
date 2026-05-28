@@ -117,19 +117,16 @@ export function TitleVIPanel() {
 
       {result && !loading && (
         <div className="space-y-3">
-          {/* Regional context */}
+          {/* ── Race / ethnicity ── */}
+          <h3 className="font-heading font-bold text-sm text-dark-brown">Race / ethnicity</h3>
           <div className="bg-cream rounded-lg px-3 py-2 flex items-center justify-between">
             <span className="text-xs text-warm-gray">Regional minority share (threshold)</span>
             <span className="text-sm font-bold text-dark-brown">{pct(result.regionalMinorityShare)}</span>
           </div>
-
-          {/* Side-by-side group columns */}
           <div className="flex gap-2">
             <GroupColumn label="Minority" group={result.minority} isMinority={true} />
             <GroupColumn label="Non-Minority" group={result.nonMinority} isMinority={false} />
           </div>
-
-          {/* Ratio */}
           <div>
             <p className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
               Minority / Non-Minority Ratio
@@ -141,10 +138,32 @@ export function TitleVIPanel() {
             </p>
           </div>
 
+          {/* ── Income (Environmental Justice) ── */}
+          <h3 className="font-heading font-bold text-sm text-dark-brown pt-1">Income (Environmental Justice)</h3>
+          <div className="bg-cream rounded-lg px-3 py-2 flex items-center justify-between">
+            <span className="text-xs text-warm-gray">Regional low-income share (threshold)</span>
+            <span className="text-sm font-bold text-dark-brown">{pct(result.regionalLowIncomeShare)}</span>
+          </div>
+          <div className="flex gap-2">
+            <GroupColumn label="Low-Income" group={result.lowIncome} isMinority={true} />
+            <GroupColumn label="Higher-Income" group={result.nonLowIncome} isMinority={false} />
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
+              Low-Income / Higher-Income Ratio
+            </p>
+            <RatioIndicator ratio={result.lowIncomeRatio} />
+            <p className="text-[10px] text-warm-gray mt-1">
+              Low-income = block groups above the regional share of population under 200% of the
+              federal poverty line. Ratio &lt; 1.0 indicates these areas receive fewer average daily trips.
+            </p>
+          </div>
+
           {/* Methodology note */}
           <p className="text-[10px] text-warm-gray border-t border-sand pt-2">
             Service metric: apportioned daily trips per block group (unique trip visits, weighted
-            by circle-overlap fraction with a 0.5 mi stop buffer). Source: ACS 5-Year B03002.
+            by circle-overlap fraction with a 0.5 mi stop buffer). Source: ACS 5-Year B03002 (race)
+            and C17002 (income-to-poverty).
           </p>
         </div>
       )}

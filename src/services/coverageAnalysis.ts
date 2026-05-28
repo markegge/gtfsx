@@ -9,10 +9,38 @@ export interface CoverageResult {
   totalPopulation: number;
   totalHouseholds: number;
   totalWorkers: number;
+  // Apportioned demographic counts (numerators + denominators kept separate
+  // so shares can be computed after summing — never average pre-computed
+  // per-block-group shares). See demographicShares() below.
+  minorityPop: number;
+  totalRacePop: number;
+  lowIncomePop: number;
+  povertyUniverse: number;
+  zeroVehicleHouseholds: number;
+  occupiedHouseholds: number;
+  seniorPop: number;
+  youthPop: number;
   coveredBlockGroupIds: string[];
   bufferMiles: number;
   /** geoid → apportionment fraction [0,1] for each covered block group */
   fractions: Map<string, number>;
+}
+
+/**
+ * The four equity shares the demographic overlay surfaces, each in [0,1].
+ * `null` when the denominator is zero (no data in the coverage area), so the
+ * UI can render "—" rather than a misleading 0%.
+ */
+export interface DemographicShares {
+  minority: number | null;
+  lowIncome: number | null;
+  zeroVehicle: number | null;
+  senior: number | null;
+  youth: number | null;
+}
+
+function share(numerator: number, denominator: number): number | null {
+  return denominator > 0 ? numerator / denominator : null;
 }
 
 /**
@@ -55,6 +83,58 @@ export function circleOverlapFraction(d: number, bufferMiles: number, bgRadius: 
  * circle-circle intersection formula, and population/households/workers are
  * scaled by that fraction before summing.
  */
+/**
+ * Sum apportioned demographic counts over a fractions map into a CoverageResult.
+ * Shared by calculateCoverage (one buffer over a stop set) and the system-level
+ * summary in CoveragePanel (max fraction per block group across per-route
+ * buffers) so the per-field summation lives in exactly one place.
+ */
+export function coverageFromFractions(
+  fractions: Map<string, number>,
+  blockGroups: BlockGroupData[],
+  bufferMiles: number,
+): CoverageResult {
+  const bgMap = new Map(blockGroups.map((bg) => [bg.geoid, bg]));
+  let totalPopulation = 0, totalHouseholds = 0, totalWorkers = 0;
+  let minorityPop = 0, totalRacePop = 0;
+  let lowIncomePop = 0, povertyUniverse = 0;
+  let zeroVehicleHouseholds = 0, occupiedHouseholds = 0;
+  let seniorPop = 0, youthPop = 0;
+
+  for (const [geoid, f] of fractions) {
+    const bg = bgMap.get(geoid);
+    if (!bg || !f) continue;
+    totalPopulation       += f * bg.population;
+    totalHouseholds       += f * bg.households;
+    totalWorkers          += f * bg.workers;
+    minorityPop           += f * bg.minorityPop;
+    totalRacePop          += f * bg.totalRacePop;
+    lowIncomePop          += f * bg.lowIncomePop;
+    povertyUniverse       += f * bg.povertyUniverse;
+    zeroVehicleHouseholds += f * bg.zeroVehicleHouseholds;
+    occupiedHouseholds    += f * bg.occupiedHouseholds;
+    seniorPop             += f * bg.seniorPop;
+    youthPop              += f * bg.youthPop;
+  }
+
+  return {
+    totalPopulation:       Math.round(totalPopulation),
+    totalHouseholds:       Math.round(totalHouseholds),
+    totalWorkers:          Math.round(totalWorkers),
+    minorityPop:           Math.round(minorityPop),
+    totalRacePop:          Math.round(totalRacePop),
+    lowIncomePop:          Math.round(lowIncomePop),
+    povertyUniverse:       Math.round(povertyUniverse),
+    zeroVehicleHouseholds: Math.round(zeroVehicleHouseholds),
+    occupiedHouseholds:    Math.round(occupiedHouseholds),
+    seniorPop:             Math.round(seniorPop),
+    youthPop:              Math.round(youthPop),
+    coveredBlockGroupIds:  [...fractions.keys()],
+    bufferMiles,
+    fractions,
+  };
+}
+
 export function calculateCoverage(
   stops: Stop[],
   blockGroups: BlockGroupData[],
@@ -74,23 +154,55 @@ export function calculateCoverage(
     if (fraction > 0) fractions.set(bg.geoid, fraction);
   }
 
-  let totalPopulation = 0, totalHouseholds = 0, totalWorkers = 0;
-  for (const bg of blockGroups) {
-    const f = fractions.get(bg.geoid);
-    if (f) {
-      totalPopulation += f * bg.population;
-      totalHouseholds += f * bg.households;
-      totalWorkers    += f * bg.workers;
-    }
-  }
+  return coverageFromFractions(fractions, blockGroups, bufferMiles);
+}
 
+/**
+ * Demographic shares for a coverage area, computed from the apportioned
+ * numerators and denominators (so they're area-weighted, not an average of
+ * per-block-group rates). Senior / youth use total population as the base.
+ */
+export function demographicShares(r: CoverageResult): DemographicShares {
   return {
-    totalPopulation:     Math.round(totalPopulation),
-    totalHouseholds:     Math.round(totalHouseholds),
-    totalWorkers:        Math.round(totalWorkers),
-    coveredBlockGroupIds: [...fractions.keys()],
-    bufferMiles,
-    fractions,
+    minority:    share(r.minorityPop, r.totalRacePop),
+    lowIncome:   share(r.lowIncomePop, r.povertyUniverse),
+    zeroVehicle: share(r.zeroVehicleHouseholds, r.occupiedHouseholds),
+    senior:      share(r.seniorPop, r.totalPopulation),
+    youth:       share(r.youthPop, r.totalPopulation),
+  };
+}
+
+/**
+ * Service-area baseline shares: the same five shares computed over EVERY block
+ * group in the fetched county (unweighted), giving the denominator for the
+ * coverage-vs-baseline equity ratio. No extra Census fetch — we already pull
+ * the whole county to run the coverage apportionment.
+ */
+export function baselineShares(blockGroups: BlockGroupData[]): DemographicShares {
+  const t = blockGroups.reduce(
+    (a, bg) => {
+      a.minorityPop += bg.minorityPop;
+      a.totalRacePop += bg.totalRacePop;
+      a.lowIncomePop += bg.lowIncomePop;
+      a.povertyUniverse += bg.povertyUniverse;
+      a.zeroVehicleHouseholds += bg.zeroVehicleHouseholds;
+      a.occupiedHouseholds += bg.occupiedHouseholds;
+      a.seniorPop += bg.seniorPop;
+      a.youthPop += bg.youthPop;
+      a.population += bg.population;
+      return a;
+    },
+    {
+      minorityPop: 0, totalRacePop: 0, lowIncomePop: 0, povertyUniverse: 0,
+      zeroVehicleHouseholds: 0, occupiedHouseholds: 0, seniorPop: 0, youthPop: 0, population: 0,
+    },
+  );
+  return {
+    minority:    share(t.minorityPop, t.totalRacePop),
+    lowIncome:   share(t.lowIncomePop, t.povertyUniverse),
+    zeroVehicle: share(t.zeroVehicleHouseholds, t.occupiedHouseholds),
+    senior:      share(t.seniorPop, t.population),
+    youth:       share(t.youthPop, t.population),
   };
 }
 

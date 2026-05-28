@@ -137,7 +137,7 @@ export function StopPopup({ stopId, onClose }: StopPopupProps) {
             onClick={handleEdit}
             className="w-full px-3 py-1.5 text-xs font-semibold text-coral bg-coral-light hover:bg-coral hover:text-white rounded-md transition-colors"
           >
-            Edit Stop Properties
+            Stop Properties
           </button>
         </div>
       </div>

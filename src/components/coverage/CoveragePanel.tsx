@@ -5,7 +5,10 @@ import { fetchCensusData, lookupFips } from '../../services/demographics';
 import {
   getBufferForRoute,
   generateBufferGeoJSON,
-  type CoverageResult,
+  coverageFromFractions,
+  demographicShares,
+  baselineShares,
+  type DemographicShares,
 } from '../../services/coverageAnalysis';
 
 function formatNumber(n: number): string {
@@ -50,27 +53,15 @@ export function CoveragePanel() {
       }));
 
       // System summary: for each block group, take the max apportionment
-      // fraction across all routes, then sum apportioned populations.
-      const bgMap = new Map(blockGroups.map((bg) => [bg.geoid, bg]));
+      // fraction across all routes, then sum apportioned counts via the shared
+      // helper so every demographic field aggregates identically to per-route.
       const systemFractions = new Map<string, number>();
       for (const { result } of routeResults) {
         for (const [geoid, f] of result.fractions) {
           if ((systemFractions.get(geoid) ?? 0) < f) systemFractions.set(geoid, f);
         }
       }
-      let sysPop = 0, sysHH = 0, sysWorkers = 0;
-      for (const [geoid, f] of systemFractions) {
-        const bg = bgMap.get(geoid);
-        if (bg) { sysPop += f * bg.population; sysHH += f * bg.households; sysWorkers += f * bg.workers; }
-      }
-      const systemResult: CoverageResult = {
-        totalPopulation:      Math.round(sysPop),
-        totalHouseholds:      Math.round(sysHH),
-        totalWorkers:         Math.round(sysWorkers),
-        coveredBlockGroupIds: [...systemFractions.keys()],
-        bufferMiles:          0.25,
-        fractions:            systemFractions,
-      };
+      const systemResult = coverageFromFractions(systemFractions, blockGroups, 0.25);
 
       // Generate buffer GeoJSON for map display
       // Combine buffers: for each route, use its specific buffer distance
@@ -120,7 +111,9 @@ export function CoveragePanel() {
   return (
     <div className="space-y-4">
       <p className="text-xs text-warm-gray">
-        Population, households, and workers within walking distance of stops, from US Census data.
+        Population, households, workers, and equity demographics within a straight-line ¼–½ mi
+        buffer of stops, from US Census ACS data. Buffers approximate walking reach; true
+        street-network walksheds are a future enhancement.
       </p>
 
       <button
@@ -163,6 +156,12 @@ export function CoveragePanel() {
             </p>
           </div>
 
+          {/* Demographic profile — coverage vs. county baseline */}
+          <DemographicProfile
+            coverage={demographicShares(coverageData.systemResult)}
+            baseline={baselineShares(coverageData.blockGroups)}
+          />
+
           {/* Per-route breakdown */}
           <div className="space-y-2">
             <h3 className="font-heading font-bold text-sm text-dark-brown">
@@ -186,6 +185,69 @@ export function CoveragePanel() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+const SHARE_LABELS: { key: keyof DemographicShares; label: string }[] = [
+  { key: 'minority', label: 'Minority' },
+  { key: 'lowIncome', label: 'Low-income (<200% FPL)' },
+  { key: 'zeroVehicle', label: 'Zero-vehicle HH' },
+  { key: 'senior', label: 'Age 65+' },
+  { key: 'youth', label: 'Age under 18' },
+];
+
+function pctOrDash(v: number | null): string {
+  return v == null ? '—' : `${(v * 100).toFixed(1)}%`;
+}
+
+/**
+ * Coverage-area demographic shares vs. the county baseline. The ratio
+ * (coverage ÷ baseline) is the equity signal: > 1 over-represents the group in
+ * the served area, < 1 under-represents it. Mirrors the Title VI panel's
+ * ratio coloring (≥1 good, ≥0.8 moderate, else disparity).
+ */
+function DemographicProfile({ coverage, baseline }: { coverage: DemographicShares; baseline: DemographicShares }) {
+  return (
+    <div className="space-y-2">
+      <h3 className="font-heading font-bold text-sm text-dark-brown">Demographic profile</h3>
+      <div className="border border-sand rounded-lg overflow-hidden">
+        <table className="w-full text-[11px] border-collapse">
+          <thead>
+            <tr className="bg-cream text-warm-gray uppercase tracking-wide">
+              <th className="px-2 py-1.5 text-left font-semibold">Group</th>
+              <th className="px-2 py-1.5 text-right font-semibold">Coverage</th>
+              <th className="px-2 py-1.5 text-right font-semibold">County</th>
+              <th className="px-2 py-1.5 text-right font-semibold">Ratio</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SHARE_LABELS.map(({ key, label }, i) => {
+              const cov = coverage[key];
+              const base = baseline[key];
+              const ratio = cov != null && base != null && base > 0 ? cov / base : null;
+              const ratioColor =
+                ratio == null ? 'text-warm-gray' :
+                ratio >= 1.0 ? 'text-emerald-600' :
+                ratio >= 0.8 ? 'text-amber-600' : 'text-red-600';
+              return (
+                <tr key={key} className={i % 2 ? 'bg-cream/50' : ''}>
+                  <td className="px-2 py-1 text-dark-brown">{label}</td>
+                  <td className="px-2 py-1 text-right tabular-nums text-dark-brown">{pctOrDash(cov)}</td>
+                  <td className="px-2 py-1 text-right tabular-nums text-warm-gray">{pctOrDash(base)}</td>
+                  <td className={`px-2 py-1 text-right tabular-nums font-semibold ${ratioColor}`}>
+                    {ratio == null ? '—' : ratio.toFixed(2)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-warm-gray">
+        Ratio = coverage share ÷ county share. Above 1.0 means the served area over-represents that
+        group; below 0.8 may warrant a closer look. Source: ACS 5-year (2022), block-group level.
+      </p>
     </div>
   );
 }

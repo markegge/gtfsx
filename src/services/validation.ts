@@ -99,6 +99,24 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     if (!s.stop_lat || !s.stop_lon) messages.push(msg('error', `Stop "${s.stop_name || s.stop_id}" has invalid coordinates`, 'stop', s.stop_id));
   }
 
+  // Accessibility completeness — aggregate (one message, not one per stop) so
+  // the warning is actionable without flooding the panel. Counts board points
+  // (location_type 0/blank) where wheelchair_boarding is unset or 0 (= "no
+  // information" per the GTFS spec). Detailed per-route breakdown lives in
+  // Stop Analysis → Accessibility, which this cross-links to.
+  const boardPoints = state.stops.filter((s) => (s.location_type ?? 0) === 0);
+  const missingWheelchair = boardPoints.filter(
+    (s) => s.wheelchair_boarding !== 1 && s.wheelchair_boarding !== 2,
+  ).length;
+  if (boardPoints.length > 0 && missingWheelchair > 0) {
+    const pct = Math.round((missingWheelchair / boardPoints.length) * 100);
+    messages.push(msg(
+      'warning',
+      `${missingWheelchair} of ${boardPoints.length} stops (${pct}%) are missing wheelchair_boarding — riders see "no accessibility information." Populate it in Stop Analysis → Accessibility.`,
+      'stop',
+    ));
+  }
+
   // Trip checks (using pre-built indexes — O(n) not O(n²))
   for (const t of state.trips) {
     if (!routeIdSet.has(t.route_id)) {

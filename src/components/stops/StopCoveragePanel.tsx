@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import distance from '@turf/distance';
 import { point } from '@turf/helpers';
 import { useStore } from '../../store';
-import { calculateCoverage } from '../../services/coverageAnalysis';
+import { calculateCoverage, demographicShares, baselineShares } from '../../services/coverageAnalysis';
 import { fetchCensusData, lookupFips, type BlockGroupData } from '../../services/demographics';
 import { directionName } from '../../utils/constants';
 
@@ -170,6 +170,16 @@ export function StopCoveragePanel() {
     return calculateCoverage([stop], blockGroups, bufferMiles);
   }, [stop, blockGroups, bufferMiles]);
 
+  // Equity shares for this stop's buffer vs. the county baseline.
+  const shares = useMemo(
+    () => (coverageResult ? demographicShares(coverageResult) : null),
+    [coverageResult],
+  );
+  const baseline = useMemo(
+    () => (blockGroups ? baselineShares(blockGroups) : null),
+    [blockGroups],
+  );
+
   if (!stop) return null;
 
   const fmtMiles = (m: number) => {
@@ -286,9 +296,44 @@ export function StopCoveragePanel() {
           </div>
         ) : null}
         <p className="mt-1.5 text-[10px] text-warm-gray">
-          Estimated reach within a {bufferMiles === 0.25 ? '1/4-mile' : '1/2-mile'} walk of this stop. Block-group apportionment uses the same circle-overlap method as the system Coverage panel.
+          Estimated reach within a {bufferMiles === 0.25 ? '1/4-mile' : '1/2-mile'} straight-line buffer of this stop. Block-group apportionment uses the same circle-overlap method as the system Coverage panel.
         </p>
+
+        {shares && baseline && coverageResult && coverageResult.totalPopulation > 0 && (
+          <div className="mt-3 border border-sand rounded-lg overflow-hidden">
+            <table className="w-full text-[11px] border-collapse">
+              <thead>
+                <tr className="bg-cream text-warm-gray uppercase tracking-wide">
+                  <th className="px-2 py-1 text-left font-semibold">Group</th>
+                  <th className="px-2 py-1 text-right font-semibold">Here</th>
+                  <th className="px-2 py-1 text-right font-semibold">County</th>
+                </tr>
+              </thead>
+              <tbody>
+                {STOP_SHARE_ROWS.map(({ key, label }, i) => (
+                  <tr key={key} className={i % 2 ? 'bg-cream/50' : ''}>
+                    <td className="px-2 py-1 text-dark-brown">{label}</td>
+                    <td className="px-2 py-1 text-right tabular-nums text-dark-brown">{fmtShare(shares[key])}</td>
+                    <td className="px-2 py-1 text-right tabular-nums text-warm-gray">{fmtShare(baseline[key])}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
+}
+
+const STOP_SHARE_ROWS = [
+  { key: 'minority', label: 'Minority' },
+  { key: 'lowIncome', label: 'Low-income' },
+  { key: 'zeroVehicle', label: 'Zero-vehicle HH' },
+  { key: 'senior', label: 'Age 65+' },
+  { key: 'youth', label: 'Age <18' },
+] as const;
+
+function fmtShare(v: number | null): string {
+  return v == null ? '—' : `${(v * 100).toFixed(0)}%`;
 }

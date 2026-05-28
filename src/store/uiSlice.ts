@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { SidebarSection, BottomPanelTab, MapMode, StopPlacementMode, RouteDetailTab, StopDetailTab, CalendarDetailTab } from '../types/ui';
+import type { SidebarSection, BottomPanelTab, MapMode, StopPlacementMode, RouteDetailTab, StopDetailTab, CalendarDetailTab, StopAnalysisOverlay } from '../types/ui';
 
 export interface UISlice {
   sidebarSection: SidebarSection | null;
@@ -63,6 +63,9 @@ export interface UISlice {
   routeDetailTab: RouteDetailTab;
   stopDetailTab: StopDetailTab;
   calendarDetailTab: CalendarDetailTab;
+  /** Contextual map overlay set by the Stop Analysis panel; cleared when the
+   *  user leaves the Stop Analysis section. */
+  stopAnalysisOverlay: StopAnalysisOverlay | null;
   /** Shape id the user wants to enter edit mode on, set by a component
    *  outside RouteShapesTab (e.g. the RoutePopup "Edit Shape" button).
    *  RouteShapesTab watches this on mount / change, dispatches its
@@ -109,6 +112,7 @@ export interface UISlice {
   setRouteDetailTab: (tab: RouteDetailTab) => void;
   setStopDetailTab: (tab: StopDetailTab) => void;
   setCalendarDetailTab: (tab: CalendarDetailTab) => void;
+  setStopAnalysisOverlay: (overlay: StopAnalysisOverlay | null) => void;
   setPendingShapeEditId: (id: string | null) => void;
   setSelectedHolidayNames: (names: string[]) => void;
   setRouteDeleteConfirmId: (id: string | null) => void;
@@ -150,6 +154,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   routeDetailTab: 'details',
   stopDetailTab: 'details',
   calendarDetailTab: 'details',
+  stopAnalysisOverlay: null,
   pendingShapeEditId: null,
   // Six federal holidays transit typically suspends service on — kept in sync
   // with the US_HOLIDAYS catalog names in CalendarEditor.tsx.
@@ -209,6 +214,9 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     // active; clear it when navigating elsewhere so other sections see the
     // full feed unmuted.
     if (section !== 'stops') state.mapStopFilter = null;
+    // The Stop Analysis map overlay is scoped to its section — drop it on the
+    // way out so balancing/intensity/accessibility highlights don't linger.
+    if (section !== 'stop-analysis') state.stopAnalysisOverlay = null;
   }),
   setBottomPanelOpen: (open) => set((state) => { state.bottomPanelOpen = open; }),
   toggleBottomPanel: () => set((state) => { state.bottomPanelOpen = !state.bottomPanelOpen; }),
@@ -262,6 +270,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setPendingShapeEditId: (id) => set((state) => { state.pendingShapeEditId = id; }),
   setStopDetailTab: (tab) => set((state) => { state.stopDetailTab = tab; }),
   setCalendarDetailTab: (tab) => set((state) => { state.calendarDetailTab = tab; }),
+  setStopAnalysisOverlay: (overlay) => set((state) => { state.stopAnalysisOverlay = overlay; }),
   setSelectedHolidayNames: (names) => set((state) => { state.selectedHolidayNames = names; }),
   setRouteDeleteConfirmId: (id) => set((state) => { state.routeDeleteConfirmId = id; }),
 });

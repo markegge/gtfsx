@@ -13,6 +13,7 @@ import { StopPopup } from './StopPopup';
 import { RoutePopup } from './RoutePopup';
 import { FlexZonePopup } from './FlexZonePopup';
 import { CoverageLayer } from './CoverageLayer';
+import { StopAnalysisLayer } from './StopAnalysisLayer';
 import { FlexLayer } from '../flex/FlexLayer';
 import { DemandDotsLayer } from './DemandDotsLayer';
 import { MapLayerControls } from './MapLayerControls';
@@ -1005,6 +1006,7 @@ export function MapView() {
         <FlexLayer />
         <RouteLayer simplified={simplifyShapes} />
         <StopLayer clustered={clusterStops} />
+        <StopAnalysisLayer />
 
         {popupStopId && (
           <StopPopup

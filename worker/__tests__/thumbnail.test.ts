@@ -129,6 +129,35 @@ describe('renderRouteThumbnail', () => {
     expect(await renderRouteThumbnail(stateWithShapes(), env)).toBeNull();
     expect(mock).not.toHaveBeenCalled();
   });
+
+  it('sanitizes a route_color with stray whitespace (no control char in URL)', async () => {
+    const mock = mockMapbox();
+    await renderRouteThumbnail(stateWithShapes('005B95 '), env); // note trailing space
+    const url = String(mock.mock.calls[0][0]);
+    expect(url).toContain('path-5+005B95-0.95'); // trimmed
+    expect(url).not.toContain('005B95 '); // no raw space leaked into the URL
+  });
+
+  it('drops shapes to keep the URL under Mapbox’s cap for huge feeds', async () => {
+    const mock = mockMapbox();
+    // 250 distinct shapes would overflow the ~8KB URL even at max simplification.
+    const state: FeedState = {
+      ...emptyState(),
+      routes: [{ route_id: 'R', agency_id: 'A', route_short_name: 'R', route_long_name: 'R', route_type: 3, route_color: '274BAC', route_text_color: 'FFFFFF' }],
+      trips: Array.from({ length: 250 }, (_, i) => ({ trip_id: `T${i}`, route_id: 'R', service_id: 'S', direction_id: 0 as const, shape_id: `SH${i}` })),
+      shapes: Array.from({ length: 250 }, (_, i) => ({
+        shape_id: `SH${i}`,
+        points: [
+          { shape_pt_lat: 45.6 + i * 0.001, shape_pt_lon: -111.0 - i * 0.001, shape_pt_sequence: 0 },
+          { shape_pt_lat: 45.61 + i * 0.001, shape_pt_lon: -111.01 - i * 0.001, shape_pt_sequence: 1 },
+        ],
+      })),
+    };
+    const res = await renderRouteThumbnail(state, env);
+    expect(res).not.toBeNull();
+    const url = String(mock.mock.calls[0][0]);
+    expect(url.length).toBeLessThanOrEqual(8192); // Mapbox Static URL limit
+  });
 });
 
 describe('generateAndStoreThumbnail + gate', () => {

@@ -160,19 +160,36 @@ export async function renderRouteThumbnail(state: FeedState, env: Env): Promise<
     return null;
   }
   const data = buildSystemMapData(state);
-  const shapes: ColoredShape[] = data.shapes.map((s) => ({
-    coords: s.coords,
-    color: (s.color.startsWith('#') ? s.color.slice(1) : s.color) || '666666',
-  }));
+  // Sanitize route_color: GTFS data sometimes carries stray whitespace or junk
+  // (e.g. "005B95 "), which would put a control char in the Mapbox URL. Fall
+  // back to a neutral gray for anything that isn't a clean 6-hex value.
+  const shapes: ColoredShape[] = data.shapes.map((s) => {
+    const raw = (s.color.startsWith('#') ? s.color.slice(1) : s.color).trim();
+    return { coords: s.coords, color: /^[0-9a-fA-F]{6}$/.test(raw) ? raw : '666666' };
+  });
   if (shapes.length === 0) return null;
 
-  // Auto-tune the simplification tolerance: start near-full-resolution and
-  // coarsen until the larger image's URL fits the budget.
+  // Fit the overlay under Mapbox's URL cap. First coarsen the simplification
+  // tolerance (fewer points per shape); if a feed has so many shapes that even
+  // coarse geometry overflows, drop the shortest shapes (least significant)
+  // until it fits. Sorting longest-first means we keep the trunk routes.
+  let working = [...shapes].sort((a, b) => b.coords.length - a.coords.length);
   let eps = 0.000003;
-  let overlay = buildOverlay(shapes, eps);
-  for (let i = 0; i < 40 && urlLen(overlay, 1200, 630, env) > URL_BUDGET; i++) {
-    eps *= 1.4;
-    overlay = buildOverlay(shapes, eps);
+  let overlay = buildOverlay(working, eps);
+  let dropped = 0;
+  while (urlLen(overlay, 1200, 630, env) > URL_BUDGET) {
+    if (eps < 0.01) {
+      eps *= 1.4;
+    } else if (working.length > 1) {
+      working = working.slice(0, -1);
+      dropped++;
+    } else {
+      break;
+    }
+    overlay = buildOverlay(working, eps);
+  }
+  if (dropped > 0) {
+    console.warn(`[thumbnail] dropped ${dropped}/${shapes.length} shapes to fit the Mapbox URL budget`);
   }
 
   const out: Partial<ThumbnailResult> = {};

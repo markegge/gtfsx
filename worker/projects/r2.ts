@@ -16,6 +16,15 @@ export function publicationZipKey(projectId: string, snapshotId: string): string
   return `publications/${projectId}/${snapshotId}/gtfs.zip`;
 }
 
+export type ThumbnailSize = 'lg' | 'sm';
+
+// Per-project route-map thumbnail (rendered via Mapbox Static Images, see
+// worker/embeds/thumbnail.ts). One pair per project; overwritten on regen.
+export function thumbnailKey(projectId: string, size: ThumbnailSize): string {
+  const dims = size === 'sm' ? '400x300' : '1200x630';
+  return `projects/${projectId}/thumbnail-${dims}.png`;
+}
+
 export function draftZipKey(projectId: string, tokenHash: string): string {
   return `draft-links/${projectId}/${tokenHash}.zip`;
 }

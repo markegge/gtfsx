@@ -314,6 +314,11 @@ export interface SocialMeta {
   description: string;
   // Optional canonical URL for OG meta.
   url?: string;
+  // Optional absolute URL of the route-map thumbnail (og:image / twitter:image).
+  // When set, the card upgrades to summary_large_image.
+  imageUrl?: string;
+  imageWidth?: number;
+  imageHeight?: number;
 }
 
 export function renderLayout(opts: {
@@ -346,7 +351,15 @@ export function renderLayout(opts: {
         <meta property="og:description" content="${social.description}" />
         <meta property="og:type" content="website" />
         ${social.url ? html`<meta property="og:url" content="${social.url}" />` : ''}
-        <meta name="twitter:card" content="summary" />
+        ${social.imageUrl
+          ? html`
+              <meta property="og:image" content="${social.imageUrl}" />
+              ${social.imageWidth ? html`<meta property="og:image:width" content="${social.imageWidth}" />` : ''}
+              ${social.imageHeight ? html`<meta property="og:image:height" content="${social.imageHeight}" />` : ''}
+              <meta name="twitter:image" content="${social.imageUrl}" />
+            `
+          : ''}
+        <meta name="twitter:card" content="${social.imageUrl ? 'summary_large_image' : 'summary'}" />
         <meta name="twitter:title" content="${social.title}" />
         <meta name="twitter:description" content="${social.description}" />
       `

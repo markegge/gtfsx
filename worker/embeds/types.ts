@@ -116,5 +116,7 @@ export interface LoadedEmbedFeed {
   // Public URL for the owning org's brand logo (resolves on FEEDS_ORIGIN).
   // Null when the project is user-owned or the org has no logo.
   brandLogoUrl: string | null;
+  // feed_project.thumbnail_version — 0 when no route-map thumbnail exists yet.
+  thumbnailVersion: number;
   state: FeedState;
 }

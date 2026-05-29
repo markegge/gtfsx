@@ -15,7 +15,7 @@
 
 import type { Env } from '../env';
 import { sha256Hex } from '../util/crypto';
-import { getFeedBlob } from '../projects/r2';
+import { getFeedBlob, thumbnailKey, type ThumbnailSize } from '../projects/r2';
 import { ungzip } from './ungzip';
 import { renderRouteEmbed } from '../embeds/route';
 import { renderSystemMapEmbed } from '../embeds/systemMap';
@@ -141,6 +141,7 @@ const DRAFT_RE = /^\/([a-z0-9][a-z0-9-]*)\/draft\/([A-Za-z0-9_-]+)\.zip$/;
 const EMBED_ROUTE_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/route\/([^/?#]+)\/?$/;
 const EMBED_STOP_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/stop\/([^/?#]+)\/?$/;
 const EMBED_SYSMAP_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/system-map\/?$/;
+const THUMBNAIL_RE = /^\/([a-z0-9][a-z0-9-]*)\/thumbnail(-sm)?\.png$/;
 const ORG_LOGO_RE = /^\/_\/orgs\/([A-Z0-9]+)\/logo\/?$/i;
 const FORUM_IMAGE_RE = /^\/_forum-images\/(images\/[A-Z0-9]+\/[A-Z0-9]+\.(?:jpg|png|gif|webp))$/i;
 const LANDING_RE = /^\/([a-z0-9][a-z0-9-]*)\/?$/;
@@ -188,6 +189,10 @@ export async function feedsHandler(
   const embedSystem = url.pathname.match(EMBED_SYSMAP_RE);
   if (embedSystem) {
     return renderSystemMapEmbed(request, env, embedSystem[1]);
+  }
+  const thumbnail = url.pathname.match(THUMBNAIL_RE);
+  if (thumbnail) {
+    return serveThumbnail(request, env, thumbnail[1], thumbnail[2] ? 'sm' : 'lg');
   }
   const orgLogo = url.pathname.match(ORG_LOGO_RE);
   if (orgLogo) {
@@ -251,6 +256,45 @@ async function serveForumImage(request: Request, env: Env, r2Key: string): Promi
 }
 
 // ─── Org brand logo (public read) ───────────────────────────────────────────
+
+// Route-map thumbnail (Mapbox static render, cached in R2). Served by slug for
+// any feed that has one — GTFS route maps are inherently public transit data,
+// so no publish gate. Used as the public landing page's og:image and the feeds
+// list <img>. See worker/embeds/thumbnail.ts.
+async function serveThumbnail(
+  request: Request,
+  env: Env,
+  slug: string,
+  size: ThumbnailSize,
+): Promise<Response> {
+  const row = await env.DB.prepare(
+    `SELECT id, thumbnail_version FROM feed_project WHERE slug = ? AND deleted_at IS NULL`,
+  )
+    .bind(slug)
+    .first<{ id: string; thumbnail_version: number }>();
+  if (!row || !row.thumbnail_version) return notFound('Thumbnail not available.');
+
+  const etag = `"${row.thumbnail_version}-${size}"`;
+  if (etagMatches(request.headers.get('If-None-Match'), etag)) {
+    return new Response(null, {
+      status: 304,
+      headers: { ETag: etag, 'Cache-Control': 'public, max-age=3600, s-maxage=86400' },
+    });
+  }
+
+  const obj = await env.FEEDS.get(thumbnailKey(row.id, size));
+  if (!obj) return notFound('Thumbnail missing.');
+
+  return new Response(obj.body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'image/png',
+      ETag: etag,
+      'Cache-Control': 'public, max-age=3600, s-maxage=86400',
+      'Access-Control-Allow-Origin': '*',
+    },
+  });
+}
 
 async function serveOrgLogo(request: Request, env: Env, orgId: string): Promise<Response> {
   const row = await env.DB.prepare(

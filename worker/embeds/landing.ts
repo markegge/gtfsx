@@ -122,9 +122,21 @@ export async function renderLandingPage(
     </footer>
   `;
 
+  const thumbUrl =
+    feed.thumbnailVersion > 0
+      ? `${env.FEEDS_ORIGIN.replace(/\/$/, '')}/${encodeURIComponent(slug)}/thumbnail.png?v=${feed.thumbnailVersion}`
+      : undefined;
+
   const html5 = await renderLayout({
     title: titleText,
-    social: { title: titleText, description, url: url.toString() },
+    social: {
+      title: titleText,
+      description,
+      url: url.toString(),
+      imageUrl: thumbUrl,
+      imageWidth: thumbUrl ? 1200 : undefined,
+      imageHeight: thumbUrl ? 630 : undefined,
+    },
     bodyClass: 'landing',
     noindex: false,
     brandColor: feed.brandPrimaryColor,

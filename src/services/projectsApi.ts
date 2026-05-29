@@ -17,6 +17,8 @@ export interface ProjectSummary {
   lastSnapshotCreatedAt?: number | null;
   /** 6-char hex without leading "#"; null = use default coral. */
   brandPrimaryColor?: string | null;
+  /** Absolute URL of the small route-map thumbnail; null when none generated. */
+  thumbnailUrl?: string | null;
 }
 
 export interface ProjectQuota {

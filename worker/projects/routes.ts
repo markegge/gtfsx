@@ -41,6 +41,11 @@ import {
   snapshotZipKey,
   workingStateKey,
 } from './r2';
+import {
+  loadFeedStateFromKey,
+  maybeRegenerateThumbnail,
+  parseFeedStateFromGzip,
+} from '../embeds/thumbnail';
 
 interface ProjectRow {
   id: string;
@@ -58,6 +63,7 @@ interface ProjectRow {
   created_at: number;
   updated_at: number;
   brand_primary_color: string | null;
+  thumbnail_version?: number | null;
 }
 
 interface SnapshotRow {
@@ -350,7 +356,7 @@ projectsRouter.get('/', async (c) => {
   const rows = await c.env.DB.prepare(
     `SELECT p.id, p.slug, p.name, p.description, p.owner_type, p.owner_id,
             p.working_state_r2_key, p.working_state_version, p.working_state_size, p.working_state_updated_at,
-            p.archived_at, p.deleted_at, p.created_at, p.updated_at, p.brand_primary_color,
+            p.archived_at, p.deleted_at, p.created_at, p.updated_at, p.brand_primary_color, p.thumbnail_version,
             (SELECT COUNT(*) FROM feed_snapshot v WHERE v.project_id = p.id) AS snapshot_count,
             (SELECT MAX(v.created_at) FROM feed_snapshot v WHERE v.project_id = p.id) AS last_snapshot_created_at
        FROM feed_project p
@@ -360,10 +366,14 @@ projectsRouter.get('/', async (c) => {
     .bind(ownerType, ownerId)
     .all<ProjectRow & { snapshot_count: number; last_snapshot_created_at: number | null }>();
 
+  const feedsOrigin = c.env.FEEDS_ORIGIN.replace(/\/$/, '');
   const projects = (rows.results ?? []).map((r) => ({
     ...shapeProject(r),
     snapshotCount: r.snapshot_count,
     lastSnapshotCreatedAt: r.last_snapshot_created_at,
+    thumbnailUrl: r.thumbnail_version
+      ? `${feedsOrigin}/${r.slug}/thumbnail-sm.png?v=${r.thumbnail_version}`
+      : null,
   }));
 
   const ownerQuotas = await getOwnerQuotas(c.env, ownerType, ownerId);
@@ -690,6 +700,16 @@ projectsRouter.put('/:id/working-state', async (c) => {
     metadata: { size, version: row.working_state_version + 1 },
     ip: clientIp(c.req.raw),
   });
+
+  // Refresh the route-map thumbnail off the response path. Gated on a geometry
+  // hash inside maybeRegenerateThumbnail, so routine autosaves that don't touch
+  // route shapes don't re-hit Mapbox. Best-effort — never breaks the save.
+  c.executionCtx.waitUntil(
+    (async () => {
+      const state = await parseFeedStateFromGzip(buf);
+      if (state) await maybeRegenerateThumbnail(c.env, row.id, state);
+    })().catch((err) => console.error('[thumbnail] save-trigger error', err)),
+  );
 
   return c.json({ workingStateVersion: row.working_state_version + 1 });
 });
@@ -1284,6 +1304,16 @@ projectsRouter.post('/:id/publish', async (c) => {
     }).catch((err) => {
       console.error('[publish] catalog submission error', err);
     }),
+  );
+
+  // Ensure the thumbnail reflects the published snapshot's geometry (covers
+  // first-ever publish and publishing an older snapshot). Off the response
+  // path; gated on the geometry hash; never breaks publish.
+  c.executionCtx.waitUntil(
+    (async () => {
+      const state = await loadFeedStateFromKey(c.env, snapshot.state_r2_key);
+      if (state) await maybeRegenerateThumbnail(c.env, project.id, state);
+    })().catch((err) => console.error('[thumbnail] publish-trigger error', err)),
   );
 
   const canonicalUrl = `${feedsOrigin.replace(/\/$/, '')}/${project.slug}/gtfs.zip`;

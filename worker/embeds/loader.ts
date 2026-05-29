@@ -17,6 +17,7 @@ interface ProjectRow {
   brand_primary_color: string | null;
   owner_type: string;
   owner_id: string;
+  thumbnail_version: number;
 }
 
 interface OrgLogoRow {
@@ -47,7 +48,7 @@ export async function loadEmbedFeed(env: Env, slug: string): Promise<LoadedEmbed
       .bind(pub.snapshot_id)
       .first<SnapshotRow>(),
     env.DB.prepare(
-      `SELECT name, brand_primary_color, owner_type, owner_id FROM feed_project WHERE id = ?`,
+      `SELECT name, brand_primary_color, owner_type, owner_id, thumbnail_version FROM feed_project WHERE id = ?`,
     )
       .bind(pub.project_id)
       .first<ProjectRow>(),
@@ -103,6 +104,7 @@ export async function loadEmbedFeed(env: Env, slug: string): Promise<LoadedEmbed
     projectName: project.name,
     brandPrimaryColor: project.brand_primary_color,
     brandLogoUrl,
+    thumbnailVersion: project.thumbnail_version ?? 0,
     state,
   };
 }

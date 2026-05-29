@@ -392,6 +392,18 @@ function FeedCard({
         archived ? 'border-sand opacity-70' : 'border-sand hover:border-coral/40'
       }`}
     >
+      {project.thumbnailUrl && (
+        <img
+          src={project.thumbnailUrl}
+          alt=""
+          loading="lazy"
+          className="hidden sm:block w-28 h-20 object-cover rounded-lg border border-sand bg-cream shrink-0"
+          onError={(e) => {
+            // No thumbnail available — hide gracefully rather than show a broken image.
+            e.currentTarget.style.display = 'none';
+          }}
+        />
+      )}
       <button
         onClick={onOpen}
         className="flex-1 text-left focus:outline-none"

@@ -1,11 +1,102 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <script>
-      // GitHub Pages SPA redirect: save the requested path then send to index.html
-      sessionStorage.setItem('__spa_redirect', window.location.pathname);
-      window.location.replace('/');
-    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Real 404 page. Served with an HTTP 404 status by the static-assets
+         binding (wrangler.jsonc → assets.not_found_handling: "404-page") for
+         any path that is neither a real asset nor a known client-side route.
+         No client-side redirect: a genuine 404 must return 404 to crawlers so
+         dead URLs are dropped from the index instead of being treated as
+         soft-404s (a 200 response that's really "page not found"). -->
+    <meta name="robots" content="noindex" />
+    <title>Page not found – GTFS·X</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <style>
+      :root {
+        --accent: #E8734A;
+        --bg: #FFF8F0;
+        --ink: #2A1F18;
+        --muted: #6B5A4D;
+        --rule: #EADBC8;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        line-height: 1.55;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .site-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px 24px;
+        border-bottom: 1px solid var(--rule);
+      }
+      .site-header .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
+      .site-header .brand img { height: 36px; width: auto; }
+      main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 64px 24px;
+      }
+      .code {
+        font-size: 4rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: var(--accent);
+        line-height: 1;
+        margin: 0 0 8px;
+      }
+      h1 { font-size: 1.6rem; font-weight: 800; margin: 0 0 12px; letter-spacing: -0.01em; }
+      p { color: var(--muted); max-width: 30rem; margin: 0 0 28px; }
+      .links { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+      .links a {
+        text-decoration: none;
+        font-weight: 700;
+        padding: 11px 18px;
+        border-radius: 10px;
+        border: 1px solid var(--rule);
+        color: var(--ink);
+        background: #fff;
+      }
+      .links a.cta { background: var(--accent); border-color: var(--accent); color: #fff; }
+      .links a:hover { border-color: var(--accent); color: var(--accent); }
+      .links a.cta:hover { color: #fff; opacity: 0.92; }
+      @media (max-width: 480px) {
+        .code { font-size: 3rem; }
+        h1 { font-size: 1.35rem; }
+      }
+    </style>
   </head>
+  <body>
+    <header class="site-header">
+      <a href="/" class="brand">
+        <img src="/gtfsx-lockup.svg" alt="GTFS·X" />
+      </a>
+    </header>
+    <main>
+      <p class="code">404</p>
+      <h1>This page doesn’t exist</h1>
+      <p>
+        The page you’re looking for may have moved or never existed. Try the
+        editor, the docs, or one of the links below.
+      </p>
+      <div class="links">
+        <a href="/" class="cta">Open the editor</a>
+        <a href="/docs/">Docs</a>
+        <a href="/learn/gtfs/">Learn GTFS</a>
+        <a href="/help">Help</a>
+      </div>
+    </main>
+  </body>
 </html>

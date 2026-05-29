@@ -21,11 +21,19 @@
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
+    // "404-page" (not "single-page-application"): an unmatched asset path
+    // returns dist/404.html with an HTTP 404 status. The old SPA fallback
+    // returned index.html with 200 for *every* unknown URL, so Googlebot saw
+    // dead URLs as soft-404s (a 200 that's really "page not found"). The
+    // Worker still serves the SPA shell (index.html, 200) for known
+    // client-side routes — see SPA_SHELL_* in worker/index.ts — so app routes
+    // like /login and /feeds keep working; only genuine misses get the 404.
+    "not_found_handling": "404-page",
     // Every request runs the Worker first. The Worker dispatches feeds.*
     // hostnames and /auth, /api, /_import, /_demand-tiles paths, then falls
-    // through to `env.ASSETS.fetch(request)` for the SPA (which still
-    // applies the `not_found_handling: single-page-application` fallback).
+    // through to `env.ASSETS.fetch(request)` (see the catch-all at the bottom
+    // of worker/index.ts, which turns asset misses into either the SPA shell
+    // or a real 404).
     //
     // Path-specific run_worker_first lists won't work: on the feeds
     // subdomain we need the Worker to own every path, including `/robots.txt`

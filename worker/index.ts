@@ -20,6 +20,37 @@ const LEGACY_ALIAS_REDIRECTS: Record<string, string> = {
   '/what-is-gtfs': '/learn/gtfs/',
 };
 
+// Client-side (React Router) routes that have NO pre-rendered HTML file and
+// must still receive the SPA shell (index.html, HTTP 200) so the app can
+// render them. The static-assets binding is configured with
+// `not_found_handling: "404-page"`, so an asset miss returns dist/404.html
+// with a real 404 — which is what we want for genuinely dead URLs (no more
+// soft-404s), but NOT for these legitimate app routes. Keep this in sync with
+// the <Routes> in src/App.tsx. (/pricing and /demo are normally served by the
+// marketing SSR above; they're listed here only as a fallback in case that
+// render throws and falls through.)
+const SPA_SHELL_EXACT = new Set([
+  '/',
+  '/import',
+  '/login',
+  '/signup',
+  '/help',
+  '/pricing',
+  '/demo',
+  '/upgrade',
+  '/verify-email',
+  '/magic-link',
+  '/reset-password',
+  '/change-email',
+]);
+const SPA_SHELL_PREFIXES = ['/account', '/admin', '/community', '/feeds', '/orgs', '/welcome'];
+
+function isSpaShellRoute(pathname: string): boolean {
+  const p = pathname.replace(/\/+$/, '') || '/';
+  if (SPA_SHELL_EXACT.has(p)) return true;
+  return SPA_SHELL_PREFIXES.some((pre) => p === pre || p.startsWith(`${pre}/`));
+}
+
 const app = new Hono<AppContext>();
 
 // Request ID + basic headers on every response
@@ -183,8 +214,24 @@ export default {
       }
     }
 
-    // Everything else: static assets (SPA fallback handled by the binding).
-    return env.ASSETS.fetch(request);
+    // Everything else: static assets, with a real 404 for genuine misses.
+    //
+    // The assets binding uses `not_found_handling: "404-page"`, so a path with
+    // no matching file resolves to dist/404.html with an HTTP 404 status. For
+    // known client-side routes we instead serve the SPA shell (index.html,
+    // 200) so React Router can take over; everything else keeps the real 404.
+    // This stops Googlebot from indexing soft-404s — dead URLs used to return
+    // index.html with a 200 status. Trailing-slash and other redirects from
+    // the binding (status !== 404) are passed through unchanged.
+    const assetRes = await env.ASSETS.fetch(request);
+    if (assetRes.status !== 404 || !isSpaShellRoute(url.pathname)) {
+      return assetRes;
+    }
+    const shell = await env.ASSETS.fetch(new URL('/index.html', url.origin).toString());
+    return new Response(shell.body, {
+      status: 200,
+      headers: shell.headers,
+    });
   },
 
   // Scheduled worker invocations (Cron Triggers). See worker/cron/index.ts.

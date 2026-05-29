@@ -30,13 +30,19 @@ export function ValidationPanel() {
     }
     else if (m.entity_type === 'trip' || m.entity_type === 'stop_time') {
       // Timetable lives in the bottom panel now; the right rail no longer
-      // hosts it. Surface the bottom panel on the timetable tab and try
-      // to pre-select the relevant route so the grid opens with rows.
+      // hosts it. Surface the bottom panel on the timetable tab and pre-select
+      // the route AND the trip's service + direction (+ shape pattern) so the
+      // grid opens on exactly the cell the issue is about, not just the route.
       state.setBottomPanelOpen(true);
       state.setBottomPanelTab('timetable');
       if (m.entity_id) {
         const trip = state.trips.find((t) => t.trip_id === m.entity_id);
-        if (trip?.route_id) state.selectRoute(trip.route_id);
+        if (trip) {
+          state.selectRoute(trip.route_id);
+          state.setTimetableServiceId(trip.service_id);
+          state.setTimetableDirectionId(trip.direction_id);
+          if (trip.shape_id) state.setTimetableShapeId(trip.shape_id);
+        }
       }
     }
   };

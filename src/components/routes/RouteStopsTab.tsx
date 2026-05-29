@@ -17,6 +17,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
+import { PatternSelector } from '../ui/ShapePatternSelector';
+import { computeShapePatterns } from '../ui/shapePatterns';
 import { directionName } from '../../utils/constants';
 import type { Stop } from '../../types/gtfs';
 
@@ -121,6 +123,7 @@ export function RouteStopsTab() {
   const stops = useStore((s) => s.stops);
   const routeStops = useStore((s) => s.routeStops);
   const stopTimes = useStore((s) => s.stopTimes);
+  const trips = useStore((s) => s.trips);
   const selectedStopId = useStore((s) => s.selectedStopId);
   const selectStop = useStore((s) => s.selectStop);
   const addRouteStop = useStore((s) => s.addRouteStop);
@@ -131,6 +134,20 @@ export function RouteStopsTab() {
   const setCreatingStop = useStore((s) => s.setCreatingStop);
   const directionId = useStore((s) => s.stopPlacementDirection);
   const setDirectionId = useStore((s) => s.setStopPlacementDirection);
+
+  // Distinct shape patterns for this route. At 3+, the two-way Direction
+  // toggle can't represent them, so we swap in the shared pattern dropdown
+  // (matches the Timetable tab). Picking a pattern sets its direction — route
+  // stops are stored per direction, so same-direction variants share a list.
+  const patterns = useMemo(() => computeShapePatterns(routeId, trips), [routeId, trips]);
+  const [selectedPatternShapeId, setSelectedPatternShapeId] = useState<string | null>(null);
+  // Ignore a selection that isn't in the current route's patterns (e.g. left
+  // over from another route) — fall back to the pattern for the active
+  // direction. Avoids resetting state in an effect.
+  const effectiveShapeId =
+    selectedPatternShapeId && patterns.some((p) => p.shapeId === selectedPatternShapeId)
+      ? selectedPatternShapeId
+      : (patterns.find((p) => p.directionId === directionId)?.shapeId ?? null);
 
   const [addExistingStopId, setAddExistingStopId] = useState<string>('');
   const [confirmRemoveStop, setConfirmRemoveStop] = useState<{ stopId: string } | null>(null);
@@ -243,24 +260,38 @@ export function RouteStopsTab() {
 
   return (
     <div>
-      {/* Direction toggle */}
+      {/* Direction selector — a 2-way toggle for 0–2 shape patterns, a
+          dropdown for 3+ (which the toggle can't represent). */}
       <div className="mb-3">
-        <div className="flex rounded-md border border-sand overflow-hidden">
-          <button
-            onClick={() => setDirectionId(0)}
-            className={`flex-1 px-3 py-1.5 text-xs font-semibold transition-colors
-              ${directionId === 0 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'}`}
-          >
-            {directionName(route, 0)}
-          </button>
-          <button
-            onClick={() => setDirectionId(1)}
-            className={`flex-1 px-3 py-1.5 text-xs font-semibold transition-colors border-l border-sand
-              ${directionId === 1 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'}`}
-          >
-            {directionName(route, 1)}
-          </button>
-        </div>
+        {patterns.length >= 3 ? (
+          <PatternSelector
+            patterns={patterns}
+            route={route}
+            selectedShapeId={effectiveShapeId}
+            onChange={(p) => {
+              setSelectedPatternShapeId(p.shapeId);
+              if (p.directionId !== directionId) setDirectionId(p.directionId);
+            }}
+            className="w-full px-2 py-1.5 border border-sand rounded-md text-xs font-semibold bg-cream focus:outline-none focus:border-coral"
+          />
+        ) : (
+          <div className="flex rounded-md border border-sand overflow-hidden">
+            <button
+              onClick={() => setDirectionId(0)}
+              className={`flex-1 px-3 py-1.5 text-xs font-semibold transition-colors
+                ${directionId === 0 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'}`}
+            >
+              {directionName(route, 0)}
+            </button>
+            <button
+              onClick={() => setDirectionId(1)}
+              className={`flex-1 px-3 py-1.5 text-xs font-semibold transition-colors border-l border-sand
+                ${directionId === 1 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'}`}
+            >
+              {directionName(route, 1)}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Add stops to this route+direction */}

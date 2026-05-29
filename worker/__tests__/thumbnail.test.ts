@@ -8,13 +8,14 @@ import { html } from 'hono/html';
 import { SELF } from 'cloudflare:test';
 import { applyMigrations, env, resetDb } from './_setup';
 import {
+  FALLBACK_HASH,
   generateAndStoreThumbnail,
   maybeRegenerateThumbnail,
   renderRouteThumbnail,
   thumbnailGeomHash,
 } from '../embeds/thumbnail';
 import { renderLayout } from '../embeds/layout';
-import { thumbnailKey } from '../projects/r2';
+import { thumbnailKey, FALLBACK_THUMBNAIL_KEY } from '../projects/r2';
 import type { FeedState } from '../embeds/types';
 
 const FAKE_PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02]);
@@ -218,6 +219,31 @@ describe('public thumbnail serve route', () => {
 
     expect((await SELF.fetch('http://feeds.example.com/no-thumb/thumbnail.png')).status).toBe(404);
     expect((await SELF.fetch('http://feeds.example.com/nonexistent/thumbnail.png')).status).toBe(404);
+  });
+});
+
+describe('generic fallback (feeds with no route shapes)', () => {
+  it('marks a no-shapes feed to use the fallback (version+sentinel, no Mapbox)', async () => {
+    const mock = mockMapbox();
+    await seedProject('PF', 'fallback-gen');
+    const wrote = await generateAndStoreThumbnail(env, 'PF', emptyState(), null);
+    expect(wrote).toBe(true);
+    expect(mock).not.toHaveBeenCalled(); // no shapes → no Mapbox render
+    const row = await env.DB.prepare(`SELECT thumbnail_version, thumbnail_geom_hash FROM feed_project WHERE id='PF'`)
+      .first<{ thumbnail_version: number; thumbnail_geom_hash: string }>();
+    expect(row!.thumbnail_version).toBe(1);
+    expect(row!.thumbnail_geom_hash).toBe(FALLBACK_HASH);
+    // Re-running is a no-op (already marked).
+    expect(await maybeRegenerateThumbnail(env, 'PF', emptyState())).toBe(false);
+  });
+
+  it('serve route returns the generic fallback when a feed has no per-feed image', async () => {
+    await seedProject('PFB', 'fallback-serve', 1); // version>0, no per-feed R2 object
+    await env.FEEDS.put(FALLBACK_THUMBNAIL_KEY, FAKE_PNG, { httpMetadata: { contentType: 'image/png' } });
+    const res = await SELF.fetch('http://feeds.example.com/fallback-serve/thumbnail.png');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('image/png');
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(FAKE_PNG);
   });
 });
 

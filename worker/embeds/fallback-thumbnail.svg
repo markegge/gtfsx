@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#FFF8F0"/>
+  <!-- subtle grid -->
+  <g stroke="#EADBC8" stroke-width="1" opacity="0.6">
+    <path d="M0 158 H1200 M0 316 H1200 M0 474 H1200 M300 0 V630 M600 0 V630 M900 0 V630"/>
+  </g>
+  <!-- stylized route lines (generic transit map) -->
+  <g fill="none" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity="0.92">
+    <path d="M90 520 C 300 520, 320 300, 520 300 S 760 120, 1010 120" stroke="#E8734A"/>
+    <path d="M120 120 C 360 120, 360 360, 600 360 S 900 540, 1120 500" stroke="#274BAC"/>
+    <path d="M80 330 H 470 C 560 330, 560 200, 700 200 H 1130" stroke="#1DD719"/>
+    <path d="M260 560 C 420 560, 470 240, 640 240 S 940 300, 1100 250" stroke="#BB29BB" opacity="0.75"/>
+  </g>
+  <!-- stops -->
+  <g fill="#FFFFFF" stroke="#2A1F18" stroke-width="3">
+    <circle cx="520" cy="300" r="9"/><circle cx="600" cy="360" r="9"/>
+    <circle cx="700" cy="200" r="9"/><circle cx="90" cy="520" r="9"/>
+    <circle cx="1010" cy="120" r="9"/><circle cx="470" cy="330" r="9"/>
+  </g>
+  <!-- wordmark -->
+  <g font-family="'Helvetica Neue', Arial, sans-serif" text-anchor="middle">
+    <text x="600" y="318" font-size="92" font-weight="800" fill="#2A1F18" letter-spacing="-2">GTFS·X</text>
+    <text x="600" y="372" font-size="30" font-weight="600" fill="#6B5A4D" letter-spacing="1">Transit feed</text>
+  </g>
+</svg>

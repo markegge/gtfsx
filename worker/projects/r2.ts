@@ -25,6 +25,10 @@ export function thumbnailKey(projectId: string, size: ThumbnailSize): string {
   return `projects/${projectId}/thumbnail-${dims}.png`;
 }
 
+// Single generic fallback card, served when a feed has no per-feed thumbnail
+// (e.g. it has no route shapes to render). Uploaded once per environment.
+export const FALLBACK_THUMBNAIL_KEY = '_fallback/thumbnail.png';
+
 export function draftZipKey(projectId: string, tokenHash: string): string {
   return `draft-links/${projectId}/${tokenHash}.zip`;
 }

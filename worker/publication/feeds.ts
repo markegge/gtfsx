@@ -15,7 +15,7 @@
 
 import type { Env } from '../env';
 import { sha256Hex } from '../util/crypto';
-import { getFeedBlob, thumbnailKey, type ThumbnailSize } from '../projects/r2';
+import { getFeedBlob, thumbnailKey, FALLBACK_THUMBNAIL_KEY, type ThumbnailSize } from '../projects/r2';
 import { ungzip } from './ungzip';
 import { renderRouteEmbed } from '../embeds/route';
 import { renderSystemMapEmbed } from '../embeds/systemMap';
@@ -282,7 +282,10 @@ async function serveThumbnail(
     });
   }
 
-  const obj = await env.FEEDS.get(thumbnailKey(row.id, size));
+  // Serve the per-feed render if present, else the generic fallback card
+  // (feeds with thumbnail_version>0 but no rendered image — e.g. no route
+  // shapes — are marked to use the fallback; see worker/embeds/thumbnail.ts).
+  const obj = (await env.FEEDS.get(thumbnailKey(row.id, size))) ?? (await env.FEEDS.get(FALLBACK_THUMBNAIL_KEY));
   if (!obj) return notFound('Thumbnail missing.');
 
   return new Response(obj.body, {

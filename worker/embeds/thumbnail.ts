@@ -16,6 +16,11 @@ import { getFeedBlob, putFeedBlob, thumbnailKey } from '../projects/r2';
 import { buildSystemMapData } from './map';
 import type { FeedState } from './types';
 
+// Sentinel geom hash for a feed with no drawable shapes: it shows the generic
+// fallback card (served by feeds.ts from FALLBACK_THUMBNAIL_KEY) rather than a
+// route map. Distinguishes "intentionally fallback" from "not generated yet".
+export const FALLBACK_HASH = '__fallback__';
+
 const STATIC_BASE = 'https://api.mapbox.com/styles/v1/mapbox/light-v11/static';
 // Leave headroom under Mapbox's ~8192 limit for the style/base/token/params.
 const URL_BUDGET = 7900;
@@ -234,7 +239,20 @@ export async function generateAndStoreThumbnail(
 ): Promise<boolean> {
   try {
     const hash = thumbnailGeomHash(state);
-    if (hash === null) return false; // nothing to draw
+    if (hash === null) {
+      // No drawable route shapes — mark the feed to use the generic fallback
+      // card (served by feeds.ts when no per-feed image exists) so it still
+      // gets a thumbnail + social card. version>0 makes the og:image and
+      // feeds-list reference it; the sentinel hash stops us re-marking it on
+      // every autosave.
+      if (currentHash === FALLBACK_HASH) return false;
+      await env.DB.prepare(
+        `UPDATE feed_project SET thumbnail_geom_hash = ?, thumbnail_version = thumbnail_version + 1 WHERE id = ?`,
+      )
+        .bind(FALLBACK_HASH, projectId)
+        .run();
+      return true;
+    }
     if (hash === currentHash) return false; // geometry unchanged → skip Mapbox
     const imgs = await renderRouteThumbnail(state, env);
     if (!imgs) return false;

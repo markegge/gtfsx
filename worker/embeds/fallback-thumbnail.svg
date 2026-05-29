@@ -1,19 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <rect width="1200" height="630" fill="#EFEEEB"/>
-  <g fill="none" stroke="#B4B2AD" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+  <g fill="none" stroke="#ADABA6" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
     <!-- body -->
-    <rect x="408" y="198" width="384" height="158" rx="30"/>
+    <rect x="406" y="168" width="388" height="160" rx="32"/>
     <!-- side windows -->
-    <rect x="438" y="232" width="250" height="50" rx="8"/>
-    <path d="M 500 232 V 282 M 563 232 V 282 M 626 232 V 282"/>
+    <rect x="440" y="204" width="246" height="50" rx="9"/>
+    <path d="M 502 204 V 254 M 564 204 V 254 M 624 204 V 254"/>
     <!-- front window -->
-    <rect x="704" y="232" width="66" height="62" rx="8"/>
+    <rect x="704" y="204" width="64" height="62" rx="9"/>
     <!-- beltline -->
-    <path d="M 438 312 H 762"/>
-    <!-- headlight -->
-    <circle cx="775" cy="332" r="6"/>
+    <path d="M 440 286 H 760"/>
     <!-- wheels -->
-    <circle cx="486" cy="366" r="30"/>
-    <circle cx="700" cy="366" r="30"/>
+    <circle cx="488" cy="338" r="31"/>
+    <circle cx="700" cy="338" r="31"/>
   </g>
+  <text x="600" y="448" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif" font-size="44" font-weight="800" fill="#9C9A95" letter-spacing="2">GTFS·X</text>
 </svg>

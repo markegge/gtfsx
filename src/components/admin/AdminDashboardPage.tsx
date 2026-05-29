@@ -228,6 +228,15 @@ export function AdminDashboardPage() {
                 { label: 'Last 30 days', value: stats.activeUsers.last30d },
               ]}
             />
+            <BucketCard
+              title="Users by plan"
+              items={[
+                { label: 'Free', value: stats.usersByPlan?.free ?? 0 },
+                { label: 'Pro', value: stats.usersByPlan?.pro ?? 0 },
+                { label: 'Agency', value: stats.usersByPlan?.team ?? 0 },
+                { label: 'Enterprise', value: stats.usersByPlan?.enterprise ?? 0 },
+              ]}
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

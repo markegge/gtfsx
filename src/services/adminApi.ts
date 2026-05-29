@@ -10,6 +10,8 @@ export interface AdminStats {
     disabled: number;
     deleted_soft: number;
   };
+  // Non-deleted users by subscription tier ('team' = Agency).
+  usersByPlan: { free: number; pro: number; team: number; enterprise: number };
   organizations: { total: number };
   projects: { total: number; byOwnerType: { user: number; org: number } };
   snapshots: { total: number };

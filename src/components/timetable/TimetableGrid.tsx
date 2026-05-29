@@ -875,7 +875,7 @@ function TripIdCell({ tripId, allTripIds, onRename }: {
         onFocus={handleFocus}
         onBlur={handleBlur}
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-        className={`w-20 px-1.5 py-1 text-xs rounded border hover:border-sand focus:border-coral focus:outline-none bg-transparent font-semibold
+        className={`w-full px-1.5 py-1 text-xs rounded border hover:border-sand focus:border-coral focus:outline-none bg-transparent font-semibold
           ${isDuplicate ? 'border-red-400 bg-red-50' : 'border-transparent'}`}
         title={isDuplicate ? 'Duplicate trip ID' : tripId}
       />

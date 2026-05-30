@@ -4,7 +4,7 @@ import { FormField } from '../ui/FormField';
 import { AuthLayout } from './AuthLayout';
 import { AuthButton } from './AuthButton';
 import { TurnstileWidget } from './TurnstileWidget';
-import { signup, ApiError } from '../../services/authApi';
+import { signup, resendVerification, ApiError } from '../../services/authApi';
 import { turnstileSiteKey } from '../../utils/featureFlags';
 import { useStore } from '../../store';
 
@@ -45,6 +45,9 @@ export function SignupPage() {
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  // Resend state for the "Check your email" screen, so a user who never got the
+  // confirmation link can request a fresh one without going back to sign in.
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | { error: string }>('idle');
 
   const captchaRequired = turnstileSiteKey.length > 0;
 
@@ -104,6 +107,17 @@ export function SignupPage() {
     }
   };
 
+  const handleResend = async () => {
+    setResendState('sending');
+    try {
+      await resendVerification({ email: email.trim() });
+      setResendState('sent');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Could not send verification email';
+      setResendState({ error: msg });
+    }
+  };
+
   const passwordStrengthOk = password.length >= 10;
 
   if (done) {
@@ -123,6 +137,32 @@ export function SignupPage() {
           We sent a message to <span className="font-semibold text-dark-brown">{email.trim()}</span>. Click the
           link to activate your account.
         </p>
+        <div className="mt-5 border-t border-sand pt-4">
+          {resendState === 'sent' ? (
+            <div className="px-3 py-2 rounded-lg bg-teal-light text-teal text-sm">
+              Sent — check your inbox for a new link from gtfsx.com.
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-warm-gray mb-2">
+                Didn&rsquo;t get the link? Check your spam folder, or we can send a new one.
+              </p>
+              {typeof resendState === 'object' && 'error' in resendState && (
+                <div className="mb-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                  {resendState.error}
+                </div>
+              )}
+              <AuthButton
+                type="button"
+                variant="secondary"
+                onClick={handleResend}
+                disabled={resendState === 'sending'}
+              >
+                {resendState === 'sending' ? 'Sending…' : 'Send a new verification email'}
+              </AuthButton>
+            </>
+          )}
+        </div>
       </AuthLayout>
     );
   }

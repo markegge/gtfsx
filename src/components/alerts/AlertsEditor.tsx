@@ -56,10 +56,30 @@ function isCurrentlyActive(a: ServiceAlert, nowSec: number): boolean {
 
 type EntityKind = 'route' | 'stop' | 'agency';
 
+// Key off which field is PRESENT, not truthy — an unselected Route row
+// (`{ route_id: '' }`) must stay "route", not collapse to "whole feed".
 function entityKind(e: InformedEntity): EntityKind {
-  if (e.stop_id) return 'stop';
-  if (e.route_id) return 'route';
+  if ('stop_id' in e) return 'stop';
+  if ('route_id' in e) return 'route';
   return 'agency';
+}
+
+// "Whole feed" scope. On feeds whose single agency has a blank agency_id (valid
+// GTFS, common for small agencies), a GTFS-RT agency_id selector can't be
+// serialized — so resolve "whole feed" to the agency_id when present, else to
+// every route_id (the only entities a consumer can actually match).
+function expandEntities(entities: InformedEntity[], routes: RouteLite[]): InformedEntity[] {
+  return entities.flatMap((e) => {
+    if (entityKind(e) !== 'agency') return [e];
+    return e.agency_id ? [{ agency_id: e.agency_id }] : routes.map((r) => ({ route_id: r.route_id }));
+  });
+}
+
+function entityComplete(e: InformedEntity, hasRoutes: boolean): boolean {
+  const kind = entityKind(e);
+  if (kind === 'stop') return !!e.stop_id;
+  if (kind === 'route') return !!e.route_id;
+  return !!e.agency_id || hasRoutes; // whole feed: agency_id or expandable to routes
 }
 
 const EMPTY_INPUT: AlertInput = {
@@ -339,39 +359,41 @@ function AlertForm({
   const set = <K extends keyof AlertInput>(key: K, value: AlertInput[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  const hasRoutes = routes.length > 0;
+
   const valid = useMemo(() => {
     if (!form.header_text.trim()) return false;
     if (form.informed_entities.length === 0) return false;
-    // every entity must select something
-    for (const e of form.informed_entities) {
-      if (!e.agency_id && !e.route_id && !e.stop_id) return false;
-    }
-    // periods with both ends must satisfy end > start
+    if (!form.informed_entities.every((e) => entityComplete(e, hasRoutes))) return false;
     for (const p of form.active_periods) {
       if (p.start != null && p.end != null && p.end <= p.start) return false;
     }
     return true;
-  }, [form]);
+  }, [form, hasRoutes]);
 
   // Explains why Save is disabled — authoring needs no published feed, so a
   // disabled button is always a fixable form-completeness issue.
   const hint = useMemo(() => {
     if (!form.header_text.trim()) return 'Add a header summary to enable Save.';
     for (const e of form.informed_entities) {
-      if (!e.agency_id && !e.route_id && !e.stop_id) {
-        return 'Pick an affected route, stop, or “Entire agency” for each row.';
+      if (!entityComplete(e, hasRoutes)) {
+        return entityKind(e) === 'agency'
+          ? 'This feed has no routes to scope a whole-feed alert to — add a stop or route instead.'
+          : 'Choose a route or stop for each affected row (or switch it to “Whole feed”).';
       }
     }
     for (const p of form.active_periods) {
       if (p.start != null && p.end != null && p.end <= p.start) return 'Each window’s end must be after its start.';
     }
     return null;
-  }, [form]);
+  }, [form, hasRoutes]);
 
   function submit() {
-    // Normalize empty strings to nulls for optional text fields.
+    // Normalize empty strings to nulls for optional text fields; expand
+    // "whole feed" scope to concrete entities the published feed can match.
     onSave({
       ...form,
+      informed_entities: expandEntities(form.informed_entities, routes),
       description_text: form.description_text?.trim() ? form.description_text : null,
       url: form.url?.trim() ? form.url : null,
     });
@@ -566,11 +588,11 @@ function EntityRow({
           else if (k === 'stop') onChange({ stop_id: stops[0]?.stop_id ?? '' });
           else onChange({ agency_id: defaultAgencyId });
         }}
-        className={`${inputCls} w-28 shrink-0`}
+        className={`${inputCls} w-32 shrink-0`}
       >
         <option value="route">Route</option>
         <option value="stop">Stop</option>
-        <option value="agency">Entire agency</option>
+        <option value="agency">Whole feed</option>
       </select>
 
       {kind === 'route' && (
@@ -618,7 +640,9 @@ function EntityRow({
       )}
 
       {kind === 'agency' && (
-        <span className="flex-1 min-w-0 text-sm text-warm-gray italic">Applies to the whole feed</span>
+        <span className="flex-1 min-w-0 text-sm text-warm-gray italic truncate">
+          {entity.agency_id ? 'Applies agency-wide' : `Applies to all ${routes.length} routes`}
+        </span>
       )}
 
       {canRemove && (

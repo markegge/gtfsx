@@ -378,15 +378,19 @@ npx tsc -p tsconfig.worker.json --noEmit      # worker typecheck
 ### Shipping to prod (pre-push checklist)
 
 1. Tests + both typechecks pass locally.
-2. **Migrations applied on prod first** (manual): `unset CLOUDFLARE_API_TOKEN; npx wrangler d1 migrations apply gtfs-builder --remote`.
-3. **Kill-switch pair in sync** — `BACKEND_ENABLED`/`BILLING_ENABLED` in `wrangler.jsonc` match their `VITE_*` twins in CF Workers Builds → Settings → Variables.
-4. `git push origin main` → CF Workers Builds deploys.
-5. **Verify the new build went live** (a "succeeded" build doesn't guarantee the active asset manifest):
+2. **Docs updated in the same change.** New/changed functionality must flip its
+   status in [`REQUIREMENTS.md`](./REQUIREMENTS.md) and carry a short how-to-use
+   note (user-facing docs / in-app help where relevant). Code without docs is
+   not "done" — don't merge or close the issue until the docs reflect it.
+3. **Migrations applied on prod first** (manual): `unset CLOUDFLARE_API_TOKEN; npx wrangler d1 migrations apply gtfs-builder --remote`.
+4. **Kill-switch pair in sync** — `BACKEND_ENABLED`/`BILLING_ENABLED` in `wrangler.jsonc` match their `VITE_*` twins in CF Workers Builds → Settings → Variables.
+5. `git push origin main` → CF Workers Builds deploys.
+6. **Verify the new build went live** (a "succeeded" build doesn't guarantee the active asset manifest):
    ```bash
    curl -sS https://www.gtfsx.com/ | grep -oE 'index-[a-zA-Z0-9_-]+\.js'   # must differ from the previous bundle
    ```
    If unchanged, use the manual fallback.
-6. Smoke-test in incognito (homepage, anonymous IndexedDB editor save/load, ZIP export; if backend on, `/login` shows the form not the placeholder).
+7. Smoke-test in incognito (homepage, anonymous IndexedDB editor save/load, ZIP export; if backend on, `/login` shows the form not the placeholder).
 
 ### Manual fallback deploy (CF Builds broken, or to ship a specific local SHA)
 

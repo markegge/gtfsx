@@ -344,7 +344,7 @@ Architecture and API surface are in [`ARCHITECTURE.md`](./ARCHITECTURE.md) (§3 
 - ✅ Unpublish — pointer cleared, canonical URL returns `410 Gone`. Republish restores.
 - ✅ Publication history view + rollback ("publish this old snapshot again").
 - ✅ Per-snapshot state stored as gzipped JSON (R2) plus a rendered ZIP (also R2); two immutable blobs per snapshot.
-- 🔲 Scheduled publish ("go live on 2026-06-01 at 02:00 UTC") — BE-77, stretch. Tracked in GitHub issues.
+- ✅ Scheduled publish (BE-77) — in the Publish panel, choose "Schedule for later" and pick a date/time; the selected snapshot publishes automatically at the next check after that time (a `*/15` cron, so within ~15 min). One pending schedule per feed; re-scheduling replaces it and "Cancel" clears it. The rendered GTFS ZIP is captured when you schedule (so the cron can publish without the editor open); a failure (e.g. plan downgraded before the time arrives) is surfaced in the panel.
 
 ### 4.2 Draft links
 

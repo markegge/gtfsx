@@ -172,9 +172,16 @@ export function AlertsEditor() {
   }
 
   if (editing) {
+    // New alerts default to "entire agency" scope when the feed has an agency,
+    // so the form is immediately valid/savable; the editor narrows it to a
+    // route/stop as needed. Falls back to an (unselected) route row otherwise.
+    const newAlertInput: AlertInput = {
+      ...EMPTY_INPUT,
+      informed_entities: [agencies[0] ? { agency_id: agencies[0].agency_id } : { route_id: '' }],
+    };
     return (
       <AlertForm
-        initial={editing === 'new' ? EMPTY_INPUT : alertToInput(editing)}
+        initial={editing === 'new' ? newAlertInput : alertToInput(editing)}
         routes={routes}
         stops={stops}
         agencies={agencies}
@@ -346,6 +353,21 @@ function AlertForm({
     return true;
   }, [form]);
 
+  // Explains why Save is disabled — authoring needs no published feed, so a
+  // disabled button is always a fixable form-completeness issue.
+  const hint = useMemo(() => {
+    if (!form.header_text.trim()) return 'Add a header summary to enable Save.';
+    for (const e of form.informed_entities) {
+      if (!e.agency_id && !e.route_id && !e.stop_id) {
+        return 'Pick an affected route, stop, or “Entire agency” for each row.';
+      }
+    }
+    for (const p of form.active_periods) {
+      if (p.start != null && p.end != null && p.end <= p.start) return 'Each window’s end must be after its start.';
+    }
+    return null;
+  }, [form]);
+
   function submit() {
     // Normalize empty strings to nulls for optional text fields.
     onSave({
@@ -371,7 +393,7 @@ function AlertForm({
           value={form.header_text}
           onChange={(e) => set('header_text', e.target.value)}
           placeholder="Route 5 detour around Main St"
-          className={inputCls}
+          className={`${inputCls} w-full`}
         />
       </Field>
 
@@ -381,23 +403,23 @@ function AlertForm({
           onChange={(e) => set('description_text', e.target.value)}
           rows={3}
           placeholder="Buses are detouring via 2nd Ave until further notice."
-          className={inputCls}
+          className={`${inputCls} w-full`}
         />
       </Field>
 
       <div className="grid grid-cols-3 gap-2">
         <Field label="Cause">
-          <select value={form.cause} onChange={(e) => set('cause', e.target.value)} className={inputCls}>
+          <select value={form.cause} onChange={(e) => set('cause', e.target.value)} className={`${inputCls} w-full`}>
             {CAUSE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </Field>
         <Field label="Effect">
-          <select value={form.effect} onChange={(e) => set('effect', e.target.value)} className={inputCls}>
+          <select value={form.effect} onChange={(e) => set('effect', e.target.value)} className={`${inputCls} w-full`}>
             {EFFECT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </Field>
         <Field label="Severity">
-          <select value={form.severity_level} onChange={(e) => set('severity_level', e.target.value)} className={inputCls}>
+          <select value={form.severity_level} onChange={(e) => set('severity_level', e.target.value)} className={`${inputCls} w-full`}>
             {SEVERITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </Field>
@@ -408,7 +430,7 @@ function AlertForm({
           value={form.url ?? ''}
           onChange={(e) => set('url', e.target.value)}
           placeholder="https://agency.gov/alerts/route-5"
-          className={inputCls}
+          className={`${inputCls} w-full`}
         />
       </Field>
 
@@ -465,7 +487,7 @@ function AlertForm({
                   copy[i] = { ...p, start: fromLocalInput(e.target.value) };
                   set('active_periods', copy);
                 }}
-                className={`${inputCls} flex-1`}
+                className={`${inputCls} flex-1 min-w-0`}
               />
               <span className="text-warm-gray text-xs">to</span>
               <input
@@ -476,7 +498,7 @@ function AlertForm({
                   copy[i] = { ...p, end: fromLocalInput(e.target.value) };
                   set('active_periods', copy);
                 }}
-                className={`${inputCls} flex-1`}
+                className={`${inputCls} flex-1 min-w-0`}
               />
               <button
                 onClick={() => set('active_periods', form.active_periods.filter((_, j) => j !== i))}
@@ -490,7 +512,9 @@ function AlertForm({
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2 pt-2 border-t border-sand">
+      {hint && <p className="text-xs text-amber-700">{hint}</p>}
+
+      <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-sand">
         <label className="mr-auto flex items-center gap-2 text-sm text-brown">
           <input
             type="checkbox"
@@ -594,7 +618,7 @@ function EntityRow({
       )}
 
       {kind === 'agency' && (
-        <span className="flex-1 text-sm text-warm-gray italic">Applies to the whole feed</span>
+        <span className="flex-1 min-w-0 text-sm text-warm-gray italic">Applies to the whole feed</span>
       )}
 
       {canRemove && (
@@ -606,8 +630,12 @@ function EntityRow({
   );
 }
 
+// NOTE: no width utility here — callers add `w-full` or a fixed `w-NN`. Putting
+// `w-full` in the shared class lets it win over a later `w-28`/`w-24` in the
+// compiled CSS (class order in JSX doesn't decide the cascade), which made the
+// "fixed-width" selects render full-width and overflow the rail.
 const inputCls =
-  'w-full rounded-lg border-2 border-sand bg-cream px-3 py-2 text-sm text-dark-brown focus:outline-none focus:border-coral focus:bg-white';
+  'rounded-lg border-2 border-sand bg-cream px-3 py-2 text-sm text-dark-brown focus:outline-none focus:border-coral focus:bg-white';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

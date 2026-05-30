@@ -85,9 +85,8 @@ Stops are placed in the context of the currently-selected route. Default behavio
 - ✅ Freehand stop placement for off-route stops (park-and-rides, transfer points).
 - ✅ Drag to reposition; snapped stops re-snap, freehand stops move freely.
 - ✅ Stop attributes: name, code, description, lat/lon, wheelchair boarding.
-- ✅ Multi-route stops — stops can be assigned to additional routes; near-duplicate detection prompts to reuse existing stops.
+- ✅ Multi-route stops — stops can be assigned to additional routes via an "Add existing" stop picker.
 - ✅ Reorder stops along a route via drag-and-drop.
-- ✅ Bulk import stops from CSV.
 - ✅ Parent station / location_type hierarchy — editable on the stop (location type, parent station, `level_id`); a **Stations** panel adds table editors for `levels.txt` (floors) and `pathways.txt` (in-station walkways/stairs/elevators), with FK + enum validation.
 - ✅ Stop names labelled on the map at appropriate zoom levels.
 
@@ -349,7 +348,7 @@ Architecture and API surface are in [`ARCHITECTURE.md`](./ARCHITECTURE.md) (§3 
 
 ### 4.2 Draft links
 
-- ✅ "Get review link" generates `feeds.*/<slug>/draft/<token>.zip` with an unguessable 192-bit token (hashed at rest). 30-day default expiry, renewable, revocable.
+- ✅ "Create draft link" (in the Share &amp; Publish → "Share for review" section) generates `feeds.*/<slug>/draft/<token>.zip` with an unguessable 256-bit token (hashed at rest). 30-day expiry, revocable; also surfaces an `import?url=` open-in-editor link sharing the same revocation.
 - ✅ `X-Robots-Tag: noindex`; feeds-origin `robots.txt` disallows `/draft/`.
 - ✅ Each draft URL points to a specific `feed_snapshot` so the bytes don't change once a link is shared.
 

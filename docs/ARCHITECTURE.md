@@ -242,6 +242,14 @@ Design rationale is preserved in the decisions appendix of the archived
 - **GTFS-Realtime Service Alerts (BE-90..93)** live since 2026-05-30 — Agency+
   authoring under `/api/projects/:id/alerts`, public serving at
   `feeds.*/<slug>/alerts.pb` + `/alerts.json`.
+- **Pricing/signup consolidation** live since 2026-05-30 — the former `/upgrade`
+  tier-picker (`WelcomePlanPage`) is merged into `/pricing`, which now renders one
+  set of plan cards for both the public marketing view and authenticated checkout
+  (Stripe / Agency org-create / billing-portal downgrade). `/upgrade` and
+  `/welcome/plan` 301 → `/pricing` (query preserved; see `LEGACY_ALIAS_REDIRECTS`).
+  Logged-out plan CTAs go to `/signup?next=/pricing?plan=…`, so checkout resumes
+  automatically after email verification with no second plan choice; the
+  post-verify redirect lands on `/pricing?source=welcome`.
 - Secrets: `RESEND_API_KEY`, `MOBILITY_DATABASE_REFRESH_TOKEN`,
   `TURNSTILE_SECRET_KEY`, `STRIPE_SECRET_KEY` (live), `STRIPE_WEBHOOK_SIGNING_SECRET` (live).
 - Stripe: live-mode Price IDs (`STRIPE_PRICE_PRO_*`, `STRIPE_PRICE_AGENCY/TEAM_*`),

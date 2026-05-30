@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../../store';
 import { FaresEditor } from './FaresEditor';
+import { FareZoneTool } from './FareZoneTool';
 import { TransfersEditor } from '../transfers/TransfersEditor';
 
 /**
@@ -9,7 +10,7 @@ import { TransfersEditor } from '../transfers/TransfersEditor';
  * authoring that giving it its own sidebar entry was disproportionate. Tabs
  * keep both reachable in one place without crowding the rail.
  */
-type FaresTab = 'fares' | 'transfers';
+type FaresTab = 'fares' | 'zones' | 'transfers';
 
 export function FaresPanel() {
   const transferCount = useStore((s) => s.transfers.length);
@@ -20,6 +21,9 @@ export function FaresPanel() {
       <div className="flex gap-1 -mt-1 mb-4 border-b border-sand">
         <TabButton active={tab === 'fares'} onClick={() => setTab('fares')}>
           Fares
+        </TabButton>
+        <TabButton active={tab === 'zones'} onClick={() => setTab('zones')}>
+          Zones
         </TabButton>
         <TabButton active={tab === 'transfers'} onClick={() => setTab('transfers')}>
           Transfers
@@ -34,7 +38,7 @@ export function FaresPanel() {
           )}
         </TabButton>
       </div>
-      {tab === 'fares' ? <FaresEditor /> : <TransfersEditor />}
+      {tab === 'fares' ? <FaresEditor /> : tab === 'zones' ? <FareZoneTool /> : <TransfersEditor />}
     </div>
   );
 }

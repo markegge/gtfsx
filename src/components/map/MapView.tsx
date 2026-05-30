@@ -18,6 +18,7 @@ import { FlexLayer } from '../flex/FlexLayer';
 import { DemandDotsLayer } from './DemandDotsLayer';
 import { MapLayerControls } from './MapLayerControls';
 import { createFlexZoneWithRoute } from '../flex/flexHelpers';
+import { stopsInsidePolygon } from '../fares/fareZoneHelpers';
 import type { MapStyleId } from './MapLayerControls';
 import type { MapMouseEvent, MapboxGeoJSONFeature } from 'mapbox-gl';
 import type { ShapePoint } from '../../types/gtfs';
@@ -488,7 +489,10 @@ export function MapView() {
       editDrawFeatureIdRef.current = featureId;
 
       drawRef.current.changeMode('direct_select', { featureId });
-    } else if (currentMode === 'draw_flex_zone') {
+    } else if (currentMode === 'draw_flex_zone' || currentMode === 'draw_fare_zone') {
+      // Both draw a fresh polygon. draw_fare_zone is a one-shot lasso: the
+      // draw-complete handler stamps a zone_id onto the enclosed stops and
+      // returns to select mode (no persisted zone geometry).
       drawRef.current.deleteAll();
       drawRef.current.changeMode('draw_polygon');
     } else if (currentMode === 'draw_route') {
@@ -598,6 +602,29 @@ export function MapView() {
         bufferMiles: 0,
         geojson,
       });
+      useStore.getState().setMapMode('select');
+      if (drawRef.current) drawRef.current.deleteAll();
+      return;
+    }
+
+    // Fare-zone lasso drawn — stamp the chosen zone_id onto every stop inside
+    // the polygon, then discard the polygon (one-shot bulk assign; GTFS fare
+    // zones have no geometry, so nothing about the shape is persisted).
+    if (currentState.mapMode === 'draw_fare_zone' && feature.geometry.type === 'Polygon') {
+      const zoneId = (window.__lassoFareZoneId ?? '').trim();
+      if (zoneId) {
+        const insideIds = new Set(
+          stopsInsidePolygon(currentState.stops, feature as GeoJSON.Feature<GeoJSON.Polygon>),
+        );
+        if (insideIds.size > 0) {
+          currentState.setStops(
+            currentState.stops.map((s) =>
+              insideIds.has(s.stop_id) ? { ...s, zone_id: zoneId } : s,
+            ),
+          );
+        }
+        window.__onFareZoneAssigned?.(insideIds.size, zoneId);
+      }
       useStore.getState().setMapMode('select');
       if (drawRef.current) drawRef.current.deleteAll();
       return;
@@ -993,7 +1020,7 @@ export function MapView() {
         doubleClickZoom={mapMode !== 'place_stop'}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        interactiveLayerIds={mapMode === 'edit_shape' || mapMode === 'edit_flex_zone' || mapMode === 'draw_flex_zone' ? [] : ['stop-circles', 'stop-cluster-points', 'stop-clusters', 'route-lines', 'flex-zone-fill']}
+        interactiveLayerIds={mapMode === 'edit_shape' || mapMode === 'edit_flex_zone' || mapMode === 'draw_flex_zone' || mapMode === 'draw_fare_zone' ? [] : ['stop-circles', 'stop-cluster-points', 'stop-clusters', 'route-lines', 'flex-zone-fill']}
       >
         <NavigationControl position="bottom-right" />
         <DrawControl

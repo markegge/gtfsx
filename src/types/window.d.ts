@@ -19,6 +19,13 @@ declare global {
     __cancelDrawRoute?: () => void;
     __flexZoneExpand?: string;
     __drawingDirection?: 0 | 1;
+    /** Target zone_id for the Fares > Fare-zone lasso. Set by FareZoneTool
+     *  before entering 'draw_fare_zone' mode; read by MapView's draw-complete
+     *  handler to stamp this zone_id onto every stop inside the drawn polygon. */
+    __lassoFareZoneId?: string;
+    /** Set by FareZoneTool so MapView can report back how many stops the lasso
+     *  assigned (for the panel's confirmation message). */
+    __onFareZoneAssigned?: (count: number, zoneId: string) => void;
     /** Set by the Routes > Shapes tab's Trim button before entering
      *  'trim_shape' map mode. MapView's click handler reads these to know
      *  which shape to mutate and which side to cut from. */

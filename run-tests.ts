@@ -17,6 +17,9 @@ import {
 } from './src/services/stopAnalysis';
 import { useStore } from './src/store';
 import { getUSHolidaysForYear, getUSHolidaysInRange } from './src/utils/holidays';
+import { pointInPolygon } from './src/utils/geometry';
+import { stopsInsidePolygon } from './src/components/fares/fareZoneHelpers';
+import type { Stop } from './src/types/gtfs';
 
 const FIXTURE_DIR = 'streamline_gtfs_march_2026';
 
@@ -526,6 +529,28 @@ async function main() {
   const julys = range.filter(h => h.name === 'Independence Day').map(h => h.gtfsDate).sort();
   assert('multi-year range: 3 Independence Days', julys.length === 3 && julys[0] === '20240704' && julys[2] === '20260704', julys.join(','));
   assert('range excludes out-of-bounds', !getUSHolidaysInRange('20260201', '20260601').some(h => h.name === 'Independence Day'));
+
+  // ---- PHASE 16: fare-zone lasso geometry (#14) ----
+  console.log('\nPhase 16: fare-zone lasso (stopsInsidePolygon)');
+  const mkStop = (id: string, lon: number, lat: number): Stop =>
+    ({ stop_id: id, stop_name: id, stop_lat: lat, stop_lon: lon, location_type: 0, wheelchair_boarding: 0 });
+  const lassoStops: Stop[] = [
+    mkStop('IN1', 5, 5),      // inside
+    mkStop('IN2', 1, 1),      // inside
+    mkStop('OUT1', 15, 5),    // east of the box
+    mkStop('OUT2', 10.5, 5),  // just outside the east edge
+    mkStop('OUT3', -1, -1),   // southwest of the box
+  ];
+  // Square box (0,0)–(10,10), closed ring, wrapped as a GeoJSON Feature<Polygon>.
+  const box: GeoJSON.Feature<GeoJSON.Polygon> = {
+    type: 'Feature', properties: {},
+    geometry: { type: 'Polygon', coordinates: [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]] },
+  };
+  const inside = stopsInsidePolygon(lassoStops, box).sort();
+  assert('lasso: only inside stops selected', JSON.stringify(inside) === JSON.stringify(['IN1', 'IN2']), inside.join(','));
+  assert('pointInPolygon: center inside', pointInPolygon(5, 5, [[0, 0], [10, 0], [10, 10], [0, 10]]) === true);
+  assert('pointInPolygon: far point outside', pointInPolygon(50, 50, [[0, 0], [10, 0], [10, 10], [0, 10]]) === false);
+  assert('lasso: degenerate ring → empty', stopsInsidePolygon(lassoStops, { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 1]]] } } as GeoJSON.Feature<GeoJSON.Polygon>).length === 0);
 
   // ---- SUMMARY ----
   console.log(`\n${'='.repeat(50)}`);

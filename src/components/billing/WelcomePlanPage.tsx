@@ -43,7 +43,7 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
   {
     plan: 'team', displayName: 'Agency', monthlyPriceUsd: 299, annualPriceUsd: 2499, perSeat: false,
     tagline: 'Plan routes and service as a team.',
-    features: ['Everything in Pro', 'Unlimited feeds', 'Demographic coverage analysis', 'Cost estimation analysis', 'Title VI equity analysis', 'Ridership propensity heatmap', 'Unlimited team members in your organization', 'Cross-org membership (work in unlimited client orgs)', 'Custom org logo', 'Email support'],
+    features: ['Everything in Pro', 'Unlimited feeds', 'Demographic coverage analysis', 'Cost estimation analysis', 'Title VI equity analysis', 'Ridership propensity heatmap', 'Unlimited team members in your organization', 'Cross-org membership (work in unlimited client orgs)', 'Custom org logo', 'Phone support'],
   },
   {
     plan: 'enterprise', displayName: 'Enterprise', monthlyPriceUsd: null, annualPriceUsd: null, perSeat: false,

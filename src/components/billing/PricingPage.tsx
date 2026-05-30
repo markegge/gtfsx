@@ -52,7 +52,7 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
     tagline: 'Plan routes and service as a team.',
     features: [
       'Everything in Pro',
-      'Unlimited saved feeds, publish up to 5',
+      'Unlimited feeds',
       'Demographic coverage analysis',
       'Cost estimation analysis',
       'Title VI equity analysis',

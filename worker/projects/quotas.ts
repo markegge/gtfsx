@@ -26,7 +26,7 @@ const MB = 1024 * 1024;
 export const PLAN_QUOTAS: Record<Plan, PlanQuotas> = {
   free:       { projects: 3,     snapshotsPerProject: 5,   blobBytes:  20 * MB, publishedFeeds: 0 },
   pro:        { projects: 10,    snapshotsPerProject: 25,  blobBytes:  50 * MB, publishedFeeds: 1 },
-  team:       { projects: 500,   snapshotsPerProject: 50,  blobBytes: 100 * MB, publishedFeeds: 5 },
+  team:       { projects: 99999, snapshotsPerProject: 50,  blobBytes: 100 * MB, publishedFeeds: 99999 },
   enterprise: { projects: 99999, snapshotsPerProject: 200, blobBytes: 200 * MB, publishedFeeds: 99999 },
 };
 

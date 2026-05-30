@@ -7,6 +7,7 @@ import { CalendarPreview } from './CalendarPreview';
 import { generateId } from '../../services/idGenerator';
 import type { Calendar } from '../../types/gtfs';
 import { format } from 'date-fns';
+import { US_HOLIDAYS, getUSHolidaysInRange } from '../../utils/holidays';
 
 function formatGtfsDate(d: string): string {
   if (!d || d.length !== 8) return '';
@@ -15,63 +16,6 @@ function formatGtfsDate(d: string): string {
 
 function toGtfsDate(d: string): string {
   return d.replace(/-/g, '');
-}
-
-function dateToGtfs(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}${m}${day}`;
-}
-
-/**
- * Returns the date for the Nth occurrence of a given weekday in a month.
- * @param year Full year
- * @param month 0-based month
- * @param weekday 0=Sunday, 1=Monday, etc.
- * @param n Which occurrence (1=first, 2=second, etc.)
- */
-function nthWeekdayOfMonth(year: number, month: number, weekday: number, n: number): Date {
-  const first = new Date(year, month, 1);
-  const dayOfWeek = first.getDay();
-  const diff = (weekday - dayOfWeek + 7) % 7;
-  const date = 1 + diff + (n - 1) * 7;
-  return new Date(year, month, date);
-}
-
-/**
- * Returns the last Monday of the given month.
- */
-function lastMondayOfMonth(year: number, month: number): Date {
-  const lastDay = new Date(year, month + 1, 0);
-  const dayOfWeek = lastDay.getDay();
-  const diff = (dayOfWeek - 1 + 7) % 7;
-  return new Date(year, month, lastDay.getDate() - diff);
-}
-
-interface USHoliday {
-  name: string;
-  getDate: (year: number) => Date;
-}
-
-const US_HOLIDAYS: USHoliday[] = [
-  { name: "New Year's Day", getDate: (y) => new Date(y, 0, 1) },
-  { name: 'MLK Day', getDate: (y) => nthWeekdayOfMonth(y, 0, 1, 3) }, // 3rd Monday of January
-  { name: "Presidents' Day", getDate: (y) => nthWeekdayOfMonth(y, 1, 1, 3) }, // 3rd Monday of February
-  { name: 'Memorial Day', getDate: (y) => lastMondayOfMonth(y, 4) }, // Last Monday of May
-  { name: 'Independence Day', getDate: (y) => new Date(y, 6, 4) },
-  { name: 'Labor Day', getDate: (y) => nthWeekdayOfMonth(y, 8, 1, 1) }, // 1st Monday of September
-  { name: 'Columbus Day', getDate: (y) => nthWeekdayOfMonth(y, 9, 1, 2) }, // 2nd Monday of October
-  { name: 'Veterans Day', getDate: (y) => new Date(y, 10, 11) },
-  { name: 'Thanksgiving', getDate: (y) => nthWeekdayOfMonth(y, 10, 4, 4) }, // 4th Thursday of November
-  { name: 'Christmas Day', getDate: (y) => new Date(y, 11, 25) },
-];
-
-function getUSHolidaysForYear(year: number): Array<{ name: string; gtfsDate: string }> {
-  return US_HOLIDAYS.map((h) => ({
-    name: h.name,
-    gtfsDate: dateToGtfs(h.getDate(year)),
-  }));
 }
 
 function isWeekdayService(cal: Calendar): boolean {
@@ -121,20 +65,10 @@ export function CalendarEditor() {
     [editingCalendarServiceId, calendarDates],
   );
 
-  const holidaysInRange = useMemo(() => {
-    if (!selected) return [];
-    const startYear = parseInt(selected.start_date.slice(0, 4));
-    const endYear = parseInt(selected.end_date.slice(0, 4));
-    const holidays: Array<{ name: string; gtfsDate: string }> = [];
-    for (let y = startYear; y <= endYear; y++) {
-      for (const h of getUSHolidaysForYear(y)) {
-        if (h.gtfsDate >= selected.start_date && h.gtfsDate <= selected.end_date) {
-          holidays.push(h);
-        }
-      }
-    }
-    return holidays;
-  }, [selected]);
+  const holidaysInRange = useMemo(
+    () => (selected ? getUSHolidaysInRange(selected.start_date, selected.end_date) : []),
+    [selected],
+  );
 
   const existingDateSet = useMemo(() => {
     return new Set(selectedDates.map((cd) => cd.date));

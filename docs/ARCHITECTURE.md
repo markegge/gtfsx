@@ -185,9 +185,11 @@ editor state (published feeds public by design, drafts public-but-unguessable).
 
 **Security (NF-40..45):** passwords are PBKDF2-HMAC-SHA256 @ 100k iterations
 (workerd ceiling), stored self-describing as `pbkdf2$<iter>$<salt>$<hash>`.
-**NF-40a — migrate to argon2id via WASM (dual-path verify) before broad RTAP
-distribution — is the one outstanding security debt** (tracked as a GitHub
-issue). All bearer tokens ≥128-bit, single-use, hashed at rest. CSRF via
+**NF-40a (migrate to argon2id) is deferred indefinitely** (issue #26, closed
+2026-05-30): the clean WASM path is blocked on workerd (no runtime
+`WebAssembly.compile`) and pure-JS argon2id runs ~0.5–1s/op — not worth it given
+low data sensitivity (no PII/financial). Revisit if that changes. All bearer
+tokens ≥128-bit, single-use, hashed at rest. CSRF via
 required `X-GB-Client` header + `SameSite=Lax`. Auth/publish endpoints
 rate-limited. Audit log covers login/publish/delete/member/transfer/admin
 actions.
@@ -436,7 +438,9 @@ Cloudflare Managed `robots.txt` is injected at the edge on the feeds origin.
 The product backlog (undeveloped features) lives in GitHub issues. The
 infra/tech-debt items that originated as `NF-*` anchors:
 
-- **NF-40a** — argon2id password hashing (dual-path verify) before broad RTAP rollout.
+- **NF-40a** — argon2id password hashing. **Deferred indefinitely** (issue #26,
+  closed): WASM argon2 is blocked on workerd, pure-JS is too slow, and account
+  data is low-sensitivity. Staying on PBKDF2-100k.
 - **NF-72** — error reporting (Sentry / Logpush sink with PII redaction).
 - **NF-71** — per-project usage metrics surfaced to feed owners.
 - **transit.land** catalog submission is stubbed (`status='pending'`) in

@@ -203,8 +203,12 @@ p95 < 500 ms; idempotent working-state save; atomic publish (D1 pointer flips
 only after the R2 object is fully written).
 
 **Observability (NF-70..73):** Workers Analytics + first-party page-view/funnel
-analytics at `/admin/events`. **NF-71 (per-project usage metrics for owners) and
-NF-72 (error reporting / Sentry-Logpush) remain open** (GitHub issues).
+analytics at `/admin/events`. **NF-72 baseline done** — native Cloudflare Workers
+Observability is enabled (`wrangler.jsonc` `observability`) and every worker error
+sink logs through `worker/util/redact.ts` (`errorDetail`/`redactPii`: scrubs
+emails, auth headers, Stripe keys, the session cookie, sensitive query params). A
+richer Sentry error-aggregation upgrade is the remaining open part (issue #27).
+**NF-71 (per-project usage metrics for owners) remains open** (GitHub issue).
 
 **GTFS-Realtime Service Alerts (BE-90..93):** Agency+ editors author Service
 Alerts (`worker/projects/alerts.ts`, gated by `requireOwnerFeature('service_alerts')`
@@ -242,6 +246,10 @@ Design rationale is preserved in the decisions appendix of the archived
 - **GTFS-Realtime Service Alerts (BE-90..93)** live since 2026-05-30 — Agency+
   authoring under `/api/projects/:id/alerts`, public serving at
   `feeds.*/<slug>/alerts.pb` + `/alerts.json`.
+- **Error reporting (NF-72 baseline)** live since 2026-05-30 — native Workers
+  Observability enabled (`observability.enabled`, `head_sampling_rate: 1`); worker
+  error sinks redact PII via `worker/util/redact.ts`. Sentry aggregation upgrade
+  deferred (issue #27).
 - **Pricing/signup consolidation** live since 2026-05-30 — the former `/upgrade`
   tier-picker (`WelcomePlanPage`) is merged into `/pricing`, which now renders one
   set of plan cards for both the public marketing view and authenticated checkout

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Organizations &amp; team workspaces — GTFS·X</title>
+    <meta name="description" content="Create a shared organization, invite teammates with owner/admin/editor/viewer roles, manage feeds in a team workspace, move feeds between workspaces, and brand your published feeds." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/organizations/" />
+    <meta property="og:title" content="Organizations &amp; team workspaces — GTFS·X" />
+    <meta property="og:description" content="Shared organizations, member roles, invitations, team workspaces, cross-workspace feed transfer, and org branding." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/organizations/" />
+    <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@gtfsxapp" />
+    <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --sand:#FBF6EE; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
+      .site-header nav a:hover, .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      @media (max-width: 720px) { .site-header nav, .site-header .cta { display:none; } .site-header .brand img { height:30px; } }
+      main { padding-top: 24px; padding-bottom: 60px; }
+      .crumbs { color:var(--muted); font-size:0.9rem; margin: 0 0 12px; }
+      .crumbs a { color:var(--muted); text-decoration:none; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      .tier-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; vertical-align:middle; }
+      .tier-badge.pro { background:#FBEEDF; color:#9A4F00; border:1px solid #F0D1A0; }
+      .tier-badge.agency { background:#EADFFD; color:#5B2E91; border:1px solid #C9B1F0; }
+      a { color: var(--accent); }
+      ul, ol { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code, kbd { background:var(--sand); padding: 1px 6px; border-radius:4px; font-size:0.9em; }
+      figure { margin: 1.4rem 0; }
+      figure img { width:100%; max-width:1200px; height:auto; border:1px solid var(--rule); border-radius:8px; display:block; }
+      figcaption { color:var(--muted); font-size:0.9rem; margin-top:6px; }
+      table { border-collapse: collapse; width: 100%; margin: 1.2rem 0; font-size: 0.97rem; }
+      th, td { border:1px solid var(--rule); padding: 8px 12px; text-align:left; vertical-align:top; }
+      th { background: var(--sand); }
+      .see-also { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 36px 0 0; }
+      .see-also h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; font-size:1.1rem; }
+      .see-also ul { margin: 8px 0 0; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; margin-top:32px; }
+      footer a { color: var(--muted); text-decoration:none; }
+      footer a:hover { color:var(--accent); }
+    </style>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Organizations & team workspaces — GTFS·X",
+  "description": "Create a shared organization, invite teammates with owner/admin/editor/viewer roles, manage feeds in a team workspace, move feeds between workspaces, and brand your published feeds.",
+  "image": "https://www.gtfsx.com/og-default.png",
+  "author": { "@type": "Organization", "name": "GTFS·X", "url": "https://www.gtfsx.com/" },
+  "publisher": { "@type": "Organization", "name": "GTFS·X", "logo": { "@type": "ImageObject", "url": "https://www.gtfsx.com/gtfsx-lockup.svg" } },
+  "datePublished": "2026-05-30",
+  "dateModified": "2026-05-30",
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "https://www.gtfsx.com/docs/organizations/" }
+}
+  </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Accounts &amp; teams</div>
+      <h1>Organizations &amp; team workspaces <span class="tier-badge agency">Agency</span></h1>
+      <p class="lede">An organization is a shared workspace for a team. Feeds owned by the org are visible to every member, with per-member roles controlling who can edit and publish. It's built for agencies with more than one person touching the feed — and for the consultants who work across several client agencies at once.</p>
+
+      <figure>
+        <img src="/assets/docs/organizations-members.png" alt="The organization settings page in GTFS·X showing the Members table — each member with a role dropdown (Owner, Editor) and join date — an Invite button, and a Pending invitations section." loading="lazy" />
+        <figcaption>Organization settings: members with per-person roles, an Invite button, pending invitations, and (above) branding and plan. Owners and admins manage the roster here.</figcaption>
+      </figure>
+
+      <h2 id="what-it-is">Personal vs. organization workspaces</h2>
+      <p>Every account starts with a <strong>personal</strong> workspace — feeds only you can see. An <strong>organization</strong> is a second kind of workspace whose feeds belong to the team, not to an individual, so they survive staff turnover and are visible to everyone you invite. You switch between your personal feeds and any org you belong to from the workspace switcher in the account menu (top-right); the <strong>My Feeds</strong> page always shows the workspace you're currently in.</p>
+      <p>Organizations are an <strong>Agency</strong>-plan feature. On Free or Pro you'll be prompted to upgrade rather than creating an empty org.</p>
+
+      <h2 id="create">Creating an organization</h2>
+      <ol>
+        <li>Open the account menu (your avatar, top-right) and choose <strong>+ Create organization…</strong>.</li>
+        <li>Give it a name and a URL slug (the slug becomes <code>/orgs/&lt;slug&gt;</code>). You're the owner.</li>
+        <li>Switch into it from the same menu, then create or import feeds as usual — they'll be owned by the org.</li>
+      </ol>
+
+      <h2 id="roles">Members and roles</h2>
+      <p>Invite teammates from <strong>Organization settings</strong> (account menu → <em>Organization settings &amp; billing</em>, or visit <code>/orgs/&lt;slug&gt;</code>) with the <strong>+ Invite</strong> button. Each member carries one role:</p>
+      <table>
+        <thead><tr><th>Role</th><th>Can do</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Owner</strong></td><td>Everything, including billing, deleting the org, and transferring ownership. (There's always at least one owner.)</td></tr>
+          <tr><td><strong>Admin</strong></td><td>Manage members and roles, edit and publish feeds, manage branding — everything except billing/ownership-level actions.</td></tr>
+          <tr><td><strong>Editor</strong></td><td>Create, edit, and publish the org's feeds. No member management.</td></tr>
+          <tr><td><strong>Viewer</strong></td><td>Read-only access to the org's feeds.</td></tr>
+        </tbody>
+      </table>
+      <p>Change a member's role inline from the role dropdown in the Members table; <strong>Remove</strong> takes someone off the roster. Outstanding invites appear under <strong>Pending invitations</strong> until accepted.</p>
+
+      <h2 id="invitations">How invitations work</h2>
+      <p>Invitations are email-based. The invitee gets a link; if they don't have an account yet they sign up (the invite proves they own the email, so they're activated immediately and skip the verification round-trip), then land in the org. One person can belong to <strong>many</strong> organizations at once — the core consultant scenario: work inside each client's org without each client paying for your seat.</p>
+
+      <h2 id="ownership">Transfer &amp; cross-workspace moves</h2>
+      <ul>
+        <li><strong>Transfer ownership</strong> — promote another member to owner from the org settings page; you step back to admin. Last-owner protection prevents orphaning an org.</li>
+        <li><strong>Move a feed between workspaces</strong> — from <strong>My Feeds</strong>, a feed's kebab menu → <strong>Move to…</strong> lets you move it between your personal workspace and any org where you're an editor or above. A published feed keeps its URL after the move — the canonical slug follows the feed.</li>
+        <li><strong>Bring anonymous work in</strong> — feeds you built signed-out (in the browser) can be uploaded to your account on first sign-in, then moved into an org.</li>
+      </ul>
+
+      <h2 id="branding">Branding &amp; plan</h2>
+      <p>The organization settings page also hosts <strong>Branding</strong> — upload an org logo (PNG, JPEG, WebP, or SVG, up to 1 MB) that renders on your published feed pages: the rider mini-site landing, and the per-route, per-stop, and system-map embeds. <strong>Plan &amp; billing</strong> shows the org's subscription (org-owned feeds are gated by the <em>org's</em> plan, not your personal one), seat count, and workspace usage. See <a href="/docs/embed-widgets/">embed widgets</a> and <a href="/docs/rider-mini-site/">rider mini-site</a> for where branding appears, and the <a href="/pricing/">pricing page</a> for plan details.</p>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/account-and-cloud-sync/">Accounts and cloud sync</a> — personal accounts, saving, and tier limits.</li>
+          <li><a href="/docs/hosted-publishing/">Hosted publishing</a> — publishing org-owned feeds to a stable URL.</li>
+          <li><a href="/docs/rider-mini-site/">Rider mini-site</a> — where your org logo and brand color appear.</li>
+          <li><a href="/pricing/">Pricing</a> — the Agency plan that unlocks organizations.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

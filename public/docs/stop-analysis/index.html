@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Stop analysis — GTFS·X</title>
+    <meta name="description" content="Stop-level diagnostics from a GTFS feed: stop-spacing distribution, consolidation candidates, service intensity per stop, and wheelchair-accessibility completeness." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/stop-analysis/" />
+    <meta property="og:title" content="Stop analysis — GTFS·X" />
+    <meta property="og:description" content="Stop-level diagnostics from a GTFS feed: spacing, consolidation candidates, service intensity, and accessibility completeness." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/stop-analysis/" />
+    <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@gtfsxapp" />
+    <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --sand:#FBF6EE; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
+      .site-header nav a:hover, .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      @media (max-width: 720px) { .site-header nav, .site-header .cta { display:none; } .site-header .brand img { height:30px; } }
+      main { padding-top: 24px; padding-bottom: 60px; }
+      .crumbs { color:var(--muted); font-size:0.9rem; margin: 0 0 12px; }
+      .crumbs a { color:var(--muted); text-decoration:none; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      .tier-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; vertical-align:middle; }
+      .tier-badge.pro { background:#FBEEDF; color:#9A4F00; border:1px solid #F0D1A0; }
+      .tier-badge.agency { background:#EADFFD; color:#5B2E91; border:1px solid #C9B1F0; }
+      a { color: var(--accent); }
+      ul, ol { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code, kbd { background:var(--sand); padding: 1px 6px; border-radius:4px; font-size:0.9em; }
+      figure { margin: 1.4rem 0; }
+      figure img { width:100%; max-width:1200px; height:auto; border:1px solid var(--rule); border-radius:8px; display:block; }
+      figcaption { color:var(--muted); font-size:0.9rem; margin-top:6px; }
+      .see-also { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 36px 0 0; }
+      .see-also h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; font-size:1.1rem; }
+      .see-also ul { margin: 8px 0 0; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; margin-top:32px; }
+      footer a { color: var(--muted); text-decoration:none; }
+      footer a:hover { color:var(--accent); }
+    </style>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Stop analysis — GTFS·X",
+  "description": "Stop-level diagnostics from a GTFS feed: stop-spacing distribution, consolidation candidates, service intensity per stop, and wheelchair-accessibility completeness.",
+  "image": "https://www.gtfsx.com/og-default.png",
+  "author": { "@type": "Organization", "name": "GTFS·X", "url": "https://www.gtfsx.com/" },
+  "publisher": { "@type": "Organization", "name": "GTFS·X", "logo": { "@type": "ImageObject", "url": "https://www.gtfsx.com/gtfsx-lockup.svg" } },
+  "datePublished": "2026-05-30",
+  "dateModified": "2026-05-30",
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "https://www.gtfsx.com/docs/stop-analysis/" }
+}
+  </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Analysis tools</div>
+      <h1>Stop analysis <span class="tier-badge agency">Agency</span></h1>
+      <p class="lede">Four stop-level diagnostics computed straight from the feed: how far apart your stops sit, which neighbouring pairs are candidates for consolidation, how much service each stop actually gets, and whether your board points carry wheelchair-accessibility data. Every table exports to CSV, and the findings highlight on the map as you read them.</p>
+
+      <figure>
+        <img src="/assets/docs/stop-analysis-hero.png" alt="The Stop Analysis panel on the Sunny Valley feed: a stop-spacing histogram with median, mean, P10 and P90 figures, counts of too-close / in-target / too-far segments, configurable thresholds, and a per-route breakdown sorted tightest-first." loading="lazy" />
+        <figcaption>The Stop Analysis panel. Stop-spacing distribution up top — median, mean, and percentiles, with too-close / in-target / too-far counts — then a per-route breakdown. The other three diagnostics expand below.</figcaption>
+      </figure>
+
+      <h2 id="what-it-is">What it is</h2>
+      <p>Stop placement is one of the highest-leverage, least-examined decisions an agency makes. Stops that are too close together slow every trip and inflate operating cost; stops that are too far apart strand riders. Most agencies never look at the distribution because pulling it out of a GTFS feed by hand is tedious. Stop Analysis does it in one panel — open it on any feed and read four diagnostics computed client-side from the schedule, with no setup and nothing uploaded anywhere.</p>
+      <p>It is a planning aid, not a mandate: the thresholds are defaults you can change, and the consolidation candidates are suggestions to review on the map, not stops to delete blindly.</p>
+
+      <h2 id="diagnostics">The four diagnostics</h2>
+
+      <h3>Stop-spacing distribution</h3>
+      <p>A histogram of the distance between consecutive stops across the system, with the median, mean, and the 10th / 90th percentiles called out. Segments are colour-coded against APTA / TransitWiki benchmarks — <strong>too close</strong> (under ~600 ft), <strong>in target</strong> (~750–1,320 ft), and <strong>too far</strong> (over ~2,640 ft) — and the panel tallies how many fall in each band. Below the histogram, a per-route table sorts routes tightest-median-first so you can see which lines drive the pattern. Spacing is measured along each route's dominant trip pattern (the longest trip per direction).</p>
+
+      <h3>Stop-balancing candidates</h3>
+      <p>Consecutive same-route stop pairs closer than your too-close threshold (600 ft by default), flagged for possible consolidation. Each candidate shows an order-of-magnitude daily time saving (dwell seconds × trips per day) so you can prioritize. Terminals and stations are excluded, and the lower-service stop of the pair is offered as the removal candidate.</p>
+
+      <h3>Service intensity per stop</h3>
+      <p>For each stop: trips per day, span of service, and the peak vs. off-peak median headway on the busiest weekday (or a service day you pick). It answers "how much service does this stop actually see?" — useful for spotting over- and under-served stops, and it's also surfaced on the per-stop Trips tab in the editor.</p>
+
+      <h3>Accessibility completeness</h3>
+      <p>The share of board points that have <code>wheelchair_boarding</code> populated, plus a per-route breakdown of the gaps. This is the detailed view behind the single accessibility warning in the <a href="/docs/validation/">validator</a> — clear the gaps here and the warning clears too.</p>
+
+      <h2 id="how-to-use-it">How to use it in GTFS·X</h2>
+      <ol>
+        <li>Open the feed and click <strong>Stop Analysis</strong> under <strong>Analysis</strong> in the left rail. The panel opens on the right and the map switches to the analysis overlay.</li>
+        <li>Adjust the <strong>Too-close</strong> and <strong>Hard max</strong> thresholds (defaults 600 ft and 2,640 ft) if your context differs — coverage-oriented rural service and dense urban grids have different targets.</li>
+        <li>Expand each diagnostic. Hover or click a flagged candidate to highlight it on the map: removal candidates render amber, a trips-per-day colour ramp shades stops by service intensity, and accessibility gaps drop pins.</li>
+        <li>Use <strong>Download CSV</strong> on any section to pull the figures into a spreadsheet for a memo or a stop-rationalization workshop.</li>
+      </ol>
+
+      <h2 id="methodology">Methodology &amp; limits</h2>
+      <ul>
+        <li><strong>Distances are great-circle (Haversine), in feet.</strong> <code>shape_dist_traveled</code> is deliberately not used — GTFS leaves its unit undefined, so it can't be trusted across arbitrary feeds.</li>
+        <li><strong>Spacing uses the dominant pattern.</strong> The longest trip per direction stands in for the route, so a rare short-turn variant doesn't skew the histogram.</li>
+        <li><strong>Thresholds are conventions, not rules.</strong> The 600 / 750–1,320 / 2,640 ft bands come from widely-cited stop-spacing guidance; tune them to your service type.</li>
+        <li><strong>No ridership is synthesised.</strong> Service intensity counts trips, not boardings — an honest stop-level ridership estimate needs APC data the feed doesn't contain.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/service-summary/">Service summary</a> — system-level revenue hours, trip counts, and peak vehicles.</li>
+          <li><a href="/docs/demographic-coverage/">Demographic coverage</a> — who lives within walking distance of these stops.</li>
+          <li><a href="/docs/validation/">Validation</a> — where the accessibility-completeness warning surfaces.</li>
+          <li><a href="/docs/stops/">Stops</a> — placing and editing the stops this panel analyses.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

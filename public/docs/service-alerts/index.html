@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Service Alerts (GTFS-Realtime) — GTFS·X</title>
+    <meta name="description" content="Author GTFS-Realtime Service Alerts — detours, delays, stop closures — and publish them to a live feed that trip planners consume, without republishing your schedule." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/service-alerts/" />
+    <meta property="og:title" content="Service Alerts (GTFS-Realtime) — GTFS·X" />
+    <meta property="og:description" content="Author and publish GTFS-Realtime Service Alerts — detours, delays, stop closures — to a live feed, decoupled from your schedule." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/service-alerts/" />
+    <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@gtfsxapp" />
+    <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --sand:#FBF6EE; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
+      .site-header nav a:hover, .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      @media (max-width: 720px) { .site-header nav, .site-header .cta { display:none; } .site-header .brand img { height:30px; } }
+      main { padding-top: 24px; padding-bottom: 60px; }
+      .crumbs { color:var(--muted); font-size:0.9rem; margin: 0 0 12px; }
+      .crumbs a { color:var(--muted); text-decoration:none; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      .tier-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; vertical-align:middle; }
+      .tier-badge.pro { background:#FBEEDF; color:#9A4F00; border:1px solid #F0D1A0; }
+      .tier-badge.agency { background:#EADFFD; color:#5B2E91; border:1px solid #C9B1F0; }
+      a { color: var(--accent); }
+      ul, ol { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code, kbd { background:var(--sand); padding: 1px 6px; border-radius:4px; font-size:0.9em; }
+      figure { margin: 1.4rem 0; }
+      figure img { width:100%; max-width:1200px; height:auto; border:1px solid var(--rule); border-radius:8px; display:block; }
+      figcaption { color:var(--muted); font-size:0.9rem; margin-top:6px; }
+      .see-also { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 36px 0 0; }
+      .see-also h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; font-size:1.1rem; }
+      .see-also ul { margin: 8px 0 0; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; margin-top:32px; }
+      footer a { color: var(--muted); text-decoration:none; }
+      footer a:hover { color:var(--accent); }
+    </style>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Service Alerts (GTFS-Realtime) — GTFS·X",
+  "description": "Author GTFS-Realtime Service Alerts — detours, delays, stop closures — and publish them to a live feed that trip planners consume, without republishing your schedule.",
+  "image": "https://www.gtfsx.com/og-default.png",
+  "author": { "@type": "Organization", "name": "GTFS·X", "url": "https://www.gtfsx.com/" },
+  "publisher": { "@type": "Organization", "name": "GTFS·X", "logo": { "@type": "ImageObject", "url": "https://www.gtfsx.com/gtfsx-lockup.svg" } },
+  "datePublished": "2026-05-30",
+  "dateModified": "2026-05-30",
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "https://www.gtfsx.com/docs/service-alerts/" }
+}
+  </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Publishing &amp; distribution</div>
+      <h1>Service Alerts <span class="tier-badge agency">Agency</span></h1>
+      <p class="lede">Post GTFS-Realtime Service Alerts — detours, delays, stop closures, reduced service — to a live feed that Google Maps, Apple Maps, and transit apps consume. Alerts are decoupled from your schedule: posting or expiring one takes effect immediately, with no republish.</p>
+
+      <figure>
+        <img src="/assets/docs/service-alerts-hero.png" alt="The Service Alerts authoring form in GTFS·X: a rider-facing header, optional description, Cause / Effect / Severity dropdowns, a More info URL, and an Affected-entities picker set to Whole feed." loading="lazy" />
+        <figcaption>Composing an alert. A rider-facing header and description, GTFS-Realtime Cause / Effect / Severity, an optional info URL, the entities it affects (whole feed, routes, or stops), and one or more active windows.</figcaption>
+      </figure>
+
+      <h2 id="what-it-is">What it is</h2>
+      <p>A GTFS feed is your <em>schedule</em> — the service you intend to run. Real operations diverge: a bridge closes, a stop moves for construction, snow cancels a route. GTFS-Realtime <strong>Service Alerts</strong> are the standard way to tell riders' apps about those divergences, layered on top of the static feed. GTFS·X gives you a place to write them and a live URL to serve them — without standing up a real-time server.</p>
+      <p>This covers the <strong>Service Alerts</strong> entity of GTFS-Realtime only. Trip Updates (live arrival predictions) and Vehicle Positions require an AVL feed off your buses and are out of scope.</p>
+
+      <h2 id="when-to-use-it">When to use it</h2>
+      <ul>
+        <li>A detour or stop closure that lasts days or weeks but doesn't warrant reissuing the schedule.</li>
+        <li>A planned reduction (holiday service, weather) you want to flag in advance with an active window.</li>
+        <li>An elevator outage or accessibility note at a specific station.</li>
+        <li>Any rider-facing notice you'd otherwise only post on your website — here it reaches the apps riders actually check.</li>
+      </ul>
+
+      <h2 id="how-to-use-it">How to author an alert</h2>
+      <ol>
+        <li>Open a feed and click <strong>Service Alerts</strong> under <strong>Operations</strong> in the left rail, then <strong>+ New alert</strong>.</li>
+        <li>Write a <strong>Header</strong> — the short rider-facing summary (e.g. "Route 5 detour around Main St") — and an optional longer <strong>Description</strong>.</li>
+        <li>Set <strong>Cause</strong>, <strong>Effect</strong>, and <strong>Severity</strong> from the GTFS-Realtime enumerations (e.g. Construction → Detour → Warning). Add a <strong>More info URL</strong> if you have a page with details.</li>
+        <li>Choose the <strong>affected entities</strong> — the whole feed (agency-wide), specific routes, or specific stops, optionally by direction. The pickers are populated from the live feed, so you select real routes and stops. At least one is required.</li>
+        <li>Optionally add one or more <strong>active windows</strong> (start/end). With no window, the alert is active as soon as you activate it and until you deactivate it.</li>
+        <li>Save, preview, then <strong>activate</strong>. The alert appears on your public alerts feed within the cache window; deactivating or expiring it removes it — all without touching your schedule.</li>
+      </ol>
+
+      <h2 id="serving">How it's served</h2>
+      <p>Alerts publish to two public URLs alongside your feed, for whichever format a consumer prefers:</p>
+      <ul>
+        <li><code>feeds.gtfsx.com/&lt;slug&gt;/alerts.pb</code> — the binary GTFS-Realtime <code>FeedMessage</code> (<code>application/x-protobuf</code>), which is what Google, Apple, and most trip planners ingest.</li>
+        <li><code>feeds.gtfsx.com/&lt;slug&gt;/alerts.json</code> — the same data as JSON, handy for debugging or a custom website widget.</li>
+      </ul>
+      <p>Both serve a v2.0 <code>FULL_DATASET</code> containing only currently-active alerts (by status and active window), with a short <code>max-age=30</code> cache. Authoring is gated to your team; the served feeds are open, because their consumers are trip planners. When you start authoring alerts, GTFS·X automatically advertises the <code>alerts.pb</code> URL in your feed's <code>feed_info.json</code> so catalogs and consumers can discover it.</p>
+
+      <h2 id="notes">Good to know</h2>
+      <ul>
+        <li><strong>Decoupled from publish.</strong> Alerts live as their own records, not inside the schedule ZIP — so an alert never forces a feed republish, and a republish never disturbs your alerts.</li>
+        <li><strong>Validation warns, doesn't block.</strong> An alert needs at least one affected entity, a non-empty header, and <code>end &gt; start</code> on any window. If you reference a route or stop that isn't in the published feed, you get a warning, not a hard stop.</li>
+        <li><strong>One alerts feed per project.</strong> If you already register an external GTFS-RT alerts URL, GTFS·X won't also publish its own — you'll be asked to choose, so consumers never see two.</li>
+        <li><strong>Single language today.</strong> Alert text is published as one translation; multi-language alerts are on the roadmap.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/hosted-publishing/">Hosted publishing</a> — the stable feed URL alerts attach to.</li>
+          <li><a href="/learn/publish-gtfs-feed/">How to publish a GTFS feed</a> — registering your feed with the catalogs that also read alerts.</li>
+          <li><a href="/docs/rider-mini-site/">Rider mini-site</a> — where an active alert shows as a rider-facing banner.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

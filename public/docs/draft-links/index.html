@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Draft &amp; review links — GTFS·X</title>
+    <meta name="description" content="Share a working GTFS feed with stakeholders before you publish: an unguessable, expiring, revocable draft URL pinned to a specific snapshot. Pro feature." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/draft-links/" />
+    <meta property="og:title" content="Draft &amp; review links — GTFS·X" />
+    <meta property="og:description" content="Share a working feed before publishing with an unguessable, expiring, revocable draft URL pinned to a snapshot." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/draft-links/" />
+    <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@gtfsxapp" />
+    <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --sand:#FBF6EE; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
+      .site-header nav a:hover, .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      @media (max-width: 720px) { .site-header nav, .site-header .cta { display:none; } .site-header .brand img { height:30px; } }
+      main { padding-top: 24px; padding-bottom: 60px; }
+      .crumbs { color:var(--muted); font-size:0.9rem; margin: 0 0 12px; }
+      .crumbs a { color:var(--muted); text-decoration:none; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      .tier-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; vertical-align:middle; }
+      .tier-badge.pro { background:#FBEEDF; color:#9A4F00; border:1px solid #F0D1A0; }
+      .tier-badge.agency { background:#EADFFD; color:#5B2E91; border:1px solid #C9B1F0; }
+      a { color: var(--accent); }
+      ul, ol { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code, kbd { background:var(--sand); padding: 1px 6px; border-radius:4px; font-size:0.9em; }
+      figure { margin: 1.4rem 0; }
+      figure img { width:100%; max-width:1200px; height:auto; border:1px solid var(--rule); border-radius:8px; display:block; }
+      figcaption { color:var(--muted); font-size:0.9rem; margin-top:6px; }
+      .see-also { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 36px 0 0; }
+      .see-also h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; font-size:1.1rem; }
+      .see-also ul { margin: 8px 0 0; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; margin-top:32px; }
+      footer a { color: var(--muted); text-decoration:none; }
+      footer a:hover { color:var(--accent); }
+    </style>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Draft & review links — GTFS·X",
+  "description": "Share a working GTFS feed with stakeholders before you publish: an unguessable, expiring, revocable draft URL pinned to a specific snapshot.",
+  "image": "https://www.gtfsx.com/og-default.png",
+  "author": { "@type": "Organization", "name": "GTFS·X", "url": "https://www.gtfsx.com/" },
+  "publisher": { "@type": "Organization", "name": "GTFS·X", "logo": { "@type": "ImageObject", "url": "https://www.gtfsx.com/gtfsx-lockup.svg" } },
+  "datePublished": "2026-05-30",
+  "dateModified": "2026-05-30",
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "https://www.gtfsx.com/docs/draft-links/" }
+}
+  </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Publishing &amp; distribution</div>
+      <h1>Draft &amp; review links <span class="tier-badge pro">Pro</span></h1>
+      <p class="lede">Hand a stakeholder a working copy of your feed before it goes live. A draft link is an unguessable, time-limited URL to a specific snapshot's GTFS ZIP — perfect for review by a colleague, a consultant, or a downstream consumer who wants to test the feed before you publish it to the world.</p>
+
+      <figure>
+        <img src="/assets/docs/draft-links-share-tab.png" alt="The Share &amp; Publish panel in GTFS·X with the Get review link control: a generated draft URL, its expiry date, and copy / renew / revoke actions." loading="lazy" />
+        <figcaption>The Share &amp; Publish panel. "Get review link" mints a private draft URL pinned to the current snapshot, with copy, renew, and revoke controls.</figcaption>
+      </figure>
+
+      <h2 id="what-it-is">What it is</h2>
+      <p>Publishing puts your feed at a permanent, public, catalog-registered URL. That's the wrong tool for "can you check this before it's live?" A <strong>draft link</strong> fills that gap: a private URL you can share for review, with none of the permanence or discoverability of a real publish. It serves a frozen snapshot, so what your reviewer downloads doesn't shift under them while you keep editing.</p>
+
+      <h2 id="when-to-use-it">When to use it</h2>
+      <ul>
+        <li>Sending a revised feed to a state DOT coordinator or a consultant for sign-off before publishing.</li>
+        <li>Letting a downstream developer or trip-planner integrator test against real data ahead of go-live.</li>
+        <li>Sharing a proposed service change internally without exposing it on your public feed URL.</li>
+      </ul>
+
+      <h2 id="how-to-use-it">How to use it in GTFS·X</h2>
+      <ol>
+        <li>Open the feed and go to the <strong>Share &amp; Publish</strong> tab in the bottom panel.</li>
+        <li>Choose <strong>Get review link</strong>. GTFS·X mints a URL of the form <code>feeds.gtfsx.com/&lt;slug&gt;/draft/&lt;token&gt;.zip</code> tied to the current snapshot.</li>
+        <li>Copy it and send it to your reviewer. They can download the ZIP directly — no GTFS·X account required.</li>
+        <li>When the review is done, <strong>revoke</strong> the link (or let it expire). Need longer? <strong>Renew</strong> it.</li>
+      </ol>
+
+      <h2 id="how-it-works">How it stays private</h2>
+      <ul>
+        <li><strong>Unguessable token.</strong> The link carries a 192-bit random token (stored hashed), so it can't be enumerated or guessed.</li>
+        <li><strong>Expiring &amp; revocable.</strong> Draft links default to a 30-day expiry; you can renew or revoke at any time.</li>
+        <li><strong>Not indexed.</strong> Draft responses carry <code>X-Robots-Tag: noindex</code> and the feeds origin's <code>robots.txt</code> disallows <code>/draft/</code>, so search engines won't surface them.</li>
+        <li><strong>Pinned to a snapshot.</strong> Each link points at a specific saved snapshot, so the bytes are stable once shared — continuing to edit the feed doesn't change what the reviewer sees until you mint a new link.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/hosted-publishing/">Hosted publishing</a> — when you're ready to go live at a permanent URL.</li>
+          <li><a href="/docs/import-and-export/">Import &amp; export</a> — a plain ZIP download for offline sharing.</li>
+          <li><a href="/docs/validation/">Validation</a> — clear errors before sending a feed for review.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

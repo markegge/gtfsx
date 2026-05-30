@@ -14,6 +14,7 @@ import { CoveragePanel } from '../coverage/CoveragePanel';
 import { TitleVIPanel } from '../titlevi/TitleVIPanel';
 import { StopAnalysisPanel } from '../analysis/StopAnalysisPanel';
 import { FlexEditor } from '../flex/FlexEditor';
+import { AlertsEditor } from '../alerts/AlertsEditor';
 import { PaywallOverlay } from '../billing/PaywallOverlay';
 import { useEditorPlan } from '../billing/useEditorPlan';
 import { EditActions } from '../ui/EditActions';
@@ -37,6 +38,7 @@ const SECTION_TITLES: Record<SidebarSection, string> = {
   coverage: 'Coverage',
   titlevi: 'Title VI',
   'stop-analysis': 'Stop Analysis',
+  alerts: 'Service Alerts',
 };
 
 const SECTION_GROUP: Record<SidebarSection, string | null> = {
@@ -50,6 +52,7 @@ const SECTION_GROUP: Record<SidebarSection, string | null> = {
   coverage: 'Analysis',
   titlevi: 'Analysis',
   'stop-analysis': 'Analysis',
+  alerts: 'Operations',
 };
 
 function PanelBody({ section }: { section: SidebarSection }) {
@@ -89,6 +92,12 @@ function PanelBody({ section }: { section: SidebarSection }) {
       return (
         <PaywallOverlay feature="analysis_basic" currentPlan={plan}>
           <StopAnalysisPanel />
+        </PaywallOverlay>
+      );
+    case 'alerts':
+      return (
+        <PaywallOverlay feature="service_alerts" currentPlan={plan}>
+          <AlertsEditor />
         </PaywallOverlay>
       );
     default:

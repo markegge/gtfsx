@@ -103,7 +103,8 @@ delivered once.
 | `draft_link` | Unguessable hashed token → a specific snapshot; time-limited, revocable. |
 | `publication` / `publication_history` | Canonical-publish pointer (≤1 live snapshot per project) + append-only publish/unpublish/rollback log. |
 | `project_catalog_submission` | Opt-in record per (project, catalog) for Mobility DB / transit.land; stores external feed id. |
-| `project_rt_feed` | Registered external GTFS-RT feed URLs (metadata only). |
+| `project_rt_feed` | GTFS-RT feed URLs forwarded in `feed_info.json`. `managed=0` = externally-hosted feeds the agency registers; `managed=1` = the auto-wired pointer at our own generated Service Alerts feed (RT coexistence, BE-92). |
+| `service_alert` | One GTFS-Realtime Service Alert per row, project-scoped (BE-90). Rendered to protobuf on demand; decoupled from publish. |
 | `subscription` | Stripe-synced plan/status/renewal for a user or org. |
 | `forum_*` | `forum_category`, `forum_thread`, `forum_post`, `forum_post_upvote`, `forum_subscription`, `forum_user_state`, `forum_image`, FTS5 `forum_search`. |
 | `audit_event` | Append-only log of significant actions. |
@@ -130,6 +131,7 @@ delivered once.
 | `0015_event_oci_upload` | `event.oci_uploaded_at` — Google Ads Offline Conversion Import bookkeeping |
 | `0016_feed_thumbnail` | Route-map thumbnail pointers on `feed_project` (Mapbox Static Images → R2; og:image) |
 | `0017_rename_team_plan_to_agency` | Internal plan id `team`→`agency` (display name changed at pricing-v2; this aligns the data) |
+| `0018_service_alerts` | `service_alert` (GTFS-RT Service Alerts authoring, BE-90); `project_rt_feed.managed` column for RT coexistence (BE-92) |
 
 ---
 
@@ -152,7 +154,8 @@ origin. This list is the source of truth.
 | `POST/GET /api/projects/:id/snapshots`, `*/snapshots/:sid/state`, `*/restore`, `DELETE *` | Snapshots (list/create/fetch/restore/delete) |
 | `POST/GET/DELETE /api/projects/:id/draft-links[/:tokenHash]` | Draft review links |
 | `POST /api/projects/:id/publish` · `/unpublish` · `/publish/rollback` · `GET /publish/history` | Canonical publish lifecycle |
-| `POST /api/projects/:id/catalog-submissions`, `PUT /api/projects/:id/rt-feeds`, `GET /api/projects/:id/audit` | Distribution opt-in, RT-feed registration, per-project audit |
+| `POST /api/projects/:id/catalog-submissions`, `PUT /api/projects/:id/rt-feeds`, `GET /api/projects/:id/audit` | Distribution opt-in, external RT-feed registration, per-project audit |
+| `GET/POST/PUT/PATCH/DELETE /api/projects/:id/alerts[/:alertId]`, `GET */alerts/preview.json`, `POST */alerts/rt-feed` | Service Alerts authoring (Agency+; BE-90) |
 | `POST /api/projects/import` | Anonymous→signed-in bulk import |
 | `POST /api/billing/checkout` · `/portal` · `POST /api/billing/webhooks/stripe` · `GET /api/billing/me` · catalog | Stripe checkout/portal/webhooks; plan + usage |
 | `GET /community/*`, `/api/forum/*` | Forum SSR pages + forum JSON API (threads/posts/upvotes/subscriptions/search/profile/uploads) |
@@ -161,9 +164,10 @@ origin. This list is the source of truth.
 
 ### Feeds origin (no auth)
 
-`GET feeds.*/<slug>/gtfs.zip` · `/feed_info.json` · `/draft/<token>.zip` ·
-`/<slug>` (mini-site) · `/embed/route/<id>` · `/embed/stop/<id>` ·
-`/embed/system-map` · `/_/orgs/<org_id>/logo` · `/robots.txt` (`Disallow: /`).
+`GET feeds.*/<slug>/gtfs.zip` · `/feed_info.json` · `/alerts.pb` · `/alerts.json` ·
+`/draft/<token>.zip` · `/<slug>` (mini-site) · `/embed/route/<id>` ·
+`/embed/stop/<id>` · `/embed/system-map` · `/_/orgs/<org_id>/logo` ·
+`/robots.txt` (`Disallow: /`).
 
 ---
 
@@ -202,6 +206,20 @@ only after the R2 object is fully written).
 analytics at `/admin/events`. **NF-71 (per-project usage metrics for owners) and
 NF-72 (error reporting / Sentry-Logpush) remain open** (GitHub issues).
 
+**GTFS-Realtime Service Alerts (BE-90..93):** Agency+ editors author Service
+Alerts (`worker/projects/alerts.ts`, gated by `requireOwnerFeature('service_alerts')`
++ project `editor`) stored one-row-per-alert in `service_alert` (migration 0018),
+decoupled from publish. **BE-90** authoring CRUD + activate/preview; **BE-91**
+public serving at `feeds.*/<slug>/alerts.pb` / `.json` — a `FeedMessage` v2.0 /
+FULL_DATASET rendered on demand (`worker/alerts/render.ts`, pure; uses
+`gtfs-realtime-bindings`) from currently-active rows, `max-age=30`. **BE-92** RT
+coexistence (Option A): authoring upserts a managed `project_rt_feed` row
+(`kind='alerts'`, `managed=1`) so `feed_info.json` advertises our feed; managed
+rows are excluded from the publish ID-stability warning and the external-feed
+editor, and never coexist with an external alerts feed (UI forces a choice).
+**BE-93 (backlog):** multi-language alert text — v1 emits a single-language
+`TranslatedString`, so adding languages needs no wire-format change.
+
 Design rationale is preserved in the decisions appendix of the archived
 `BACKEND_REQUIREMENTS.md` (`docs/archive/`).
 
@@ -239,6 +257,9 @@ Infra still exists (`gtfs-builder-staging`, `staging[-feeds].gtfsx.com`, separat
 D1/KV/R2) but is **not auto-deployed**. Use as a manual rehearsal env for risky
 changes: `npm run build && unset CLOUDFLARE_API_TOKEN && npx wrangler deploy --env staging`.
 Staging runs test-mode Stripe and both `*_ENABLED` flags true.
+- **GTFS-Realtime Service Alerts (migration `0018`, BE-90..93)** is deployed here
+  for review (2026-05-30); **not yet on prod** — prod migrations stop at `0017`.
+  Promotion applies `0018` to the prod D1 before/with the merge to `main`.
 
 ### Deploy gotchas (these tripped past deploys)
 

@@ -320,12 +320,12 @@ Self-serve subscriptions via Stripe — live in production since 2026-05-15
 - ✅ Four tiers — **Free / Pro / Agency / Enterprise** (internal plan ids `free` / `pro` / `agency` / `enterprise`; `agency` was `team` before the pricing-v2 rename, migration 0017):
   - **Free** $0 — editor + up to 3 cloud-saved feeds; no publishing.
   - **Pro** $49/mo · $499/yr — Premium Feed Management (hosting, publishing, embeds, mini-site).
-  - **Agency** $299/mo · $2,499/yr — adds the full route-planning suite + org workspaces + unlimited feeds; 14-day free trial (card up front).
+  - **Agency** $299/mo · $2,499/yr — adds the full route-planning suite + org workspaces + unlimited feeds + GTFS-Realtime Service Alerts authoring (§4.5); 14-day free trial (card up front).
   - **Enterprise** — custom (talk to sales).
 - ✅ Stripe Checkout upgrade flow (`/upgrade`; per-card monthly/annual toggle, defaults to annual).
 - ✅ Stripe customer portal for managing / cancelling; 30-day prorated-refund policy.
 - ✅ Webhooks (`/api/billing/webhooks/stripe`) sync subscription state → D1 `subscription` + cached `plan`/status on `user` / `organization`.
-- ✅ Server-side feature gating via `requireOwnerFeature` (e.g. `managed_publishing`, `draft_links`, `analysis_basic`, `analysis_title_vi`, `org_workspace`, `org_logo`, `brand_color`); `PaywallOverlay` is the client surface.
+- ✅ Server-side feature gating via `requireOwnerFeature` (e.g. `managed_publishing`, `draft_links`, `analysis_basic`, `analysis_title_vi`, `org_workspace`, `org_logo`, `brand_color`, `service_alerts`); `PaywallOverlay` is the client surface. `service_alerts` → Agency + Enterprise.
 - ✅ Org workspaces are an Agency+ feature — Free/Pro users are routed to `/upgrade` rather than creating empty orgs.
 - ✅ Plan catalog served from the worker, with an in-SPA fallback for the public `/pricing` page; done-for-you services (fix / build a feed) advertised there via a scoping-call booking + email (not a billed product).
 - Pricing history (the Team→Agency rename + the v2 price change) is preserved in the archived `PRICING_RESTRUCTURE.md`.
@@ -357,10 +357,10 @@ Architecture and API surface are in [`ARCHITECTURE.md`](./ARCHITECTURE.md) (§3 
 
 - ✅ One-time opt-in per project at first publish: register with the Mobility Database (real API call against the existing refresh token).
 - 🟡 transit.land submission — wired through the same `CatalogClient` interface but stubbed (status=`pending`, manual-review marker). Pre-RTAP follow-up. Tracked in GitHub issues.
-- ✅ External GTFS-RT feed URLs can be registered per project (vehicle_positions / trip_updates / alerts). They're metadata only — we don't proxy or generate RT.
-- ✅ ID-stability check on publish: warns when a publish would drop or rename a `trip_id` / `stop_id` / `route_id` / `agency_id` referenced by a registered RT feed.
+- ✅ Externally-hosted GTFS-RT feed URLs can be registered per project (vehicle_positions / trip_updates / alerts). These are metadata only — we forward them in `feed_info.json` but don't proxy them. (Distinct from the alerts feed we *generate* in §4.5.)
+- ✅ ID-stability check on publish: warns when a publish would drop or rename a `trip_id` / `stop_id` / `route_id` / `agency_id` referenced by a registered *external* RT feed. (Our own managed Service Alerts feed self-renders and is excluded.)
 - ✅ Distribution checklist UI: Mobility DB (auto), transit.land (auto/stub), Google Transit Partners + Apple Maps Transit + Transit app (external links + manual mark-done).
-- 🚫 GTFS-Realtime feed generation or hosting — out of scope; we coordinate with existing RT feeds only.
+- ✅ **GTFS-Realtime Service Alerts generation is in scope** (§4.5). Trip Updates and Vehicle Positions remain out of scope — they require live AVL ingestion.
 
 ### 4.4 Embeddable maps and schedules
 
@@ -394,6 +394,18 @@ Cross-cutting embed features:
 
 (The Phase 7 embed backlog above is tracked in GitHub issues.)
 - 🚫 Custom domains for published feeds. Agencies can `301` from their own domain if needed; we don't issue per-tenant certs.
+
+### 4.5 GTFS-Realtime Service Alerts (Agency+)
+
+Authoring of GTFS-Realtime **Service Alerts** in a new "Service Alerts" workspace section, served as a spec-compliant `FeedMessage`. Engineering detail in [`ARCHITECTURE.md`](./ARCHITECTURE.md) (BE-90..93).
+
+- ✅ Alerts are **project-scoped** and **decoupled from publish** — posting or expiring an alert takes effect on the live feed without republishing the schedule. Each alert is a `service_alert` D1 row (migration `0018`), not an R2 blob; the protobuf is rendered on demand.
+- ✅ CRUD + activate/deactivate + live preview under `/api/projects/:id/alerts`, gated by project `editor` access **and** the `service_alerts` feature (Agency+). Cause / Effect / Severity, multiple active windows, and affected-entity pickers (routes / stops / whole agency, optional direction) populated from the live editor.
+- ✅ Served **public** at `feeds.gtfsx.com/<slug>/alerts.pb` (`application/x-protobuf`) and `/alerts.json`, `FeedMessage` v2.0 / FULL_DATASET, only currently-active alerts (status + `active_period`), `Cache-Control: public, max-age=30`. Authoring is gated; the served feeds are open (consumers are trip planners).
+- ✅ Validation: ≥1 informed entity, non-empty header, `end > start` on windows; **warns** (doesn't block) when a referenced `route_id`/`stop_id` isn't in the published feed.
+- ✅ **RT coexistence (Option A):** authoring auto-wires a managed `project_rt_feed` row (`kind='alerts'`, `managed=1`) pointing at our `alerts.pb` so `feed_info.json` advertises it; never two alerts feeds (if an external one exists the UI forces a choice); the row is removed when all alerts are deleted.
+- ✅ Single language for v1 (`TranslatedString` with one translation). 🔲 Multi-language alert text — backlog (BE-93).
+- 🚫 Trip Updates / Vehicle Positions / push notifications / auto-generated alerts — out of scope.
 
 ---
 

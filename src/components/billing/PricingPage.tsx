@@ -57,6 +57,7 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
       'Cost estimation analysis',
       'Title VI equity analysis',
       'Ridership propensity heatmap',
+      'Service Alerts authoring (GTFS-Realtime)',
       'Unlimited team members in your organization',
       'Cross-org membership (work in unlimited client orgs)',
       'Custom org logo',

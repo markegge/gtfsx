@@ -16,6 +16,7 @@ export type FeatureKey =
   | 'cross_org_member'     // member of orgs you don't own (e.g. consultants in client orgs)
   | 'org_logo'             // upload a custom org logo
   | 'brand_color'          // custom brand primary color
+  | 'service_alerts'       // author GTFS-Realtime Service Alerts
   | 'phone_support';       // SLA-backed phone support
 
 // Per-feature: which plans grant access. Free is excluded by absence.
@@ -38,6 +39,7 @@ export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
   cross_org_member:    ['agency', 'enterprise'],
   org_logo:            ['agency', 'enterprise'],
   brand_color:         ['pro', 'agency', 'enterprise'],
+  service_alerts:      ['agency', 'enterprise'],
   phone_support:       ['enterprise'],
 };
 
@@ -119,6 +121,7 @@ export const PLAN_CATALOG: PlanCatalogEntry[] = [
       'Cost estimation analysis',
       'Title VI equity analysis',
       'Ridership propensity heatmap',
+      'Service Alerts authoring (GTFS-Realtime)',
       'Unlimited team members in your organization',
       'Cross-org membership (work in unlimited client orgs)',
       'Custom org logo',

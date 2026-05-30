@@ -8,7 +8,8 @@ export type SidebarSection =
   | 'costs'
   | 'coverage'
   | 'titlevi'
-  | 'stop-analysis';
+  | 'stop-analysis'
+  | 'alerts';
 
 /**
  * Contextual map highlight driven by the Stop Analysis panel. `balancing` and

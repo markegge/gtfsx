@@ -21,6 +21,8 @@ import { renderRouteEmbed } from '../embeds/route';
 import { renderSystemMapEmbed } from '../embeds/systemMap';
 import { renderStopEmbed } from '../embeds/stop';
 import { renderLandingPage } from '../embeds/landing';
+import { buildFeedMessage, encodeFeedMessage, feedMessageToJson } from '../alerts/render';
+import { loadActiveAlertRecords } from '../alerts/store';
 
 interface PublicationRow {
   project_id: string;
@@ -137,6 +139,8 @@ export const DRAFT_URL_RE = /^\/([a-z0-9][a-z0-9-]*)\/draft\/([A-Za-z0-9_-]+)\.z
 
 const CANONICAL_RE = /^\/([a-z0-9][a-z0-9-]*)\/gtfs\.zip$/;
 const FEED_INFO_RE = /^\/([a-z0-9][a-z0-9-]*)\/feed_info\.json$/;
+const ALERTS_PB_RE = /^\/([a-z0-9][a-z0-9-]*)\/alerts\.pb$/;
+const ALERTS_JSON_RE = /^\/([a-z0-9][a-z0-9-]*)\/alerts\.json$/;
 const DRAFT_RE = /^\/([a-z0-9][a-z0-9-]*)\/draft\/([A-Za-z0-9_-]+)\.zip$/;
 const EMBED_ROUTE_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/route\/([^/?#]+)\/?$/;
 const EMBED_STOP_RE = /^\/([a-z0-9][a-z0-9-]*)\/embed\/stop\/([^/?#]+)\/?$/;
@@ -172,6 +176,14 @@ export async function feedsHandler(
   const info = url.pathname.match(FEED_INFO_RE);
   if (info) {
     return serveFeedInfo(env, info[1]);
+  }
+  const alertsPb = url.pathname.match(ALERTS_PB_RE);
+  if (alertsPb) {
+    return serveAlerts(env, alertsPb[1], 'pb');
+  }
+  const alertsJson = url.pathname.match(ALERTS_JSON_RE);
+  if (alertsJson) {
+    return serveAlerts(env, alertsJson[1], 'json');
   }
   const draft = url.pathname.match(DRAFT_RE);
   if (draft) {
@@ -461,6 +473,43 @@ async function serveFeedInfo(env: Env, slug: string): Promise<Response> {
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+    },
+  });
+}
+
+// ─── GTFS-Realtime Service Alerts ────────────────────────────────────────────────
+//
+// Rendered live from D1 rows (decoupled from publish), so posting/expiring an
+// alert takes effect without republishing the schedule. PUBLIC — only authoring
+// is gated. Short TTL because alerts are time-sensitive. v1 emits a single
+// default language ('en'); deriving it from the feed is on the backlog.
+
+async function serveAlerts(env: Env, slug: string, format: 'pb' | 'json'): Promise<Response> {
+  const pub = await loadPublication(env, slug);
+  if (!pub) {
+    return new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+  }
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const records = await loadActiveAlertRecords(env, pub.project_id, nowSec);
+  const message = buildFeedMessage(records, { timestamp: nowSec });
+
+  if (format === 'pb') {
+    const bytes = encodeFeedMessage(message);
+    return new Response(bytes, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/x-protobuf',
+        'Cache-Control': 'public, max-age=30',
+      },
+    });
+  }
+
+  return new Response(JSON.stringify(feedMessageToJson(message)), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'public, max-age=30',
     },
   });
 }

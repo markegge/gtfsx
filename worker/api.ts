@@ -21,6 +21,7 @@ import {
 } from './auth/tokens';
 import { sendVerifyEmail } from './email';
 import { projectsRouter } from './projects/routes';
+import { registerAlertRoutes } from './projects/alerts';
 import { computeUserUsage } from './me/usage';
 import { buildUserExport, EXPORT_RATE_KEY_PREFIX, EXPORT_RATE_WINDOW_SEC } from './me/export';
 
@@ -384,6 +385,7 @@ apiRouter.get('/me/export', requireAuth, async (c) => {
   });
 });
 
+registerAlertRoutes(projectsRouter);
 apiRouter.route('/projects', projectsRouter);
 
 // ─── SUBROUTER MOUNTS ──────────────────────────────────────────────────────

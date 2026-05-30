@@ -80,7 +80,7 @@ interface SnapshotRow {
   created_at: number;
 }
 
-async function parseJson<T extends z.ZodTypeAny>(
+export async function parseJson<T extends z.ZodTypeAny>(
   c: { req: { json: () => Promise<unknown> } },
   schema: T,
 ): Promise<z.infer<T>> {
@@ -162,7 +162,7 @@ const ACCESS_RANK: Record<RequiredProjectLevel, number> = {
  *   'admin'   — org admin+ (only admins/owners can delete org projects)
  * Personal owners always satisfy every level.
  */
-async function requireOwnedProject(
+export async function requireOwnedProject(
   env: Env,
   user: AuthedUser,
   projectId: string,
@@ -1220,8 +1220,10 @@ projectsRouter.post('/:id/publish', async (c) => {
   // ID-stability check (BE-88). Only runs when the project has RT feed URLs
   // registered AND there's an existing publication to diff against.
   const existing = existingPublication;
+  // managed=1 is our auto-wired Service Alerts feed — it self-renders from D1
+  // and can't "break" on republish, so it must not trigger the warning.
   const rtCount = await c.env.DB.prepare(
-    `SELECT COUNT(*) AS n FROM project_rt_feed WHERE project_id = ?`,
+    `SELECT COUNT(*) AS n FROM project_rt_feed WHERE project_id = ? AND managed = 0`,
   )
     .bind(project.id)
     .first<{ n: number }>();
@@ -1737,8 +1739,10 @@ projectsRouter.get('/:id/rt-feeds', async (c) => {
   const id = c.req.param('id');
   const { row: project } = await requireOwnedProject(c.env, user, id, 'viewer');
 
+  // Only external (managed=0) feeds belong to this editor; the managed Service
+  // Alerts row is owned by the alerts feature.
   const rows = await c.env.DB.prepare(
-    `SELECT id, kind, url FROM project_rt_feed WHERE project_id = ? ORDER BY created_at`,
+    `SELECT id, kind, url FROM project_rt_feed WHERE project_id = ? AND managed = 0 ORDER BY created_at`,
   )
     .bind(project.id)
     .all<{ id: string; kind: string; url: string }>();
@@ -1752,12 +1756,13 @@ projectsRouter.put('/:id/rt-feeds', async (c) => {
   const body = await parseJson(c, rtFeedsPutSchema);
   const now = Date.now();
 
-  await c.env.DB.prepare(`DELETE FROM project_rt_feed WHERE project_id = ?`)
+  // Replace only external feeds; never touch the managed Service Alerts row.
+  await c.env.DB.prepare(`DELETE FROM project_rt_feed WHERE project_id = ? AND managed = 0`)
     .bind(project.id)
     .run();
   for (const feed of body.feeds) {
     await c.env.DB.prepare(
-      `INSERT INTO project_rt_feed (id, project_id, kind, url, created_at) VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO project_rt_feed (id, project_id, kind, url, created_at, managed) VALUES (?, ?, ?, ?, ?, 0)`,
     )
       .bind(ulid(), project.id, feed.kind, feed.url, now)
       .run();
@@ -1773,7 +1778,7 @@ projectsRouter.put('/:id/rt-feeds', async (c) => {
   });
 
   const rows = await c.env.DB.prepare(
-    `SELECT id, kind, url FROM project_rt_feed WHERE project_id = ? ORDER BY created_at`,
+    `SELECT id, kind, url FROM project_rt_feed WHERE project_id = ? AND managed = 0 ORDER BY created_at`,
   )
     .bind(project.id)
     .all<{ id: string; kind: string; url: string }>();
@@ -1787,7 +1792,7 @@ projectsRouter.delete('/:id/rt-feeds/:rtId', async (c) => {
   const { row: project } = await requireOwnedProject(c.env, user, id, 'editor');
 
   const row = await c.env.DB.prepare(
-    `SELECT id FROM project_rt_feed WHERE id = ? AND project_id = ?`,
+    `SELECT id FROM project_rt_feed WHERE id = ? AND project_id = ? AND managed = 0`,
   )
     .bind(rtId, project.id)
     .first<{ id: string }>();

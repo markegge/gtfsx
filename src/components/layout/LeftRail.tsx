@@ -26,6 +26,9 @@ const ANALYSIS: NavItem[] = [
   { key: 'coverage', label: 'Coverage', tile: 'tile-teal' },
   { key: 'titlevi', label: 'Title VI', tile: 'tile-purple' },
 ];
+const OPERATIONS: NavItem[] = [
+  { key: 'alerts', label: 'Service Alerts', tile: 'tile-coral' },
+];
 
 /**
  * Section icons. Single-source-of-truth: every nav surface (max/mid/min)
@@ -129,6 +132,13 @@ const ICON_PATHS: Record<SidebarSection, ReactNode> = {
       <circle cx="17" cy="9.5" r="2.25" />
       <path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5" />
       <path d="M14.5 20c0-2 1.5-3.5 3.5-3.5s3.5 1.5 3.5 3.5" />
+    </>
+  ),
+  // Service Alerts — megaphone
+  alerts: (
+    <>
+      <path d="M3 11v2a1 1 0 0 0 1 1h2l9 5V5L6 10H4a1 1 0 0 0-1 1z" />
+      <path d="M18 9a3 3 0 0 1 0 6" />
     </>
   ),
 };
@@ -257,18 +267,22 @@ function MaxRail({ counts }: { counts: ItemCounts }) {
   const [fixedManual, setFixedManual] = useState<boolean | null>(null);
   const [flexManual, setFlexManual] = useState<boolean | null>(null);
   const [analysisManual, setAnalysisManual] = useState<boolean | null>(null);
+  const [operationsManual, setOperationsManual] = useState<boolean | null>(null);
 
   const isFixedActive = FIXED_ROUTE.some((i) => i.key === sidebarSection);
   const isFlexActive = FLEX.some((i) => i.key === sidebarSection);
   const isAnalysisActive = ANALYSIS.some((i) => i.key === sidebarSection);
+  const isOperationsActive = OPERATIONS.some((i) => i.key === sidebarSection);
 
   // Default-open if active; user can still toggle to override.
   const fixedOpen = fixedManual ?? (isFixedActive || true);
   const flexOpen = flexManual ?? isFlexActive;
   const analysisOpen = analysisManual ?? isAnalysisActive;
+  const operationsOpen = operationsManual ?? isOperationsActive;
   const setFixedOpen = (v: boolean) => setFixedManual(v);
   const setFlexOpen = (v: boolean) => setFlexManual(v);
   const setAnalysisOpen = (v: boolean) => setAnalysisManual(v);
+  const setOperationsOpen = (v: boolean) => setOperationsManual(v);
 
   const renderRow = (item: NavItem) => {
     const active = sidebarSection === item.key;
@@ -313,6 +327,8 @@ function MaxRail({ counts }: { counts: ItemCounts }) {
       {flexOpen && FLEX.map(renderRow)}
       {renderCap('Analysis', analysisOpen, setAnalysisOpen)}
       {analysisOpen && ANALYSIS.map(renderRow)}
+      {renderCap('Operations', operationsOpen, setOperationsOpen)}
+      {operationsOpen && OPERATIONS.map(renderRow)}
     </div>
   );
 }
@@ -361,6 +377,8 @@ function MidRail({ counts }: { counts: ItemCounts }) {
       {FLEX.map(renderTile)}
       {groupDivider}
       {ANALYSIS.map(renderTile)}
+      {groupDivider}
+      {OPERATIONS.map(renderTile)}
     </div>
   );
 }
@@ -370,10 +388,11 @@ function MidRail({ counts }: { counts: ItemCounts }) {
 function MinRail({ counts }: { counts: ItemCounts }) {
   const sidebarSection = useStore((s) => s.sidebarSection);
   const handleClick = useNavClick();
-  const all = [...SETUP, ...FIXED_ROUTE, ...FLEX, ...ANALYSIS];
+  const all = [...SETUP, ...FIXED_ROUTE, ...FLEX, ...ANALYSIS, ...OPERATIONS];
   const dividerAfter = new Set<number>([
     SETUP.length - 1,
     SETUP.length + FIXED_ROUTE.length + FLEX.length - 1,
+    SETUP.length + FIXED_ROUTE.length + FLEX.length + ANALYSIS.length - 1,
   ]);
 
   return (

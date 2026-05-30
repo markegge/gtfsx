@@ -16,6 +16,7 @@ export type FeatureKey =
   | 'cross_org_member'
   | 'org_logo'
   | 'brand_color'
+  | 'service_alerts'
   | 'phone_support';
 
 // Pricing v2 (May 2026): analysis_basic moved up from Pro to Agency (DB id
@@ -34,6 +35,7 @@ export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
   cross_org_member:    ['agency', 'enterprise'],
   org_logo:            ['agency', 'enterprise'],
   brand_color:         ['pro', 'agency', 'enterprise'],
+  service_alerts:      ['agency', 'enterprise'],
   phone_support:       ['enterprise'],
 };
 
@@ -113,6 +115,10 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   brand_color: {
     title: 'Custom brand color',
     description: 'Match the published feed and embed pages to your agency’s brand color.',
+  },
+  service_alerts: {
+    title: 'Service Alerts authoring',
+    description: 'Publish GTFS-Realtime Service Alerts — detours, delays, and stop closures — to a live feed Google, Apple, and transit apps consume, without republishing your schedule.',
   },
   phone_support: {
     title: 'Phone support with SLA',

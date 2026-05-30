@@ -9,8 +9,11 @@ import {
   publishProject,
   rollbackPublication,
   unpublishProject,
+  schedulePublish,
+  cancelScheduledPublish,
   type ProjectSnapshot,
   type PublicationInfo,
+  type ScheduledPublishInfo,
 } from '../../services/projectsApi';
 import { ApiError } from '../../services/authApi';
 import { exportGtfsZip } from '../../services/gtfsExport';
@@ -26,6 +29,19 @@ function formatDate(ms: number | null | undefined): string {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+// epoch ms ↔ <input type="datetime-local"> value (browser-local), mirroring
+// the helpers in AlertsEditor but in milliseconds (publication timestamps are ms).
+function toLocalDatetimeInput(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fromLocalDatetimeInput(value: string): number | null {
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : null;
 }
 
 // Swap store to the given snapshot's saved state, run the exporter, then restore.
@@ -75,6 +91,9 @@ export function PublishPanel() {
     null,
   );
   const [publishErrors, setPublishErrors] = useState<string[] | null>(null);
+  const [scheduled, setScheduled] = useState<ScheduledPublishInfo | null>(null);
+  const [scheduleMode, setScheduleMode] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState('');
 
   const refresh = useCallback(async () => {
     if (!projectId) return;
@@ -88,6 +107,7 @@ export function PublishPanel() {
       setSnapshotList(snapshotsRes.snapshots);
       setPublicationHistory(historyRes.history);
       setCurrentPublication(historyRes.current);
+      setScheduled(historyRes.scheduled);
       if (!selectedSnapshotId && snapshotsRes.snapshots.length > 0) {
         setSelectedSnapshotId(snapshotsRes.snapshots[0].id);
       }
@@ -239,6 +259,53 @@ export function PublishPanel() {
     }
   };
 
+  const handleSchedule = async () => {
+    if (!selectedSnapshot || !projectId) return;
+    const ms = fromLocalDatetimeInput(scheduleAt);
+    if (ms == null) {
+      setBanner({ kind: 'error', message: 'Pick a date and time to schedule.' });
+      return;
+    }
+    setBusy(true);
+    setBanner(null);
+    setPublishErrors(null);
+    try {
+      // Render the ZIP now and upload it — the cron has no client to render at
+      // fire time, so the rendered bytes are captured at schedule time.
+      const zip = await renderSnapshotZip(projectId, selectedSnapshot.id);
+      await schedulePublish(projectId, {
+        snapshotId: selectedSnapshot.id,
+        scheduledFor: ms,
+        ignoreWarnings: selectedSnapshot.validationWarnings > 0 ? ignoreWarnings : undefined,
+        zip,
+      });
+      setBanner({ kind: 'success', message: `Scheduled to publish on ${formatDate(ms)}.` });
+      setScheduleMode(false);
+      setScheduleAt('');
+      setIgnoreWarnings(false);
+      await refresh();
+    } catch (err) {
+      setBanner({ kind: 'error', message: err instanceof ApiError ? err.message : 'Could not schedule publish' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCancelSchedule = async () => {
+    if (!projectId) return;
+    setBusy(true);
+    setBanner(null);
+    try {
+      await cancelScheduledPublish(projectId);
+      setBanner({ kind: 'info', message: 'Scheduled publish cancelled.' });
+      await refresh();
+    } catch (err) {
+      setBanner({ kind: 'error', message: err instanceof ApiError ? err.message : 'Could not cancel the schedule' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -254,6 +321,14 @@ export function PublishPanel() {
     busy ||
     (selectedSnapshot.validationErrors ?? 0) > 0 ||
     selectedSnapshot.id === currentPubSnapshotId ||
+    ((selectedSnapshot.validationWarnings ?? 0) > 0 && !ignoreWarnings);
+  // Scheduling allows the current snapshot (a future re-publish is fine) but
+  // requires a chosen time and the same validation gate.
+  const scheduleDisabled =
+    !selectedSnapshot ||
+    busy ||
+    !scheduleAt ||
+    (selectedSnapshot.validationErrors ?? 0) > 0 ||
     ((selectedSnapshot.validationWarnings ?? 0) > 0 && !ignoreWarnings);
 
   return (
@@ -354,11 +429,72 @@ export function PublishPanel() {
                 </div>
               )}
 
-              <div className="mt-4">
-                <AuthButton onClick={handlePublish} disabled={publishDisabled}>
-                  {busy ? 'Publishing…' : 'Publish'}
-                </AuthButton>
+              {scheduled?.status === 'pending' && (
+                <div className="mt-3 px-3 py-2 rounded-md bg-gold-light border border-gold text-amber-800 text-xs flex items-center justify-between gap-3">
+                  <span>
+                    ⏰ Scheduled to publish snapshot{' '}
+                    <span className="font-mono">{scheduled.snapshotId.slice(0, 10)}</span> on{' '}
+                    {formatDate(scheduled.scheduledFor)} (within ~15 min of that time).
+                  </span>
+                  <button
+                    className="text-coral hover:underline whitespace-nowrap font-semibold"
+                    disabled={busy}
+                    onClick={handleCancelSchedule}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              {scheduled?.status === 'failed' && (
+                <div className="mt-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
+                  Last scheduled publish failed: {scheduled.failureReason || 'unknown error'}.
+                </div>
+              )}
+
+              <div className="mt-4 inline-flex gap-1 text-xs">
+                <button
+                  onClick={() => setScheduleMode(false)}
+                  className={`px-3 py-1.5 rounded-md font-semibold transition-colors ${!scheduleMode ? 'bg-coral text-white' : 'bg-sand text-brown hover:bg-coral-light hover:text-coral'}`}
+                >
+                  Publish now
+                </button>
+                <button
+                  onClick={() => setScheduleMode(true)}
+                  className={`px-3 py-1.5 rounded-md font-semibold transition-colors ${scheduleMode ? 'bg-coral text-white' : 'bg-sand text-brown hover:bg-coral-light hover:text-coral'}`}
+                >
+                  Schedule for later
+                </button>
               </div>
+
+              {scheduleMode ? (
+                <div className="mt-3">
+                  <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
+                    Publish at
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={scheduleAt}
+                    min={toLocalDatetimeInput(Date.now() + 2 * 60_000)}
+                    onChange={(e) => setScheduleAt(e.target.value)}
+                    className="w-full px-3 py-2 border-2 border-sand rounded-lg bg-cream text-sm text-dark-brown focus:outline-none focus:border-coral focus:bg-white"
+                  />
+                  <p className="mt-1 text-[11px] text-warm-gray">
+                    Your local time. The snapshot publishes automatically at the next check after
+                    this time (within ~15 min) — you don't need to keep this open.
+                  </p>
+                  <div className="mt-3">
+                    <AuthButton onClick={handleSchedule} disabled={scheduleDisabled}>
+                      {busy ? 'Scheduling…' : 'Schedule publish'}
+                    </AuthButton>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3">
+                  <AuthButton onClick={handlePublish} disabled={publishDisabled}>
+                    {busy ? 'Publishing…' : 'Publish'}
+                  </AuthButton>
+                </div>
+              )}
             </>
           )}
         </section>

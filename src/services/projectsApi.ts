@@ -387,9 +387,19 @@ export interface PublicationHistoryEntry {
   createdAt: number;
 }
 
+export interface ScheduledPublishInfo {
+  id: string;
+  snapshotId: string;
+  scheduledFor: number; // unix ms
+  ignoreWarnings: boolean;
+  status: 'pending' | 'executed' | 'cancelled' | 'failed';
+  failureReason: string | null;
+}
+
 export interface PublicationHistoryResponse {
   history: PublicationHistoryEntry[];
   current: { snapshotId: string; publishedAt: number } | null;
+  scheduled: ScheduledPublishInfo | null;
 }
 
 export interface DraftLinkInfo {
@@ -477,6 +487,39 @@ export function getPublicationHistory(
 ): Promise<PublicationHistoryResponse> {
   return requestJson<PublicationHistoryResponse>(
     `/api/projects/${encodeURIComponent(projectId)}/publish/history`,
+  );
+}
+
+export function schedulePublish(
+  projectId: string,
+  input: { snapshotId: string; scheduledFor: number; ignoreWarnings?: boolean; zip?: Blob },
+): Promise<{ scheduled: ScheduledPublishInfo }> {
+  const meta = {
+    snapshotId: input.snapshotId,
+    scheduledFor: input.scheduledFor,
+    ignoreWarnings: input.ignoreWarnings,
+  };
+  if (input.zip) {
+    // The cron has no client to render the GTFS ZIP at fire time, so we upload
+    // the rendered ZIP now (multipart) and the server persists it on the snapshot.
+    const form = new FormData();
+    form.append('meta', JSON.stringify(meta));
+    form.append('zip', input.zip, 'gtfs.zip');
+    return postFormData<{ scheduled: ScheduledPublishInfo }>(
+      `/api/projects/${encodeURIComponent(projectId)}/publish/schedule`,
+      form,
+    );
+  }
+  return requestJson<{ scheduled: ScheduledPublishInfo }>(
+    `/api/projects/${encodeURIComponent(projectId)}/publish/schedule`,
+    { method: 'POST', body: meta },
+  );
+}
+
+export function cancelScheduledPublish(projectId: string): Promise<{ cancelled: boolean }> {
+  return requestJson<{ cancelled: boolean }>(
+    `/api/projects/${encodeURIComponent(projectId)}/publish/schedule`,
+    { method: 'DELETE' },
   );
 }
 

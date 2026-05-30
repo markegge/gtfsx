@@ -10,8 +10,8 @@ export interface AdminStats {
     disabled: number;
     deleted_soft: number;
   };
-  // Non-deleted users by subscription tier ('team' = Agency).
-  usersByPlan: { free: number; pro: number; team: number; enterprise: number };
+  // Non-deleted users by subscription tier ('agency' = Agency tier).
+  usersByPlan: { free: number; pro: number; agency: number; enterprise: number };
   organizations: { total: number };
   projects: { total: number; byOwnerType: { user: number; org: number } };
   snapshots: { total: number };
@@ -30,7 +30,7 @@ export interface AdminUserRow {
   displayName: string;
   status: UserStatus;
   staff: boolean;
-  plan: 'free' | 'pro' | 'team' | 'enterprise';
+  plan: 'free' | 'pro' | 'agency' | 'enterprise';
   planStatus: 'active' | 'past_due' | 'canceled' | 'trialing';
   createdAt: number;
   lastSessionAt: number | null;

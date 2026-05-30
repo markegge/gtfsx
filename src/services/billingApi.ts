@@ -5,7 +5,7 @@ import { ApiError, type ApiErrorCode } from './authApi';
 export type Plan =
   | 'free'
   | 'pro'
-  | 'team'
+  | 'agency'
   | 'enterprise';
 
 export type Interval = 'month' | 'year';
@@ -46,7 +46,7 @@ export interface OwnerBillingState {
 export interface CheckoutInput {
   ownerType: 'user' | 'org';
   ownerId: string;
-  plan: 'pro' | 'team';
+  plan: 'pro' | 'agency';
   interval: Interval;
 }
 

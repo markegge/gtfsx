@@ -22,22 +22,22 @@ export type FeatureKey =
 //
 // Pricing v2 (May 2026): Pro is positioned as the "host and publish feeds"
 // tier — all publishing-adjacent features live here. The Agency tier (DB id:
-// 'team') consolidates the planning/analysis suite so it competes head-to-head
+// 'agency') consolidates the planning/analysis suite so it competes head-to-head
 // with Remix at ~1/6 of Remix's price. The single feature that moved was
 // analysis_basic (cost + coverage), reassigned from Pro to Agency-and-up.
 export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
-  managed_publishing:  ['pro', 'team', 'enterprise'],
-  draft_links:         ['pro', 'team', 'enterprise'],
-  mobility_db_submit:  ['pro', 'team', 'enterprise'],
-  embeds:              ['pro', 'team', 'enterprise'],
-  snapshot_history:    ['pro', 'team', 'enterprise'],
-  analysis_basic:      ['team', 'enterprise'],
-  analysis_title_vi:   ['team', 'enterprise'],
-  analysis_propensity: ['team', 'enterprise'],
-  org_workspace:       ['team', 'enterprise'],
-  cross_org_member:    ['team', 'enterprise'],
-  org_logo:            ['team', 'enterprise'],
-  brand_color:         ['pro', 'team', 'enterprise'],
+  managed_publishing:  ['pro', 'agency', 'enterprise'],
+  draft_links:         ['pro', 'agency', 'enterprise'],
+  mobility_db_submit:  ['pro', 'agency', 'enterprise'],
+  embeds:              ['pro', 'agency', 'enterprise'],
+  snapshot_history:    ['pro', 'agency', 'enterprise'],
+  analysis_basic:      ['agency', 'enterprise'],
+  analysis_title_vi:   ['agency', 'enterprise'],
+  analysis_propensity: ['agency', 'enterprise'],
+  org_workspace:       ['agency', 'enterprise'],
+  cross_org_member:    ['agency', 'enterprise'],
+  org_logo:            ['agency', 'enterprise'],
+  brand_color:         ['pro', 'agency', 'enterprise'],
   phone_support:       ['enterprise'],
 };
 
@@ -47,7 +47,7 @@ export function planHasFeature(plan: Plan, feature: FeatureKey): boolean {
 
 // The smallest plan that unlocks a given feature — used by the upgrade modal
 // to suggest a target. Order matches the price ladder.
-const PLAN_ORDER: Plan[] = ['free', 'pro', 'team', 'enterprise'];
+const PLAN_ORDER: Plan[] = ['free', 'pro', 'agency', 'enterprise'];
 
 export function cheapestPlanFor(feature: FeatureKey): Plan {
   for (const plan of PLAN_ORDER) {
@@ -106,7 +106,7 @@ export const PLAN_CATALOG: PlanCatalogEntry[] = [
     ],
   },
   {
-    plan: 'team',
+    plan: 'agency',
     displayName: 'Agency',
     monthlyPriceUsd: 299,
     annualPriceUsd: 2499,

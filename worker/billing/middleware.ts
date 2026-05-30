@@ -104,7 +104,7 @@ export async function requireDraftLinkAccess(
 
 // ─── Seat enforcement for org memberships ───────────────────────────────────
 //
-// The paying party for any org membership is the org itself (Team or
+// The paying party for any org membership is the org itself (Agency or
 // Enterprise). Free users can be members of paid orgs at no charge —
 // previously we gated joins on the invitee's personal plan, but that broke
 // the canonical "transit agency invites their planner" use case.
@@ -123,13 +123,13 @@ export async function requireOrgSeatAvailable(env: Env, orgId: string): Promise<
     throw paywall({
       feature: 'org_workspace',
       currentPlan: plan,
-      upgradeTo: 'team',
+      upgradeTo: 'agency',
     }, 'This organization needs a paid plan before adding members.');
   }
-  // Team and Enterprise are flat-priced with unlimited members — no headroom
+  // Agency and Enterprise are flat-priced with unlimited members — no headroom
   // check needed. plan_seat_count stays for forward-compat (e.g. a future
   // per-seat add-on) but isn't a gate today.
-  if (plan === 'team' || plan === 'enterprise') return;
+  if (plan === 'agency' || plan === 'enterprise') return;
   const membersRow = await env.DB.prepare(
     `SELECT COUNT(*) AS n FROM organization_membership WHERE org_id = ?`,
   )

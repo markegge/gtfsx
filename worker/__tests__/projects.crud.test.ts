@@ -52,7 +52,7 @@ describe('/api/projects CRUD', () => {
     }>(listRes);
     expect(list.projects.map((p) => p.name).sort()).toEqual(['Feed A', 'Feed B']);
     expect(list.quota.projects.used).toBe(2);
-    expect(list.quota.projects.limit).toBe(99999); // team tier default in tests (unlimited sentinel)
+    expect(list.quota.projects.limit).toBe(99999); // agency tier default in tests (unlimited sentinel)
   });
 
   it('GET /api/projects/:id returns the project plus an empty snapshots array', async () => {

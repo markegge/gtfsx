@@ -11,7 +11,7 @@ export interface OrgSummary {
   plan?:
     | 'free'
     | 'pro'
-    | 'team'
+    | 'agency'
     | 'enterprise';
   planStatus?: 'active' | 'past_due' | 'canceled' | 'trialing';
   memberCount: number;

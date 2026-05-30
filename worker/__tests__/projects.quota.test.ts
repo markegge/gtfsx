@@ -15,9 +15,9 @@ import {
 } from './_setup';
 import { ulid } from 'ulidx';
 
-async function loggedInClient(email: string, plan: 'free' | 'pro' | 'team' | 'enterprise' = 'pro') {
+async function loggedInClient(email: string, plan: 'free' | 'pro' | 'agency' | 'enterprise' = 'pro') {
   // Quota tests pin to a plan with known small limits so the assertions stay
-  // readable. Pro = 10 projects + 25 snapshots/project; Team = 500 + 50.
+  // readable. Pro = 10 projects + 25 snapshots/project; Agency = 500 + 50.
   const user = await seedUser({ email, plan });
   const client = makeClient();
   await client.post('/auth/login', { email: user.email, password: user.password });
@@ -92,8 +92,8 @@ describe('project quotas', () => {
   // add a second test project with HARD_LIMITS=true in vitest.config.ts, but
   // the soft path already exercises enforceQuota end-to-end.
 
-  it('soft mode on snapshots: 51st snapshot post still succeeds + warning (team tier)', async () => {
-    const { client, userId } = await loggedInClient('quota3@example.com', 'team');
+  it('soft mode on snapshots: 51st snapshot post still succeeds + warning (agency tier)', async () => {
+    const { client, userId } = await loggedInClient('quota3@example.com', 'agency');
     const proj = await client.json<{ id: string }>(
       await client.post('/api/projects', { name: 'ManySnapshots' }),
     );

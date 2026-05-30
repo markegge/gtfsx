@@ -114,11 +114,11 @@ billingRouter.get('/orgs/:id', async (c) => {
     .bind(orgId)
     .first<{ n: number }>();
 
-  // Agency (internal id 'team') and Enterprise are flat-priced with unlimited members; plan_seat_count
+  // Agency (internal id 'agency') and Enterprise are flat-priced with unlimited members; plan_seat_count
   // is left at 1 for legacy Stripe accounting but should not gate membership.
   // Surface a large sentinel so the UI's `unbounded` quota meter renders it
   // as "Unlimited".
-  const seatsLimit = row.plan === 'team' || row.plan === 'enterprise'
+  const seatsLimit = row.plan === 'agency' || row.plan === 'enterprise'
     ? 99999
     : row.plan_seat_count;
 
@@ -141,11 +141,11 @@ billingRouter.get('/orgs/:id', async (c) => {
 });
 
 // Self-serve checkout supports the two flat-priced plans (Pro on the user,
-// Agency on the org — DB id 'team'). Enterprise is sales-led.
+// Agency on the org — DB id 'agency'). Enterprise is sales-led.
 const checkoutSchema = z.object({
   ownerType: z.enum(['user', 'org']),
   ownerId: z.string().min(1),
-  plan: z.enum(['pro', 'team']),
+  plan: z.enum(['pro', 'agency']),
   interval: z.enum(['month', 'year']),
 });
 
@@ -178,8 +178,8 @@ billingRouter.post('/checkout', async (c) => {
   //   - org: must be admin or owner of the org
   if (body.ownerType === 'user') {
     if (body.ownerId !== user.id) throw forbidden('Cannot start checkout for another user.');
-    // Pro is billed to the user; Agency (DB id 'team') needs an org.
-    if (body.plan === 'team') {
+    // Pro is billed to the user; Agency (DB id 'agency') needs an org.
+    if (body.plan === 'agency') {
       throw validationFailed('Agency plans must be billed to an organization.');
     }
   } else {
@@ -190,7 +190,7 @@ billingRouter.post('/checkout', async (c) => {
   }
 
   const interval: Interval = body.interval;
-  // Agency (DB id 'team') is flat-priced with unlimited seats, so every
+  // Agency (DB id 'agency') is flat-priced with unlimited seats, so every
   // self-serve checkout is quantity=1; Stripe quantity does not track seats.
   const quantity = 1;
 
@@ -259,12 +259,12 @@ billingRouter.post('/checkout', async (c) => {
           // delivers a Subscription, not a checkout session.
           initiated_by_user_id: user.id,
         },
-        // 14-day free trial on Agency (internal id 'team'). Card up front
+        // 14-day free trial on Agency (internal id 'agency'). Card up front
         // per Stripe defaults — payment fails closed at trial end if the
         // card is invalid (Stripe pauses the subscription and emits
         // invoice.payment_failed which the existing handler logs). No trial
         // on Pro — its value is testable in an hour on the Free tier already.
-        ...(body.plan === 'team' ? { trial_period_days: 14 } : {}),
+        ...(body.plan === 'agency' ? { trial_period_days: 14 } : {}),
       },
       success_url: `${c.env.APP_ORIGIN}${billingPath}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${c.env.APP_ORIGIN}${billingPath}?checkout=canceled`,

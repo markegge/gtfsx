@@ -95,8 +95,8 @@ function weekBucket(ms: number): string {
 
 interface AdminStats {
   users: { total: number; active: number; pending_verification: number; disabled: number; deleted_soft: number };
-  // Non-deleted users grouped by subscription tier ('team' = Agency).
-  usersByPlan: { free: number; pro: number; team: number; enterprise: number };
+  // Non-deleted users grouped by subscription tier ('agency' = Agency tier).
+  usersByPlan: { free: number; pro: number; agency: number; enterprise: number };
   organizations: { total: number };
   projects: { total: number; byOwnerType: { user: number; org: number } };
   snapshots: { total: number };
@@ -136,11 +136,11 @@ async function computeStats(env: Env): Promise<AdminStats> {
   const planRows = await env.DB.prepare(
     `SELECT plan, COUNT(*) AS n FROM user WHERE status != 'deleted_soft' GROUP BY plan`,
   ).all<{ plan: string; n: number }>();
-  const usersByPlan = { free: 0, pro: 0, team: 0, enterprise: 0 };
+  const usersByPlan = { free: 0, pro: 0, agency: 0, enterprise: 0 };
   for (const r of planRows.results ?? []) {
     if (r.plan === 'free') usersByPlan.free = r.n;
     else if (r.plan === 'pro') usersByPlan.pro = r.n;
-    else if (r.plan === 'team') usersByPlan.team = r.n;
+    else if (r.plan === 'agency') usersByPlan.agency = r.n;
     else if (r.plan === 'enterprise') usersByPlan.enterprise = r.n;
   }
 

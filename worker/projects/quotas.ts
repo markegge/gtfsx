@@ -9,7 +9,7 @@ import { quotaExceeded } from '../util/errors';
 export type Plan =
   | 'free'
   | 'pro'
-  | 'team'
+  | 'agency'
   | 'enterprise';
 
 export type OwnerType = 'user' | 'org';
@@ -26,7 +26,7 @@ const MB = 1024 * 1024;
 export const PLAN_QUOTAS: Record<Plan, PlanQuotas> = {
   free:       { projects: 3,     snapshotsPerProject: 5,   blobBytes:  20 * MB, publishedFeeds: 0 },
   pro:        { projects: 10,    snapshotsPerProject: 25,  blobBytes:  50 * MB, publishedFeeds: 1 },
-  team:       { projects: 99999, snapshotsPerProject: 50,  blobBytes: 100 * MB, publishedFeeds: 99999 },
+  agency:     { projects: 99999, snapshotsPerProject: 50,  blobBytes: 100 * MB, publishedFeeds: 99999 },
   enterprise: { projects: 99999, snapshotsPerProject: 200, blobBytes: 200 * MB, publishedFeeds: 99999 },
 };
 
@@ -38,9 +38,9 @@ export function isPlan(s: string | null | undefined): s is Plan {
 
 // Legacy defaults — kept for the small number of call sites that don't yet
 // thread an owner through. New code should resolve via getOwnerQuotas().
-export const MAX_PROJECTS_PER_OWNER = PLAN_QUOTAS.team.projects;
-export const MAX_SNAPSHOTS_PER_PROJECT = PLAN_QUOTAS.team.snapshotsPerProject;
-export const MAX_BLOB_BYTES = PLAN_QUOTAS.team.blobBytes;
+export const MAX_PROJECTS_PER_OWNER = PLAN_QUOTAS.agency.projects;
+export const MAX_SNAPSHOTS_PER_PROJECT = PLAN_QUOTAS.agency.snapshotsPerProject;
+export const MAX_BLOB_BYTES = PLAN_QUOTAS.agency.blobBytes;
 
 // ─── Plan resolution ────────────────────────────────────────────────────────
 

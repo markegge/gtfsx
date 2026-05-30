@@ -333,7 +333,7 @@ export function UserRowActions({
 }
 
 // Mirrors StatusPill's visual weight. Color signals tier (gray free / coral
-// pro / teal team / dark-brown enterprise); a small grey suffix calls out
+// pro / teal agency / dark-brown enterprise); a small grey suffix calls out
 // non-active plan_status (past_due, canceled, trialing) so a delinquent
 // pro subscriber doesn't visually look the same as a current one.
 function PlanPill({
@@ -346,7 +346,7 @@ function PlanPill({
   const styles: Record<AdminUserRow['plan'], string> = {
     free: 'bg-cream text-warm-gray border border-sand',
     pro: 'bg-coral-light text-coral',
-    team: 'bg-teal-light text-teal',
+    agency: 'bg-teal-light text-teal',
     enterprise: 'bg-dark-brown text-white',
   };
   const statusSuffix: Record<AdminUserRow['planStatus'], string | null> = {

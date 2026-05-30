@@ -19,25 +19,25 @@ export type FeatureKey =
   | 'phone_support';
 
 // Pricing v2 (May 2026): analysis_basic moved up from Pro to Agency (DB id
-// 'team') as part of the publish-vs-plan tier split. See worker/billing/plans.ts
+// 'agency') as part of the publish-vs-plan tier split. See worker/billing/plans.ts
 // for the rationale.
 export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
-  managed_publishing:  ['pro', 'team', 'enterprise'],
-  draft_links:         ['pro', 'team', 'enterprise'],
-  mobility_db_submit:  ['pro', 'team', 'enterprise'],
-  embeds:              ['pro', 'team', 'enterprise'],
-  snapshot_history:     ['pro', 'team', 'enterprise'],
-  analysis_basic:      ['team', 'enterprise'],
-  analysis_title_vi:   ['team', 'enterprise'],
-  analysis_propensity: ['team', 'enterprise'],
-  org_workspace:       ['team', 'enterprise'],
-  cross_org_member:    ['team', 'enterprise'],
-  org_logo:            ['team', 'enterprise'],
-  brand_color:         ['pro', 'team', 'enterprise'],
+  managed_publishing:  ['pro', 'agency', 'enterprise'],
+  draft_links:         ['pro', 'agency', 'enterprise'],
+  mobility_db_submit:  ['pro', 'agency', 'enterprise'],
+  embeds:              ['pro', 'agency', 'enterprise'],
+  snapshot_history:     ['pro', 'agency', 'enterprise'],
+  analysis_basic:      ['agency', 'enterprise'],
+  analysis_title_vi:   ['agency', 'enterprise'],
+  analysis_propensity: ['agency', 'enterprise'],
+  org_workspace:       ['agency', 'enterprise'],
+  cross_org_member:    ['agency', 'enterprise'],
+  org_logo:            ['agency', 'enterprise'],
+  brand_color:         ['pro', 'agency', 'enterprise'],
   phone_support:       ['enterprise'],
 };
 
-const PLAN_ORDER: Plan[] = ['free', 'pro', 'team', 'enterprise'];
+const PLAN_ORDER: Plan[] = ['free', 'pro', 'agency', 'enterprise'];
 
 export function planHasFeature(plan: Plan | undefined | null, feature: FeatureKey): boolean {
   if (!plan) return false;
@@ -55,9 +55,10 @@ export function planDisplayName(plan: Plan): string {
   switch (plan) {
     case 'free': return 'Free';
     case 'pro': return 'Pro';
-    // Internal id stays 'team' (DB column, Stripe metadata, code paths) —
-    // 'Agency' is the May-2026 display rename. See docs/PRICING_RESTRUCTURE.md.
-    case 'team': return 'Agency';
+    // Internal id is 'agency' (DB column, code paths); the Stripe env-var names
+    // (STRIPE_PRICE_TEAM_*) and product id stay 'team' for stability. 'Agency'
+    // is the May-2026 display rename. See docs/PRICING_RESTRUCTURE.md.
+    case 'agency': return 'Agency';
     case 'enterprise': return 'Enterprise';
   }
 }

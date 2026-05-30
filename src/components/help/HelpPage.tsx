@@ -16,17 +16,17 @@ export function HelpPage() {
   const userOrgs = useStore((s) => s.userOrgs);
 
   // Plan resolution. The user's personal plan covers Pro support; Agency
-  // (internal id 'team') and Enterprise live on the org subscription, so we
+  // (internal id 'agency') and Enterprise live on the org subscription, so we
   // surface phone support if they belong to any agency/enterprise org (we
   // also check the user's plan in case enterprise was granted personally).
-  const tier = useMemo<'team' | 'pro' | 'free'>(() => {
+  const tier = useMemo<'agency' | 'pro' | 'free'>(() => {
     const userPlan = currentUser?.plan ?? 'free';
-    if (userPlan === 'enterprise') return 'team';
-    const hasTeamOrg = userOrgs.some(
-      (o) => o.plan === 'team' || o.plan === 'enterprise',
+    if (userPlan === 'enterprise') return 'agency';
+    const hasAgencyOrg = userOrgs.some(
+      (o) => o.plan === 'agency' || o.plan === 'enterprise',
     );
-    if (hasTeamOrg) return 'team';
-    if (userPlan === 'pro' || userPlan === 'team') return userPlan === 'team' ? 'team' : 'pro';
+    if (hasAgencyOrg) return 'agency';
+    if (userPlan === 'pro' || userPlan === 'agency') return userPlan === 'agency' ? 'agency' : 'pro';
     return 'free';
   }, [currentUser, userOrgs]);
 
@@ -89,7 +89,7 @@ export function HelpPage() {
 
         <section className="bg-white border border-sand rounded-2xl p-6 mb-10">
           <h2 className="font-heading font-bold text-xl text-dark-brown mb-1">Direct support</h2>
-          {tier === 'team' ? (
+          {tier === 'agency' ? (
             <>
               <p className="text-sm text-warm-gray mb-4">
                 Agency and Enterprise subscriptions include direct email and phone support.

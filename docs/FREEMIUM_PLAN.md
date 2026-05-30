@@ -2,12 +2,14 @@
 
 *Status: 🔲 planned. Source of truth for the freemium / paid-tier work. Companion to [`REQUIREMENTS.md`](./REQUIREMENTS.md) and [`BACKEND_REQUIREMENTS.md`](./BACKEND_REQUIREMENTS.md).*
 
-> **May 2026 pricing v2:** Display rename Team → **Agency** (internal id stays
-> `team`). Agency monthly price moved $199 → $299 and annual $1,999 → $2,499.
-> `analysis_basic` (cost + coverage) moved up from Pro to Agency-and-up to
-> position the Agency tier head-to-head against Remix's planning suite.
-> Implementation details + open Stripe/migration follow-ups in
-> [`PRICING_RESTRUCTURE.md`](./PRICING_RESTRUCTURE.md).
+> **May 2026 pricing v2:** Display rename Team → **Agency**. The internal plan
+> id was renamed `team` → `agency` to match (migration `0017`); only the Stripe
+> env-var names (`STRIPE_PRICE_TEAM_*`), product id (`gtfsb_team`), and price
+> lookup keys keep the old word for stability. Agency monthly price moved
+> $199 → $299 and annual $1,999 → $2,499. `analysis_basic` (cost + coverage)
+> moved up from Pro to Agency-and-up to position the Agency tier head-to-head
+> against Remix's planning suite. Implementation details + open Stripe/migration
+> follow-ups in [`PRICING_RESTRUCTURE.md`](./PRICING_RESTRUCTURE.md).
 
 This document defines what needs to be built to turn the current backend (auth, orgs, projects, publication, embeds — see [`BACKEND_STATUS.md`](./BACKEND_STATUS.md)) into a monetised product with a free tier and paid plans. Strategic context lives in the business plan at `~/Library/CloudStorage/.../GTFS·X/Business Plan.md` — the short version is: undercut Remix/Trillium on price *and* on procurement friction, free editor + self-hosted export, managed publishing is the paywall, analysis features are the second paywall, Enterprise covers state DOTs / RTAP / Cal-ITP.
 
@@ -52,7 +54,7 @@ This document defines what needs to be built to turn the current backend (auth, 
 | **Anonymous** (no account) | $0 | 0 (local IndexedDB only) | None | None | None | Community board |
 | **Free** (account) | $0 | Up to 3 | None — self-hosted ZIP export only | None | Personal workspace only | Community board |
 | **Pro** | $49/mo or $499/yr | Up to 10 | 1 feed | None (moved to Agency in v2) | Personal workspace only | Email (best-effort) |
-| **Agency** (DB id: `team`) | $299/mo or $2,499/yr | Unlimited | Up to 5 feeds | Full: demographic coverage, cost estimation, stop analysis, Title VI, propensity heatmap | One org with unlimited seats | Email (1-2 BD target) |
+| **Agency** (DB id: `agency`) | $299/mo or $2,499/yr | Unlimited | Up to 5 feeds | Full: demographic coverage, cost estimation, stop analysis, Title VI, propensity heatmap | One org with unlimited seats | Email (1-2 BD target) |
 | **Consultant (solo)** | $79/mo or $790/yr per seat | Unlimited | Up to 5 feeds per seat | Full | Member of unlimited orgs (cross-org access) | Email (1-2 BD target) |
 | **Consultant Firm** | $79/mo or $790/yr × N seats | Unlimited | Up to 5 feeds per seat | Full | Firm org; each member can join unlimited external client orgs | Email (1-2 BD target) |
 | **Enterprise** | $25k-150k/yr (custom) | Unlimited under license | Unlimited, branded | Full + custom | Unlimited orgs + agencies under license | Phone + email with SLA |
@@ -119,7 +121,8 @@ ALTER TABLE user
 
 ALTER TABLE organization
   ADD COLUMN plan TEXT NOT NULL DEFAULT 'free';
-  -- 'free' | 'team' | 'consultant_firm' | 'enterprise' — for org-owned billing
+  -- 'free' | 'agency' | 'enterprise' — for org-owned billing (the historical
+  -- 'consultant_firm' value was folded into the Agency tier by migration 0009)
 ALTER TABLE organization
   ADD COLUMN stripe_customer_id TEXT;
 ALTER TABLE organization
@@ -128,7 +131,7 @@ ALTER TABLE organization
   ADD COLUMN plan_renewal_at INTEGER;
 ALTER TABLE organization
   ADD COLUMN plan_seat_count INTEGER NOT NULL DEFAULT 1;
-  -- for team: number of paid seats
+  -- for agency: number of paid seats
 
 -- One subscription per billing owner (user or org).
 CREATE TABLE subscription (
@@ -328,7 +331,7 @@ Analysis features today run client-side. The gating point is the API endpoints t
 export const PLAN_QUOTAS = {
   free:             { projects: 3,     versions_per_project: 5,   blob_bytes: 20 * 1024 * 1024,  published_feeds: 0 },
   pro:              { projects: 10,    versions_per_project: 25,  blob_bytes: 50 * 1024 * 1024,  published_feeds: 1 },
-  team:             { projects: 500,   versions_per_project: 50,  blob_bytes: 100 * 1024 * 1024, published_feeds: 5 },
+  agency:           { projects: 500,   versions_per_project: 50,  blob_bytes: 100 * 1024 * 1024, published_feeds: 5 },
   consultant:       { projects: 500,   versions_per_project: 50,  blob_bytes: 100 * 1024 * 1024, published_feeds: 5 },     // solo
   consultant_firm:  { projects: 500,   versions_per_project: 50,  blob_bytes: 100 * 1024 * 1024, published_feeds: 5 },     // shared at org; per-seat scaling tracked separately
   enterprise:       { projects: 99999, versions_per_project: 200, blob_bytes: 200 * 1024 * 1024, published_feeds: 99999 },

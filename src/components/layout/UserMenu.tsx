@@ -134,7 +134,7 @@ export function UserMenuItems({ onClose }: { onClose?: () => void } = {}) {
           </button>
         );
       })}
-      {currentUser.plan === 'team' || currentUser.plan === 'enterprise' ? (
+      {currentUser.plan === 'agency' || currentUser.plan === 'enterprise' ? (
         <button
           onClick={() => setShowCreateOrg(true)}
           className="w-full text-left px-3 py-1.5 rounded-md text-sm text-coral hover:bg-cream transition-colors"

@@ -216,10 +216,10 @@ orgsRouter.post('/', async (c) => {
 
   const now = Date.now();
   const id = ulid();
-  // Staff orgs land on team so internal demo / support orgs aren't blocked
+  // Staff orgs land on agency so internal demo / support orgs aren't blocked
   // by the "paid plan required to add members" gate on day one. Real users
   // still get free until they go through Stripe Checkout.
-  const initialPlan: 'free' | 'team' = user.staff ? 'team' : 'free';
+  const initialPlan: 'free' | 'agency' = user.staff ? 'agency' : 'free';
   try {
     await c.env.DB.prepare(
       `INSERT INTO organization (id, slug, name, created_at, plan, plan_status)
@@ -303,7 +303,7 @@ orgsRouter.get('/', async (c) => {
     slug: r.slug,
     name: r.name,
     role: r.role,
-    plan: (r.plan ?? 'free') as 'free' | 'pro' | 'team' | 'enterprise',
+    plan: (r.plan ?? 'free') as 'free' | 'pro' | 'agency' | 'enterprise',
     planStatus: (r.plan_status ?? 'active') as 'active' | 'past_due' | 'canceled' | 'trialing',
     memberCount: r.member_count,
     projectCount: r.project_count,
@@ -407,8 +407,8 @@ orgsRouter.post('/invitations/accept', async (c) => {
     });
   }
 
-  // Org must be on a paid plan (Team/Enterprise hosts the membership; the
-  // member doesn't need their own subscription). For Team/Enterprise we
+  // Org must be on a paid plan (Agency/Enterprise hosts the membership; the
+  // member doesn't need their own subscription). For Agency/Enterprise we
   // skip the seat-cap check entirely — see worker/billing/middleware.ts.
   await requireOrgSeatAvailable(c.env, orgId);
 
@@ -556,7 +556,7 @@ orgsRouter.post('/:id/logo', async (c) => {
   const id = c.req.param('id');
   // Admins + owners can manage branding.
   await requireOrgRole(c.env, user, id, 'admin');
-  // Custom org logo is a Team+ feature.
+  // Custom org logo is an Agency+ feature.
   await requireOwnerFeature(c.env, 'org', id, 'org_logo', user);
 
   const form = await c.req.formData().catch(() => null);

@@ -41,7 +41,7 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
     features: ['Up to 10 saved feeds', 'Publish 1 feed to a stable URL', 'Rider-facing embeds + mini-site', 'Submit to the Mobility Database', 'Named snapshot history', 'Custom brand color', 'Email support'],
   },
   {
-    plan: 'team', displayName: 'Agency', monthlyPriceUsd: 299, annualPriceUsd: 2499, perSeat: false,
+    plan: 'agency', displayName: 'Agency', monthlyPriceUsd: 299, annualPriceUsd: 2499, perSeat: false,
     tagline: 'Plan routes and service as a team.',
     features: ['Everything in Pro', 'Unlimited feeds', 'Demographic coverage analysis', 'Cost estimation analysis', 'Title VI equity analysis', 'Ridership propensity heatmap', 'Unlimited team members in your organization', 'Cross-org membership (work in unlimited client orgs)', 'Custom org logo', 'Phone support'],
   },
@@ -97,8 +97,8 @@ export function WelcomePlanPage() {
   const [pendingPlan, setPendingPlan] = useState<Plan | null>(null);
   const [autoTriggered, setAutoTriggered] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Team-without-org sub-form state. Activated when user clicks "Choose Team"
-  // and we have no admin org to attach the subscription to.
+  // Agency-without-org sub-form state. Activated when user clicks "Choose
+  // Agency" and we have no admin org to attach the subscription to.
   const [teamOrgPrompt, setTeamOrgPrompt] = useState<null | { name: string; slug: string }>(null);
 
   useEffect(() => {
@@ -124,14 +124,14 @@ export function WelcomePlanPage() {
 
   // Auto-pick after a deep-link from /pricing (e.g. /upgrade?plan=pro). Waits
   // for auth + orgs to load, fires once, and skips silently if the user is
-  // already on the requested plan. Team still routes through the org picker /
+  // already on the requested plan. Agency still routes through the org picker /
   // create form via handlePick — we don't bypass that step.
   useEffect(() => {
     if (autoTriggered) return;
     if (!authChecked || !currentUser) return;
     if (!orgsLoaded) return;
     if (!directPlanParam) return;
-    if (directPlanParam !== 'pro' && directPlanParam !== 'team') {
+    if (directPlanParam !== 'pro' && directPlanParam !== 'agency') {
       setAutoTriggered(true);
       return;
     }
@@ -141,7 +141,7 @@ export function WelcomePlanPage() {
     }
     setAutoTriggered(true);
     // handlePick is defined further down — capture the click via the same
-    // dispatch so Team correctly funnels into the org-create flow.
+    // dispatch so Agency correctly funnels into the org-create flow.
     handlePick(directPlanParam as Plan);
     // We deliberately don't include handlePick in the deps — it's recreated
     // on every render but the auto-trigger guard ensures we only fire once.
@@ -155,7 +155,7 @@ export function WelcomePlanPage() {
   );
 
   // If the caller specified an org owner (e.g. coming from /orgs/:slug/billing),
-  // require Team checkout to target that org. Otherwise fall back to the
+  // require Agency checkout to target that org. Otherwise fall back to the
   // user's first admin org, or the org-create flow.
   const presetOrg = useMemo(() => {
     if (presetOwnerType !== 'org' || !presetOwnerId) return null;
@@ -163,7 +163,7 @@ export function WelcomePlanPage() {
   }, [presetOwnerType, presetOwnerId, adminOrgs]);
 
   const ordered = useMemo(() => {
-    const order: Plan[] = ['free', 'pro', 'team', 'enterprise'];
+    const order: Plan[] = ['free', 'pro', 'agency', 'enterprise'];
     return order
       .map((p) => plans.find((c) => c.plan === p))
       .filter((c): c is PlanCatalogEntry => !!c);
@@ -179,7 +179,7 @@ export function WelcomePlanPage() {
 
   // Kick off Stripe Checkout. The owner mapping is enforced server-side too,
   // but we resolve it here so the redirect happens in a single round-trip.
-  async function startPaidCheckout(plan: 'pro' | 'team', orgId?: string) {
+  async function startPaidCheckout(plan: 'pro' | 'agency', orgId?: string) {
     if (!currentUser) {
       navigate('/login?next=/upgrade');
       return;
@@ -192,7 +192,7 @@ export function WelcomePlanPage() {
     setError(null);
     setPendingPlan(plan);
     try {
-      const ownerType: 'user' | 'org' = plan === 'team' ? 'org' : 'user';
+      const ownerType: 'user' | 'org' = plan === 'agency' ? 'org' : 'user';
       const ownerId = ownerType === 'org' ? (orgId ?? '') : currentUser.id;
       if (ownerType === 'org' && !ownerId) {
         throw new Error('No organization selected.');
@@ -206,7 +206,7 @@ export function WelcomePlanPage() {
   }
 
   // Top-level click handler for each tier card. Dispatches into the
-  // free/enterprise/team/other-paid branches.
+  // free/enterprise/agency/other-paid branches.
   async function handlePick(plan: Plan) {
     if (plan === 'free') {
       // "Switch to Free" from an active paid subscription is a
@@ -260,13 +260,13 @@ export function WelcomePlanPage() {
       window.location.href = ENTERPRISE_MAIL;
       return;
     }
-    if (plan === 'team') {
+    if (plan === 'agency') {
       // If the entry point pinned a specific org (org admins coming from
       // /orgs/:slug/billing), use that. Otherwise prefer the user's existing
       // admin org. If they have none, prompt for an org name.
       const orgId = presetOrg?.id ?? adminOrgs[0]?.id;
       if (orgId) {
-        void startPaidCheckout('team', orgId);
+        void startPaidCheckout('agency', orgId);
       } else {
         const defaultName = `${currentUser?.displayName ?? 'My'} Transit`;
         setTeamOrgPrompt({ name: defaultName, slug: slugifyOrgName(defaultName) });
@@ -278,7 +278,7 @@ export function WelcomePlanPage() {
 
   // Submit handler for the inline "Create your organization" form. Creates
   // the org first (plan='free' at this point — Stripe webhook will flip it
-  // to 'team' after Checkout completes), then starts Team checkout against
+  // to 'agency' after Checkout completes), then starts Agency checkout against
   // the new org's ID.
   async function handleCreateOrgAndCheckout() {
     if (!teamOrgPrompt) return;
@@ -289,7 +289,7 @@ export function WelcomePlanPage() {
       return;
     }
     setError(null);
-    setPendingPlan('team');
+    setPendingPlan('agency');
     try {
       const res = await createOrg({ name, slug });
       // Surface the new org in the workspace switcher right away.
@@ -304,7 +304,7 @@ export function WelcomePlanPage() {
         projectCount: 0,
         createdAt: res.organization.createdAt,
       });
-      await startPaidCheckout('team', res.organization.id);
+      await startPaidCheckout('agency', res.organization.id);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : (e as Error)?.message ?? 'Could not create organization.');
       setPendingPlan(null);
@@ -330,7 +330,7 @@ export function WelcomePlanPage() {
     );
   }
 
-  // Inline org-create sub-step for Team. Renders in place of the tier matrix
+  // Inline org-create sub-step for Agency. Renders in place of the tier matrix
   // so the user has one focused thing to do.
   if (teamOrgPrompt) {
     return (
@@ -380,16 +380,16 @@ export function WelcomePlanPage() {
                 setError(null);
               }}
               type="button"
-              disabled={pendingPlan === 'team'}
+              disabled={pendingPlan === 'agency'}
             >
               Back
             </AuthButton>
             <AuthButton
               onClick={handleCreateOrgAndCheckout}
               type="button"
-              disabled={pendingPlan === 'team' || !teamOrgPrompt.name.trim()}
+              disabled={pendingPlan === 'agency' || !teamOrgPrompt.name.trim()}
             >
-              {pendingPlan === 'team' ? 'Creating…' : 'Continue to checkout'}
+              {pendingPlan === 'agency' ? 'Creating…' : 'Continue to checkout'}
             </AuthButton>
           </div>
         </div>
@@ -454,7 +454,7 @@ export function WelcomePlanPage() {
             const isCurrent = p.plan === currentPlan;
             const isFree = p.plan === 'free';
             const isEnterprise = p.plan === 'enterprise';
-            const popular = p.plan === 'team' && !recommendedPlan;
+            const popular = p.plan === 'agency' && !recommendedPlan;
             const recommended = recommendedPlan === p.plan;
             const isPending = pendingPlan === p.plan;
             return (

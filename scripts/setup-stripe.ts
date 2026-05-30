@@ -76,14 +76,15 @@ const PRODUCTS: ProductSpec[] = [
   },
   {
     // Internal product id stays 'gtfsb_team' so existing subscriptions and the
-    // worker tier matrix continue to resolve. Customer-facing name was renamed
+    // price lookup keys continue to resolve. Customer-facing name was renamed
     // Team → Agency in the May-2026 pricing v2 — receipts and portal copy
-    // pick up the new name from the Product.name field.
+    // pick up the new name from the Product.name field. The tier metadata now
+    // matches the worker's internal plan id ('agency').
     id: 'gtfsb_team',
     name: 'GTFS·X Agency',
     description:
       'For transit agencies and consultants planning routes and service. Unlimited saved feeds, publish up to 5, the full planning suite (demographic coverage, cost estimation, Title VI, ridership propensity), unlimited team members in your organization, and cross-org membership for consultants serving multiple clients.',
-    metadata: { app_id: 'gtfsb_team', tier: 'team' },
+    metadata: { app_id: 'gtfsb_team', tier: 'agency' },
   },
   {
     id: 'gtfsb_enterprise',

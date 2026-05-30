@@ -72,7 +72,7 @@ export interface AuthedUser {
   staff: boolean;
   // Personal-workspace plan + status, mirrored from user.plan / user.plan_status.
   // Updated by Stripe webhooks. Used for client-side paywall gating.
-  plan: 'free' | 'pro' | 'team' | 'enterprise';
+  plan: 'free' | 'pro' | 'agency' | 'enterprise';
   planStatus: 'active' | 'past_due' | 'canceled' | 'trialing';
 }
 

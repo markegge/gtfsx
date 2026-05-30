@@ -137,7 +137,7 @@ export function trackFeedExported(): void {
   send('feed_exported');
 }
 
-// Fires when a Pro/Team paywall is shown; `feature` is the gated feature key.
+// Fires when a Pro/Agency paywall is shown; `feature` is the gated feature key.
 export function trackPaywallView(feature: string): void {
   send('paywall_view', { label: feature });
 }

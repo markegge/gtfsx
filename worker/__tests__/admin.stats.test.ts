@@ -24,7 +24,7 @@ async function staffClient(email = 'admin@example.com') {
 
 interface Stats {
   users: { total: number; active: number; pending_verification: number; disabled: number; deleted_soft: number };
-  usersByPlan: { free: number; pro: number; team: number; enterprise: number };
+  usersByPlan: { free: number; pro: number; agency: number; enterprise: number };
   organizations: { total: number };
   projects: { total: number; byOwnerType: { user: number; org: number } };
   snapshots: { total: number };
@@ -63,7 +63,7 @@ describe('/api/admin/stats', () => {
     expect(body.projects.byOwnerType.org).toBe(0);
     expect(body.snapshots.total).toBe(0);
     expect(body.publications.total).toBe(0);
-    expect(body.usersByPlan.team).toBe(1); // staff user (seedUser defaults to 'team')
+    expect(body.usersByPlan.agency).toBe(1); // staff user (seedUser defaults to 'agency')
     expect(body.usersByPlan.free).toBe(0);
     expect(body.trend.newUsersByWeek.length).toBe(8);
     expect(body.trend.newProjectsByWeek.length).toBe(8);
@@ -113,7 +113,7 @@ describe('/api/admin/stats', () => {
   });
 
   it('counts users by subscription tier, excluding deleted', async () => {
-    const { client } = await staffClient(); // staff user is on 'team' (seedUser default)
+    const { client } = await staffClient(); // staff user is on 'agency' (seedUser default)
     const mk = (email: string, plan: string, status = 'active') =>
       dbRun(
         `INSERT INTO user (id, email, display_name, status, staff, plan, created_at, updated_at)
@@ -122,7 +122,7 @@ describe('/api/admin/stats', () => {
       );
     await mk('free@example.com', 'free');
     await mk('pro@example.com', 'pro');
-    await mk('agency@example.com', 'team');
+    await mk('agency@example.com', 'agency');
     await mk('ent@example.com', 'enterprise');
     await mk('gone@example.com', 'pro', 'deleted_soft'); // excluded from the breakdown
 
@@ -130,7 +130,7 @@ describe('/api/admin/stats', () => {
     const body = (await res.json()) as Stats;
     expect(body.usersByPlan.free).toBe(1);
     expect(body.usersByPlan.pro).toBe(1); // deleted pro not counted
-    expect(body.usersByPlan.team).toBe(2); // agency@ + the staff user
+    expect(body.usersByPlan.agency).toBe(2); // agency@ + the staff user
     expect(body.usersByPlan.enterprise).toBe(1);
   });
 

@@ -44,7 +44,7 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
     ],
   },
   {
-    plan: 'team',
+    plan: 'agency',
     displayName: 'Agency',
     monthlyPriceUsd: 299,
     annualPriceUsd: 2499,
@@ -81,7 +81,7 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
   },
 ];
 
-const POPULAR_PLAN: Plan = 'team';
+const POPULAR_PLAN: Plan = 'agency';
 const ENTERPRISE_MAIL =
   'mailto:hello@gtfsx.com?subject=GTFS·X Enterprise inquiry&body=Hi%20—%20I%27d%20like%20to%20learn%20more%20about%20the%20Enterprise%20plan.';
 

@@ -4,7 +4,7 @@ import { planDisplayName } from './planConfig';
 const STYLES: Record<Plan, string> = {
   free: 'bg-sand text-brown',
   pro: 'bg-teal-light text-teal',
-  team: 'bg-purple-light text-purple',
+  agency: 'bg-purple-light text-purple',
   enterprise: 'bg-gold-light text-amber-700',
 };
 

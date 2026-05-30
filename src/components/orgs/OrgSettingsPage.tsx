@@ -488,7 +488,7 @@ export function OrgSettingsPage() {
 
         <PaywallOverlay
           feature="org_logo"
-          currentPlan={(matchingOrg as { plan?: 'free' | 'pro' | 'team' | 'enterprise' } | null)?.plan ?? 'free'}
+          currentPlan={(matchingOrg as { plan?: 'free' | 'pro' | 'agency' | 'enterprise' } | null)?.plan ?? 'free'}
           preview={false}
         >
           <BrandingSection
@@ -552,7 +552,7 @@ export function OrgSettingsPage() {
                   </div>
                   <div className="mt-1 text-sm text-warm-gray">
                     Seats: <span className="font-semibold text-brown">
-                      {billing.plan === 'team' || billing.plan === 'enterprise'
+                      {billing.plan === 'agency' || billing.plan === 'enterprise'
                         ? `${billing.quotas.seats.used} (unlimited)`
                         : `${billing.quotas.seats.used} / ${billing.planSeatCount}`}
                     </span>
@@ -573,7 +573,7 @@ export function OrgSettingsPage() {
                       onClick={() => navigate(`/upgrade?ownerType=org&ownerId=${matchingOrg.id}`)}
                       disabled={!billingEnabled}
                     >
-                      Upgrade to Team
+                      Upgrade to Agency
                     </AuthButton>
                   )}
                 </div>

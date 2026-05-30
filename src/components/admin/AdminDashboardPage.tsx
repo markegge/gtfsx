@@ -233,7 +233,7 @@ export function AdminDashboardPage() {
               items={[
                 { label: 'Free', value: stats.usersByPlan?.free ?? 0 },
                 { label: 'Pro', value: stats.usersByPlan?.pro ?? 0 },
-                { label: 'Agency', value: stats.usersByPlan?.team ?? 0 },
+                { label: 'Agency', value: stats.usersByPlan?.agency ?? 0 },
                 { label: 'Enterprise', value: stats.usersByPlan?.enterprise ?? 0 },
               ]}
             />

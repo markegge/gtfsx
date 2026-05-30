@@ -206,7 +206,7 @@ describe('embed routes', () => {
       await client.post('/api/orgs', { slug: 'logo-org', name: 'Logo Org' }),
     );
     await testEnv.DB.prepare('UPDATE organization SET plan = ? WHERE id = ?')
-      .bind('team', orgRes.organization.id)
+      .bind('agency', orgRes.organization.id)
       .run();
     const proj = await client.json<{ id: string; slug: string }>(
       await client.post('/api/projects', {

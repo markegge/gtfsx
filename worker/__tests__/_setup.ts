@@ -84,11 +84,11 @@ export async function seedUser(opts: {
   status?: 'pending_verification' | 'active' | 'disabled' | 'deleted_soft';
   staff?: boolean;
   /**
-   * Defaults to `'team'` so tests exercise paid features (snapshots, publish,
+   * Defaults to `'agency'` so tests exercise paid features (snapshots, publish,
    * embeds, org operations, etc.) without each one having to opt in. Pass
    * `'free'` explicitly when testing paywall enforcement.
    */
-  plan?: 'free' | 'pro' | 'team' | 'enterprise';
+  plan?: 'free' | 'pro' | 'agency' | 'enterprise';
 } = {}): Promise<SeededUser> {
   const id = ulid();
   const email = opts.email ?? `user-${id.toLowerCase()}@example.com`;
@@ -96,7 +96,7 @@ export async function seedUser(opts: {
   const displayName = opts.displayName ?? 'Test User';
   const status = opts.status ?? 'active';
   const staff = opts.staff ? 1 : 0;
-  const plan = opts.plan ?? 'team';
+  const plan = opts.plan ?? 'agency';
   const now = Date.now();
 
   await testEnv.DB.prepare(

@@ -21,7 +21,7 @@ export function planFromPriceId(env: Env, priceId: string): Plan | null {
     return 'pro';
   }
   if (priceId === env.STRIPE_PRICE_TEAM_MONTHLY || priceId === env.STRIPE_PRICE_TEAM_ANNUAL) {
-    return 'team';
+    return 'agency';
   }
   return null;
 }
@@ -50,8 +50,11 @@ export function resolvePriceId(env: Env, plan: Plan, interval: Interval): string
   const map: Partial<Record<string, string | undefined>> = {
     pro_month: env.STRIPE_PRICE_PRO_MONTHLY,
     pro_year: env.STRIPE_PRICE_PRO_ANNUAL,
-    team_month: env.STRIPE_PRICE_TEAM_MONTHLY,
-    team_year: env.STRIPE_PRICE_TEAM_ANNUAL,
+    // Keyed by `${plan}_${interval}`; plan is now 'agency'. The env var NAMES
+    // (STRIPE_PRICE_TEAM_*) intentionally stay — they're opaque config that
+    // points at the same Stripe Price IDs as before the display rename.
+    agency_month: env.STRIPE_PRICE_TEAM_MONTHLY,
+    agency_year: env.STRIPE_PRICE_TEAM_ANNUAL,
   };
   const id = map[k];
   if (!id) {

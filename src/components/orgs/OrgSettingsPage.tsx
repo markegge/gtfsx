@@ -570,7 +570,7 @@ export function OrgSettingsPage() {
                   )}
                   {isAdmin && billing.plan === 'free' && matchingOrg && (
                     <AuthButton
-                      onClick={() => navigate(`/upgrade?ownerType=org&ownerId=${matchingOrg.id}`)}
+                      onClick={() => navigate(`/pricing?ownerType=org&ownerId=${matchingOrg.id}`)}
                       disabled={!billingEnabled}
                     >
                       Upgrade to Agency

@@ -44,7 +44,7 @@ export function AccountBillingPage() {
 
   const checkoutFlag = searchParams.get('checkout');
   // Legacy ?upgrade=<plan> intent used to auto-open the in-page dialog. The
-  // upgrade flow now lives on /upgrade, so any caller passing the legacy
+  // upgrade flow now lives on /pricing, so any caller passing the legacy
   // query gets redirected there.
   const legacyUpgradeIntent = searchParams.get('upgrade');
 
@@ -119,7 +119,7 @@ export function AccountBillingPage() {
   }, [checkoutFlag, refresh]);
 
   // Anything that used to deep-link to /account/billing?upgrade=<plan> now
-  // gets bounced to the canonical tier-picker page so the in-app modal is
+  // gets bounced to the canonical /pricing page so the in-app modal is
   // truly retired. This preserves any back-compat links that may exist in
   // old emails or saved tabs.
   useEffect(() => {
@@ -128,7 +128,7 @@ export function AccountBillingPage() {
     const params = new URLSearchParams();
     params.set('plan', legacyUpgradeIntent);
     if (interval) params.set('interval', interval);
-    navigate(`/upgrade?${params.toString()}`, { replace: true });
+    navigate(`/pricing?${params.toString()}`, { replace: true });
   }, [legacyUpgradeIntent, searchParams, navigate]);
 
   async function handleManage() {
@@ -233,12 +233,12 @@ export function AccountBillingPage() {
                   </AuthButton>
                 ) : null}
                 {state.plan === 'free' && (
-                  <AuthButton onClick={() => navigate('/upgrade')} disabled={!billingEnabled}>
+                  <AuthButton onClick={() => navigate('/pricing')} disabled={!billingEnabled}>
                     Upgrade
                   </AuthButton>
                 )}
                 {state.plan !== 'free' && state.plan !== 'enterprise' && (
-                  <AuthButton variant="secondary" onClick={() => navigate('/upgrade')} disabled={!billingEnabled}>
+                  <AuthButton variant="secondary" onClick={() => navigate('/pricing')} disabled={!billingEnabled}>
                     Change plan
                   </AuthButton>
                 )}

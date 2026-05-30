@@ -24,8 +24,8 @@ export function MapLayerControls({
   // gets access. Anonymous users see the upgrade affordance.
   const propensityUnlocked = planHasFeature(currentUser?.plan ?? null, 'analysis_propensity');
   const upgradeHref = currentUser
-    ? '/upgrade?feature=analysis_propensity'
-    : '/login?next=' + encodeURIComponent('/upgrade?feature=analysis_propensity');
+    ? '/pricing?feature=analysis_propensity'
+    : '/signup?next=' + encodeURIComponent('/pricing?feature=analysis_propensity');
 
   return (
     <div className="absolute top-3 left-3 z-10">

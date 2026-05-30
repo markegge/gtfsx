@@ -9,8 +9,8 @@ interface UpgradeButtonProps {
   fullWidth?: boolean;
 }
 
-// Convenience CTA — routes to the tier-picker page. Pass `feature` to
-// recommend the cheapest plan that unlocks it (the picker reads ?feature=).
+// Convenience CTA — routes to the /pricing page. Pass `feature` to
+// recommend the cheapest plan that unlocks it (the page reads ?feature=).
 export function UpgradeButton({
   feature,
   children = 'Upgrade',
@@ -18,7 +18,7 @@ export function UpgradeButton({
   fullWidth,
 }: UpgradeButtonProps) {
   const navigate = useNavigate();
-  const href = feature ? `/upgrade?feature=${encodeURIComponent(feature)}` : '/upgrade';
+  const href = feature ? `/pricing?feature=${encodeURIComponent(feature)}` : '/pricing';
   return (
     <AuthButton variant={variant} fullWidth={fullWidth} onClick={() => navigate(href)}>
       {children}

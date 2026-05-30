@@ -462,10 +462,10 @@ authRouter.get('/verify', async (c) => {
     ip,
   });
 
-  // Signup verifications land on the tier-picker page unless the signup
-  // carried a `next` (e.g. invitee accepting an org invite — they go
-  // straight to the accept page and skip the picker entirely). Other
-  // verify-email flows fall back to the editor.
+  // Signup verifications land on the /pricing page unless the signup carried a
+  // `next` (e.g. a /pricing card click carries ?plan= so checkout resumes
+  // automatically, or an invitee accepting an org invite goes straight to the
+  // accept page). Other verify-email flows fall back to the editor.
   const isSignupFlow = resolved.metadata?.flow === 'signup';
   const next = typeof resolved.metadata?.next === 'string'
     ? safeNext(resolved.metadata.next)
@@ -473,7 +473,7 @@ authRouter.get('/verify', async (c) => {
   const target = next
     ? next
     : isSignupFlow
-      ? '/upgrade?source=welcome'
+      ? '/pricing?source=welcome'
       : '/?welcome=1';
   return c.redirect(`${c.env.APP_ORIGIN}${target}`, 302);
 });

@@ -18,6 +18,11 @@ const LEGACY_ALIAS_REDIRECTS: Record<string, string> = {
   '/quickstart': '/docs/quick-start/',
   '/gtfs-flex': '/learn/gtfs-flex/',
   '/what-is-gtfs': '/learn/gtfs/',
+  // The tier-picker (formerly /upgrade and /welcome/plan) was merged into
+  // /pricing. 301 both aliases there, preserving the query string so checkout
+  // context (?plan, ?feature, ?source, ?ownerType…) carries over.
+  '/upgrade': '/pricing',
+  '/welcome/plan': '/pricing',
 };
 
 // Client-side (React Router) routes that have NO pre-rendered HTML file and
@@ -37,7 +42,6 @@ const SPA_SHELL_EXACT = new Set([
   '/help',
   '/pricing',
   '/demo',
-  '/upgrade',
   '/verify-email',
   '/magic-link',
   '/reset-password',

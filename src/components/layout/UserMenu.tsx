@@ -143,7 +143,7 @@ export function UserMenuItems({ onClose }: { onClose?: () => void } = {}) {
         </button>
       ) : (
         <button
-          onClick={() => go('/upgrade?feature=org_workspace')}
+          onClick={() => go('/pricing?feature=org_workspace')}
           className="w-full text-left px-3 py-1.5 rounded-md text-sm text-coral hover:bg-cream transition-colors flex items-center justify-between gap-2"
           title="Organizations are an Agency plan feature"
         >

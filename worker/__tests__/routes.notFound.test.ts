@@ -39,7 +39,7 @@ describe('known client-side routes are served (200), not 404ed', () => {
   // Routes with no pre-rendered HTML file that fall back to the SPA shell.
   // A 200 here (vs the 404 a genuine miss gets) proves the shell-vs-404
   // decision. /community/* is excluded (it hits the forum SSR + D1).
-  const spaRoutes = ['/login', '/signup', '/feeds', '/account', '/import', '/help', '/upgrade'];
+  const spaRoutes = ['/login', '/signup', '/feeds', '/account', '/import', '/help'];
 
   for (const route of spaRoutes) {
     it(`serves ${route} with 200`, async () => {
@@ -61,7 +61,7 @@ describe('known client-side routes are served (200), not 404ed', () => {
 
 describe('private/functional shell routes are noindex; content pages are not', () => {
   // /import was the URL flagged as a Soft 404 in Search Console.
-  const noindexRoutes = ['/import', '/login', '/signup', '/account', '/feeds', '/upgrade'];
+  const noindexRoutes = ['/import', '/login', '/signup', '/account', '/feeds'];
   for (const route of noindexRoutes) {
     it(`sends X-Robots-Tag: noindex for ${route}`, async () => {
       const res = await client.get(route, { redirect: 'manual' });
@@ -81,4 +81,28 @@ describe('private/functional shell routes are noindex; content pages are not', (
     const res = await client.get('/', { redirect: 'manual' });
     expect(res.headers.get('X-Robots-Tag') ?? '').not.toContain('noindex');
   });
+});
+
+describe('legacy tier-picker aliases 301 to /pricing', () => {
+  // /upgrade and /welcome/plan were merged into /pricing. They must 301
+  // (permanent) and preserve the query so checkout context carries over.
+  for (const alias of ['/upgrade', '/welcome/plan']) {
+    it(`301s ${alias} → /pricing`, async () => {
+      const res = await client.get(alias, { redirect: 'manual' });
+      expect(res.status).toBe(301);
+      expect(new URL(res.headers.get('location')!).pathname).toBe('/pricing');
+    });
+
+    it(`preserves the query string on ${alias}`, async () => {
+      const res = await client.get(`${alias}?plan=pro&interval=year&source=welcome`, {
+        redirect: 'manual',
+      });
+      expect(res.status).toBe(301);
+      const loc = new URL(res.headers.get('location')!);
+      expect(loc.pathname).toBe('/pricing');
+      expect(loc.searchParams.get('plan')).toBe('pro');
+      expect(loc.searchParams.get('interval')).toBe('year');
+      expect(loc.searchParams.get('source')).toBe('welcome');
+    });
+  }
 });

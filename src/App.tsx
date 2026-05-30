@@ -42,7 +42,6 @@ const OrgSettingsPage = lazy(() => import('./components/orgs/OrgSettingsPage').t
 const AcceptInvitationPage = lazy(() => import('./components/orgs/AcceptInvitationPage').then((m) => ({ default: m.AcceptInvitationPage })));
 const PricingPage = lazy(() => import('./components/billing/PricingPage').then((m) => ({ default: m.PricingPage })));
 const AccountBillingPage = lazy(() => import('./components/billing/AccountBillingPage').then((m) => ({ default: m.AccountBillingPage })));
-const WelcomePlanPage = lazy(() => import('./components/billing/WelcomePlanPage').then((m) => ({ default: m.WelcomePlanPage })));
 const CommunityRoot = lazy(() => import('./components/community/CommunityRoot').then((m) => ({ default: m.CommunityRoot })));
 const CategoryIndex = lazy(() => import('./components/community/CategoryIndex').then((m) => ({ default: m.CategoryIndex })));
 const ThreadList = lazy(() => import('./components/community/ThreadList').then((m) => ({ default: m.ThreadList })));
@@ -56,6 +55,15 @@ const SearchResults = lazy(() => import('./components/community/SearchResults').
 
 function RouteFallback() {
   return <div className="p-8 text-warm-gray">Loading…</div>;
+}
+
+// The old tier-picker lived at /upgrade and /welcome/plan; it's been merged
+// into /pricing. The Worker 301s these for full-page loads; this handles any
+// in-session client-side navigation, preserving the query (?plan=, ?feature=,
+// ?source=, ?ownerType=…) so checkout context carries over.
+function RedirectToPricing() {
+  const { search } = useLocation();
+  return <Navigate to={`/pricing${search}`} replace />;
 }
 
 function PageviewTracker() {
@@ -330,8 +338,8 @@ function App() {
         <Route path="/account/billing" element={<AccountBillingPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/help" element={<HelpPage />} />
-        <Route path="/welcome/plan" element={<WelcomePlanPage />} />
-        <Route path="/upgrade" element={<WelcomePlanPage />} />
+        <Route path="/welcome/plan" element={<RedirectToPricing />} />
+        <Route path="/upgrade" element={<RedirectToPricing />} />
         <Route path="/feeds" element={<MyFeedsPage />} />
         <Route path="/feeds/:slug" element={<ServerEditorRoute />} />
         <Route path="/feeds/*" element={<Navigate to="/feeds" replace />} />

@@ -49,13 +49,13 @@ export function PaywallOverlay({
 
   const copy = FEATURE_COPY[feature];
   const target = cheapestPlanFor(feature);
-  const cta = currentUser ? 'Upgrade plan' : 'Sign in to upgrade';
+  const cta = currentUser ? 'Upgrade plan' : 'Sign up to upgrade';
 
-  // Both CTAs route to the tier-picker page. Anonymous users get bounced
-  // through login first; the page itself handles that case.
+  // Both CTAs route to /pricing. Anonymous users go to sign-up first (carrying
+  // the feature through), then land back on /pricing for checkout.
   const upgradeHref = currentUser
-    ? `/upgrade?feature=${encodeURIComponent(feature)}`
-    : `/login?next=${encodeURIComponent(`/upgrade?feature=${feature}`)}`;
+    ? `/pricing?feature=${encodeURIComponent(feature)}`
+    : `/signup?next=${encodeURIComponent(`/pricing?feature=${feature}`)}`;
 
   return (
     // `min-h-[420px]` keeps room for the card even when the wrapped child

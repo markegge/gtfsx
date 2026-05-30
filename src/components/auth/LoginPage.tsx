@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FormField } from '../ui/FormField';
 import { AuthLayout } from './AuthLayout';
@@ -33,6 +33,14 @@ export function LoginPage() {
 
   const magicLinkInvalid = searchParams.get('error') === 'magic_link_invalid';
   const resetSuccess = searchParams.get('reset') === '1';
+
+  // Preserve `next` when sending the user to sign up — e.g. a /pricing card
+  // click for a logged-out user lands here, and choosing "create an account"
+  // must keep the chosen plan so checkout resumes after email verification.
+  const signupHref = useMemo(() => {
+    const next = searchParams.get('next');
+    return next ? `/signup?next=${encodeURIComponent(next)}` : '/signup';
+  }, [searchParams]);
 
   useEffect(() => {
     if (searchParams.get('tab') === 'magic') setTab('magic');
@@ -96,7 +104,7 @@ export function LoginPage() {
       footer={
         <>
           New here?{' '}
-          <Link to="/signup" className="text-coral font-semibold hover:underline">
+          <Link to={signupHref} className="text-coral font-semibold hover:underline">
             Create an account
           </Link>
         </>
@@ -189,7 +197,7 @@ export function LoginPage() {
             <Link to="/reset-password" className="text-coral hover:underline">
               Forgot password?
             </Link>
-            <Link to="/signup" className="text-warm-gray hover:text-dark-brown">
+            <Link to={signupHref} className="text-warm-gray hover:text-dark-brown">
               Sign up
             </Link>
           </div>

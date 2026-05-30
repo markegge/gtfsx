@@ -56,8 +56,8 @@ describe('auth /signup + /verify', () => {
     const linkPath = new URL(link!).pathname + new URL(link!).search;
     const verify = await client.get(linkPath);
     expect(verify.status).toBe(302);
-    // Verify auto-creates a session and lands signup users on the tier picker.
-    expect(locationPath(verify)).toBe('/upgrade');
+    // Verify auto-creates a session and lands signup users on /pricing.
+    expect(locationPath(verify)).toBe('/pricing');
     expect(locationQuery(verify, 'source')).toBe('welcome');
     expect(client.cookie).toMatch(/^gb_session=/);
 
@@ -287,7 +287,7 @@ describe('auth /signup + /verify', () => {
 
     const first = await client.get(`/auth/verify?token=${token}`);
     expect(first.status).toBe(302);
-    expect(locationPath(first)).toBe('/upgrade');
+    expect(locationPath(first)).toBe('/pricing');
     expect(locationQuery(first, 'source')).toBe('welcome');
 
     // Reusing a fresh client so we're not sending the session cookie. The

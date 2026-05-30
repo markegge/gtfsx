@@ -25,7 +25,7 @@ export function RouteShapesTab() {
     setMapMode, setDrawingRouteId,
     setEditingShapeId,
     addShape, addTrip,
-    removeShape,
+    removeShape, renameShape,
     updateShapePoints, recalcShapeDistances,
     hiddenShapeIds, toggleShapeVisibility,
   } = useStore();
@@ -194,11 +194,19 @@ export function RouteShapesTab() {
                     }}
                     title={isShapeHidden ? 'Show shape on map' : 'Hide shape from map'}
                   />
-                  <div className={`flex-1 min-w-0 transition-opacity ${isShapeHidden ? 'opacity-40' : ''}`}>
-                    <span className="text-dark-brown font-medium text-xs">
-                      {trip?.trip_headsign || 'Untitled shape'}
-                    </span>
-                    <span className="text-[10px] text-warm-gray ml-1.5">
+                  <div className={`flex-1 min-w-0 flex items-center gap-1.5 transition-opacity ${isShapeHidden ? 'opacity-40' : ''}`}>
+                    <input
+                      key={`shape-name-${shape!.shape_id}-${shape!._name ?? ''}`}
+                      defaultValue={shape!._name ?? ''}
+                      placeholder={trip?.trip_headsign || 'Untitled shape'}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v !== (shape!._name ?? '')) renameShape(shape!.shape_id, v);
+                      }}
+                      title="Rename shape"
+                      className="min-w-0 flex-1 text-dark-brown font-medium text-xs bg-transparent border border-transparent rounded px-1 py-0.5 -ml-1 hover:border-sand focus:border-coral focus:bg-white focus:outline-none placeholder:text-warm-gray placeholder:font-medium"
+                    />
+                    <span className="text-[10px] text-warm-gray whitespace-nowrap shrink-0">
                       {shape!.points.length} pts · {shapeTrips.length} trip{shapeTrips.length !== 1 ? 's' : ''}
                     </span>
                   </div>
@@ -233,7 +241,7 @@ export function RouteShapesTab() {
                         onClick={() => handleEditShape(shape!.shape_id)}
                         className="flex-1 px-2 py-1.5 bg-sand text-brown rounded text-[11px] font-semibold hover:bg-coral-light hover:text-coral transition-colors"
                       >
-                        Edit
+                        Edit Shape
                       </button>
                       <button
                         onClick={() => handleDuplicateShape(shape!.shape_id)}

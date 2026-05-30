@@ -63,6 +63,7 @@ export interface ShapePoint {
 export interface Shape {
   shape_id: string;
   points: ShapePoint[];
+  _name?: string; // UI-only label for the shape (GTFS shapes.txt has no name); stripped on export
 }
 
 export interface Stop {

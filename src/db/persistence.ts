@@ -14,6 +14,7 @@ const SMALL_KEYS = [
   'fareAreas', 'stopAreas', 'fareNetworks', 'routeNetworks',
   'timeframes', 'riderCategories', 'fareMedia',
   'fareProducts', 'fareLegRules', 'fareTransferRules',
+  'frequencies', 'levels', 'pathways',
   'projectId', 'projectName',
 ] as const;
 
@@ -136,6 +137,9 @@ export async function loadProject(projectId: string) {
   if (snapshot.fareProducts) state.setFareProducts(snapshot.fareProducts);
   if (snapshot.fareLegRules) state.setFareLegRules(snapshot.fareLegRules);
   if (snapshot.fareTransferRules) state.setFareTransferRules(snapshot.fareTransferRules);
+  if (snapshot.frequencies) state.setFrequencies(snapshot.frequencies);
+  if (snapshot.levels) state.setLevels(snapshot.levels);
+  if (snapshot.pathways) state.setPathways(snapshot.pathways);
   if (snapshot.projectName) state.setProjectName(snapshot.projectName);
   if (snapshot.projectId) state.setProjectId(snapshot.projectId);
 

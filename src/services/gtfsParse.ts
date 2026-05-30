@@ -8,7 +8,7 @@ import length from '@turf/length';
 import { lineString } from '@turf/helpers';
 import type {
   Agency, Calendar, CalendarDate, Route, Shape, ShapePoint, Stop, Trip, StopTime, FeedInfo, RouteStop,
-  FareAttribute, FareRule, Transfer,
+  FareAttribute, FareRule, Transfer, Frequency, Pathway, Level,
   FareArea, StopArea, FareNetwork, RouteNetwork, Timeframe, RiderCategory, FareMedia,
   FareProduct, FareLegRule, FareTransferRule,
 } from '../types/gtfs';
@@ -125,6 +125,9 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
   fareAttributes: FareAttribute[];
   fareRules: FareRule[];
   transfers: Transfer[];
+  frequencies: Frequency[];
+  levels: Level[];
+  pathways: Pathway[];
   fareAreas: FareArea[];
   stopAreas: StopArea[];
   fareNetworks: FareNetwork[];
@@ -277,6 +280,7 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
         parent_station: row.parent_station || undefined,
         stop_timezone: row.stop_timezone || undefined,
         wheelchair_boarding: num(row.wheelchair_boarding),
+        level_id: row.level_id || undefined,
       }))
     : [];
 
@@ -393,6 +397,55 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
           transfer_type: (num(row.transfer_type) as 0 | 1 | 2 | 3),
           min_transfer_time: row.min_transfer_time !== undefined && row.min_transfer_time !== ''
             ? num(row.min_transfer_time) : undefined,
+        }))
+    : [];
+
+  // Frequencies — headway-based service per trip. Times may exceed 24:00:00.
+  const frequenciesText = await readFile('frequencies.txt');
+  const frequencies: Frequency[] = frequenciesText
+    ? parseCSV(frequenciesText)
+        .filter((row) => row.trip_id && row.start_time && row.end_time)
+        .map((row) => ({
+          trip_id: String(row.trip_id),
+          start_time: String(row.start_time),
+          end_time: String(row.end_time),
+          headway_secs: num(row.headway_secs),
+          exact_times: row.exact_times !== undefined && row.exact_times !== ''
+            ? (num(row.exact_times) as 0 | 1) : undefined,
+        }))
+    : [];
+
+  // Levels — station floors referenced by stops.level_id and pathways.
+  const levelsText = await readFile('levels.txt');
+  const levels: Level[] = levelsText
+    ? parseCSV(levelsText)
+        .filter((row) => row.level_id)
+        .map((row) => ({
+          level_id: String(row.level_id),
+          level_index: num(row.level_index),
+          level_name: row.level_name || undefined,
+        }))
+    : [];
+
+  // Pathways — directed in-station connections. Every optional column is typed
+  // so an imported feed round-trips without dropping data.
+  const pathwaysText = await readFile('pathways.txt');
+  const pathways: Pathway[] = pathwaysText
+    ? parseCSV(pathwaysText)
+        .filter((row) => row.pathway_id && row.from_stop_id && row.to_stop_id)
+        .map((row) => ({
+          pathway_id: String(row.pathway_id),
+          from_stop_id: String(row.from_stop_id),
+          to_stop_id: String(row.to_stop_id),
+          pathway_mode: (num(row.pathway_mode) as Pathway['pathway_mode']),
+          is_bidirectional: (num(row.is_bidirectional) as 0 | 1),
+          length: row.length !== undefined && row.length !== '' ? num(row.length) : undefined,
+          traversal_time: row.traversal_time !== undefined && row.traversal_time !== '' ? num(row.traversal_time) : undefined,
+          stair_count: row.stair_count !== undefined && row.stair_count !== '' ? num(row.stair_count) : undefined,
+          max_slope: row.max_slope !== undefined && row.max_slope !== '' ? num(row.max_slope) : undefined,
+          min_width: row.min_width !== undefined && row.min_width !== '' ? num(row.min_width) : undefined,
+          signposted_as: row.signposted_as || undefined,
+          reversed_signposted_as: row.reversed_signposted_as || undefined,
         }))
     : [];
 
@@ -791,6 +844,7 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
     routes: routesWithoutFlex, shapes, stops,
     trips: tripsWithoutFlex, stopTimes, feedInfo,
     routeStops, fareAttributes, fareRules, transfers,
+    frequencies, levels, pathways,
     fareAreas, stopAreas, fareNetworks, routeNetworks,
     timeframes, riderCategories, fareMedia,
     fareProducts, fareLegRules, fareTransferRules,

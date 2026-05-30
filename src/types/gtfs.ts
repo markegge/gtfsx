@@ -78,6 +78,7 @@ export interface Stop {
   parent_station?: string;
   stop_timezone?: string;
   wheelchair_boarding: number;
+  level_id?: string; // FK to levels.txt — which level (floor) this stop is on
 }
 
 export interface Trip {
@@ -160,6 +161,48 @@ export interface Transfer {
   transfer_type: 0 | 1 | 2 | 3;
   /** Seconds required to make the transfer. Required when transfer_type=2. */
   min_transfer_time?: number;
+}
+
+/**
+ * frequencies.txt — headway-based (frequency) service for a trip. A trip with
+ * frequencies rows runs every `headway_secs` between start_time and end_time
+ * rather than on the explicit times in stop_times (which then act as a single
+ * reference run). A trip may have multiple non-overlapping windows.
+ */
+export interface Frequency {
+  trip_id: string;
+  start_time: string;   // HH:MM:SS, may exceed 24:00:00
+  end_time: string;     // HH:MM:SS, may exceed 24:00:00
+  headway_secs: number; // positive integer
+  /** 0 = frequency-based (default), 1 = schedule-based exact times. */
+  exact_times?: 0 | 1;
+}
+
+/** levels.txt — a level (floor) within a station, referenced by stops + pathways. */
+export interface Level {
+  level_id: string;
+  level_index: number;  // float; 0 = ground, negative = below grade
+  level_name?: string;
+}
+
+/**
+ * pathways.txt — a directed edge between two stop/node points inside a station
+ * (walkway, stairs, elevator, …). Used by trip planners for in-station routing.
+ */
+export interface Pathway {
+  pathway_id: string;
+  from_stop_id: string;
+  to_stop_id: string;
+  /** 1 walkway, 2 stairs, 3 moving sidewalk, 4 escalator, 5 elevator, 6 fare gate, 7 exit gate. */
+  pathway_mode: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  is_bidirectional: 0 | 1;
+  length?: number;          // meters
+  traversal_time?: number;  // seconds
+  stair_count?: number;     // signed integer
+  max_slope?: number;
+  min_width?: number;       // meters
+  signposted_as?: string;
+  reversed_signposted_as?: string;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

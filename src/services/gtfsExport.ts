@@ -21,9 +21,23 @@ function fillShapeDistancesExport(points: ShapePoint[]): ShapePoint[] {
 // CSV input rows are heterogeneous (GTFS entity types with varying field
 // sets); accept any object shape but flatten to a plain record before
 // handing to PapaParse so it sees consistent keys.
+//
+// PapaParse derives the header from the FIRST row's keys only, which silently
+// drops optional columns that are absent on row 0 but present on a later row
+// (e.g. a frequencies row without exact_times, or a stop whose level_id is only
+// set on platform stops further down the file). Build the union of keys across
+// all rows — in first-seen order — and pass it explicitly so no column is lost
+// on a round-trip.
 function toCSV(data: readonly object[]): string {
   if (data.length === 0) return '';
-  return Papa.unparse(data as Record<string, unknown>[]);
+  const columns: string[] = [];
+  const seen = new Set<string>();
+  for (const row of data) {
+    for (const key of Object.keys(row)) {
+      if (!seen.has(key)) { seen.add(key); columns.push(key); }
+    }
+  }
+  return Papa.unparse(data as Record<string, unknown>[], { columns });
 }
 
 function stripUIFields<T extends object>(obj: T): Record<string, unknown> {
@@ -340,6 +354,21 @@ export async function exportGtfsZip(): Promise<Blob> {
   // transfers.txt
   if (state.transfers.length > 0) {
     zip.file('transfers.txt', toCSV(state.transfers.map(stripUIFields)));
+  }
+
+  // frequencies.txt
+  if (state.frequencies.length > 0) {
+    zip.file('frequencies.txt', toCSV(state.frequencies.map(stripUIFields)));
+  }
+
+  // levels.txt
+  if (state.levels.length > 0) {
+    zip.file('levels.txt', toCSV(state.levels.map(stripUIFields)));
+  }
+
+  // pathways.txt
+  if (state.pathways.length > 0) {
+    zip.file('pathways.txt', toCSV(state.pathways.map(stripUIFields)));
   }
 
   // GTFS-Fares v2 — written when populated, alongside (not instead of) v1.

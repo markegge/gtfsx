@@ -34,6 +34,9 @@ const DATA_KEYS = [
   'fareProducts',
   'fareLegRules',
   'fareTransferRules',
+  'frequencies',
+  'levels',
+  'pathways',
   'flexZones',
 ] as const;
 
@@ -92,6 +95,9 @@ export function resetStoreEntities() {
   state.setFareProducts([] as never);
   state.setFareLegRules([] as never);
   state.setFareTransferRules([] as never);
+  state.setFrequencies([] as never);
+  state.setLevels([] as never);
+  state.setPathways([] as never);
   state.setFlexZones([] as never);
 }
 
@@ -143,6 +149,9 @@ export function applySnapshotToStore(snapshot: Record<string, unknown>) {
   if (Array.isArray(g('fareProducts'))) state.setFareProducts(g('fareProducts') as never);
   if (Array.isArray(g('fareLegRules'))) state.setFareLegRules(g('fareLegRules') as never);
   if (Array.isArray(g('fareTransferRules'))) state.setFareTransferRules(g('fareTransferRules') as never);
+  if (Array.isArray(g('frequencies'))) state.setFrequencies(g('frequencies') as never);
+  if (Array.isArray(g('levels'))) state.setLevels(g('levels') as never);
+  if (Array.isArray(g('pathways'))) state.setPathways(g('pathways') as never);
   if (Array.isArray(g('flexZones'))) state.setFlexZones(g('flexZones') as never);
 
   state.markSaved();

@@ -80,6 +80,9 @@ export function loadImportIntoStore(data: Awaited<ReturnType<typeof importGtfsZi
   store.setFareAttributes(data.fareAttributes);
   store.setFareRules(data.fareRules);
   store.setTransfers(data.transfers);
+  store.setFrequencies(data.frequencies);
+  store.setLevels(data.levels);
+  store.setPathways(data.pathways);
   store.setFareAreas(data.fareAreas);
   store.setStopAreas(data.stopAreas);
   store.setFareNetworks(data.fareNetworks);

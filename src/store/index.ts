@@ -17,6 +17,9 @@ import { createAuthSlice, type AuthSlice } from './authSlice';
 import { createFeedsSlice, type FeedsSlice } from './feedsSlice';
 import { createOrgsSlice, type OrgsSlice } from './orgsSlice';
 import { createTransferSlice, type TransferSlice } from './transferSlice';
+import { createFrequenciesSlice, type FrequenciesSlice } from './frequenciesSlice';
+import { createLevelsSlice, type LevelsSlice } from './levelsSlice';
+import { createPathwaysSlice, type PathwaysSlice } from './pathwaysSlice';
 import { createFareV2Slice, type FareV2Slice } from './fareV2Slice';
 
 export type AppStore = AgencySlice &
@@ -36,6 +39,9 @@ export type AppStore = AgencySlice &
   FeedsSlice &
   OrgsSlice &
   TransferSlice &
+  FrequenciesSlice &
+  LevelsSlice &
+  PathwaysSlice &
   FareV2Slice;
 
 // Zustand-immer slice composition: each create*Slice is typed against its
@@ -64,6 +70,9 @@ export const useStore = create<AppStore>()(
     ...(createFeedsSlice as any)(...a),
     ...(createOrgsSlice as any)(...a),
     ...(createTransferSlice as any)(...a),
+    ...(createFrequenciesSlice as any)(...a),
+    ...(createLevelsSlice as any)(...a),
+    ...(createPathwaysSlice as any)(...a),
     ...(createFareV2Slice as any)(...a),
   }))
 );

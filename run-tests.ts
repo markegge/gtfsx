@@ -16,6 +16,7 @@ import {
   computeAccessibilityAudit, representativeDay,
 } from './src/services/stopAnalysis';
 import { useStore } from './src/store';
+import { getUSHolidaysForYear, getUSHolidaysInRange } from './src/utils/holidays';
 
 const FIXTURE_DIR = 'streamline_gtfs_march_2026';
 
@@ -454,6 +455,77 @@ async function main() {
   assert('bundle round-trip: pathway length survived', s().pathways.find(p => p.pathway_id === 'PW2')?.length === 12.5);
   assert('bundle round-trip: pathway mode survived', s().pathways.find(p => p.pathway_id === 'PW1')?.pathway_mode === 5);
   assert('bundle round-trip: block_id survived', s().trips.find(t => t.trip_id === 'T_BLK_A')?.block_id === 'BLOCK1');
+
+  // ---- PHASE 14: bundle validation rules (#12/#13/#16/#17) ----
+  console.log('\nPhase 14: validation rules (#12/#13/#16/#17)');
+  // Reload a clean copy so prior phases don't bleed in.
+  loadImportIntoStore(await importGtfsZip(await buildBundleFixtureZip() as unknown as File));
+  let vmsgs = runValidation(s());
+  const hasMsg = (sev: 'error' | 'warning', sub: string) =>
+    vmsgs.some(m => m.severity === sev && m.message.includes(sub));
+
+  // Positive baseline: the fixture's frequencies + pathways/levels are valid.
+  assert('#12 valid windows: no frequency error', !hasMsg('error', 'frequency') && !hasMsg('error', 'Frequency'));
+  assert('#13 valid pathways/levels: no FK/enum error',
+    !hasMsg('error', 'Pathway') && !hasMsg('error', 'non-existent level_id'));
+  // #16 — overlapping block trips warn (soft).
+  assert('#16 block overlap warns', hasMsg('warning', 'block "BLOCK1"'));
+  assert('#16 overlap is a warning not error', !hasMsg('error', 'block "BLOCK1"'));
+  // #17 — Independence Day (Sat 2026-07-04) nudge on the Saturday service.
+  assert('#17 Independence Day nudge fires', hasMsg('warning', 'Independence Day (2026-07-04)'));
+  assert('#17 nudge is a warning not error', !hasMsg('error', 'Independence Day'));
+
+  // #12 negatives — overlap, end<=start, headway<=0.
+  s().setFrequencies([
+    { trip_id: 'T_FREQ', start_time: '06:00:00', end_time: '09:00:00', headway_secs: 600 },
+    { trip_id: 'T_FREQ', start_time: '08:30:00', end_time: '10:00:00', headway_secs: 600 }, // overlaps prev
+    { trip_id: 'T_FREQ', start_time: '12:00:00', end_time: '11:00:00', headway_secs: 600 }, // end < start
+    { trip_id: 'T_FREQ', start_time: '13:00:00', end_time: '14:00:00', headway_secs: 0 },   // headway 0
+    { trip_id: 'GHOST',  start_time: '06:00:00', end_time: '07:00:00', headway_secs: 600 }, // bad trip FK
+  ]);
+  vmsgs = runValidation(s());
+  assert('#12 overlap detected', hasMsg('error', 'overlapping frequency windows'));
+  assert('#12 end<=start detected', hasMsg('error', 'at or before it starts'));
+  assert('#12 headway>0 detected', hasMsg('error', 'headway_secs 0'));
+  assert('#12 trip FK detected', hasMsg('error', 'Frequency references non-existent trip "GHOST"'));
+
+  // #13 negatives — bad FK, out-of-range enums, dangling level_id.
+  s().setLevels([{ level_id: 'L1', level_index: 0 }]);
+  s().setPathways([
+    { pathway_id: 'BAD1', from_stop_id: 'NOPE', to_stop_id: 'S1', pathway_mode: 9, is_bidirectional: 2 },
+  ] as never);
+  s().setStops(s().stops.map((st, i) => (i === 0 ? { ...st, level_id: 'GHOST' } : st)));
+  vmsgs = runValidation(s());
+  assert('#13 pathway bad from_stop', hasMsg('error', 'non-existent from_stop_id "NOPE"'));
+  assert('#13 pathway_mode range', hasMsg('error', 'pathway_mode 9'));
+  assert('#13 is_bidirectional range', hasMsg('error', 'is_bidirectional 2'));
+  assert('#13 dangling level_id', hasMsg('error', 'non-existent level_id "GHOST"'));
+
+  // #17 — adding a matching exception silences the nudge.
+  loadImportIntoStore(await importGtfsZip(await buildBundleFixtureZip() as unknown as File));
+  s().addCalendarDate({ service_id: 'SAT', date: '20260704', exception_type: 2 });
+  vmsgs = runValidation(s());
+  assert('#17 nudge cleared by exception', !hasMsg('warning', 'Independence Day (2026-07-04)'));
+
+  // ---- PHASE 15: US holiday date math (#17) ----
+  console.log('\nPhase 15: US holiday date math');
+  const h2026 = getUSHolidaysForYear(2026);
+  const dateOf = (year: number, name: string) => getUSHolidaysForYear(year).find(h => h.name === name)?.gtfsDate;
+  assert('MLK 2026 = 3rd Mon Jan (01-19)', dateOf(2026, 'MLK Day') === '20260119', `got ${dateOf(2026, 'MLK Day')}`);
+  assert('Memorial 2026 = last Mon May (05-25)', dateOf(2026, 'Memorial Day') === '20260525', `got ${dateOf(2026, 'Memorial Day')}`);
+  assert('Labor 2026 = 1st Mon Sep (09-07)', dateOf(2026, 'Labor Day') === '20260907', `got ${dateOf(2026, 'Labor Day')}`);
+  assert('Thanksgiving 2026 = 4th Thu Nov (11-26)', dateOf(2026, 'Thanksgiving') === '20261126', `got ${dateOf(2026, 'Thanksgiving')}`);
+  assert('Juneteenth 2026 fixed (06-19)', dateOf(2026, 'Juneteenth') === '20260619');
+  assert('Independence 2026 fixed (07-04)', dateOf(2026, 'Independence Day') === '20260704');
+  assert('Independence 2026 falls on Saturday (dow=6)', h2026.find(h => h.name === 'Independence Day')?.dayOfWeek === 6);
+  // Leap year — date math still correct in 2024.
+  assert('MLK 2024 = 3rd Mon Jan (01-15)', dateOf(2024, 'MLK Day') === '20240115', `got ${dateOf(2024, 'MLK Day')}`);
+  assert('Thanksgiving 2024 = 4th Thu Nov (11-28)', dateOf(2024, 'Thanksgiving') === '20241128', `got ${dateOf(2024, 'Thanksgiving')}`);
+  // Multi-year range returns one entry per holiday per year.
+  const range = getUSHolidaysInRange('20240101', '20261231');
+  const julys = range.filter(h => h.name === 'Independence Day').map(h => h.gtfsDate).sort();
+  assert('multi-year range: 3 Independence Days', julys.length === 3 && julys[0] === '20240704' && julys[2] === '20260704', julys.join(','));
+  assert('range excludes out-of-bounds', !getUSHolidaysInRange('20260201', '20260601').some(h => h.name === 'Independence Day'));
 
   // ---- SUMMARY ----
   console.log(`\n${'='.repeat(50)}`);

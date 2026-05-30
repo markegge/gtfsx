@@ -1,5 +1,7 @@
 import type { ValidationMessage } from '../types/ui';
 import type { AppStore } from '../store';
+import { gtfsTimeToSeconds } from '../utils/time';
+import { getUSHolidaysInRange } from '../utils/holidays';
 
 let msgId = 0;
 function msg(severity: 'error' | 'warning', message: string, entity_type?: string, entity_id?: string): ValidationMessage {
@@ -329,6 +331,130 @@ export function runValidation(state: AppStore): ValidationMessage[] {
         'warning',
         `Flex zone "${zone.name}" has no booking rule — riders won't know how to request service.`,
         'flex_zone', zone.id,
+      ));
+    }
+  }
+
+  // ── Frequencies (#12) ──────────────────────────────────────────────────
+  // Headway-based service per trip: end_time > start_time, headway_secs > 0,
+  // and windows for the same trip must not overlap (a consumer can't resolve
+  // two headways at the same instant). Times may exceed 24:00:00.
+  const tripIdSet = new Set(state.trips.map((t) => t.trip_id));
+  const freqByTrip = new Map<string, typeof state.frequencies>();
+  for (const f of state.frequencies) {
+    if (!tripIdSet.has(f.trip_id)) {
+      messages.push(msg('error', `Frequency references non-existent trip "${f.trip_id}"`, 'trip', f.trip_id));
+    }
+    if (!(f.headway_secs > 0)) {
+      messages.push(msg('error', `Frequency for trip "${f.trip_id}" has headway_secs ${f.headway_secs} — must be a positive number.`, 'trip', f.trip_id));
+    }
+    if (gtfsTimeToSeconds(f.end_time) <= gtfsTimeToSeconds(f.start_time)) {
+      messages.push(msg('error', `Frequency for trip "${f.trip_id}" ends (${f.end_time}) at or before it starts (${f.start_time}).`, 'trip', f.trip_id));
+    }
+    const list = freqByTrip.get(f.trip_id) ?? [];
+    list.push(f);
+    freqByTrip.set(f.trip_id, list);
+  }
+  for (const [tripId, windows] of freqByTrip) {
+    if (windows.length < 2) continue;
+    const sorted = [...windows].sort((a, b) => gtfsTimeToSeconds(a.start_time) - gtfsTimeToSeconds(b.start_time));
+    for (let i = 1; i < sorted.length; i++) {
+      if (gtfsTimeToSeconds(sorted[i].start_time) < gtfsTimeToSeconds(sorted[i - 1].end_time)) {
+        messages.push(msg(
+          'error',
+          `Trip "${tripId}" has overlapping frequency windows (${sorted[i - 1].start_time}–${sorted[i - 1].end_time} and ${sorted[i].start_time}–${sorted[i].end_time}).`,
+          'trip', tripId,
+        ));
+      }
+    }
+  }
+
+  // ── Levels & pathways (#13) ────────────────────────────────────────────
+  const levelIdSet = new Set(state.levels.map((l) => l.level_id));
+  for (const s of state.stops) {
+    if (s.level_id && !levelIdSet.has(s.level_id)) {
+      messages.push(msg('error', `Stop "${s.stop_name || s.stop_id}" references non-existent level_id "${s.level_id}".`, 'stop', s.stop_id));
+    }
+  }
+  for (const p of state.pathways) {
+    if (!stopIdSet.has(p.from_stop_id)) {
+      messages.push(msg('error', `Pathway "${p.pathway_id}" references non-existent from_stop_id "${p.from_stop_id}".`, 'pathway', p.pathway_id));
+    }
+    if (!stopIdSet.has(p.to_stop_id)) {
+      messages.push(msg('error', `Pathway "${p.pathway_id}" references non-existent to_stop_id "${p.to_stop_id}".`, 'pathway', p.pathway_id));
+    }
+    if (!(p.pathway_mode >= 1 && p.pathway_mode <= 7)) {
+      messages.push(msg('error', `Pathway "${p.pathway_id}" has pathway_mode ${p.pathway_mode} — must be 1–7.`, 'pathway', p.pathway_id));
+    }
+    if (p.is_bidirectional !== 0 && p.is_bidirectional !== 1) {
+      messages.push(msg('error', `Pathway "${p.pathway_id}" has is_bidirectional ${p.is_bidirectional} — must be 0 or 1.`, 'pathway', p.pathway_id));
+    }
+  }
+
+  // ── Block overlap (#16) — soft warning ─────────────────────────────────
+  // Two trips in the same block (one vehicle) on the same service day can't
+  // run at once. Compute each trip's time span from its stop_times and flag
+  // overlapping trips within a (block_id, service_id) group.
+  const tripSpan = new Map<string, { start: number; end: number }>();
+  for (const st of state.stopTimes) {
+    const t = st.departure_time || st.arrival_time;
+    if (!t) continue;
+    const sec = gtfsTimeToSeconds(t);
+    const span = tripSpan.get(st.trip_id);
+    if (!span) tripSpan.set(st.trip_id, { start: sec, end: sec });
+    else {
+      if (sec < span.start) span.start = sec;
+      if (sec > span.end) span.end = sec;
+    }
+  }
+  const blockGroups = new Map<string, { trip_id: string; start: number; end: number }[]>();
+  for (const t of state.trips) {
+    if (!t.block_id) continue;
+    const span = tripSpan.get(t.trip_id);
+    if (!span) continue;
+    const key = `${t.block_id} ${t.service_id}`;
+    const list = blockGroups.get(key) ?? [];
+    list.push({ trip_id: t.trip_id, start: span.start, end: span.end });
+    blockGroups.set(key, list);
+  }
+  for (const [key, blockTrips] of blockGroups) {
+    if (blockTrips.length < 2) continue;
+    const blockId = key.split(' ')[0];
+    const sorted = [...blockTrips].sort((a, b) => a.start - b.start);
+    let maxEnd = sorted[0].end;
+    let holder = sorted[0].trip_id;
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i].start < maxEnd) {
+        messages.push(msg(
+          'warning',
+          `Trips "${holder}" and "${sorted[i].trip_id}" in block "${blockId}" overlap in time — a vehicle can't run two trips at once.`,
+          'trip', sorted[i].trip_id,
+        ));
+      }
+      if (sorted[i].end > maxEnd) { maxEnd = sorted[i].end; holder = sorted[i].trip_id; }
+    }
+  }
+
+  // ── Holiday-exception nudge (#17) — soft warning ───────────────────────
+  // Flag major US holidays that fall on a day a service runs, inside its
+  // active range, with no calendar_dates exception. Scan at most the first
+  // year of the range so a far-future end_date (e.g. the default 20991231)
+  // doesn't generate decades of nudges; holidays repeat annually anyway.
+  const dayFields = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+  const exceptionKeys = new Set(state.calendarDates.map((cd) => `${cd.service_id} ${cd.date}`));
+  for (const c of state.calendars) {
+    if (!c.start_date || !c.end_date || c.start_date.length !== 8) continue;
+    const startYearPlusOne = `${Number(c.start_date.slice(0, 4)) + 1}${c.start_date.slice(4)}`;
+    const scanEnd = c.end_date < startYearPlusOne ? c.end_date : startYearPlusOne;
+    for (const h of getUSHolidaysInRange(c.start_date, scanEnd)) {
+      if (c[dayFields[h.dayOfWeek]] !== 1) continue;
+      if (exceptionKeys.has(`${c.service_id} ${h.gtfsDate}`)) continue;
+      const label = c._description || c.service_id;
+      const pretty = `${h.gtfsDate.slice(0, 4)}-${h.gtfsDate.slice(4, 6)}-${h.gtfsDate.slice(6, 8)}`;
+      messages.push(msg(
+        'warning',
+        `Service "${label}" has no exception for ${h.name} (${pretty}) — most agencies run a holiday or no-service schedule that day. Add a calendar_dates exception if so.`,
+        'calendar', c.service_id,
       ));
     }
   }

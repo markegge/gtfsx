@@ -31,12 +31,22 @@ export async function applyMigrations(): Promise<void> {
 
 export async function resetDb(): Promise<void> {
   await applyMigrations();
+  // forum_thread.solved_post_id ↔ forum_post is a circular FK — break it before
+  // deleting either side. (forum_thread/forum_post FK to user without ON DELETE
+  // CASCADE, so they must be cleared before the user delete below.)
+  await testEnv.DB.prepare(`UPDATE forum_thread SET solved_post_id = NULL`).run();
   // Child tables first, then parents.
   const tables = [
     'audit_event',
     'auth_token',
     'session',
     'credential',
+    'forum_post_upvote',
+    'forum_subscription',
+    'forum_image',
+    'forum_post',
+    'forum_thread',
+    'forum_user_state',
     'publication_history',
     'publication',
     'project_catalog_submission',

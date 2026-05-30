@@ -1,13 +1,39 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getPublicProfile, type PublicProfile } from '../../services/forumApi';
+import { getPublicProfile, banForumUser, unbanForumUser, type PublicProfile } from '../../services/forumApi';
+import { useStore } from '../../store';
 import { Avatar } from './Avatar';
 import { relativeTime } from './time';
+
+const INDEFINITE_BAN_UNTIL = 4_102_444_800_000; // mirrors worker/forum/routes.ts
 
 export function ProfilePage() {
   const { userId } = useParams<{ userId: string }>();
   const [data, setData] = useState<PublicProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const currentUser = useStore((s) => s.currentUser);
+  const [banPending, setBanPending] = useState(false);
+  const [banError, setBanError] = useState<string | null>(null);
+
+  async function toggleBan(currentlyBanned: boolean) {
+    if (!userId) return;
+    const ok = window.confirm(
+      currentlyBanned
+        ? "Lift this member's forum ban? They'll be able to post again."
+        : "Ban this member from the forum? They won't be able to post until you lift it.",
+    );
+    if (!ok) return;
+    setBanPending(true);
+    setBanError(null);
+    try {
+      const res = currentlyBanned ? await unbanForumUser(userId) : await banForumUser(userId);
+      setData((prev) => (prev ? { ...prev, bannedUntil: res.bannedUntil } : prev));
+    } catch (e) {
+      setBanError(e instanceof Error ? e.message : 'Action failed');
+    } finally {
+      setBanPending(false);
+    }
+  }
 
   useEffect(() => {
     if (!userId) return;
@@ -27,6 +53,13 @@ export function ProfilePage() {
   if (error) return <div className="text-red-700 text-sm">{error}</div>;
   if (!data) return <div className="text-warm-gray text-sm">Loading…</div>;
 
+  // Staff-only moderation. `bannedUntil` is only present in the response for
+  // staff viewers; we also hide the control on the staff member's own profile.
+  const showModeration = !!currentUser?.staff && currentUser.id !== userId;
+  const bannedUntil = data.bannedUntil ?? null;
+  const isBanned = typeof bannedUntil === 'number' && bannedUntil > Date.now();
+  const indefinite = bannedUntil != null && bannedUntil >= INDEFINITE_BAN_UNTIL;
+
   return (
     <div className="space-y-6">
       <Link to="/community" className="text-xs text-warm-gray hover:text-coral">← Community</Link>
@@ -39,6 +72,35 @@ export function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {showModeration && (
+        <div className={`rounded-lg border p-4 text-sm ${isBanned ? 'border-red-200 bg-red-50' : 'border-sand bg-white'}`}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <span className="font-semibold text-dark-brown">Staff moderation</span>
+              <span className="text-warm-gray">
+                {' · '}
+                {isBanned
+                  ? indefinite
+                    ? 'Banned from the forum (indefinite)'
+                    : `Banned until ${new Date(bannedUntil!).toLocaleDateString()}`
+                  : 'Forum access active'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => toggleBan(isBanned)}
+              disabled={banPending}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-50 ${
+                isBanned ? 'bg-sand text-brown hover:bg-coral-light hover:text-coral' : 'bg-red-600 text-white hover:bg-red-700'
+              }`}
+            >
+              {banPending ? '…' : isBanned ? 'Lift ban' : 'Ban from forum'}
+            </button>
+          </div>
+          {banError && <div className="mt-2 text-red-700">{banError}</div>}
+        </div>
+      )}
 
       <section>
         <h2 className="font-heading font-bold text-sm text-warm-gray uppercase tracking-wide mb-2">Threads started</h2>

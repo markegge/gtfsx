@@ -195,6 +195,9 @@ export function patchMyForumProfile(input: {
 
 export interface PublicProfile {
   user: ForumAuthor;
+  // Present only for staff viewers: the target's forum-ban expiry (ms epoch),
+  // null if not banned. Undefined for non-staff.
+  bannedUntil?: number | null;
   totalUpvotes: number;
   threads: ForumThread[];
   posts: Array<{
@@ -211,6 +214,19 @@ export interface PublicProfile {
 
 export function getPublicProfile(userId: string): Promise<PublicProfile> {
   return requestJson(`/api/forum/profile/${encodeURIComponent(userId)}`);
+}
+
+// Staff-only forum moderation: ban (indefinite by default, or `days` for a
+// timed ban) and lift a ban. Returns the new bannedUntil (ms epoch, or null).
+export function banForumUser(userId: string, days?: number): Promise<{ bannedUntil: number | null }> {
+  return requestJson(`/api/forum/profile/${encodeURIComponent(userId)}/ban`, {
+    method: 'POST',
+    body: days ? { days } : {},
+  });
+}
+
+export function unbanForumUser(userId: string): Promise<{ bannedUntil: number | null }> {
+  return requestJson(`/api/forum/profile/${encodeURIComponent(userId)}/ban`, { method: 'DELETE' });
 }
 
 export function subscribeToThread(threadId: string): Promise<{ subscribed: boolean }> {

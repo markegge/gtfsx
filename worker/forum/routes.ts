@@ -799,8 +799,19 @@ forumRouter.get('/profile/:userId', async (c) => {
     `SELECT COALESCE(SUM(upvote_count), 0) as total FROM forum_post WHERE author_user_id = ? AND deleted_at IS NULL`,
   ).bind(userId).first<{ total: number }>();
 
+  // Staff viewers see the target's forum-ban state so they can moderate.
+  // Omitted for everyone else (undefined fields drop out of the JSON).
+  let bannedUntil: number | null | undefined = undefined;
+  if (c.var.user?.staff) {
+    const st = await c.env.DB.prepare(
+      `SELECT banned_until FROM forum_user_state WHERE user_id = ?`,
+    ).bind(userId).first<{ banned_until: number | null }>();
+    bannedUntil = st?.banned_until ?? null;
+  }
+
   return c.json({
     user: author,
+    bannedUntil,
     totalUpvotes: totalUpvotesRes?.total ?? 0,
     threads: (threadsRes.results ?? []).map((r) => threadDto(r, author)),
     posts: (postsRes.results ?? []).map((r) => ({
@@ -814,6 +825,65 @@ forumRouter.get('/profile/:userId', async (c) => {
       createdAt: r.created_at,
     })),
   });
+});
+
+// ─── Staff: forum ban ────────────────────────────────────────────────────────
+// Bans are enforced everywhere by canWriteToForum (banned_until > now); these
+// two endpoints are the staff-only way to set and lift one. Indefinite bans use
+// a far-future sentinel; a `days` body sets a timed ban instead.
+
+const INDEFINITE_BAN_UNTIL = 4_102_444_800_000; // 2100-01-01T00:00:00Z
+
+const banSchema = z.object({ days: z.number().int().positive().max(3650).optional() });
+
+forumRouter.post('/profile/:userId/ban', requireAuth, async (c) => {
+  const actor = c.var.user!;
+  if (!actor.staff) throw forbidden('Staff only');
+  const targetId = c.req.param('userId');
+  if (targetId === actor.id) throw validationFailed("You can't ban yourself");
+  const body = await parseJson(c, banSchema);
+
+  const target = await c.env.DB.prepare(`SELECT id FROM user WHERE id = ?`).bind(targetId).first();
+  if (!target) throw notFound('User not found');
+
+  const now = Date.now();
+  const bannedUntil = body.days ? now + body.days * 86_400_000 : INDEFINITE_BAN_UNTIL;
+  // Upsert — the row is created lazily, so a never-active user may have none yet.
+  await c.env.DB.prepare(
+    `INSERT INTO forum_user_state (user_id, gravatar_opt_out, email_pref_replies, email_pref_subscribed, email_pref_mark_solved, email_pref_admin_alerts, email_pref_all_off, banned_until, created_at, updated_at)
+     VALUES (?, 0, 1, 1, 1, 1, 0, ?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET banned_until = excluded.banned_until, updated_at = excluded.updated_at`,
+  ).bind(targetId, bannedUntil, now, now).run();
+
+  await logAudit(c.env, {
+    actorUserId: actor.id,
+    subjectType: 'user',
+    subjectId: targetId,
+    action: 'forum.user.ban',
+    metadata: { bannedUntil, days: body.days ?? null },
+    ip: clientIp(c.req.raw),
+  });
+  return c.json({ bannedUntil });
+});
+
+forumRouter.delete('/profile/:userId/ban', requireAuth, async (c) => {
+  const actor = c.var.user!;
+  if (!actor.staff) throw forbidden('Staff only');
+  const targetId = c.req.param('userId');
+  const now = Date.now();
+  await c.env.DB.prepare(
+    `UPDATE forum_user_state SET banned_until = NULL, updated_at = ? WHERE user_id = ?`,
+  ).bind(now, targetId).run();
+
+  await logAudit(c.env, {
+    actorUserId: actor.id,
+    subjectType: 'user',
+    subjectId: targetId,
+    action: 'forum.user.unban',
+    metadata: {},
+    ip: clientIp(c.req.raw),
+  });
+  return c.json({ bannedUntil: null });
 });
 
 // ─── Subscriptions ──────────────────────────────────────────────────────────

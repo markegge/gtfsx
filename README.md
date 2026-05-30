@@ -113,7 +113,7 @@ npx tsc -p tsconfig.worker.json --noEmit    # worker
 - **Production:** `gtfsx.com` / `www.gtfsx.com` / `feeds.gtfsx.com` — auto-deployed by **Cloudflare Workers Builds** on every push to `main` (no separate promotion step).
 - **Staging:** `staging.gtfsx.com` + `staging-feeds.gtfsx.com` — parked, manual rehearsal env. Deploy via `npx wrangler deploy --env staging`.
 
-Full day-to-day cadence lives in [`docs/WORKFLOW.md`](./docs/WORKFLOW.md). First-time Cloudflare provisioning runbook (D1, KV, R2, Resend, Turnstile) is in [`docs/DEPLOY_BACKEND.md`](./docs/DEPLOY_BACKEND.md). Live operational state — including kill-switch positions and outstanding work — is in [`docs/BACKEND_STATUS.md`](./docs/BACKEND_STATUS.md).
+Full day-to-day cadence, the first-time Cloudflare provisioning runbook (D1, KV, R2, Resend, Turnstile), and the live operational state (kill-switch positions, deploy gotchas) all live in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) (§5 live state, §6 provisioning, §7 workflow).
 
 ## Data sources
 
@@ -121,22 +121,18 @@ Full day-to-day cadence lives in [`docs/WORKFLOW.md`](./docs/WORKFLOW.md). First
 - **Demographics (ACS):** US Census Bureau [American Community Survey 5-year](https://www.census.gov/data/developers/data-sets/acs-5year.html)
 - **Tract centroids:** Census Bureau [CenPop2020](https://www.census.gov/geographies/reference-files/time-series/geo/centers-population.html), bundled per state in `public/census/`
 - **Jobs (LODES WAC):** [LEHD Origin-Destination Employment Statistics](https://lehd.ces.census.gov/data/)
-- **Demand-dot pipeline:** see [`docs/demand-dots-nationwide-plan.md`](./docs/demand-dots-nationwide-plan.md)
+- **Demand-dot pipeline:** see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) Appendix A
 - **Catalog distribution:** [Mobility Database](https://mobilitydata.org/) (live), transit.land (stubbed)
 
 ## Documentation
 
 | Doc | Scope |
 |---|---|
-| [`REQUIREMENTS.md`](./docs/REQUIREMENTS.md) | Capability inventory across editor, analysis, accounts, publication. Shipped / partial / planned / deferred. |
-| [`WORKFLOW.md`](./docs/WORKFLOW.md) | Day-to-day git + deployment cadence (branches, staging deploys, prod deploys, kill-switch flags, hotfixes). |
-| [`BACKEND_REQUIREMENTS.md`](./docs/BACKEND_REQUIREMENTS.md) | Backend reference spec — data model, API surface, security/privacy NFRs. `BE-*` and `NF-*` anchors. |
-| [`BACKEND_STATUS.md`](./docs/BACKEND_STATUS.md) | "Where we are now" — env state, deploy gotchas, outstanding work. **Update when changing deployed state.** |
-| [`DEPLOY_BACKEND.md`](./docs/DEPLOY_BACKEND.md) | First-time provisioning runbook (D1 / KV / R2 / Resend / Turnstile / smoke-test). |
-| [`EMBEDS_REQUIREMENTS.md`](./docs/EMBEDS_REQUIREMENTS.md) | Embeds spec — architecture, shipped, queued. `EM-*` anchors. |
-| [`FLEX_ROADMAP.md`](./docs/FLEX_ROADMAP.md) | GTFS-Flex coverage tracker. |
-| [`demand-dots-nationwide-plan.md`](./docs/demand-dots-nationwide-plan.md) | Demand-dot tile build pipeline + refresh cadence. |
-| [`Title VI Transit Service Analysis - Calculation Procedures Memo.md`](./docs/Title%20VI%20Transit%20Service%20Analysis%20-%20Calculation%20Procedures%20Memo.md) | Methodology for the Title VI equity analysis. |
+| [`REQUIREMENTS.md`](./docs/REQUIREMENTS.md) | Capability inventory across editor, analysis, accounts, billing, publication, and forum. Shipped / partial / planned / deferred. |
+| [`ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | The single engineering reference — system architecture, data model, full API surface, security/privacy NFRs (`BE-*`/`NF-*` anchors), live environment state, git + deploy workflow, provisioning + operator runbooks, demand-dot regen + Google Ads OCI appendices. |
+| [`brand-kit/`](./docs/brand-kit/) | Brand assets — logos, palette, fonts, guidelines. |
+
+The 🔲 planned-feature backlog lives in **GitHub issues**. Superseded/historical specs are preserved under `docs/archive/` (gitignored; local reference only).
 
 ## Project structure
 

@@ -35,6 +35,10 @@ playwright-report/
 # Local task handoff / planning docs (not part of the repo)
 handoffs/
 
+# Archived/superseded docs — kept on disk for local reference, out of the repo.
+# Living docs are docs/REQUIREMENTS.md + docs/ARCHITECTURE.md.
+docs/archive/
+
 # demand-dots build artifacts
 demand-dots/cache/
 demand-dots/.venv/

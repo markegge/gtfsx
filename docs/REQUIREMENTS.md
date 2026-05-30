@@ -58,9 +58,9 @@ Required and core-optional files are first-class entities in the editor:
 | `fare_attributes.txt` / `fare_rules.txt` (GTFS-Fares v1) | ✅ |
 | GTFS-Fares v2 (`areas.txt`, `stop_areas.txt`, `networks.txt`, `route_networks.txt`, `timeframes.txt`, `rider_categories.txt`, `fare_media.txt`, `fare_products.txt`, `fare_leg_rules.txt`, `fare_transfer_rules.txt`) | 🟡 — Phase 1 round-trip only; see [§1.6](#16-fares) |
 | `directions.txt` (auto-emitted from per-route direction names) | ✅ |
-| `frequencies.txt` (headway-based service) | 🔲 |
+| `frequencies.txt` (headway-based service) | ✅ |
 | `transfers.txt` | ✅ |
-| `pathways.txt` | 🔲 |
+| `pathways.txt` / `levels.txt` (multi-level stations) | ✅ |
 | GTFS-Flex (`locations.geojson`, `booking_rules.txt`, `location_groups.txt`, extended `stop_times`) | ✅ — see [§1.7](#17-gtfs-flex-demand-responsive-service) |
 
 ### 1.2 Routes and shapes
@@ -71,7 +71,7 @@ The editor enforces a **route-first** workflow: alignment is drawn before stops 
 - ✅ Polyline drawing with vertex add/remove/drag.
 - ✅ Snap-to-road via the Mapbox Map Matching API.
 - ✅ Freehand drawing for off-road segments.
-- ✅ Multiple shape variants per route (e.g., inbound vs outbound; loops).
+- ✅ Multiple shape variants per route (e.g., inbound vs outbound; loops); each shape carries an editable display name (UI-only label, not exported).
 - ✅ `shape_dist_traveled` auto-calculated on export.
 - ✅ Per-route hidden/visible toggle on the map.
 - ✅ Route delete cascades trips, `stop_times`, `route_stops`, fare rules, and shapes only used by this route. Stops unique to the route are deleted by default; user can opt out via the delete confirmation dialog to preserve them as standalone stops in `stops.txt` (useful when reassigning to a different route).
@@ -88,7 +88,7 @@ Stops are placed in the context of the currently-selected route. Default behavio
 - ✅ Multi-route stops — stops can be assigned to additional routes; near-duplicate detection prompts to reuse existing stops.
 - ✅ Reorder stops along a route via drag-and-drop.
 - ✅ Bulk import stops from CSV.
-- 🟡 Parent station / location_type hierarchy — types accepted on import + preserved on export, no rich UI for editing the hierarchy.
+- ✅ Parent station / location_type hierarchy — editable on the stop (location type, parent station, `level_id`); a **Stations** panel adds table editors for `levels.txt` (floors) and `pathways.txt` (in-station walkways/stairs/elevators), with FK + enum validation.
 - ✅ Stop names labelled on the map at appropriate zoom levels.
 
 ### 1.4 Calendars and service patterns
@@ -98,7 +98,7 @@ Stops are placed in the context of the currently-selected route. Default behavio
 - ✅ Bulk-add common US holidays (MLK Day, Presidents' Day, Memorial Day, July 4, Labor Day, Thanksgiving, Christmas, etc.) within the active service date range.
 - ✅ Visual calendar showing which services run on which dates, with exception days colour-coded.
 - ✅ Human-readable service summary ("Weekdays", "Saturday Only", custom day patterns) — surfaced both inside the editor and on rider-facing embeds.
-- 🔲 Validation nudge when a service pattern has no exception dates configured for major holidays.
+- ✅ Validation nudge (soft warning) when a service runs on a major US holiday inside its active range with no `calendar_dates` exception — covers fixed-date + nth-weekday holidays incl. Juneteenth.
 
 ### 1.5 Trips and timetables
 
@@ -109,9 +109,9 @@ Stops are placed in the context of the currently-selected route. Default behavio
 - ✅ Bidirectional editing — changes in the timetable reflect on the map and vice versa.
 - ✅ Service summary showing weekly revenue hours, trips per week, peak vehicles per route.
 - ✅ Per-stop departures view ("departures from this stop today").
-- 🔲 Frequency-based service entry (`frequencies.txt`).
+- ✅ Frequency-based (headway) service entry (`frequencies.txt`) — per-trip windows with overlap/validity checks, in the Frequencies panel.
+- ✅ Block assignment UI — `block_id` is first-class: editable per trip, with a Blocks panel grouping trips by block and a soft overlap warning.
 - 🔲 Marey diagram (time–distance trip chart).
-- 🔲 Block assignment UI (block_id is preserved on round-trip but isn't a first-class editor concept yet).
 
 ### 1.6 Fares
 

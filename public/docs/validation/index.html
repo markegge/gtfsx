@@ -39,7 +39,7 @@
     }
   },
   "datePublished": "2026-05-01",
-  "dateModified": "2026-05-22",
+  "dateModified": "2026-05-30",
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": "https://www.gtfsx.com/docs/validation/"
@@ -91,7 +91,7 @@
       <h2 id="common-issues">Common warnings worth addressing before publishing</h2>
       <ul>
         <li><strong>No fare data.</strong> The empty-fare warning surfaces from the moment a feed has any routes. See <a href="/docs/fares/">Fares</a> for the cheapest fix (add a single flat fare).</li>
-        <li><strong>Holiday exceptions missing.</strong> A service pattern that doesn't have any <code>calendar_dates</code> exceptions on US federal holidays is suspect — most agencies operate reduced service or no service on those days. The Calendars panel's "Add US Holidays" tool fixes this in one click.</li>
+        <li><strong>Holiday exceptions missing.</strong> A service pattern that doesn't have any <code>calendar_dates</code> exceptions on US federal holidays is suspect — most agencies operate reduced service or no service on those days. The Calendars panel nudges you about this, and its <strong>Add US holidays</strong> picker (in a pattern's Exceptions subpanel) fixes it in a couple of clicks.</li>
         <li><strong>Stops served by no trips.</strong> Stops that exist in the feed but no trip visits. Usually leftover from a deleted route. Either delete the stop or attach it to a trip.</li>
         <li><strong>Route with no fare.</strong> A route exists but no <code>fare_rule</code> covers it. Either the flat-fare default should apply (and you can ignore the warning) or the route needs a specific fare assigned.</li>
         <li><strong>Stale date range.</strong> A service's end_date is in the past or within two weeks. Refresh the dates and re-publish.</li>

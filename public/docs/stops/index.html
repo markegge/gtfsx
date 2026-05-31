@@ -39,7 +39,7 @@
     }
   },
   "datePublished": "2026-05-01",
-  "dateModified": "2026-05-22",
+  "dateModified": "2026-05-30",
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": "https://www.gtfsx.com/docs/stops/"
@@ -92,8 +92,10 @@
         <li><strong><code>stop_code</code></strong> — the public stop ID a rider would tap into a "next departures" text-message service or look up on a sign. Often a 4–5 digit number. Optional but useful for paratransit booking and rider-facing tools.</li>
         <li><strong><code>stop_desc</code></strong> — longer description. Rarely shown; skip unless the stop has a non-obvious location ("on the west side of the depot building").</li>
         <li><strong><code>wheelchair_boarding</code></strong> — 0 (unknown), 1 (accessible), 2 (not accessible). Strongly recommended — trip planners use this to filter trips for riders requesting an accessible journey.</li>
-        <li><strong><code>parent_station</code></strong> — links a platform-level stop to its parent station (subway / rail systems mostly). The editor accepts the value on import and preserves it on export but doesn't have a rich UI for editing the station hierarchy yet.</li>
-        <li><strong><code>zone_id</code></strong> — fare zone the stop belongs to. Edit from the Fares panel rather than here.</li>
+        <li><strong><code>location_type</code></strong> — what the record represents: a stop/platform (the default), a station, an entrance/exit, a generic node, or a boarding area. Set it from the <strong>Location type</strong> dropdown. Only relevant when you're modeling a multi-level station.</li>
+        <li><strong><code>parent_station</code></strong> — links a platform-level stop to its parent station (subway / rail systems mostly). The <strong>Parent station</strong> dropdown lists stops whose location type is Station; create the station record first, then point its platforms and entrances at it. See <a href="/docs/stations/">Stations, levels &amp; pathways</a>.</li>
+        <li><strong><code>level_id</code></strong> — which floor of a station the stop sits on. Pick it from the <strong>Level</strong> dropdown (disabled until you define levels in the Stations panel). Used together with pathways so trip planners can route riders between platforms.</li>
+        <li><strong><code>zone_id</code></strong> — fare zone the stop belongs to. Set it here (the <strong>Fare Zone ID</strong> field), or assign many stops at once by drawing a region in the Fares panel's Zones tab.</li>
       </ul>
 
       <h2 id="reordering">Reordering stops along a route</h2>
@@ -112,6 +114,7 @@
         <ul>
           <li><a href="/docs/routes-and-shapes/">Routes &amp; shapes</a> — draw the route before placing stops.</li>
           <li><a href="/docs/timetables-and-trips/">Timetables &amp; trips</a> — stop times reference the stops you placed here.</li>
+          <li><a href="/docs/stations/">Stations, levels &amp; pathways</a> — group platforms under a station and place stops on a level.</li>
           <li><a href="/docs/fares/">Fares</a> — zone-based fares assign <code>zone_id</code> to stops.</li>
         </ul>
       </div>

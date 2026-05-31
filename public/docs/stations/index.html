@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Stations, levels &amp; pathways — GTFS·X</title>
+    <meta name="description" content="Model multi-level stations in GTFS·X: define levels (floors), place stops on a level, and connect platforms with pathways (walkways, stairs, elevators) so trip planners can route riders inside a station." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/stations/" />
+    <meta property="og:title" content="Stations, levels &amp; pathways — GTFS·X" />
+    <meta property="og:description" content="Levels, in-station pathways, and the location_type / parent_station hierarchy for multi-level stations." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/stations/" />
+    <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@gtfsxapp" />
+    <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Stations, levels & pathways — GTFS·X",
+  "description": "Model multi-level stations in GTFS·X: define levels (floors), place stops on a level, and connect platforms with pathways (walkways, stairs, elevators) so trip planners can route riders inside a station.",
+  "image": "https://www.gtfsx.com/og-default.png",
+  "author": {
+    "@type": "Organization",
+    "name": "GTFS·X",
+    "url": "https://www.gtfsx.com/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "GTFS·X",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://www.gtfsx.com/gtfsx-lockup.svg"
+    }
+  },
+  "datePublished": "2026-05-30",
+  "dateModified": "2026-05-30",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://www.gtfsx.com/docs/stations/"
+  }
+}
+  </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Editor panels</div>
+      <h1>Stations, levels &amp; pathways</h1>
+      <p class="lede">Most agencies never need this. A single curbside bus stop is one record in <code>stops.txt</code> and that's the end of it. But a multi-platform rail station, a transit center with an underground concourse, or any facility where riders walk between platforms is more than a point on a map — it has floors and internal walking connections. The <strong>Stations</strong> panel models that: <code>levels.txt</code> for the floors and <code>pathways.txt</code> for the walkways, stairs, and elevators between them, so a trip planner can give a rider turn-by-turn directions <em>inside</em> the station.</p>
+
+      <h2 id="when-to-use">When to model a station</h2>
+      <p>Reach for this only when a rider has to navigate within a facility — a subway station with platforms on two levels, a multimodal hub where the rail platform and the bus bays are a walk apart, an interchange with a fare-gate line between concourse and platform. If your whole system is on-street bus stops, skip it; the overhead isn't worth it and an empty <code>levels.txt</code>/<code>pathways.txt</code> is better than a half-modeled one.</p>
+      <p>The building blocks come from the GTFS station hierarchy, set per stop in the stop editor via <strong>Location type</strong>:</p>
+      <ul>
+        <li><strong>Stop / platform</strong> (location_type 0) — where vehicles actually stop. The default.</li>
+        <li><strong>Station</strong> (location_type 1) — the parent that groups platforms, entrances, and nodes together. Other stops point at it via <strong>Parent station</strong>.</li>
+        <li><strong>Entrance / exit</strong> (location_type 2), <strong>generic node</strong> (3), and <strong>boarding area</strong> (4) — intermediate points a pathway can connect.</li>
+      </ul>
+      <p>A pathway connects any two of these nodes. So the usual shape is: one <strong>Station</strong>, several child <strong>platforms</strong> and <strong>entrances</strong> that name it as their parent, and pathways stitching them together across one or more levels.</p>
+
+      <h2 id="levels">Levels (floors)</h2>
+      <p>Open the <strong>Stations</strong> panel from the left rail. The top section is <strong>Levels</strong>. Click <strong>+ Add Level</strong> for each floor and fill in:</p>
+      <ul>
+        <li><strong>Level ID</strong> — a short stable identifier (<code>street</code>, <code>concourse</code>, <code>platform</code>). It's what stops and pathways reference, so don't churn it.</li>
+        <li><strong>Index</strong> — the floor's height ordering. <code>0</code> is the ground/street level, positive numbers go up, negative numbers go below grade. Half-steps are allowed (the field steps by 0.5) for mezzanines.</li>
+        <li><strong>Name</strong> (optional) — the human label riders would recognize ("Concourse", "Northbound Platform").</li>
+      </ul>
+      <p>Levels are a flat list — there's no geometry, just the ordering. Delete one with <strong>Delete level</strong>; make sure no stop or pathway still references it first.</p>
+
+      <h2 id="assign-stops">Placing a stop on a level</h2>
+      <p>Levels do nothing until stops sit on them. Open a stop in the <a href="/docs/stops/">Stops</a> panel and use the <strong>Level</strong> dropdown in the stop editor to put it on a floor. (The dropdown stays disabled until you've defined at least one level in the Stations panel.) While you're there, set the stop's <strong>Location type</strong> and, for child stops, its <strong>Parent station</strong> — the parent dropdown only lists stops whose location type is Station.</p>
+
+      <h2 id="pathways">Pathways</h2>
+      <p>The lower section of the Stations panel is <strong>Pathways</strong> — the in-station walking connections. You need at least two stop nodes before you can add one. Click <strong>+ Add Pathway</strong> and set:</p>
+      <ul>
+        <li><strong>From stop</strong> / <strong>To stop</strong> — the two nodes the pathway links (any location type: station, platform, entrance, node, boarding area).</li>
+        <li><strong>Mode</strong> — Walkway, Stairs, Moving sidewalk, Escalator, Elevator, Fare gate, or Exit gate.</li>
+        <li><strong>Direction</strong> — <em>Bidirectional</em> (riders can traverse it either way) or <em>One-way (from → to)</em>, e.g. an exit-only gate.</li>
+        <li><strong>Length (m)</strong> and <strong>Traversal (s)</strong> — optional walking distance and time. Trip planners use these to estimate in-station transfer time; worth filling in for long concourse walks.</li>
+        <li><strong>Stair count</strong> — appears only when the mode is Stairs.</li>
+        <li><strong>Signposted as</strong> — the wayfinding text printed on station signage that a rider would follow ("To Eastbound Trains").</li>
+      </ul>
+      <p>The collapsed row header summarizes each pathway as <code>From ↔ To · Mode</code>, so a long list stays scannable. Rarer columns the GTFS spec defines (maximum slope, minimum width, the reverse signpost text) aren't exposed in the form, but they're preserved untouched on import and export if your source feed already had them. There's no map drawing for pathways — they're a logical table of connections, not geometry.</p>
+
+      <h2 id="gotchas">Edge cases and gotchas</h2>
+      <ul>
+        <li><strong>Don't half-model a station.</strong> A station with platforms but no pathways tells a trip planner "these platforms exist but I won't say how to walk between them," which is often worse than not modeling the hierarchy at all. Either commit to the pathways or leave the stops as plain points.</li>
+        <li><strong>Parent before child.</strong> A stop can only name a parent that already exists as a <em>Station</em> (location_type 1). Create the station record first, then point its platforms and entrances at it.</li>
+        <li><strong>Levels are optional even when pathways aren't.</strong> A single-floor station with two platforms across a plaza needs pathways but no levels. Add levels only when there's a genuine vertical dimension.</li>
+        <li><strong>Pathway length and time are independent.</strong> A 60-metre level walkway and a 60-metre escalator traverse in very different times — fill in <strong>Traversal (s)</strong> when the walking speed isn't obvious from the distance.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/stops/">Stops</a> — set a stop's location type, parent station, and level in the stop editor.</li>
+          <li><a href="/docs/transfers/">Transfers</a> — <code>transfers.txt</code> rules between stops, the complement to in-station pathways.</li>
+          <li><a href="/docs/validation/">Validation</a> — what the validator flags for stations, parents, and pathways.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

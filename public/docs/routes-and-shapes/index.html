@@ -39,7 +39,7 @@
     }
   },
   "datePublished": "2026-05-01",
-  "dateModified": "2026-05-22",
+  "dateModified": "2026-05-30",
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": "https://www.gtfsx.com/docs/routes-and-shapes/"
@@ -93,12 +93,13 @@
         <li><strong>Snap to road</strong> (default): each segment uses the Mapbox Map Matching API to follow the road network. Click two intersections and the line follows the actual road geometry, not the straight line between them. Best for fixed-route bus and most rail. Snap-to-road occasionally picks the wrong road at complex intersections; drop an intermediate vertex to disambiguate.</li>
         <li><strong>Freehand</strong>: each segment is a straight line from click to click. Useful for off-road segments, ferry routes, light rail running in its own ROW that isn't in the road graph, or sketching alignments that don't yet have a road.</li>
       </ul>
-      <p>To edit an existing shape: click the route in the sidebar, then <strong>Edit Vertices</strong>. Drag any vertex to move it, click between two vertices to insert a new one, select-and-Delete to remove. <strong>Simplify</strong> reduces vertex count using the Douglas-Peucker algorithm — useful when a snap-to-road shape has more vertices than you need.</p>
+      <p>To edit an existing shape: click the route in the sidebar, open its <strong>Shapes</strong> tab, and click <strong>Edit Shape</strong> on the one you want. Drag any vertex to move it, click between two vertices to insert a new one, select-and-Delete to remove, then <strong>Save</strong> (or <strong>Cancel</strong> to discard). The same row carries the rest of the per-shape tools: <strong>Simplify</strong> (reduces vertex count with the Douglas-Peucker algorithm — useful when a snap-to-road shape has more vertices than you need), <strong>Trim</strong>, re-<strong>Snap</strong>, <strong>Duplicate</strong>, a visibility toggle, and delete.</p>
 
       <h2 id="multiple-variants">Multiple shape variants</h2>
       <p>Most routes need at least two shapes: one for the outbound direction, one for inbound. The two often differ because one-way streets, turn restrictions, or stop pairs offset across the road force the bus to take slightly different paths each direction.</p>
       <p>In the editor, the <strong>direction picker</strong> at the top of the route's shape panel toggles between direction 0 and direction 1. Draw separate shapes for each — they share the route_id but get distinct shape_ids on export. Each trip in the timetable then references the shape_id that matches its direction.</p>
       <p>Loops and branches are also supported: a single direction can have multiple shape variants if the route runs different paths at different times of day (a peak express variant, a weekend deviation, etc.). The editor surfaces these as additional shapes under the same route.</p>
+      <p>When a route has several shapes, give them names so you can tell them apart at a glance. Each shape in the <strong>Shapes</strong> tab has an editable name field — type something like "Outbound — express" or "Weekend deviation" and it sticks with that shape. The name is an editor convenience for keeping variants straight; the exported feed still keys everything on the generated <code>shape_id</code>.</p>
 
       <h2 id="route-type">Picking a route type</h2>
       <p>The GTFS spec defines eight basic route types: bus (3), light rail (0), subway (1), rail (2), ferry (4), cable car (5), aerial lift (6), funicular (7). Pick the one that matches the rider's experience, not the operator's classification. A "bus rapid transit" service stays type=3 (bus); it's marketed as rail-like but legally still a bus. A "trolley" running on rails is light rail (0); a "trolley bus" running on rubber tires with overhead wires is bus (3).</p>

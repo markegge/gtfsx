@@ -39,7 +39,7 @@
     }
   },
   "datePublished": "2026-05-01",
-  "dateModified": "2026-05-22",
+  "dateModified": "2026-05-30",
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": "https://www.gtfsx.com/docs/service-calendars/"
@@ -85,12 +85,18 @@
       <p>Date ranges should bracket the live period of your schedule. A feed with stale <code>end_date</code>s gets flagged by validators and rejected by some catalogs. Re-publish with refreshed dates when the schedule pickup happens.</p>
 
       <h2 id="exceptions">Holiday exceptions</h2>
-      <p>Click into a service pattern and use the <strong>Exception dates</strong> table to add either:</p>
+      <p>Click into a service pattern and open its <strong>Exceptions</strong> subpanel. An exception is a single calendar date that overrides the weekly pattern. GTFS distinguishes two kinds, both shown in the exception list with a badge:</p>
       <ul>
-        <li><strong>Service added</strong> (<code>exception_type=1</code>) — service runs on this date even though the weekly pattern says it wouldn't. Used for "Sunday service operates on Thanksgiving" added to the Sunday pattern.</li>
-        <li><strong>Service removed</strong> (<code>exception_type=2</code>) — service does <em>not</em> run on this date even though the weekly pattern says it would. Used for "no Weekday service on Christmas Day" added to the Weekday pattern.</li>
+        <li><strong>No Service</strong> (<code>exception_type=2</code>) — service does <em>not</em> run on this date even though the weekly pattern says it would. The everyday case: "no Weekday service on Christmas Day," added to the Weekday pattern.</li>
+        <li><strong>Added</strong> (<code>exception_type=1</code>) — service runs on a date the weekly pattern would skip, e.g. a one-off added trip set. (Added exceptions round-trip on import and display in the list and month preview; the editor's add controls below create No-Service exceptions, which is what holiday handling almost always needs.)</li>
       </ul>
-      <p>For US agencies, the <strong>Add US Holidays</strong> button bulk-adds Memorial Day, July 4, Labor Day, Thanksgiving, Christmas Day, and New Year's Day as exceptions to the selected service pattern within its date range. Pick whether each holiday is a remove (no service) or add (run Sunday service), depending on your operating policy.</p>
+      <p>If a weekday pattern has no exceptions at all, GTFS·X shows a gentle nudge in this subpanel — <em>"Consider adding holiday exceptions — transit typically doesn't run on major holidays"</em> — because a feed that runs full weekday service straight through Christmas is almost always a mistake.</p>
+      <p>Two ways to add them:</p>
+      <ul>
+        <li><strong>One date</strong> — pick a date and click <strong>Add</strong>; it's recorded as a No-Service exception.</li>
+        <li><strong>US holidays</strong> — the <strong>Add US holidays</strong> picker is a checkbox grid of the eleven US federal holidays (New Year's Day, MLK Day, Presidents' Day, Memorial Day, Juneteenth, Independence Day, Labor Day, Columbus Day, Veterans Day, Thanksgiving, Christmas Day) with <strong>Select all</strong> / <strong>None</strong>. Tick the ones your agency closes for and click <strong>Add selected holidays</strong> — only the dates that fall inside this calendar's date range are added (the button tells you how many), each as a No-Service exception.</li>
+      </ul>
+      <p>To remove an exception, click the <strong>×</strong> next to it in the list, or click its highlighted day in the month preview and confirm. If your policy is "run Sunday service on the holiday" instead of closing, add the holiday as a No-Service exception on the Weekday pattern and leave the Sunday pattern running that date.</p>
 
       <h2 id="exception-only">Exception-only services</h2>
       <p>For one-off events (a parade route, a holiday shuttle, an emergency replacement schedule) that don't follow a weekly pattern, create a service with all seven day toggles off. Then add explicit "service added" exception dates for the dates the service runs. The pattern is fully driven by <code>calendar_dates.txt</code> — no weekly rule at all. Valid GTFS, supported by most consumers.</p>

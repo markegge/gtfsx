@@ -39,7 +39,7 @@
     }
   },
   "datePublished": "2026-05-01",
-  "dateModified": "2026-05-22",
+  "dateModified": "2026-05-30",
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": "https://www.gtfsx.com/docs/fares/"
@@ -91,11 +91,20 @@
       <h2 id="zone-based">Zone-based fares</h2>
       <p>For zone-based systems, each stop gets a <code>zone_id</code>, and fare rules define what each origin → destination pair costs.</p>
       <ol>
-        <li>Open the Stops panel and assign a <code>zone_id</code> to each stop. (Zone IDs are arbitrary strings — "Z1", "DOWNTOWN", "RING_1" — pick something stable and short.)</li>
-        <li>Back in the Fares panel, add a fare with a price for each zone-to-zone combination. The editor presents a matrix view; fill in the cells.</li>
+        <li>Assign a <code>zone_id</code> to each stop. (Zone IDs are arbitrary strings — "Z1", "DOWNTOWN", "RING_1" — pick something stable and short.) The fastest way is the <strong>Zones</strong> tab described below; you can also set a single stop's <strong>Fare Zone ID</strong> field in the stop editor.</li>
+        <li>Back in the <strong>Fares</strong> tab, add a fare with a price for each zone-to-zone combination. The editor presents a matrix view; fill in the cells.</li>
         <li>For symmetric fare schedules ($1 from Z1 to Z2 and also from Z2 to Z1), the matrix lets you toggle "mirror" so you only fill the upper triangle.</li>
       </ol>
       <p>Stops without a <code>zone_id</code> fall back to the system-wide default fare. If you have a partial zone system (downtown is zoned, suburbs are flat), set zones only on the affected stops and the default fare covers the rest.</p>
+
+      <h3 id="zone-lasso">Drawing zones on the map</h3>
+      <p>Assigning a <code>zone_id</code> to dozens of stops one at a time is tedious, so the Fares panel has a <strong>Zones</strong> tab that lets you stamp a zone onto every stop inside a region you draw. A GTFS-Fares v1 zone has no geometry of its own — it's just a string on each stop — so this is a fast bulk-assign, not a saved boundary.</p>
+      <ol>
+        <li>Open the <strong>Zones</strong> tab and type the zone to assign in <strong>Zone to assign</strong> (it autocompletes from zones already in the feed).</li>
+        <li>Click <strong>Draw on map to assign</strong>, then click the map to drop the corners of a region and double-click to close it.</li>
+        <li>Every stop inside the shape is stamped with that <code>zone_id</code>, and the panel reports how many stops it assigned.</li>
+      </ol>
+      <p>The polygon itself isn't kept — only the per-stop <code>zone_id</code> is saved — so to adjust a boundary you just redraw and reassign. The tab also lists <strong>Zones in this feed</strong> with a stop count for each, and how many stops aren't in any zone yet, so you can see your coverage at a glance.</p>
 
       <h2 id="transfers-tab">Transfers (transfers.txt)</h2>
       <p>The same Fares panel has a <strong>Transfers</strong> tab for <code>transfers.txt</code> — recommended / timed / minimum-time / not-possible rules between stop pairs. These are routing semantics, not fare rules: they tell trip planners how to chain trips together. See <a href="/docs/transfers/">Transfers</a> for the full reference; the panel reuses the same Transfers editor it used to live in standalone.</p>

@@ -39,7 +39,7 @@
     }
   },
   "datePublished": "2026-05-01",
-  "dateModified": "2026-05-22",
+  "dateModified": "2026-05-30",
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": "https://www.gtfsx.com/docs/timetables-and-trips/"
@@ -92,7 +92,14 @@
       <p>Default speed is configurable per trip. The default is reasonable for urban fixed-route bus; for express routes or rail you'll want a higher number. After interpolating, refine individual cells by typing — only the cell you edit changes, the surrounding interpolation stays put.</p>
 
       <h2 id="frequencies">Frequency-based service (frequencies.txt)</h2>
-      <p>For service that's described as a headway over a span ("every 10 minutes from 6am to 9pm") rather than as explicit trip times, use the frequency editor. From the Timetable, click <strong>Switch to frequencies</strong>. Define one trip as a "pattern" (this becomes the canonical reference for stop times), then add frequency windows: start_time, end_time, headway_secs, exact_times.</p>
+      <p>For service that's described as a headway over a span ("every 10 minutes from 6am to 9pm") rather than as explicit trip times, use the <strong>Frequencies</strong> panel in the left rail. The idea: one trip you've already built in the timetable acts as the "pattern" — its stop times become the canonical reference run — and a frequency window says "repeat this trip every N minutes between a start and end time." Click <strong>+ Add Headway Window</strong> and set:</p>
+      <ul>
+        <li><strong>Trip</strong> — the pattern trip the window repeats.</li>
+        <li><strong>Start time</strong> / <strong>End time</strong> — the span the headway applies over. Times accept <code>HH:MM:SS</code> and may cross midnight (enter a post-midnight time as <code>+1 04:30</code>).</li>
+        <li><strong>Headway</strong> — the gap between departures, in seconds; the panel shows the minute equivalent next to it.</li>
+        <li><strong>Type</strong> — <em>Frequency-based</em> (departures are approximate, "about every 10 min") or <em>Schedule-based (exact)</em> (departures land on exact clock multiples of the headway).</li>
+      </ul>
+      <p>A trip can have several non-overlapping windows — peak vs. midday vs. evening headways. The validator flags overlapping windows, an end at or before the start, and a non-positive headway. Trade-offs between this and explicit times:</p>
       <p>Trade-offs:</p>
       <ul>
         <li><strong>Explicit times</strong>: more accurate for irregular service, easier for downstream consumers to display, lets you model timepoints and slack precisely.</li>
@@ -102,6 +109,11 @@
 
       <h2 id="duplicate-direction">Duplicating a trip in the other direction</h2>
       <p>An outbound trip and its inbound counterpart aren't automatic — you have to create both. The editor's <strong>Duplicate</strong> action creates a copy on the opposite direction with the stop times reversed; refine from there. For most agencies the outbound and inbound runtimes are similar but not identical (turn lanes, peak-direction congestion).</p>
+
+      <h2 id="blocks">Vehicle blocks (block_id)</h2>
+      <p>A <strong>block</strong> is the set of trips one physical vehicle runs in sequence over a service day — finish an outbound trip on Route 5, deadhead over, and start an inbound on Route 12, all on the same bus. Trips in the same block share a <code>block_id</code>, which lets trip planners offer "stay on board" transfers and lets the Service Summary count peak vehicles correctly.</p>
+      <p>Assign blocks in the <strong>Blocks</strong> panel (left rail). It groups every trip by its block id — assigned blocks first, then an <em>Unassigned</em> group — and you set or change a trip's block by typing the id into the field next to it. Trips with no block id are perfectly valid; blocking is optional and most useful when vehicles interline between routes.</p>
+      <p>The panel flags a conflict: if two trips in the same block <em>and</em> the same service day overlap in time, they're marked with a <strong>⚠ overlap</strong> — one vehicle can't run two trips at once, so that's a modeling error to fix (usually a wrong block id or a typo in a stop time). You can also set <code>block_id</code> inline from a route's <strong>Trips</strong> tab, in the <strong>Block</strong> column, when you're working route-by-route.</p>
 
       <h2 id="gotchas">Edge cases and gotchas</h2>
       <ul>

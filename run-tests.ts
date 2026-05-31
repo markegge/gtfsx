@@ -475,7 +475,7 @@ async function main() {
   assert('#16 block overlap warns', hasMsg('warning', 'block "BLOCK1"'));
   assert('#16 overlap is a warning not error', !hasMsg('error', 'block "BLOCK1"'));
   // #17 — Independence Day (Sat 2026-07-04) nudge on the Saturday service.
-  assert('#17 Independence Day nudge fires', hasMsg('warning', 'Independence Day (2026-07-04)'));
+  assert('#17 Independence Day nudge fires', hasMsg('warning', 'Independence Day'));
   assert('#17 nudge is a warning not error', !hasMsg('error', 'Independence Day'));
 
   // #12 negatives — overlap, end<=start, headway<=0.
@@ -508,7 +508,7 @@ async function main() {
   loadImportIntoStore(await importGtfsZip(await buildBundleFixtureZip() as unknown as File));
   s().addCalendarDate({ service_id: 'SAT', date: '20260704', exception_type: 2 });
   vmsgs = runValidation(s());
-  assert('#17 nudge cleared by exception', !hasMsg('warning', 'Independence Day (2026-07-04)'));
+  assert('#17 nudge cleared by exception', !hasMsg('warning', 'Independence Day'));
 
   // ---- PHASE 15: US holiday date math (#17) ----
   console.log('\nPhase 15: US holiday date math');

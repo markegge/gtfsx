@@ -11,7 +11,6 @@ export type AdvancedFeature =
   | 'transfers'
   | 'frequencies'
   | 'stations'
-  | 'faresV2'
   | 'blocks'
   | 'demandResponse';
 
@@ -41,12 +40,6 @@ export const createFeaturesSlice: StateCreator<
       state.featureSettings = settings ?? {};
     }),
 });
-
-// The ten GTFS-Fares v2 slices that together make up "Fares v2".
-const FARE_V2_KEYS = [
-  'fareAreas', 'stopAreas', 'fareNetworks', 'routeNetworks', 'timeframes',
-  'riderCategories', 'fareMedia', 'fareProducts', 'fareLegRules', 'fareTransferRules',
-] as const;
 
 export interface FeatureMeta {
   key: AdvancedFeature;
@@ -109,17 +102,9 @@ export const ADVANCED_FEATURES: FeatureMeta[] = [
     section: 'stations',
     files: ['levels.txt', 'pathways.txt'],
   },
-  {
-    key: 'faresV2',
-    label: 'Fares v2',
-    description:
-      'The GTFS-Fares v2 model (areas, networks, products, leg/transfer rules). Most agencies only need basic (v1) fares.',
-    defaultOn: false,
-    files: [
-      'areas.txt', 'stop_areas.txt', 'networks.txt', 'route_networks.txt', 'timeframes.txt',
-      'rider_categories.txt', 'fare_media.txt', 'fare_products.txt', 'fare_leg_rules.txt', 'fare_transfer_rules.txt',
-    ],
-  },
+  // Note: GTFS-Fares v2 is import/export round-trip only (no authoring UI yet),
+  // so there's no section to gate — it isn't listed here. Add it when the v2
+  // editor ships (see REQUIREMENTS §1.6.2 Phase 2).
 ];
 
 export const FEATURE_BY_KEY: Record<AdvancedFeature, FeatureMeta> = Object.fromEntries(
@@ -135,10 +120,6 @@ export function featureHasData(s: AppStore, f: AdvancedFeature): boolean {
     case 'stations': return s.levels.length > 0 || s.pathways.length > 0;
     case 'blocks': return s.trips.some((t) => !!t.block_id);
     case 'demandResponse': return s.flexZones.length > 0;
-    case 'faresV2': {
-      const rec = s as unknown as Record<string, unknown[]>;
-      return FARE_V2_KEYS.some((k) => (rec[k]?.length ?? 0) > 0);
-    }
   }
 }
 
@@ -162,11 +143,6 @@ export function clearFeatureData(s: AppStore, f: AdvancedFeature): void {
     case 'blocks':
       // No file; strip block_id from every trip.
       s.setTrips(s.trips.map((t) => ({ ...t, block_id: undefined })));
-      break;
-    case 'faresV2':
-      s.setFareAreas([]); s.setStopAreas([]); s.setFareNetworks([]); s.setRouteNetworks([]);
-      s.setTimeframes([]); s.setRiderCategories([]); s.setFareMedia([]); s.setFareProducts([]);
-      s.setFareLegRules([]); s.setFareTransferRules([]);
       break;
   }
 }

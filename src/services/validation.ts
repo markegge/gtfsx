@@ -413,14 +413,14 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     if (!t.block_id) continue;
     const span = tripSpan.get(t.trip_id);
     if (!span) continue;
-    const key = `${t.block_id} ${t.service_id}`;
+    const key = `${t.block_id} ${t.service_id}`;
     const list = blockGroups.get(key) ?? [];
     list.push({ trip_id: t.trip_id, start: span.start, end: span.end });
     blockGroups.set(key, list);
   }
   for (const [key, blockTrips] of blockGroups) {
     if (blockTrips.length < 2) continue;
-    const blockId = key.split(' ')[0];
+    const blockId = key.split(' ')[0];
     const sorted = [...blockTrips].sort((a, b) => a.start - b.start);
     let maxEnd = sorted[0].end;
     let holder = sorted[0].trip_id;
@@ -442,19 +442,28 @@ export function runValidation(state: AppStore): ValidationMessage[] {
   // year of the range so a far-future end_date (e.g. the default 20991231)
   // doesn't generate decades of nudges; holidays repeat annually anyway.
   const dayFields = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
-  const exceptionKeys = new Set(state.calendarDates.map((cd) => `${cd.service_id} ${cd.date}`));
+  const exceptionKeys = new Set(state.calendarDates.map((cd) => `${cd.service_id} ${cd.date}`));
   for (const c of state.calendars) {
     if (!c.start_date || !c.end_date || c.start_date.length !== 8) continue;
     const startYearPlusOne = `${Number(c.start_date.slice(0, 4)) + 1}${c.start_date.slice(4)}`;
     const scanEnd = c.end_date < startYearPlusOne ? c.end_date : startYearPlusOne;
+    // Collect every holiday this service runs on without a calendar_dates
+    // exception, then surface ONE consolidated warning per service rather
+    // than a dozen near-identical ones (which flooded the export dialog).
+    const missing: string[] = [];
+    const seen = new Set<string>();
     for (const h of getUSHolidaysInRange(c.start_date, scanEnd)) {
       if (c[dayFields[h.dayOfWeek]] !== 1) continue;
-      if (exceptionKeys.has(`${c.service_id} ${h.gtfsDate}`)) continue;
+      if (exceptionKeys.has(`${c.service_id} ${h.gtfsDate}`)) continue;
+      if (seen.has(h.name)) continue;
+      seen.add(h.name);
+      missing.push(h.name);
+    }
+    if (missing.length > 0) {
       const label = c._description || c.service_id;
-      const pretty = `${h.gtfsDate.slice(0, 4)}-${h.gtfsDate.slice(4, 6)}-${h.gtfsDate.slice(6, 8)}`;
       messages.push(msg(
         'warning',
-        `Service "${label}" has no exception for ${h.name} (${pretty}) — most agencies run a holiday or no-service schedule that day. Add a calendar_dates exception if so.`,
+        `Service "${label}" has no calendar_dates exception for ${missing.length} major US holiday${missing.length !== 1 ? 's' : ''} (${missing.join(', ')}). Most agencies run a holiday or reduced schedule those days; add exceptions if so.`,
         'calendar', c.service_id,
       ));
     }

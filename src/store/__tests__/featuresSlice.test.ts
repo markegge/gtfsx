@@ -24,7 +24,7 @@ describe('feature defaults', () => {
   it('demand response is on by default; the rest are off', () => {
     const s = useStore.getState();
     expect(featureEnabled(s, 'demandResponse')).toBe(true);
-    for (const f of ['transfers', 'frequencies', 'stations', 'blocks', 'faresV2'] as const) {
+    for (const f of ['transfers', 'frequencies', 'stations', 'blocks'] as const) {
       expect(featureEnabled(s, f)).toBe(false);
     }
   });

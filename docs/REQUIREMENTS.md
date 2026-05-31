@@ -178,6 +178,15 @@ Full GTFS-Flex authoring is shipped (`src/store/flexSlice.ts`, `gtfsImport.ts` /
 - ✅ Import GTFS ZIP — parses every supported file, preserves unknown columns where possible, populates the editor.
 - ✅ Export GTFS ZIP — emits every populated file. Every stop in editor state is written to `stops.txt`, including unreferenced ones (the validator already warns on unused stops, so users still get the nudge).
 
+### 1.9 Per-feed feature settings
+
+Advanced GTFS features clutter the editor for small agencies that don't use them, so they're gated behind a per-feed **Settings** panel (gear in the left rail). A feature is shown when the user turns it on *or* the feed already contains its data ("the feed has the file enables it"). Settings live with the feed (working-state snapshot — IndexedDB + server R2), not a database setting, and never change the exported GTFS. Turning a feature off warns and clears its data.
+
+- ✅ Gated, **off by default**: Transfers (a Fares sub-tab), Frequencies, Stations (`levels.txt`/`pathways.txt`), Blocks (`block_id` — a trips column, no file), Fares v2.
+- ✅ **Demand response / paratransit** — GTFS-Flex; **on by default** to drive Flex adoption. Off hides Flex Zones. A soft (non-blocking) validation nudge fires when it's on but the feed has no flex zones.
+- ✅ Import seeds the settings from the feed's contents; gated nav sections (and the Transfers tab) hide/show accordingly.
+- 🔲 Emitting header-only empty files on export for enabled-but-empty features (full bare-zip round-trip of the on-state) — deferred; needs import-side file-manifest detection and trips validator "empty file" notices.
+
 ---
 
 ## 2. Analysis and route development

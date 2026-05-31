@@ -378,10 +378,14 @@ npx tsc -p tsconfig.worker.json --noEmit      # worker typecheck
 ### Shipping to prod (pre-push checklist)
 
 1. Tests + both typechecks pass locally.
-2. **Docs updated in the same change.** New/changed functionality must flip its
-   status in [`REQUIREMENTS.md`](./REQUIREMENTS.md) and carry a short how-to-use
-   note (user-facing docs / in-app help where relevant). Code without docs is
-   not "done" — don't merge or close the issue until the docs reflect it.
+2. **Public docs updated in the same change.** New/changed user-facing
+   functionality must be documented for the END USER on the live docs site
+   (**gtfsx.com/docs** → `public/docs/<topic>/index.html`): add a new topic page
+   (and link it from `public/docs/index.html`) or a section to the closest
+   existing page, and bump that page's JSON-LD `dateModified`. Also flip the
+   feature's status in [`REQUIREMENTS.md`](./REQUIREMENTS.md) as a secondary
+   internal update. Code without public docs is not "done" — don't merge or close
+   the issue until gtfsx.com/docs reflects it.
 3. **Migrations applied on prod first** (manual): `unset CLOUDFLARE_API_TOKEN; npx wrangler d1 migrations apply gtfs-builder --remote`.
 4. **Kill-switch pair in sync** — `BACKEND_ENABLED`/`BILLING_ENABLED` in `wrangler.jsonc` match their `VITE_*` twins in CF Workers Builds → Settings → Variables.
 5. `git push origin main` → CF Workers Builds deploys.

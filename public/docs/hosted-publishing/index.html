@@ -49,7 +49,7 @@
       .lede { font-size: 1.15rem; color:var(--muted); }
       .tier-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; vertical-align:middle; }
       .tier-badge.pro { background:#FBEEDF; color:#9A4F00; border:1px solid #F0D1A0; }
-      .tier-badge.team { background:#EADFFD; color:#5B2E91; border:1px solid #C9B1F0; }
+      .tier-badge.agency { background:#EADFFD; color:#5B2E91; border:1px solid #C9B1F0; }
       .tier-badge.enterprise { background:#DCE9FA; color:#1F4D88; border:1px solid #A8C0E2; }
       a { color: var(--accent); }
       ul { padding-left: 1.2rem; }
@@ -87,7 +87,7 @@
     }
   },
   "datePublished": "2026-05-01",
-  "dateModified": "2026-05-22",
+  "dateModified": "2026-05-30",
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": "https://www.gtfsx.com/docs/hosted-publishing/"
@@ -131,7 +131,7 @@
       </ul>
 
       <h2 id="how-to-publish">How to publish a feed</h2>
-      <p>Open the feed in the editor and click <strong>Share &amp; Publish</strong> in the footer (next to Timetable / Service Summary / Validation). The publish flow needs a signed-in account on the Pro or Team plan — anonymous drafts can be exported as ZIP but not hosted.</p>
+      <p>Open the feed in the editor and click <strong>Share &amp; Publish</strong> in the footer (next to Timetable / Service Summary / Validation). The publish flow needs a signed-in account on the Pro or Agency plan — anonymous drafts can be exported as ZIP but not hosted.</p>
       <ol>
         <li><strong>Pick a slug.</strong> The default is derived from the feed name (e.g. "Sunny Valley Transit" → <code>sunny-valley-transit</code>). You can edit it before the first publish: lowercase letters, digits, and hyphens, up to 63 characters, must start with a letter or digit. The slug is the part of the URL that doesn't change between updates, so pick something a regulator wouldn't be embarrassed by.</li>
         <li><strong>Confirm what's included.</strong> Publishing snapshots the current state of the project: every file the editor would produce on Export GTFS goes into the published ZIP. Validation errors block publishing; warnings don't.</li>
@@ -145,6 +145,16 @@
       <h2 id="updates">Updating a published feed</h2>
       <p>There's no separate "update" action: when you click Publish on a feed that already has a canonical slug, the new snapshot replaces the old one at the same URL. Cache headers tell consumers the feed is fresh for one hour and revalidate after that, so most ingestors will pick up your change within a day even if they don't poll aggressively. Trip planners that pull on their own cadence (Google Maps, Apple Maps) will follow their own schedule.</p>
       <p>The previous snapshot stays in storage (the editor's Snapshots tab is where you can browse and roll back), but only the latest snapshot is served at the canonical URL. There's no public history of past versions.</p>
+
+      <h2 id="schedule">Scheduling a publish for later</h2>
+      <p>Sometimes a change should go live at a specific time — a service change that starts on the first of the month, an overnight cutover, or a new feed that shouldn't appear until the route opens. Rather than clicking Publish at that exact moment, schedule it.</p>
+      <p>In <strong>Share &amp; Publish</strong>, pick the snapshot, switch the publish control from <strong>Publish now</strong> to <strong>Schedule for later</strong>, and choose a date and time (shown in your browser's local time zone). GTFS·X renders that snapshot's feed when you schedule and stores it, so the publish runs on its own — you don't need to keep the editor open or even be online when the time arrives.</p>
+      <ul>
+        <li><strong>It fires within about 15 minutes of the time you pick.</strong> A background job checks every quarter-hour, so "2:00 AM" means "at the first check at or after 2:00 AM," not to the second.</li>
+        <li><strong>One pending schedule per feed.</strong> Scheduling again replaces the previous one, and <strong>Cancel</strong> clears it. The pending schedule and its Cancel button appear in the Share &amp; Publish tab.</li>
+        <li><strong>Same gate as publishing now.</strong> Validation errors block scheduling just as they block an immediate publish, and it's a paid feature (Pro or Agency).</li>
+        <li><strong>Failures surface, they don't publish silently.</strong> If the publish can't run when the time comes — for example the plan was downgraded in the meantime — the schedule is marked failed with the reason shown in the panel, and the currently-published feed is left untouched.</li>
+      </ul>
 
       <h2 id="drafts">Draft preview links</h2>
       <p>Before publishing a change to riders, you'll often want a stakeholder to look at it — a board member, an agency director, a partner operator. Draft preview links solve that without exposing your work-in-progress at the canonical URL.</p>
@@ -162,12 +172,12 @@
       <p>You only have to do each of these once. After that the catalogs poll your URL on their own.</p>
 
       <h2 id="tier-limits">Tier limits and pricing</h2>
-      <p>Hosted publishing is part of the Pro and Team plans:</p>
+      <p>Hosted publishing is part of the Pro and Agency plans:</p>
       <ul>
         <li><strong>Free</strong> — no published feeds. You can still export a GTFS ZIP and host it yourself; the editor doesn't care where the feed lives.</li>
         <li><strong>Pro ($49/mo)</strong> — one published feed per account, plus the mini-site and embeds tied to that feed.</li>
-        <li><strong>Team ($199/mo)</strong> — up to five published feeds per organization, useful if you operate multiple services under one administrative roof (a county transit authority running a fixed-route system and a separate microtransit service, for example).</li>
-        <li><strong>Enterprise</strong> — uncapped; pricing on application.</li>
+        <li><strong>Agency ($299/mo)</strong> — unlimited published feeds, useful if you operate multiple services under one administrative roof (a county transit authority running a fixed-route system and a separate microtransit service, for example) or manage feeds for several client agencies.</li>
+        <li><strong>Enterprise</strong> — uncapped, with custom seat and feed limits; pricing on application.</li>
       </ul>
       <p>See <a href="/pricing/">pricing</a> for the full feature comparison.</p>
 

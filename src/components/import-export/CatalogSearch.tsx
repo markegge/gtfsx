@@ -64,7 +64,6 @@ export function CatalogSearch({ onSelect }: Props) {
 
   const [importingId, setImportingId] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const search = useCallback(async () => {
     setSearching(true);
@@ -106,25 +105,6 @@ export function CatalogSearch({ onSelect }: Props) {
       setImportError(e instanceof Error ? e.message : 'Import failed');
     } finally {
       setImportingId(null);
-    }
-  };
-
-  // Copy a shareable deep link that opens this feed straight into GTFS·X. Uses
-  // the feed's direct hosted dataset URL (not the Mobility Database id) so the
-  // link imports the zip directly, no MD lookup.
-  const copyLink = async (feed: CatalogFeed) => {
-    const src = feed.latest_dataset?.hosted_url;
-    if (!src) {
-      setImportError('That feed has no hosted dataset URL to link to.');
-      return;
-    }
-    const link = `${window.location.origin}/import?url=${encodeURIComponent(src)}`;
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopiedId(feed.id);
-      window.setTimeout(() => setCopiedId((c) => (c === feed.id ? null : c)), 1600);
-    } catch {
-      setImportError('Could not copy the link to your clipboard.');
     }
   };
 
@@ -217,46 +197,42 @@ export function CatalogSearch({ onSelect }: Props) {
                 const url = feed.latest_dataset?.hosted_url;
                 const isImporting = importingId === feed.id;
                 const disabled = !url || importingId !== null;
-                const copied = copiedId === feed.id;
+                // The whole row is the import link: a real <a> pointing at the
+                // shareable deep link (?url=<feed zip>). Plain click imports in
+                // place; right-click → "Copy link" gives the shareable URL, and
+                // ⌘/Ctrl-click opens it in a new tab.
+                const deepLink = url ? `${window.location.origin}/import?url=${encodeURIComponent(url)}` : undefined;
                 return (
-                  <div key={feed.id} className="px-3 py-2.5 hover:bg-cream transition-colors flex items-start gap-3">
-                    <div className="flex-1 min-w-0">
-                      <button
-                        onClick={() => handleImport(feed)}
-                        disabled={disabled}
-                        className="block w-full text-left disabled:opacity-60"
-                      >
+                  <a
+                    key={feed.id}
+                    href={deepLink}
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; // let the browser open/copy the link
+                      e.preventDefault();
+                      if (!disabled) handleImport(feed);
+                    }}
+                    title="Click to import. Right-click to copy a shareable import link, or ⌘/Ctrl-click to open it in a new tab."
+                    className={`block select-none px-3 py-2.5 transition-colors ${disabled ? 'opacity-60 pointer-events-none' : 'hover:bg-cream'}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
                         <span className="block text-sm font-semibold text-dark-brown truncate">{summarizeProvider(feed.provider)}</span>
                         {feed.feed_name && (
                           <span className="block text-xs text-warm-gray truncate">{feed.feed_name}</span>
                         )}
-                      </button>
-                      <div className="text-[11px] text-warm-gray flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
-                        {summarizeLocations(feed.locations)}
-                        {feed.latest_dataset?.downloaded_at && (
-                          <span className="text-warm-gray/80">· updated {fmtDate(feed.latest_dataset.downloaded_at)}</span>
-                        )}
-                        {!url && <span className="text-amber-600">· no dataset available</span>}
-                        {url && (
-                          <button
-                            type="button"
-                            onClick={() => copyLink(feed)}
-                            title="Copy a shareable link that opens this feed in GTFS·X"
-                            className="text-coral hover:underline font-medium"
-                          >
-                            · {copied ? 'Copied ✓' : 'Copy import link'}
-                          </button>
-                        )}
+                        <div className="text-[11px] text-warm-gray flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
+                          {summarizeLocations(feed.locations)}
+                          {feed.latest_dataset?.downloaded_at && (
+                            <span className="text-warm-gray/80">· updated {fmtDate(feed.latest_dataset.downloaded_at)}</span>
+                          )}
+                          {!url && <span className="text-amber-600">· no dataset available</span>}
+                        </div>
                       </div>
+                      <span className="text-xs text-coral font-semibold whitespace-nowrap pt-0.5">
+                        {isImporting ? 'Loading…' : 'Import →'}
+                      </span>
                     </div>
-                    <button
-                      onClick={() => handleImport(feed)}
-                      disabled={disabled}
-                      className="text-xs text-coral font-semibold whitespace-nowrap pt-0.5 disabled:opacity-60"
-                    >
-                      {isImporting ? 'Loading…' : 'Import →'}
-                    </button>
-                  </div>
+                  </a>
                 );
               })
             )}

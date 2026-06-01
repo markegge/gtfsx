@@ -56,6 +56,11 @@ export interface FeatureMeta {
    *  data-driven: enabling a feature never emits an empty file — a file
    *  appears in the export only once it has rows. */
   files: string[];
+  /** When the feed already contains this feature's data but the user hasn't set
+   *  a preference, should the feature auto-show? True for most; false for
+   *  `blocks` — block_id is too niche to surface a nav section just because a
+   *  feed happens to carry it. */
+  autoShowOnData?: boolean;
 }
 
 export const ADVANCED_FEATURES: FeatureMeta[] = [
@@ -93,6 +98,8 @@ export const ADVANCED_FEATURES: FeatureMeta[] = [
     defaultOn: false,
     section: 'blocks',
     files: [],
+    // Niche: stay hidden even when the feed carries block_id, until opted in.
+    autoShowOnData: false,
   },
   {
     key: 'stations',
@@ -124,13 +131,18 @@ export function featureHasData(s: AppStore, f: AdvancedFeature): boolean {
   }
 }
 
-// Whether a feature's UI (nav section / Fares sub-tab) is shown. Enabled when
-// the user explicitly turned it on, when the feed has data, or — for
-// demandResponse only — by default.
+// Whether a feature's UI (nav section / Fares sub-tab) is shown. An explicit
+// per-feed choice always wins — turning a feature off hides it even when the
+// feed still has data (the data is kept and still exports; the Settings panel
+// offers hide-vs-delete on toggle-off). With no explicit choice, demandResponse
+// is on by default and the rest auto-show when the feed already contains their
+// data — except `blocks` (autoShowOnData: false), hidden until opted in.
 export function featureEnabled(s: AppStore, f: AdvancedFeature): boolean {
   const explicit = s.featureSettings[f];
-  const base = explicit !== undefined ? explicit : FEATURE_BY_KEY[f].defaultOn;
-  return base || featureHasData(s, f);
+  if (explicit !== undefined) return explicit;
+  const meta = FEATURE_BY_KEY[f];
+  if (meta.defaultOn) return true;
+  return meta.autoShowOnData !== false && featureHasData(s, f);
 }
 
 // Clear every row a feature owns — used when the user turns a feature off and

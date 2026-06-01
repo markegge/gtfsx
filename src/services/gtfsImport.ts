@@ -97,14 +97,15 @@ export function loadImportIntoStore(data: Awaited<ReturnType<typeof importGtfsZi
   store.setFlexZones(data.flexZones);
 
   // Seed per-feed feature settings from what the imported feed contains, so its
-  // advanced sections (frequencies, stations, blocks, transfers, fares v2) show
-  // up — "the feed contains the file" enables the feature. demandResponse is
-  // left unset, so it stays on by default (any flex data keeps it on too).
+  // advanced sections (frequencies, stations, transfers) show up — "the feed
+  // contains the file" enables the feature. demandResponse is left unset so it
+  // stays on by default. Blocks is intentionally NOT seeded: block_id is too
+  // niche to auto-surface a nav section, so it stays off until the user opts in
+  // (the data is preserved and still exports regardless).
   const fs: Partial<Record<AdvancedFeature, boolean>> = {};
   if (data.transfers.length) fs.transfers = true;
   if (data.frequencies.length) fs.frequencies = true;
   if (data.levels.length || data.pathways.length) fs.stations = true;
-  if (data.trips.some((t) => !!t.block_id)) fs.blocks = true;
   store.setFeatureSettings(fs);
 }
 

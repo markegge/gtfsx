@@ -38,11 +38,17 @@ describe('data-driven auto-enable', () => {
     expect(featureEnabled(s, 'frequencies')).toBe(true);
   });
 
-  it('blocks detect a trip with a block_id', () => {
+  it('blocks stay hidden by default even when the feed has block_id (too niche to auto-surface)', () => {
     useStore.getState().setTrips([{ trip_id: 't1', route_id: 'r1', service_id: 's1', block_id: 'b1' } as never]);
     const s = useStore.getState();
     expect(featureHasData(s, 'blocks')).toBe(true);
-    expect(featureEnabled(s, 'blocks')).toBe(true);
+    expect(featureEnabled(s, 'blocks')).toBe(false);
+  });
+
+  it('blocks show once explicitly turned on', () => {
+    useStore.getState().setTrips([{ trip_id: 't1', route_id: 'r1', service_id: 's1', block_id: 'b1' } as never]);
+    useStore.getState().setFeatureSetting('blocks', true);
+    expect(featureEnabled(useStore.getState(), 'blocks')).toBe(true);
   });
 });
 
@@ -57,11 +63,13 @@ describe('explicit toggles + in-use guard', () => {
     expect(featureEnabled(useStore.getState(), 'demandResponse')).toBe(false);
   });
 
-  it('a feature with data stays enabled even when explicitly turned off (no orphaning)', () => {
+  it('an explicit off hides the feature but keeps its data (hide, not delete)', () => {
     const s = useStore.getState();
     s.setFlexZones([{ id: 'z1' } as never]);
     s.setFeatureSetting('demandResponse', false);
-    expect(featureEnabled(useStore.getState(), 'demandResponse')).toBe(true);
+    expect(featureEnabled(useStore.getState(), 'demandResponse')).toBe(false);
+    // Hiding preserves the data — it still exports; only delete clears it.
+    expect(useStore.getState().flexZones.length).toBe(1);
   });
 });
 

@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useStore } from '../../store';
 import {
   ADVANCED_FEATURES,
+  FEATURE_BY_KEY,
   featureEnabled,
   featureHasData,
   clearFeatureData,
@@ -8,7 +10,7 @@ import {
 } from '../../store/featuresSlice';
 import type { AppStore } from '../../store';
 
-// Human description of the data a feature owns, for the destroy-confirm prompt.
+// Human description of the data a feature owns, for the hide-vs-delete prompt.
 function describeData(s: AppStore, f: AdvancedFeature): string {
   switch (f) {
     case 'frequencies': return `${s.frequencies.length} frequency rule(s)`;
@@ -44,21 +46,34 @@ export function FeatureSettingsPanel() {
   // Settings panel isn't perf-critical and reads across many slices, so it
   // subscribes to the whole store.
   const s = useStore();
+  // Feature whose toggle-off-with-data prompt is open, if any.
+  const [pending, setPending] = useState<AdvancedFeature | null>(null);
 
   const onToggle = (f: AdvancedFeature, next: boolean) => {
     if (next) {
       s.setFeatureSetting(f, true);
       return;
     }
-    // Turning off. If the feed has data, confirm before destroying it.
+    // Turning off. If the feed has data, let the user choose hide vs delete;
+    // otherwise just hide it.
     if (featureHasData(s, f)) {
-      const ok = window.confirm(
-        `This feed has ${describeData(s, f)}. Turning this off will delete that data from the feed. Continue?`,
-      );
-      if (!ok) return;
-      clearFeatureData(s, f);
+      setPending(f);
+      return;
     }
     s.setFeatureSetting(f, false);
+  };
+
+  // Hide the feature but keep its data (still exported; just not shown).
+  const hideFeature = (f: AdvancedFeature) => {
+    s.setFeatureSetting(f, false);
+    setPending(null);
+  };
+
+  // Delete the feature's data from the feed and hide it.
+  const deleteFeatureData = (f: AdvancedFeature) => {
+    clearFeatureData(s, f);
+    s.setFeatureSetting(f, false);
+    setPending(null);
   };
 
   return (
@@ -94,6 +109,50 @@ export function FeatureSettingsPanel() {
           );
         })}
       </div>
+
+      {pending && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setPending(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-dark-brown">Turn off {FEATURE_BY_KEY[pending].label}?</h3>
+            <p className="mt-2 text-sm text-warm-gray">
+              This feed has {describeData(s, pending)}. You can hide {FEATURE_BY_KEY[pending].label} from
+              the editor and keep the data — it still exports in your GTFS — or delete the data from the
+              feed entirely.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPending(null)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-warm-gray hover:bg-sand transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => hideFeature(pending)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold border border-sand text-dark-brown hover:bg-cream transition-colors"
+              >
+                Hide, keep data
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteFeatureData(pending)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors"
+              >
+                Delete data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

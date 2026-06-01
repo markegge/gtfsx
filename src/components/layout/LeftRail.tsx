@@ -40,11 +40,12 @@ const SETTINGS: NavItem[] = [
 // Returns the FIXED_ROUTE and FLEX items visible for the current feed, honoring
 // the per-feed feature settings. Subscribes to primitive booleans so the
 // selector stays referentially stable. Other groups are never gated here.
-function useGatedSections(): { fixed: NavItem[]; flex: NavItem[] } {
+function useGatedSections(): { fixed: NavItem[]; flex: NavItem[]; operations: NavItem[] } {
   const showStations = useStore((s) => featureEnabled(s, 'stations'));
   const showFrequencies = useStore((s) => featureEnabled(s, 'frequencies'));
   const showBlocks = useStore((s) => featureEnabled(s, 'blocks'));
   const showFlex = useStore((s) => featureEnabled(s, 'demandResponse'));
+  const showAlerts = useStore((s) => featureEnabled(s, 'serviceAlerts'));
   const vis: Record<string, boolean> = {
     stations: showStations,
     frequencies: showFrequencies,
@@ -52,7 +53,8 @@ function useGatedSections(): { fixed: NavItem[]; flex: NavItem[] } {
   };
   const fixed = FIXED_ROUTE.filter((i) => vis[i.key] ?? true);
   const flex = showFlex ? FLEX : [];
-  return { fixed, flex };
+  const operations = showAlerts ? OPERATIONS : [];
+  return { fixed, flex, operations };
 }
 
 /**
@@ -337,7 +339,7 @@ function MaxRail({ counts }: { counts: ItemCounts }) {
   const setFlexOpen = (v: boolean) => setFlexManual(v);
   const setAnalysisOpen = (v: boolean) => setAnalysisManual(v);
   const setOperationsOpen = (v: boolean) => setOperationsManual(v);
-  const { fixed, flex } = useGatedSections();
+  const { fixed, flex, operations } = useGatedSections();
 
   const renderRow = (item: NavItem) => {
     const active = sidebarSection === item.key;
@@ -386,8 +388,12 @@ function MaxRail({ counts }: { counts: ItemCounts }) {
       )}
       {renderCap('Analysis', analysisOpen, setAnalysisOpen)}
       {analysisOpen && ANALYSIS.map(renderRow)}
-      {renderCap('Operations', operationsOpen, setOperationsOpen)}
-      {operationsOpen && OPERATIONS.map(renderRow)}
+      {operations.length > 0 && (
+        <>
+          {renderCap('Operations', operationsOpen, setOperationsOpen)}
+          {operationsOpen && operations.map(renderRow)}
+        </>
+      )}
       <div className="my-1 border-t border-sand" aria-hidden />
       {SETTINGS.map(renderRow)}
     </div>
@@ -429,7 +435,7 @@ function MidRail({ counts }: { counts: ItemCounts }) {
   const groupDivider = (
     <div className="my-1.5 mx-auto w-6 h-px bg-sand" aria-hidden />
   );
-  const { fixed, flex } = useGatedSections();
+  const { fixed, flex, operations } = useGatedSections();
 
   return (
     <div className="flex flex-col py-2 gap-0.5">
@@ -440,8 +446,12 @@ function MidRail({ counts }: { counts: ItemCounts }) {
       {groupDivider}
       {ANALYSIS.map(renderTile)}
       {groupDivider}
-      {OPERATIONS.map(renderTile)}
-      {groupDivider}
+      {operations.length > 0 && (
+        <>
+          {operations.map(renderTile)}
+          {groupDivider}
+        </>
+      )}
       {SETTINGS.map(renderTile)}
     </div>
   );
@@ -452,13 +462,13 @@ function MidRail({ counts }: { counts: ItemCounts }) {
 function MinRail({ counts }: { counts: ItemCounts }) {
   const sidebarSection = useStore((s) => s.sidebarSection);
   const handleClick = useNavClick();
-  const { fixed, flex } = useGatedSections();
-  const all = [...SETUP, ...fixed, ...flex, ...ANALYSIS, ...OPERATIONS, ...SETTINGS];
+  const { fixed, flex, operations } = useGatedSections();
+  const all = [...SETUP, ...fixed, ...flex, ...ANALYSIS, ...operations, ...SETTINGS];
   const dividerAfter = new Set<number>([
     SETUP.length - 1,
     SETUP.length + fixed.length + flex.length - 1,
     SETUP.length + fixed.length + flex.length + ANALYSIS.length - 1,
-    SETUP.length + fixed.length + flex.length + ANALYSIS.length + OPERATIONS.length - 1,
+    SETUP.length + fixed.length + flex.length + ANALYSIS.length + operations.length - 1,
   ]);
 
   return (

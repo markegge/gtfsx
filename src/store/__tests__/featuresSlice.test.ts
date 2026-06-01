@@ -16,6 +16,7 @@ function reset() {
   s.setFlexZones([]);
   s.setTrips([]);
   s.setFareLegRules([]);
+  s.setCurrentPublication(null);
 }
 beforeEach(reset);
 afterEach(reset);
@@ -24,9 +25,18 @@ describe('feature defaults', () => {
   it('demand response is on by default; the rest are off', () => {
     const s = useStore.getState();
     expect(featureEnabled(s, 'demandResponse')).toBe(true);
-    for (const f of ['transfers', 'frequencies', 'stations', 'blocks'] as const) {
+    for (const f of ['transfers', 'frequencies', 'stations', 'blocks', 'serviceAlerts'] as const) {
       expect(featureEnabled(s, f)).toBe(false);
     }
+  });
+
+  it('service alerts default to on once the feed is published', () => {
+    expect(featureEnabled(useStore.getState(), 'serviceAlerts')).toBe(false);
+    useStore.getState().setCurrentPublication({ slug: 's', publishedAt: 1 } as never);
+    expect(featureEnabled(useStore.getState(), 'serviceAlerts')).toBe(true);
+    // An explicit off still wins over the published default.
+    useStore.getState().setFeatureSetting('serviceAlerts', false);
+    expect(featureEnabled(useStore.getState(), 'serviceAlerts')).toBe(false);
   });
 });
 

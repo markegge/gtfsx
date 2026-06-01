@@ -89,11 +89,8 @@ function PanelBody({ section }: { section: SidebarSection }) {
     case 'blocks':
       return <BlocksPanel />;
     case 'costs':
-      return (
-        <PaywallOverlay feature="analysis_basic" currentPlan={plan}>
-          <CostSummary />
-        </PaywallOverlay>
-      );
+      // Cost analysis is free; only the CSV export inside it is gated (Pro/Agency).
+      return <CostSummary />;
     case 'coverage':
       return (
         <PaywallOverlay feature="analysis_basic" currentPlan={plan}>

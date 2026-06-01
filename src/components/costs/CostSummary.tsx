@@ -4,6 +4,8 @@ import { calculateRouteSpans, applyRouteCosts } from '../../services/costEstimat
 import type { RouteStats } from '../../services/costEstimation';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
 import { RailSubHeading } from '../ui/RailHeadings';
+import { useNavigate } from 'react-router-dom';
+import { useEditorPlan } from '../billing/useEditorPlan';
 
 function formatCurrency(n: number): string {
   return '$' + Math.round(n).toLocaleString();
@@ -15,9 +17,12 @@ export function CostSummary() {
     selectRoute, setEditingRouteId, setSidebarSection,
   } = useStore();
   const { byTrip: stopTimesByTrip } = useStopTimesIndex();
+  const navigate = useNavigate();
+  // CSV export is a paid (Pro/Agency) feature; the cost analysis itself is free.
+  const canExportCsv = useEditorPlan() !== 'free';
 
-  const [defaultCostPerHour, setDefaultCostPerHour] = useState(50);
-  const [deadheadFactor, setDeadheadFactor] = useState(1.2);
+  const [defaultCostPerHour, setDefaultCostPerHour] = useState(100);
+  const [deadheadFactor, setDeadheadFactor] = useState(1.1);
 
   const stateSlice = useMemo(
     () => ({ routes, trips, stopTimes, calendars, calendarDates, stopTimesByTrip }),
@@ -158,6 +163,7 @@ export function CostSummary() {
           </div>
           <button
             onClick={() => {
+              if (!canExportCsv) { navigate('/pricing'); return; }
               const rows = [
                 ['Route', 'Rev Hours/Wk', 'Total Hours/Wk', 'Trips/Wk', 'Peak Vehicles', 'Cost/Hour', 'Weekly Cost', 'Annual Cost'],
                 ...routeRows.map(({ route, stats }) => {
@@ -188,9 +194,15 @@ export function CostSummary() {
               a.click();
               URL.revokeObjectURL(url);
             }}
-            className="mt-4 w-full px-3 py-2 border-2 border-dashed border-sand rounded-lg text-xs font-semibold text-warm-gray hover:border-coral hover:text-coral hover:bg-coral-light transition-colors"
+            title={canExportCsv ? undefined : 'Export to CSV is available on Pro and Agency plans'}
+            className="mt-4 w-full px-3 py-2 border-2 border-dashed border-sand rounded-lg text-xs font-semibold text-warm-gray hover:border-coral hover:text-coral hover:bg-coral-light transition-colors flex items-center justify-center gap-1.5"
           >
             Export to CSV
+            {!canExportCsv && (
+              <span className="text-[10px] font-bold uppercase tracking-wide rounded-full bg-coral text-white px-1.5 py-0.5">
+                Pro
+              </span>
+            )}
           </button>
         </>
       )}

@@ -18,6 +18,7 @@ function describeData(s: AppStore, f: AdvancedFeature): string {
     case 'stations': return `${s.levels.length} level(s) and ${s.pathways.length} pathway(s)`;
     case 'blocks': return `${s.trips.filter((t) => !!t.block_id).length} block assignment(s)`;
     case 'demandResponse': return `${s.flexZones.length} flex zone(s)`;
+    case 'serviceAlerts': return 'service alerts'; // alerts aren't feed data; this prompt won't fire
   }
 }
 

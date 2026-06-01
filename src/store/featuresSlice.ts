@@ -12,7 +12,8 @@ export type AdvancedFeature =
   | 'frequencies'
   | 'stations'
   | 'blocks'
-  | 'demandResponse';
+  | 'demandResponse'
+  | 'serviceAlerts';
 
 export interface FeaturesSlice {
   // The user's explicit per-feature choice. Absent → use the default rule.
@@ -61,6 +62,10 @@ export interface FeatureMeta {
    *  `blocks` — block_id is too niche to surface a nav section just because a
    *  feed happens to carry it. */
   autoShowOnData?: boolean;
+  /** Dynamic default (no explicit user choice): computed from store state.
+   *  Used by `serviceAlerts`, which defaults on once the feed is published.
+   *  Takes precedence over `defaultOn`/`autoShowOnData`. */
+  defaultEnabled?: (s: AppStore) => boolean;
 }
 
 export const ADVANCED_FEATURES: FeatureMeta[] = [
@@ -110,6 +115,18 @@ export const ADVANCED_FEATURES: FeatureMeta[] = [
     section: 'stations',
     files: ['levels.txt', 'pathways.txt'],
   },
+  {
+    key: 'serviceAlerts',
+    label: 'Service Alerts',
+    description:
+      'GTFS-Realtime service alerts — detours, delays, stop closures — published to a live feed without republishing the schedule. On by default once the feed is published.',
+    defaultOn: false,
+    // On by default once the feed is published; off otherwise.
+    defaultEnabled: (s) => s.currentPublication != null,
+    section: 'alerts',
+    files: [],
+    autoShowOnData: false,
+  },
   // Note: GTFS-Fares v2 is import/export round-trip only (no authoring UI yet),
   // so there's no section to gate — it isn't listed here. Add it when the v2
   // editor ships (see REQUIREMENTS §1.6.2 Phase 2).
@@ -128,6 +145,7 @@ export function featureHasData(s: AppStore, f: AdvancedFeature): boolean {
     case 'stations': return s.levels.length > 0 || s.pathways.length > 0;
     case 'blocks': return s.trips.some((t) => !!t.block_id);
     case 'demandResponse': return s.flexZones.length > 0;
+    case 'serviceAlerts': return false; // alerts live server-side, not in the feed store
   }
 }
 
@@ -141,6 +159,7 @@ export function featureEnabled(s: AppStore, f: AdvancedFeature): boolean {
   const explicit = s.featureSettings[f];
   if (explicit !== undefined) return explicit;
   const meta = FEATURE_BY_KEY[f];
+  if (meta.defaultEnabled) return meta.defaultEnabled(s);
   if (meta.defaultOn) return true;
   return meta.autoShowOnData !== false && featureHasData(s, f);
 }
@@ -157,5 +176,6 @@ export function clearFeatureData(s: AppStore, f: AdvancedFeature): void {
       // No file; strip block_id from every trip.
       s.setTrips(s.trips.map((t) => ({ ...t, block_id: undefined })));
       break;
+    case 'serviceAlerts': break; // alerts aren't feed data — nothing to clear here
   }
 }

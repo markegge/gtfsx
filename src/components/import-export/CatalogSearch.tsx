@@ -64,6 +64,7 @@ export function CatalogSearch({ onSelect }: Props) {
 
   const [importingId, setImportingId] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const search = useCallback(async () => {
     setSearching(true);
@@ -105,6 +106,19 @@ export function CatalogSearch({ onSelect }: Props) {
       setImportError(e instanceof Error ? e.message : 'Import failed');
     } finally {
       setImportingId(null);
+    }
+  };
+
+  // Copy a shareable deep link that opens this feed straight into GTFS·X, so
+  // there's no need to dig the feed id out of the Mobility Database + docs.
+  const copyLink = async (feed: CatalogFeed) => {
+    const link = `${window.location.origin}/import?source=mobilitydb&feed_id=${encodeURIComponent(feed.id)}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedId(feed.id);
+      window.setTimeout(() => setCopiedId((c) => (c === feed.id ? null : c)), 1600);
+    } catch {
+      setImportError('Could not copy the link to your clipboard.');
     }
   };
 
@@ -197,30 +211,41 @@ export function CatalogSearch({ onSelect }: Props) {
                 const url = feed.latest_dataset?.hosted_url;
                 const isImporting = importingId === feed.id;
                 const disabled = !url || importingId !== null;
+                const copied = copiedId === feed.id;
                 return (
-                  <button
-                    key={feed.id}
-                    onClick={() => handleImport(feed)}
-                    disabled={disabled}
-                    className="w-full text-left px-3 py-2.5 hover:bg-cream transition-colors disabled:hover:bg-transparent disabled:opacity-60 flex items-start gap-3"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-dark-brown truncate">{summarizeProvider(feed.provider)}</div>
-                      {feed.feed_name && (
-                        <div className="text-xs text-warm-gray truncate">{feed.feed_name}</div>
-                      )}
-                      <div className="text-[11px] text-warm-gray flex items-center gap-2 mt-0.5">
-                        {summarizeLocations(feed.locations)}
-                        {feed.latest_dataset?.downloaded_at && (
-                          <span className="text-warm-gray/80">· updated {fmtDate(feed.latest_dataset.downloaded_at)}</span>
+                  <div key={feed.id} className="flex items-stretch hover:bg-cream transition-colors">
+                    <button
+                      onClick={() => handleImport(feed)}
+                      disabled={disabled}
+                      className="flex-1 min-w-0 text-left px-3 py-2.5 disabled:opacity-60 flex items-start gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-dark-brown truncate">{summarizeProvider(feed.provider)}</div>
+                        {feed.feed_name && (
+                          <div className="text-xs text-warm-gray truncate">{feed.feed_name}</div>
                         )}
-                        {!url && <span className="text-amber-600">· no dataset available</span>}
+                        <div className="text-[11px] text-warm-gray flex items-center gap-2 mt-0.5">
+                          {summarizeLocations(feed.locations)}
+                          {feed.latest_dataset?.downloaded_at && (
+                            <span className="text-warm-gray/80">· updated {fmtDate(feed.latest_dataset.downloaded_at)}</span>
+                          )}
+                          {!url && <span className="text-amber-600">· no dataset available</span>}
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-xs text-coral font-semibold whitespace-nowrap pt-0.5">
-                      {isImporting ? 'Loading…' : 'Import →'}
-                    </div>
-                  </button>
+                      <div className="text-xs text-coral font-semibold whitespace-nowrap pt-0.5">
+                        {isImporting ? 'Loading…' : 'Import →'}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copyLink(feed)}
+                      disabled={!url}
+                      title="Copy a shareable link that opens this feed in GTFS·X"
+                      className="shrink-0 px-3 border-l border-sand text-xs font-semibold text-warm-gray hover:text-coral disabled:opacity-40 disabled:hover:text-warm-gray transition-colors"
+                    >
+                      {copied ? 'Copied ✓' : 'Copy link'}
+                    </button>
+                  </div>
                 );
               })
             )}

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/build-docs-search-index.mjs && tsc -b && vite build",
+    "build:docs-index": "node scripts/build-docs-search-index.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

@@ -29,6 +29,21 @@
       .cluster a { font-weight: 600; }
       .cluster .desc { color: var(--muted); font-weight: 400; font-size:0.92em; display:block; margin-top:2px; }
       .cluster .tier-badge { font-size:0.65rem; padding:1px 7px; margin-left:6px; }
+      .docs-search { margin: 22px 0 4px; }
+      .docs-search input {
+        width:100%; box-sizing:border-box; padding:14px 16px 14px 46px; font-size:1rem;
+        color:var(--ink); border:1px solid var(--rule); border-radius:10px; background:#fff
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%236B5A4D' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><line x1='12.6' y1='12.6' x2='17' y2='17'/></svg>")
+        no-repeat 15px center;
+      }
+      .docs-search input::-webkit-search-cancel-button { cursor:pointer; }
+      .docs-search input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(232,115,74,0.18); }
+      #searchResults { margin: 12px 0 40px; }
+      #searchResults .result { display:block; background:#fff; border:1px solid var(--rule); border-radius:10px; padding:13px 18px; margin-bottom:10px; text-decoration:none; }
+      #searchResults .result:hover, #searchResults .result:focus { border-color:var(--accent); }
+      #searchResults .r-title { display:block; font-weight:700; color:var(--ink); }
+      #searchResults .r-desc { display:block; color:var(--muted); font-size:0.92em; margin-top:3px; }
+      #searchResults .no-results { color:var(--muted); padding:10px 2px; }
     </style>
     <script type="application/ld+json">
     {
@@ -67,6 +82,11 @@
     <main>
       <h1>GTFS·X documentation</h1>
       <p class="lede">A practitioner-direct guide to every part of GTFS·X. If this is your first GTFS feed, start with <a href="/learn/gtfs/">What is GTFS?</a> and the <a href="/docs/quick-start/">Quick start</a>, then come back here when you need a specific answer.</p>
+
+      <div class="docs-search">
+        <input id="docsSearch" type="search" placeholder="Search the docs…" autocomplete="off" spellcheck="false" aria-label="Search the documentation" aria-controls="searchResults" />
+      </div>
+      <div id="searchResults" hidden aria-live="polite"></div>
 
       <div class="clusters">
         <div class="cluster">
@@ -175,6 +195,81 @@
         if (hash && map[hash]) {
           window.location.replace(map[hash]);
         }
+      })();
+    </script>
+    <script>
+      // Client-side docs search over /docs/search-index.json (built at deploy
+      // time from every doc page). Filters the page list as you type; empty
+      // query restores the browse-by-cluster view.
+      (function () {
+        var input = document.getElementById('docsSearch');
+        var results = document.getElementById('searchResults');
+        var clusters = document.querySelector('.clusters');
+        if (!input || !results || !clusters) return;
+
+        var index = [];
+        fetch('/docs/search-index.json')
+          .then(function (r) { return r.ok ? r.json() : []; })
+          .then(function (data) {
+            index = Array.isArray(data) ? data : [];
+            var q = new URLSearchParams(window.location.search).get('q');
+            if (q) { input.value = q; render(q); }
+          })
+          .catch(function () { /* search unavailable; clusters still work */ });
+
+        function esc(s) {
+          return String(s).replace(/[&<>"]/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+          });
+        }
+
+        function score(entry, toks) {
+          var t = (entry.title || '').toLowerCase();
+          var d = (entry.description || '').toLowerCase();
+          var h = (entry.headings || []).join(' ').toLowerCase();
+          var b = (entry.text || '').toLowerCase();
+          var s = 0;
+          for (var i = 0; i < toks.length; i++) {
+            var tok = toks[i];
+            var inT = t.indexOf(tok) !== -1, inD = d.indexOf(tok) !== -1;
+            var inH = h.indexOf(tok) !== -1, inB = b.indexOf(tok) !== -1;
+            if (!inT && !inD && !inH && !inB) return -1; // every token must match somewhere
+            s += (inT ? 10 : 0) + (inD ? 4 : 0) + (inH ? 3 : 0) + (inB ? 1 : 0);
+          }
+          if (t.indexOf(toks[0]) === 0) s += 6; // title prefix boost
+          return s;
+        }
+
+        function render(q) {
+          var toks = q.toLowerCase().split(/\s+/).filter(Boolean);
+          if (!toks.length) {
+            results.hidden = true; results.innerHTML = ''; clusters.hidden = false; return;
+          }
+          clusters.hidden = true; results.hidden = false;
+          var hits = index
+            .map(function (e) { return { e: e, s: score(e, toks) }; })
+            .filter(function (x) { return x.s > 0; })
+            .sort(function (a, b) { return b.s - a.s; })
+            .slice(0, 12);
+          if (!hits.length) {
+            results.innerHTML = '<p class="no-results">No matches for &ldquo;' + esc(q) + '&rdquo;.</p>';
+            return;
+          }
+          results.innerHTML = hits.map(function (x) {
+            return '<a class="result" href="' + esc(x.e.url) + '">'
+              + '<span class="r-title">' + esc(x.e.title) + '</span>'
+              + (x.e.description ? '<span class="r-desc">' + esc(x.e.description) + '</span>' : '')
+              + '</a>';
+          }).join('');
+        }
+
+        input.addEventListener('input', function () { render(input.value); });
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            var first = results.querySelector('a.result');
+            if (first) { e.preventDefault(); window.location.href = first.getAttribute('href'); }
+          }
+        });
       })();
     </script>
   </body>

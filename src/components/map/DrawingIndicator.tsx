@@ -4,6 +4,7 @@ import { directionName } from '../../utils/constants';
 
 export function DrawingIndicator() {
   const mapMode = useStore((s) => s.mapMode);
+  const setMapMode = useStore((s) => s.setMapMode);
 
   if (mapMode === 'select') return null;
   // edit_shape's banner is rendered together with the Save Shape / Cancel
@@ -17,9 +18,18 @@ export function DrawingIndicator() {
   if (mapMode === 'place_stop') {
     return (
       <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2">
-        <div className="bg-coral text-white px-5 py-2 rounded-full text-[13px] font-heading font-semibold shadow-md flex items-center gap-2">
-          <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-          Click to place a stop
+        <div className="flex items-center gap-2">
+          <div className="bg-coral text-white px-5 py-2 rounded-full text-[13px] font-heading font-semibold shadow-md flex items-center gap-2">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+            Click to place a stop
+          </div>
+          <button
+            onClick={() => setMapMode('select')}
+            title="Finish placing stops"
+            className="bg-white text-coral border border-coral px-4 py-2 rounded-full text-[13px] font-heading font-semibold shadow-md hover:bg-coral hover:text-white transition-colors"
+          >
+            Done
+          </button>
         </div>
         <PlaceStopDialog />
       </div>

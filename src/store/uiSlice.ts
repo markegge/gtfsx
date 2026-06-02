@@ -8,6 +8,9 @@ export interface UISlice {
   mapMode: MapMode;
   stopPlacementMode: StopPlacementMode;
   stopPlacementDirection: 0 | 1;
+  // Shape the next placed stop attaches to (per-shape route stops). null = let
+  // snap-to-route pick the nearest shape, or fall back to direction.
+  stopPlacementShapeId: string | null;
   /** Optional override name for the NEXT stop placed via the Add Stop tool.
    * Cleared after a single placement so each stop can have its own name (or
    * fall back to the auto-suggested intersection name). */
@@ -89,6 +92,7 @@ export interface UISlice {
   setMapMode: (mode: MapMode) => void;
   setStopPlacementMode: (mode: StopPlacementMode) => void;
   setStopPlacementDirection: (dir: 0 | 1) => void;
+  setStopPlacementShapeId: (id: string | null) => void;
   setNextStopName: (name: string | null) => void;
   setTimetableDirectionId: (dir: 0 | 1) => void;
   setTimetableServiceId: (id: string | null) => void;
@@ -125,6 +129,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   mapMode: 'select',
   stopPlacementMode: 'snap_to_route',
   stopPlacementDirection: 0,
+  stopPlacementShapeId: null,
   nextStopName: null,
   timetableDirectionId: 0,
   timetableServiceId: null,
@@ -224,6 +229,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setMapMode: (mode) => set((state) => { state.mapMode = mode; }),
   setStopPlacementMode: (mode) => set((state) => { state.stopPlacementMode = mode; }),
   setStopPlacementDirection: (dir) => set((state) => { state.stopPlacementDirection = dir; }),
+  setStopPlacementShapeId: (id) => set((state) => { state.stopPlacementShapeId = id; }),
   setNextStopName: (name) => set((state) => { state.nextStopName = name; }),
   setTimetableDirectionId: (dir) => set((state) => { state.timetableDirectionId = dir; }),
   setTimetableServiceId: (id) => set((state) => { state.timetableServiceId = id; }),

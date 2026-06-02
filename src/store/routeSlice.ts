@@ -19,8 +19,12 @@ export interface RouteSlice {
   duplicateRoute: (route_id: string) => string | null;
   setRoutes: (routes: Route[]) => void;
   addRouteStop: (rs: RouteStop) => void;
-  removeRouteStop: (route_id: string, stop_id: string, direction_id: 0 | 1) => void;
-  reorderRouteStops: (route_id: string, direction_id: 0 | 1, stopIds: string[]) => void;
+  removeRouteStop: (route_id: string, stop_id: string, direction_id: 0 | 1, shape_id?: string) => void;
+  reorderRouteStops: (route_id: string, direction_id: 0 | 1, stopIds: string[], shape_id?: string) => void;
+  /** Flip a shape's direction: retag its trips + route stops to the new
+   *  direction, optionally reversing the stop order. Powers the
+   *  draw → add stops → duplicate → flip-to-inbound workflow. */
+  setShapeDirection: (shape_id: string, direction_id: 0 | 1, opts?: { invertStops?: boolean }) => void;
   setRouteStops: (routeStops: RouteStop[]) => void;
 }
 
@@ -173,15 +177,19 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
   },
   setRoutes: (routes) => set((state) => { state.routes = routes; }),
   addRouteStop: (rs) => set((state) => { state.routeStops.push(rs); }),
-  removeRouteStop: (route_id, stop_id, direction_id) => set((state) => {
-    state.routeStops = state.routeStops.filter(
-      (rs) => !(rs.route_id === route_id && rs.stop_id === stop_id && rs.direction_id === direction_id)
-    );
-    // Also remove stop_times for this stop on trips in this route+direction
+  removeRouteStop: (route_id, stop_id, direction_id, shape_id) => set((state) => {
+    // Scope removal to the shape when given (per-shape stops), else to the
+    // direction (legacy / shapeless feeds).
+    state.routeStops = state.routeStops.filter((rs) => {
+      if (rs.route_id !== route_id || rs.stop_id !== stop_id) return true;
+      return shape_id ? rs.shape_id !== shape_id : rs.direction_id !== direction_id;
+    });
+    // Also remove stop_times for this stop on the affected trips.
     const fullState = get() as unknown as RouteSlice & TripSlice;
     const affectedTripIds = new Set(
       fullState.trips
-        .filter((t) => t.route_id === route_id && t.direction_id === direction_id)
+        .filter((t) => t.route_id === route_id
+          && (shape_id ? t.shape_id === shape_id : t.direction_id === direction_id))
         .map((t) => t.trip_id),
     );
     if (affectedTripIds.size > 0) {
@@ -190,17 +198,33 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
       );
     }
   }),
-  reorderRouteStops: (route_id, direction_id, stopIds) => set((state) => {
-    const others = state.routeStops.filter(
-      (rs) => rs.route_id !== route_id || rs.direction_id !== direction_id
-    );
+  reorderRouteStops: (route_id, direction_id, stopIds, shape_id) => set((state) => {
+    const inGroup = (rs: RouteStop) => rs.route_id === route_id
+      && (shape_id ? rs.shape_id === shape_id : rs.direction_id === direction_id);
+    const others = state.routeStops.filter((rs) => !inGroup(rs));
     const reordered = stopIds.map((sid, i) => {
-      const existing = state.routeStops.find(
-        (rs) => rs.route_id === route_id && rs.stop_id === sid && rs.direction_id === direction_id
-      );
-      return { ...(existing || { route_id, stop_id: sid, direction_id, _snapped: true }), stop_sequence: i };
+      const existing = state.routeStops.find((rs) => inGroup(rs) && rs.stop_id === sid);
+      return {
+        ...(existing || { route_id, stop_id: sid, direction_id, _snapped: true, shape_id }),
+        stop_sequence: i,
+      };
     });
     state.routeStops = [...others, ...reordered];
+  }),
+  setShapeDirection: (shape_id, direction_id, opts) => set((state) => {
+    // Retag trips on this shape to the new direction.
+    for (const t of (state as unknown as CrossSliceState).trips) {
+      if (t.shape_id === shape_id) t.direction_id = direction_id;
+    }
+    // Retag this shape's route stops; optionally reverse their order so an
+    // inbound copy reads end-to-start.
+    const shapeStops = state.routeStops.filter((rs) => rs.shape_id === shape_id);
+    if (opts?.invertStops && shapeStops.length > 1) {
+      const ordered = [...shapeStops].sort((a, b) => a.stop_sequence - b.stop_sequence);
+      const n = ordered.length;
+      ordered.forEach((rs, i) => { rs.stop_sequence = n - 1 - i; });
+    }
+    for (const rs of shapeStops) rs.direction_id = direction_id;
   }),
   setRouteStops: (routeStops) => set((state) => { state.routeStops = routeStops; }),
 });

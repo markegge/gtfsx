@@ -594,6 +594,9 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
             direction_id: dir,
             stop_sequence: st.stop_sequence,
             _snapped: true,
+            // Tag with the representative trip's shape so the editor keys stops
+            // per shape (the common one-shape-per-direction case is 1:1).
+            shape_id: firstTrip.shape_id,
           });
         }
       }

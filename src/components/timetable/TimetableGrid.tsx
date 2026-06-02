@@ -161,38 +161,16 @@ export function TimetableGrid() {
   // Get ordered stops for this route filtered by direction
   const orderedStops = useMemo(() => {
     if (!selectedRouteId) return [];
-    // Base column set: the route's placed stops for the active direction.
-    const base = routeStops
-      .filter((rs) => rs.route_id === selectedRouteId && rs.direction_id === directionId)
+    // Columns are the selected shape's own stops (per-shape). Shapeless routes
+    // (no shape selected) fall back to direction-keyed stops.
+    const list = selectedShapeId
+      ? routeStops.filter((rs) => rs.route_id === selectedRouteId && rs.shape_id === selectedShapeId)
+      : routeStops.filter((rs) => rs.route_id === selectedRouteId && rs.direction_id === directionId);
+    return [...list]
       .sort((a, b) => a.stop_sequence - b.stop_sequence)
-      .map((rs) => rs.stop_id);
-
-    // route_stops has no shape_id, so two shapes sharing a direction share this
-    // base order. When a shape is selected and one of its trips has times,
-    // order the columns by that trip's sequence (so a reverse-direction shape
-    // reads correctly), then append any placed stops the trip doesn't visit.
-    let orderedIds = base;
-    if (selectedShapeId) {
-      const shapeTrips = trips.filter(
-        (t) => t.route_id === selectedRouteId && t.shape_id === selectedShapeId,
-      );
-      let richest: StopTime[] = [];
-      for (const t of shapeTrips) {
-        const sts = stopTimesByTrip.get(t.trip_id) ?? [];
-        if (sts.length > richest.length) richest = sts;
-      }
-      if (richest.length > 0) {
-        const seqOrder = [...richest]
-          .sort((a, b) => a.stop_sequence - b.stop_sequence)
-          .map((st) => st.stop_id);
-        const inSeq = new Set(seqOrder);
-        orderedIds = [...new Set([...seqOrder, ...base.filter((id) => !inSeq.has(id))])];
-      }
-    }
-    return orderedIds
-      .map((id) => stops.find((s) => s.stop_id === id))
+      .map((rs) => stops.find((s) => s.stop_id === rs.stop_id))
       .filter(Boolean) as typeof stops;
-  }, [selectedRouteId, selectedShapeId, directionId, routeStops, trips, stopTimesByTrip, stops]);
+  }, [selectedRouteId, selectedShapeId, directionId, routeStops, stops]);
 
   // Helper: find a specific stop_time by trip+stop using the byTrip index
   const findStopTime = useCallback((tripId: string, stopId: string): StopTime | undefined => {

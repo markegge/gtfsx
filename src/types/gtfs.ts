@@ -150,6 +150,11 @@ export interface RouteStop {
   direction_id: 0 | 1;
   stop_sequence: number;
   _snapped: boolean;
+  // The shape this stop belongs to. Stops are per-shape (a route can have
+  // several shapes in one direction — branches, short-turns), so the editor
+  // keys a route's stop list by shape. Optional for back-compat: legacy/
+  // imported route_stops without it fall back to direction_id filtering.
+  shape_id?: string;
 }
 
 export interface Transfer {

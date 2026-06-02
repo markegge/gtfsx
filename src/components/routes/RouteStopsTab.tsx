@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -136,6 +136,10 @@ export function RouteStopsTab() {
   const setCreatingStop = useStore((s) => s.setCreatingStop);
   const directionId = useStore((s) => s.stopPlacementDirection);
   const setDirectionId = useStore((s) => s.setStopPlacementDirection);
+  const setShapeDirection = useStore((s) => s.setShapeDirection);
+  const setStopPlacementShapeId = useStore((s) => s.setStopPlacementShapeId);
+  // Pending direction flip awaiting the "invert stop order?" choice.
+  const [invertPrompt, setInvertPrompt] = useState<{ newDir: 0 | 1 } | null>(null);
 
   // Distinct shape patterns for this route. At 3+, the two-way Direction
   // toggle can't represent them, so we swap in the shared pattern dropdown
@@ -151,6 +155,13 @@ export function RouteStopsTab() {
       ? selectedPatternShapeId
       : (patterns.find((p) => p.directionId === directionId)?.shapeId ?? null);
 
+  // While the Stops tab is open, the next placed stop attaches to the selected
+  // shape (so it snaps to the right one even when out-and-back shapes overlap).
+  useEffect(() => {
+    setStopPlacementShapeId(effectiveShapeId);
+    return () => setStopPlacementShapeId(null);
+  }, [effectiveShapeId, setStopPlacementShapeId]);
+
   const [addExistingStopId, setAddExistingStopId] = useState<string>('');
   const [confirmRemoveStop, setConfirmRemoveStop] = useState<{ stopId: string } | null>(null);
   // 'unassigned' (default) | 'all' | 'route:<id>'
@@ -162,10 +173,13 @@ export function RouteStopsTab() {
 
   const orderedRouteStops = useMemo(() => {
     if (!routeId) return [];
-    return routeStops
-      .filter((rs) => rs.route_id === routeId && rs.direction_id === directionId)
-      .sort((a, b) => a.stop_sequence - b.stop_sequence);
-  }, [routeId, routeStops, directionId]);
+    // Per-shape stop list. Falls back to direction-keyed stops only for
+    // shapeless routes (no shape selected) — shaped routes are tagged on load.
+    const list = effectiveShapeId
+      ? routeStops.filter((rs) => rs.route_id === routeId && rs.shape_id === effectiveShapeId)
+      : routeStops.filter((rs) => rs.route_id === routeId && rs.direction_id === directionId);
+    return [...list].sort((a, b) => a.stop_sequence - b.stop_sequence);
+  }, [routeId, routeStops, directionId, effectiveShapeId]);
 
   const directionStops = useMemo(() => {
     return orderedRouteStops
@@ -217,14 +231,36 @@ export function RouteStopsTab() {
     const newOrder = orderedRouteStops.map((rs) => rs.stop_id);
     const [moved] = newOrder.splice(oldIndex, 1);
     newOrder.splice(newIndex, 0, moved);
-    reorderRouteStops(routeId, directionId, newOrder);
+    reorderRouteStops(routeId, directionId, newOrder, effectiveShapeId ?? undefined);
+  };
+
+  // The selected shape's current direction (shapes "own" a direction).
+  const shapeDirection: 0 | 1 = patterns.find((p) => p.shapeId === effectiveShapeId)?.directionId ?? directionId;
+
+  const handleToggleDirection = (newDir: 0 | 1) => {
+    if (!effectiveShapeId || newDir === shapeDirection) return;
+    // If the shape already has stops, ask whether to reverse their order.
+    if (orderedRouteStops.length > 0) {
+      setInvertPrompt({ newDir });
+    } else {
+      setShapeDirection(effectiveShapeId, newDir);
+      setDirectionId(newDir);
+    }
+  };
+
+  const applyDirectionFlip = (invert: boolean) => {
+    if (!invertPrompt || !effectiveShapeId) return;
+    setShapeDirection(effectiveShapeId, invertPrompt.newDir, { invertStops: invert });
+    setDirectionId(invertPrompt.newDir);
+    setInvertPrompt(null);
   };
 
   // Stops already assigned to this route+direction — always exclude from the
   // "Add existing" pool so the dropdown doesn't offer to add a duplicate.
   const routeStopIdsThisDir = new Set(
     routeStops
-      .filter((rs) => rs.route_id === routeId && rs.direction_id === directionId)
+      .filter((rs) => rs.route_id === routeId
+        && (effectiveShapeId ? rs.shape_id === effectiveShapeId : rs.direction_id === directionId))
       .map((rs) => rs.stop_id),
   );
 
@@ -262,10 +298,9 @@ export function RouteStopsTab() {
 
   return (
     <div>
-      {/* Direction selector — a shape dropdown (by name) when the route has
-          shapes, matching the Timetable tab; a direction dropdown otherwise.
-          Route stops are stored per direction, so same-direction shape
-          variants share a stop list. */}
+      {/* Shape selector (by name), matching the Timetable tab. Each shape owns
+          its own stop list (per-shape). Routes with no shapes fall back to a
+          plain direction dropdown. */}
       <div className="mb-3">
         {patterns.length >= 1 ? (
           <PatternSelector
@@ -290,6 +325,34 @@ export function RouteStopsTab() {
           </select>
         )}
       </div>
+
+      {/* The selected shape's direction. Flipping it offers to invert the stop
+          order — the draw → duplicate → flip-to-inbound workflow. */}
+      {effectiveShapeId && (
+        <div className="mb-3 flex items-center gap-2">
+          <span className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide">
+            Direction
+          </span>
+          <div className="flex rounded-md border border-sand overflow-hidden">
+            <button
+              onClick={() => handleToggleDirection(0)}
+              className={`px-3 py-1 text-xs font-semibold transition-colors ${
+                shapeDirection === 0 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'
+              }`}
+            >
+              {directionName(route, 0)}
+            </button>
+            <button
+              onClick={() => handleToggleDirection(1)}
+              className={`px-3 py-1 text-xs font-semibold transition-colors border-l border-sand ${
+                shapeDirection === 1 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'
+              }`}
+            >
+              {directionName(route, 1)}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Add stops to this route+direction */}
       <div className="mb-3 space-y-2">
@@ -347,6 +410,7 @@ export function RouteStopsTab() {
                   direction_id: directionId,
                   stop_sequence: orderedRouteStops.length,
                   _snapped: false,
+                  shape_id: effectiveShapeId ?? undefined,
                 });
                 handleSelect(addExistingStopId);
                 setAddExistingStopId('');
@@ -407,14 +471,15 @@ export function RouteStopsTab() {
                     onRemove={() => {
                       const otherUses = routeStops.filter(
                         (rs) => rs.stop_id === stop.stop_id
-                          && !(rs.route_id === routeId && rs.direction_id === directionId),
+                          && !(rs.route_id === routeId
+                            && (effectiveShapeId ? rs.shape_id === effectiveShapeId : rs.direction_id === directionId)),
                       );
                       const hasStopTimes = stopTimes.some((st) => st.stop_id === stop.stop_id);
                       const isOrphaned = otherUses.length === 0 && !hasStopTimes;
                       if (isOrphaned) {
                         setConfirmRemoveStop({ stopId: stop.stop_id });
                       } else {
-                        removeRouteStop(routeId, stop.stop_id, directionId);
+                        removeRouteStop(routeId, stop.stop_id, directionId, effectiveShapeId ?? undefined);
                       }
                     }}
                   />
@@ -442,7 +507,7 @@ export function RouteStopsTab() {
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => {
-                    removeRouteStop(routeId, confirmRemoveStop.stopId, directionId);
+                    removeRouteStop(routeId, confirmRemoveStop.stopId, directionId, effectiveShapeId ?? undefined);
                     setConfirmRemoveStop(null);
                   }}
                   className="w-full px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
@@ -470,6 +535,43 @@ export function RouteStopsTab() {
           </div>
         );
       })()}
+
+      {/* Invert-stop-order prompt when flipping a shape's direction */}
+      {invertPrompt && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black/20" onClick={() => setInvertPrompt(null)} />
+          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-sm mx-4">
+            <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
+              Invert stop order?
+            </h3>
+            <p className="text-sm text-warm-gray mb-4">
+              Switching this shape to {directionName(route, invertPrompt.newDir)} with{' '}
+              {orderedRouteStops.length} stop{orderedRouteStops.length === 1 ? '' : 's'}. Reverse
+              their order so it reads end-to-start?
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => applyDirectionFlip(false)}
+                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
+              >
+                Keep order
+              </button>
+              <button
+                onClick={() => applyDirectionFlip(true)}
+                className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors"
+              >
+                Invert order
+              </button>
+            </div>
+            <button
+              onClick={() => setInvertPrompt(null)}
+              className="w-full mt-2 px-3 py-1.5 text-xs text-warm-gray hover:text-dark-brown"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

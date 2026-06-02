@@ -21,6 +21,7 @@ import { duplicateShapePoints } from '../../services/shapeHelpers';
 export function RouteShapesTab() {
   const {
     routes, trips, shapes, removeTrip,
+    routeStops, addRouteStop,
     selectedRouteId,
     setMapMode, setDrawingRouteId,
     setEditingShapeId,
@@ -87,13 +88,11 @@ export function RouteShapesTab() {
   if (!route) return null;
 
   const handleDrawShape = () => {
-    // Default a new shape to the direction that isn't represented yet: the
-    // first shape is outbound (0), and once outbound exists the next defaults
-    // to inbound (1) — the common out-and-back. This matters because route
-    // stops are stored per direction, so two shapes that share a direction
-    // share a stop list; defaulting the return trip to the other direction
-    // gives it its own stops. (Re-assignable per trip in the Trips tab.)
-    // Sentinel pattern documented in src/types/window.d.ts.
+    // First shape defaults to outbound (0); once an outbound shape exists, the
+    // next drawn shape defaults to inbound (1) — the common out-and-back, which
+    // is the most likely intent. Direction is still changeable via the per-shape
+    // toggle (which can invert the stop order), and duplicate-then-flip is the
+    // other inbound path. Sentinel pattern documented in src/types/window.d.ts.
     const dirsUsed = new Set(
       trips
         .filter((t) => t.route_id === route.route_id && t.shape_id)
@@ -150,7 +149,11 @@ export function RouteShapesTab() {
     const sourceTrips = trips.filter((t) => t.shape_id === shapeId);
     const sourceTrip = sourceTrips[0];
     const newShapeId = generateId('shape');
-    addShape({ shape_id: newShapeId, points: duplicateShapePoints(shape.points) });
+    addShape({
+      shape_id: newShapeId,
+      points: duplicateShapePoints(shape.points),
+      _name: shape._name ? `${shape._name} (copy)` : undefined,
+    });
     recalcShapeDistances(newShapeId);
     if (sourceTrip) {
       addTrip({
@@ -161,6 +164,11 @@ export function RouteShapesTab() {
           ? `${sourceTrip.trip_headsign} (copy)`
           : '',
       });
+    }
+    // Clone the shape's stops onto the copy so it's ready to flip to the
+    // opposite direction with its own (invertible) stop list.
+    for (const rs of routeStops.filter((rs) => rs.shape_id === shapeId)) {
+      addRouteStop({ ...rs, shape_id: newShapeId });
     }
   };
 

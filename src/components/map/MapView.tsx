@@ -843,11 +843,19 @@ export function MapView() {
       let stopLat = clickLat;
       let stopLon = clickLon;
       let bestDirectionId: 0 | 1 = currentState.stopPlacementDirection;
+      // The shape the new stop attaches to. Defaults to the shape being edited
+      // (set by the Stops panel); snap-to-route may refine it to the nearest.
+      let bestShapeId: string | undefined = currentState.stopPlacementShapeId ?? undefined;
       const hasRoute = !!currentState.selectedRouteId;
 
       if (hasRoute && currentState.stopPlacementMode === 'snap_to_route') {
         const routeTrips = currentState.trips.filter((t) => t.route_id === currentState.selectedRouteId);
-        const shapeTrips = routeTrips.filter((t) => t.shape_id);
+        let shapeTrips = routeTrips.filter((t) => t.shape_id);
+        // When a specific shape is being edited, snap only to it — out-and-back
+        // shapes overlap, so "nearest shape" would be ambiguous.
+        if (currentState.stopPlacementShapeId) {
+          shapeTrips = shapeTrips.filter((t) => t.shape_id === currentState.stopPlacementShapeId);
+        }
         let bestDist = Infinity;
 
         for (const trip of shapeTrips) {
@@ -865,6 +873,7 @@ export function MapView() {
             stopLat = snapped.geometry.coordinates[1];
             stopLon = snapped.geometry.coordinates[0];
             bestDirectionId = trip.direction_id;
+            bestShapeId = trip.shape_id;
           }
         }
       }
@@ -902,7 +911,8 @@ export function MapView() {
 
       if (hasRoute && currentState.selectedRouteId) {
         const existingStops = currentState.routeStops.filter(
-          (rs) => rs.route_id === currentState.selectedRouteId && rs.direction_id === bestDirectionId
+          (rs) => rs.route_id === currentState.selectedRouteId
+            && (bestShapeId ? rs.shape_id === bestShapeId : rs.direction_id === bestDirectionId)
         );
         currentState.addRouteStop({
           route_id: currentState.selectedRouteId,
@@ -910,6 +920,7 @@ export function MapView() {
           direction_id: bestDirectionId,
           stop_sequence: existingStops.length,
           _snapped: currentState.stopPlacementMode === 'snap_to_route',
+          shape_id: bestShapeId,
         });
       }
 

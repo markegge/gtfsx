@@ -87,7 +87,7 @@ async function loadDemoFeed() {
   const file = new File([blob], 'svt-demo.zip', { type: 'application/zip' });
   const data = await importGtfsZip(file);
   loadImportIntoStore(data);
-  useStore.getState().setProjectName('Streamline Transit — Demo');
+  useStore.getState().setProjectName('Sunny Valley Transit');
   // Loading is not "editing" — clear the dirty flag so the beforeunload
   // prompt doesn't fire on refresh until the user actually changes something.
   useStore.getState().markSaved();

@@ -331,24 +331,26 @@ export function RouteStopsTab() {
       {effectiveShapeId && (
         <div className="mb-3 flex items-center gap-2">
           <span className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide">
-            Direction
+            Assigned Direction
           </span>
           <div className="flex rounded-md border border-sand overflow-hidden">
             <button
               onClick={() => handleToggleDirection(0)}
-              className={`px-3 py-1 text-xs font-semibold transition-colors ${
+              title={directionName(route, 0)}
+              className={`px-2 py-0.5 text-[11px] font-semibold transition-colors ${
                 shapeDirection === 0 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'
               }`}
             >
-              {directionName(route, 0)}
+              Out
             </button>
             <button
               onClick={() => handleToggleDirection(1)}
-              className={`px-3 py-1 text-xs font-semibold transition-colors border-l border-sand ${
+              title={directionName(route, 1)}
+              className={`px-2 py-0.5 text-[11px] font-semibold transition-colors border-l border-sand ${
                 shapeDirection === 1 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'
               }`}
             >
-              {directionName(route, 1)}
+              In
             </button>
           </div>
         </div>

@@ -24,7 +24,7 @@ export function RouteShapesTab() {
     routeStops, addRouteStop,
     selectedRouteId,
     setMapMode, setDrawingRouteId, setDrawingNewRoute,
-    setEditingShapeId,
+    setEditingShapeId, setRouteDetailTab, setStopsPanelShapeId, setStopPlacementDirection,
     addShape, addTrip,
     removeShape, renameShape,
     updateShapePoints, recalcShapeDistances,
@@ -36,6 +36,10 @@ export function RouteShapesTab() {
   const [simplifyShapeId, setSimplifyShapeId] = useState<string | null>(null);
   const [warnEditShapeId, setWarnEditShapeId] = useState<string | null>(null);
   const [trimPromptShapeId, setTrimPromptShapeId] = useState<string | null>(null);
+  // Duplicate-shape options popover.
+  const [dupPromptShapeId, setDupPromptShapeId] = useState<string | null>(null);
+  const [dupReverse, setDupReverse] = useState(false);
+  const [dupCopyStops, setDupCopyStops] = useState(true);
 
   const editingShapeId = useStore((s) => s.editingShapeId);
   const mapMode = useStore((s) => s.mapMode);
@@ -66,6 +70,15 @@ export function RouteShapesTab() {
     }
     setEditingShapeId(shapeId);
     setMapMode('edit_shape');
+  };
+
+  // Jump to the Stops tab focused on this shape (works even for same-direction
+  // shapes the direction fallback can't disambiguate).
+  const handleEditStops = (shapeId: string) => {
+    const dir = trips.find((t) => t.shape_id === shapeId)?.direction_id ?? 0;
+    setStopsPanelShapeId(shapeId);
+    setStopPlacementDirection(dir);
+    setRouteDetailTab('stops');
   };
 
   // When the RoutePopup signals "edit this shape", run the same flow as
@@ -144,18 +157,28 @@ export function RouteShapesTab() {
   // with shape_ids). The trip clone is intentionally minimal — same
   // direction + service + headsign with "(copy)" appended — so the user
   // can immediately reassign or rename in the timetable.
-  const handleDuplicateShape = (shapeId: string) => {
+  const handleDuplicateShape = (
+    shapeId: string,
+    opts: { reverse: boolean; copyStops: boolean } = { reverse: false, copyStops: true },
+  ) => {
     const shape = shapes.find((s) => s.shape_id === shapeId);
     if (!shape) return;
-    const sourceTrips = trips.filter((t) => t.shape_id === shapeId);
-    const sourceTrip = sourceTrips[0];
+    const sourceTrip = trips.filter((t) => t.shape_id === shapeId)[0];
     const newShapeId = generateId('shape');
+
+    // Optionally reverse the vertex order (re-sequenced) for the opposite
+    // direction; recalcShapeDistances then recomputes shape_dist_traveled.
+    let points = duplicateShapePoints(shape.points);
+    if (opts.reverse) {
+      points = points.slice().reverse().map((p, i) => ({ ...p, shape_pt_sequence: i }));
+    }
     addShape({
       shape_id: newShapeId,
-      points: duplicateShapePoints(shape.points),
+      points,
       _name: shape._name ? `${shape._name} (copy)` : undefined,
     });
     recalcShapeDistances(newShapeId);
+
     if (sourceTrip) {
       addTrip({
         ...sourceTrip,
@@ -166,10 +189,17 @@ export function RouteShapesTab() {
           : '',
       });
     }
-    // Clone the shape's stops onto the copy so it's ready to flip to the
-    // opposite direction with its own (invertible) stop list.
-    for (const rs of routeStops.filter((rs) => rs.shape_id === shapeId)) {
-      addRouteStop({ ...rs, shape_id: newShapeId });
+
+    // Optionally copy the shape's stops onto the copy, reversing their order to
+    // match when the vertices are reversed.
+    if (opts.copyStops) {
+      const ordered = routeStops
+        .filter((rs) => rs.shape_id === shapeId)
+        .sort((a, b) => a.stop_sequence - b.stop_sequence);
+      const n = ordered.length;
+      ordered.forEach((rs, i) => {
+        addRouteStop({ ...rs, shape_id: newShapeId, stop_sequence: opts.reverse ? n - 1 - i : i });
+      });
     }
   };
 
@@ -260,9 +290,17 @@ export function RouteShapesTab() {
                         Edit Shape
                       </button>
                       <button
-                        onClick={() => handleDuplicateShape(shape!.shape_id)}
-                        className="px-2 py-1.5 bg-sand text-brown rounded text-[11px] font-semibold hover:bg-coral-light hover:text-coral transition-colors"
-                        title="Duplicate shape and its first trip"
+                        onClick={() => handleEditStops(shape!.shape_id)}
+                        className="flex-1 px-2 py-1.5 bg-sand text-brown rounded text-[11px] font-semibold hover:bg-coral-light hover:text-coral transition-colors"
+                        title="Edit this shape's stops"
+                      >
+                        Edit Stops
+                      </button>
+                      <button
+                        onClick={() => setDupPromptShapeId(dupPromptShapeId === shape!.shape_id ? null : shape!.shape_id)}
+                        className={`px-2 py-1.5 rounded text-[11px] font-semibold transition-colors
+                          ${dupPromptShapeId === shape!.shape_id ? 'bg-coral-light text-coral' : 'bg-sand text-brown hover:bg-coral-light hover:text-coral'}`}
+                        title="Duplicate shape (with options)"
                       >
                         Duplicate
                       </button>
@@ -291,6 +329,51 @@ export function RouteShapesTab() {
                     </>
                   )}
                 </div>
+
+                {/* Duplicate options — reverse the vertex order (for the
+                    opposite direction) and/or copy the shape's stops. */}
+                {dupPromptShapeId === shape!.shape_id && (
+                  <div className="mx-3 mb-2 p-2 bg-cream border border-sand rounded-lg">
+                    <p className="text-[11px] text-dark-brown font-semibold mb-2">
+                      Duplicate this shape
+                    </p>
+                    <label className="flex items-center gap-2 text-[11px] text-dark-brown mb-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={dupReverse}
+                        onChange={(e) => setDupReverse(e.target.checked)}
+                        className="accent-coral"
+                      />
+                      Reverse vertex order (for the opposite direction)
+                    </label>
+                    <label className="flex items-center gap-2 text-[11px] text-dark-brown mb-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={dupCopyStops}
+                        onChange={(e) => setDupCopyStops(e.target.checked)}
+                        className="accent-coral"
+                      />
+                      Copy stops{dupReverse ? ' (reversed to match)' : ''}
+                    </label>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setDupPromptShapeId(null)}
+                        className="flex-1 px-2 py-1.5 bg-sand text-brown rounded text-[11px] font-semibold hover:bg-coral-light hover:text-coral transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleDuplicateShape(shape!.shape_id, { reverse: dupReverse, copyStops: dupCopyStops });
+                          setDupPromptShapeId(null);
+                        }}
+                        className="flex-1 px-2 py-1.5 bg-coral text-white rounded text-[11px] font-semibold hover:bg-[#d4603a] transition-colors"
+                      >
+                        Duplicate
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Trim picker — appears when the user clicks Trim. Pick a side,
                     then click a point on the shape on the map to set the cut. */}

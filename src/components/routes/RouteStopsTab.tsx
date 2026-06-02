@@ -138,6 +138,9 @@ export function RouteStopsTab() {
   const setDirectionId = useStore((s) => s.setStopPlacementDirection);
   const setShapeDirection = useStore((s) => s.setShapeDirection);
   const setStopPlacementShapeId = useStore((s) => s.setStopPlacementShapeId);
+  // Store-backed so "Edit Stops" on a shape row can focus a specific shape.
+  const selectedPatternShapeId = useStore((s) => s.stopsPanelShapeId);
+  const setSelectedPatternShapeId = useStore((s) => s.setStopsPanelShapeId);
   // Pending direction flip awaiting the "invert stop order?" choice.
   const [invertPrompt, setInvertPrompt] = useState<{ newDir: 0 | 1 } | null>(null);
 
@@ -146,7 +149,6 @@ export function RouteStopsTab() {
   // (matches the Timetable tab). Picking a pattern sets its direction — route
   // stops are stored per direction, so same-direction variants share a list.
   const patterns = useMemo(() => computeShapePatterns(routeId, trips), [routeId, trips]);
-  const [selectedPatternShapeId, setSelectedPatternShapeId] = useState<string | null>(null);
   // Ignore a selection that isn't in the current route's patterns (e.g. left
   // over from another route) — fall back to the pattern for the active
   // direction. Avoids resetting state in an effect.
@@ -161,6 +163,7 @@ export function RouteStopsTab() {
     setStopPlacementShapeId(effectiveShapeId);
     return () => setStopPlacementShapeId(null);
   }, [effectiveShapeId, setStopPlacementShapeId]);
+
 
   const [addExistingStopId, setAddExistingStopId] = useState<string>('');
   const [confirmRemoveStop, setConfirmRemoveStop] = useState<{ stopId: string } | null>(null);

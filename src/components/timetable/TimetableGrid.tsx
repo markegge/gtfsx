@@ -108,10 +108,13 @@ export function TimetableGrid() {
   //     auto-pick the first pattern, AND set directionId so the existing
   //     stop-ordering / route_stops filtering keeps working.
   useEffect(() => {
-    if (patterns.length <= 2) {
+    if (patterns.length === 0) {
       if (selectedShapeId !== null) setSelectedShapeId(null);
       return;
     }
+    // Any route with shapes drives the timetable off the selected shape (one
+    // dropdown entry per shape), so a stale/empty selection picks the first
+    // and syncs directionId for route_stops + the map highlight.
     const current = patterns.find((p) => p.shapeId === selectedShapeId);
     if (!current) {
       const first = patterns[0];
@@ -158,12 +161,38 @@ export function TimetableGrid() {
   // Get ordered stops for this route filtered by direction
   const orderedStops = useMemo(() => {
     if (!selectedRouteId) return [];
-    return routeStops
+    // Base column set: the route's placed stops for the active direction.
+    const base = routeStops
       .filter((rs) => rs.route_id === selectedRouteId && rs.direction_id === directionId)
       .sort((a, b) => a.stop_sequence - b.stop_sequence)
-      .map((rs) => stops.find((s) => s.stop_id === rs.stop_id))
+      .map((rs) => rs.stop_id);
+
+    // route_stops has no shape_id, so two shapes sharing a direction share this
+    // base order. When a shape is selected and one of its trips has times,
+    // order the columns by that trip's sequence (so a reverse-direction shape
+    // reads correctly), then append any placed stops the trip doesn't visit.
+    let orderedIds = base;
+    if (selectedShapeId) {
+      const shapeTrips = trips.filter(
+        (t) => t.route_id === selectedRouteId && t.shape_id === selectedShapeId,
+      );
+      let richest: StopTime[] = [];
+      for (const t of shapeTrips) {
+        const sts = stopTimesByTrip.get(t.trip_id) ?? [];
+        if (sts.length > richest.length) richest = sts;
+      }
+      if (richest.length > 0) {
+        const seqOrder = [...richest]
+          .sort((a, b) => a.stop_sequence - b.stop_sequence)
+          .map((st) => st.stop_id);
+        const inSeq = new Set(seqOrder);
+        orderedIds = [...new Set([...seqOrder, ...base.filter((id) => !inSeq.has(id))])];
+      }
+    }
+    return orderedIds
+      .map((id) => stops.find((s) => s.stop_id === id))
       .filter(Boolean) as typeof stops;
-  }, [selectedRouteId, routeStops, stops, directionId]);
+  }, [selectedRouteId, selectedShapeId, directionId, routeStops, trips, stopTimesByTrip, stops]);
 
   // Helper: find a specific stop_time by trip+stop using the byTrip index
   const findStopTime = useCallback((tripId: string, stopId: string): StopTime | undefined => {
@@ -204,9 +233,11 @@ export function TimetableGrid() {
   const routeTrips = useMemo(() => {
     if (!selectedRouteId) return [];
     return trips
-      .filter((t) => t.route_id === selectedRouteId && t.direction_id === directionId
+      .filter((t) => t.route_id === selectedRouteId
         && (!activeServiceId || t.service_id === activeServiceId)
-        && (!selectedShapeId || t.shape_id === selectedShapeId))
+        // Filter by the selected shape when there is one (so two shapes sharing
+        // a direction don't pile into one view); otherwise by direction.
+        && (selectedShapeId ? t.shape_id === selectedShapeId : t.direction_id === directionId))
       .sort((a, b) => {
         const aSTs = stopTimesByTrip.get(a.trip_id);
         const bSTs = stopTimesByTrip.get(b.trip_id);
@@ -262,7 +293,7 @@ export function TimetableGrid() {
       service_id: activeServiceId || calendars[0]?.service_id || '',
       direction_id: directionId,
       trip_headsign: route?.route_short_name || '',
-      shape_id: trips.find((t) => t.route_id === selectedRouteId && t.direction_id === directionId)?.shape_id,
+      shape_id: selectedShapeId ?? trips.find((t) => t.route_id === selectedRouteId && t.direction_id === directionId)?.shape_id,
     });
   };
 
@@ -454,22 +485,19 @@ export function TimetableGrid() {
         {/* Adaptive trip-pattern selector. Falls back to the legacy direction
             toggle when the route has 0-2 shape patterns; for 3+ patterns it
             renders a dropdown so same-direction variants are reachable. */}
-        {patterns.length >= 3 ? (
+        {patterns.length >= 1 ? (
           <PatternSelector
             patterns={patterns}
             selectedShapeId={selectedShapeId}
             route={route}
+            shapes={shapes}
             onChange={(p) => {
               setSelectedShapeId(p.shapeId);
               if (p.directionId !== directionId) setDirectionId(p.directionId);
             }}
           />
-        ) : patterns.length === 1 ? (
-          <span className="px-2 py-1 text-xs font-semibold text-dark-brown bg-cream border border-sand rounded-md whitespace-nowrap">
-            {directionName(route, patterns[0].directionId)}
-          </span>
         ) : (
-          <DirectionToggle directionId={directionId} onChange={setDirectionId} route={route} />
+          <DirectionSelect directionId={directionId} onChange={setDirectionId} route={route} />
         )}
         <span className="text-xs text-warm-gray whitespace-nowrap">
           {routeTrips.length} trips
@@ -1081,7 +1109,9 @@ function TripIdCell({ tripId, allTripIds, onRename }: {
   );
 }
 
-function DirectionToggle({
+/** Direction dropdown for routes with no shapes yet (in-progress feeds).
+ *  Routes that have shapes use the shape-based PatternSelector instead. */
+function DirectionSelect({
   directionId,
   onChange,
   route,
@@ -1091,27 +1121,13 @@ function DirectionToggle({
   route?: Route | null;
 }) {
   return (
-    <div className="flex rounded-md border border-sand overflow-hidden">
-      <button
-        onClick={() => onChange(0)}
-        className={`px-3 py-1 text-xs font-semibold transition-colors ${
-          directionId === 0
-            ? 'bg-coral text-white'
-            : 'bg-white text-warm-gray hover:text-dark-brown'
-        }`}
-      >
-        {directionName(route, 0)}
-      </button>
-      <button
-        onClick={() => onChange(1)}
-        className={`px-3 py-1 text-xs font-semibold transition-colors border-l border-sand ${
-          directionId === 1
-            ? 'bg-coral text-white'
-            : 'bg-white text-warm-gray hover:text-dark-brown'
-        }`}
-      >
-        {directionName(route, 1)}
-      </button>
-    </div>
+    <select
+      value={directionId}
+      onChange={(e) => onChange(Number(e.target.value) as 0 | 1)}
+      className="px-2 py-1 border border-sand rounded-md text-xs font-semibold bg-cream focus:outline-none focus:border-coral"
+    >
+      <option value={0}>{directionName(route, 0)}</option>
+      <option value={1}>{directionName(route, 1)}</option>
+    </select>
   );
 }

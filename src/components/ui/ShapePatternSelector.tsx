@@ -4,25 +4,28 @@
 // ./shapePatterns (kept separate so this file only exports a component).
 
 import { directionName } from '../../utils/constants';
-import type { Route } from '../../types/gtfs';
+import type { Route, Shape } from '../../types/gtfs';
 import type { ShapePattern } from './shapePatterns';
 
 /**
- * Each option carries (shape_id, direction_id); the label is the route's
- * direction name, with a shape_id suffix when multiple patterns share a
- * direction (otherwise the entries collide visually).
+ * Each option carries (shape_id, direction_id). The label is the shape's name
+ * when available (so users pick "the long way home" rather than a direction);
+ * otherwise the route's direction name, with a disambiguating suffix when
+ * multiple patterns share a direction (else the entries collide visually).
  */
 export function PatternSelector({
   patterns,
   selectedShapeId,
   onChange,
   route,
+  shapes,
   className,
 }: {
   patterns: ShapePattern[];
   selectedShapeId: string | null;
   onChange: (p: ShapePattern) => void;
   route?: Route | null;
+  shapes?: Shape[];
   className?: string;
 }) {
   const dirCounts = patterns.reduce<Record<number, number>>((acc, p) => {
@@ -30,6 +33,8 @@ export function PatternSelector({
     return acc;
   }, {});
   const label = (p: ShapePattern) => {
+    const name = shapes?.find((s) => s.shape_id === p.shapeId)?._name?.trim();
+    if (name) return name;
     const base = directionName(route, p.directionId);
     return dirCounts[p.directionId] > 1 ? `${base} · ${p.shapeId}` : base;
   };

@@ -6,6 +6,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  MeasuringStrategy,
 } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import {
@@ -380,7 +381,16 @@ export function RouteStopsTab() {
             </span>
             <span className="text-[10px] text-warm-gray">Drag to reorder</span>
           </div>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+            // The stops list lives in an overflow-y-auto panel; the default
+            // WhileDragging measuring caches droppable rects at drag-start, so
+            // when the panel auto-scrolls mid-drag the drop lands offset by the
+            // scroll amount. Re-measure on every move to keep collisions exact.
+            measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+          >
             <SortableContext items={stopIds} strategy={verticalListSortingStrategy}>
               <div className="flex flex-col gap-0.5">
                 {directionStops.map((stop, i) => (

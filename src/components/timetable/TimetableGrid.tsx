@@ -7,6 +7,7 @@ import { PatternSelector } from '../ui/ShapePatternSelector';
 import { computeShapePatterns } from '../ui/shapePatterns';
 import type { Route, StopTime } from '../../types/gtfs';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
+import { estimateStopTravelSeconds, layoutStopTimes } from '../../services/travelTime';
 
 function generateTripName(routeName: string, departureTime: string, serviceIndex: number): string {
   const prefix = (routeName || 'trip').replace(/\s+/g, '').slice(0, 4).toLowerCase();
@@ -35,7 +36,7 @@ function uniqueTripId(baseId: string, existingIds: Set<string>): string {
 
 export function TimetableGrid() {
   const {
-    selectedRouteId, selectRoute, routes, trips, stops, routeStops, calendars,
+    selectedRouteId, selectRoute, routes, trips, stops, routeStops, calendars, shapes,
     setStopTime, addTrip, duplicateTrip, applyTripPattern, removeTrip, updateTrip, renameTripId,
     interpolateStopTimes,
   } = useStore();
@@ -142,6 +143,14 @@ export function TimetableGrid() {
 
   // "Apply to all trips" confirm state — holds the template trip id.
   const [applyPrompt, setApplyPrompt] = useState<string | null>(null);
+
+  // "Estimate times" dialog — holds the trip id being timed + its config.
+  const [estimatePrompt, setEstimatePrompt] = useState<string | null>(null);
+  const [estStart, setEstStart] = useState('08:00');
+  const [estDwell, setEstDwell] = useState(18);
+  const [estSpeed, setEstSpeed] = useState(1.3);
+  const [estimating, setEstimating] = useState(false);
+  const [estError, setEstError] = useState<string | null>(null);
 
   // Ref map for Tab navigation between cells
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
@@ -301,6 +310,61 @@ export function TimetableGrid() {
     if (!applyPrompt || applyTargets.length === 0) { setApplyPrompt(null); return; }
     applyTripPattern(applyPrompt, applyTargets.map((t) => t.trip_id));
     setApplyPrompt(null);
+  };
+
+  // Ordered [lng, lat] vertices of a trip's drawn shape (empty if none).
+  const shapeCoordsForTrip = useCallback((tripId: string): [number, number][] => {
+    const trip = trips.find((t) => t.trip_id === tripId);
+    const shape = trip?.shape_id ? shapes.find((s) => s.shape_id === trip.shape_id) : undefined;
+    if (!shape || shape.points.length < 2) return [];
+    return [...shape.points]
+      .sort((a, b) => a.shape_pt_sequence - b.shape_pt_sequence)
+      .map((p) => [p.shape_pt_lon, p.shape_pt_lat] as [number, number]);
+  }, [trips, shapes]);
+
+  const handleEstimate = (tripId: string) => {
+    const firstTime = getFirstDisplayedTime(tripId);
+    setEstStart(firstTime ? formatTimeShort(firstTime) : '08:00');
+    setEstError(null);
+    setEstimatePrompt(tripId);
+  };
+
+  // Estimate stop times from the drawn route's road-network travel time, plus
+  // a per-stop dwell and a bus-vs-car speed factor, then write them to the trip.
+  const handleEstimateConfirm = async () => {
+    if (!estimatePrompt) return;
+    const normalized = normalizeTimeInput(estStart);
+    if (!normalized) { setEstError('Enter a valid start time, e.g. 08:00.'); return; }
+    const shapeCoords = shapeCoordsForTrip(estimatePrompt);
+    if (shapeCoords.length < 2) { setEstError('This trip has no drawn route shape to follow.'); return; }
+    if (orderedStops.length < 2) { setEstError('Add at least two stops to this route first.'); return; }
+
+    setEstimating(true);
+    setEstError(null);
+    try {
+      const stopCoords = orderedStops.map((s) => [s.stop_lon, s.stop_lat] as [number, number]);
+      const cum = await estimateStopTravelSeconds(shapeCoords, stopCoords);
+      if (!cum) {
+        setEstError("Couldn't match this route to the road network. Try again, or set times manually.");
+        return;
+      }
+      const timings = layoutStopTimes(cum, {
+        startSec: gtfsTimeToSeconds(normalized),
+        dwellSec: Math.max(0, estDwell),
+        speedFactor: Math.max(0.1, estSpeed),
+      });
+      timings.forEach((t, i) => {
+        setStopTime(estimatePrompt, orderedStops[i].stop_id, i, {
+          arrival_time: secondsToGtfsTime(t.arrivalSec),
+          departure_time: secondsToGtfsTime(t.departureSec),
+        });
+      });
+      setEstimatePrompt(null);
+    } catch {
+      setEstError('Something went wrong estimating times. Please try again.');
+    } finally {
+      setEstimating(false);
+    }
   };
 
   const handleCopyFromService = (sourceServiceId: string) => {
@@ -656,6 +720,16 @@ export function TimetableGrid() {
                     >
                       ⟿
                     </button>
+                    {trip.shape_id
+                      && (shapes.find((s) => s.shape_id === trip.shape_id)?.points.length ?? 0) >= 2 && (
+                      <button
+                        onClick={() => handleEstimate(trip.trip_id)}
+                        title="Estimate stop times from the road network (Mapbox)"
+                        className="text-warm-gray hover:text-coral text-[11px]"
+                      >
+                        ◷
+                      </button>
+                    )}
                     <button
                       onClick={() => handleDuplicate(trip.trip_id)}
                       title="Duplicate (+60 min)"
@@ -752,6 +826,79 @@ export function TimetableGrid() {
                 className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50"
               >
                 Apply to {applyTargets.length}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Estimate times dialog */}
+      {estimatePrompt && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black/20" onClick={() => { if (!estimating) setEstimatePrompt(null); }} />
+          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-sm mx-4">
+            <h3 className="font-heading font-bold text-base text-dark-brown mb-1">
+              Estimate times
+            </h3>
+            <p className="text-sm text-warm-gray mb-4">
+              Fill this trip&rsquo;s stop times from the drawn route&rsquo;s road-network travel time, plus a
+              dwell at each stop. Then use&nbsp;⇶ to apply it to the route&rsquo;s other trips.
+            </p>
+            <div className="space-y-3 mb-4">
+              <label className="block">
+                <span className="text-xs font-semibold text-dark-brown">Start time</span>
+                <input
+                  autoFocus
+                  value={estStart}
+                  onChange={(e) => setEstStart(e.target.value)}
+                  placeholder="08:00"
+                  className="mt-1 w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral tabular-nums"
+                />
+              </label>
+              <div className="flex gap-3">
+                <label className="flex-1">
+                  <span className="text-xs font-semibold text-dark-brown">Dwell / stop (sec)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={estDwell}
+                    onChange={(e) => setEstDwell(Math.max(0, Number(e.target.value)))}
+                    className="mt-1 w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral tabular-nums"
+                  />
+                </label>
+                <label className="flex-1">
+                  <span
+                    className="text-xs font-semibold text-dark-brown"
+                    title="Multiplier on car travel time. Buses are slower than free-flow cars; ~1.3 is a reasonable urban default."
+                  >
+                    Speed factor
+                  </span>
+                  <input
+                    type="number"
+                    min={0.1}
+                    step={0.1}
+                    value={estSpeed}
+                    onChange={(e) => setEstSpeed(Math.max(0.1, Number(e.target.value)))}
+                    className="mt-1 w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral tabular-nums"
+                  />
+                </label>
+              </div>
+            </div>
+            {estError && <p className="text-xs text-red-500 mb-3">{estError}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEstimatePrompt(null)}
+                disabled={estimating}
+                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEstimateConfirm}
+                disabled={estimating}
+                className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50"
+              >
+                {estimating ? 'Estimating…' : 'Estimate'}
               </button>
             </div>
           </div>

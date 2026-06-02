@@ -104,6 +104,8 @@ Stops are placed in the context of the currently-selected route. Default behavio
 - ✅ Per-route timetable grid (rows = trips, columns = stops, cells = times).
 - ✅ Trip metadata: headsign, direction, service pattern, block_id, wheelchair_accessible.
 - ✅ Auto-interpolate intermediate stop times from distance + speed.
+- ✅ Estimate stop times from the drawn route's road-network travel time (Mapbox Map Matching, `◷` per trip): per-stop travel along the matched path + a configurable per-stop dwell (default 18 s) and bus-vs-car speed factor (default 1.3). Fill one trip, then ⇶ to all.
+- ✅ Apply a trip's stop sequence + relative timing to every other trip on the route/direction (`⇶`), each keeping its own start time.
 - ✅ Duplicate a trip with a configurable time offset (e.g. "repeat every 30 min").
 - ✅ Bidirectional editing — changes in the timetable reflect on the map and vice versa.
 - ✅ Service summary showing weekly revenue hours, trips per week, peak vehicles per route.

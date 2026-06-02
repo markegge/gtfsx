@@ -125,6 +125,18 @@ export function TimetableGrid() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRouteId, patterns]);
 
+  // The shape the timetable filters by. Falls back to the first pattern when
+  // the stored selection is null or stale — so a route WITH shapes never
+  // filters by direction (which would union same-direction shapes' stops and
+  // duplicate the shared ones). Mirrors what the dropdown displays, and doesn't
+  // depend on the sync effect having run yet.
+  const effectiveShapeId = useMemo(() => {
+    if (patterns.length === 0) return null;
+    return patterns.some((p) => p.shapeId === selectedShapeId)
+      ? selectedShapeId
+      : patterns[0].shapeId;
+  }, [patterns, selectedShapeId]);
+
   // Service patterns that have trips for this route+direction (for "copy from" feature)
   const serviceIdsWithTrips = useMemo(() => {
     if (!selectedRouteId) return [];
@@ -163,14 +175,14 @@ export function TimetableGrid() {
     if (!selectedRouteId) return [];
     // Columns are the selected shape's own stops (per-shape). Shapeless routes
     // (no shape selected) fall back to direction-keyed stops.
-    const list = selectedShapeId
-      ? routeStops.filter((rs) => rs.route_id === selectedRouteId && rs.shape_id === selectedShapeId)
+    const list = effectiveShapeId
+      ? routeStops.filter((rs) => rs.route_id === selectedRouteId && rs.shape_id === effectiveShapeId)
       : routeStops.filter((rs) => rs.route_id === selectedRouteId && rs.direction_id === directionId);
     return [...list]
       .sort((a, b) => a.stop_sequence - b.stop_sequence)
       .map((rs) => stops.find((s) => s.stop_id === rs.stop_id))
       .filter(Boolean) as typeof stops;
-  }, [selectedRouteId, selectedShapeId, directionId, routeStops, stops]);
+  }, [selectedRouteId, effectiveShapeId, directionId, routeStops, stops]);
 
   // Helper: find a specific stop_time by trip+stop using the byTrip index
   const findStopTime = useCallback((tripId: string, stopId: string): StopTime | undefined => {
@@ -215,7 +227,7 @@ export function TimetableGrid() {
         && (!activeServiceId || t.service_id === activeServiceId)
         // Filter by the selected shape when there is one (so two shapes sharing
         // a direction don't pile into one view); otherwise by direction.
-        && (selectedShapeId ? t.shape_id === selectedShapeId : t.direction_id === directionId))
+        && (effectiveShapeId ? t.shape_id === effectiveShapeId : t.direction_id === directionId))
       .sort((a, b) => {
         // Sort by earliest assigned arrival; trips with no times yet go last.
         const earliest = (tripId: string) => {
@@ -232,7 +244,7 @@ export function TimetableGrid() {
         if (!aTime || !bTime) return (aTime ? 0 : 1) - (bTime ? 0 : 1);
         return aTime.localeCompare(bTime);
       });
-  }, [selectedRouteId, trips, stopTimesByTrip, directionId, activeServiceId, selectedShapeId]);
+  }, [selectedRouteId, trips, stopTimesByTrip, directionId, activeServiceId, effectiveShapeId]);
 
   // Tab key navigation
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>, tripIdx: number, stopIdx: number) => {
@@ -280,7 +292,7 @@ export function TimetableGrid() {
       service_id: activeServiceId || calendars[0]?.service_id || '',
       direction_id: directionId,
       trip_headsign: route?.route_short_name || '',
-      shape_id: selectedShapeId ?? trips.find((t) => t.route_id === selectedRouteId && t.direction_id === directionId)?.shape_id,
+      shape_id: effectiveShapeId ?? trips.find((t) => t.route_id === selectedRouteId && t.direction_id === directionId)?.shape_id,
     });
   };
 
@@ -475,7 +487,7 @@ export function TimetableGrid() {
         {patterns.length >= 1 ? (
           <PatternSelector
             patterns={patterns}
-            selectedShapeId={selectedShapeId}
+            selectedShapeId={effectiveShapeId}
             route={route}
             shapes={shapes}
             onChange={(p) => {

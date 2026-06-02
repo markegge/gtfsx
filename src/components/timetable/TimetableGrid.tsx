@@ -217,11 +217,20 @@ export function TimetableGrid() {
         // a direction don't pile into one view); otherwise by direction.
         && (selectedShapeId ? t.shape_id === selectedShapeId : t.direction_id === directionId))
       .sort((a, b) => {
-        const aSTs = stopTimesByTrip.get(a.trip_id);
-        const bSTs = stopTimesByTrip.get(b.trip_id);
-        const aFirst = aSTs?.[0];
-        const bFirst = bSTs?.[0];
-        return (aFirst?.arrival_time || '').localeCompare(bFirst?.arrival_time || '');
+        // Sort by earliest assigned arrival; trips with no times yet go last.
+        const earliest = (tripId: string) => {
+          let best = '';
+          for (const st of stopTimesByTrip.get(tripId) ?? []) {
+            if (st.arrival_time && (!best || st.arrival_time.localeCompare(best) < 0)) {
+              best = st.arrival_time;
+            }
+          }
+          return best;
+        };
+        const aTime = earliest(a.trip_id);
+        const bTime = earliest(b.trip_id);
+        if (!aTime || !bTime) return (aTime ? 0 : 1) - (bTime ? 0 : 1);
+        return aTime.localeCompare(bTime);
       });
   }, [selectedRouteId, trips, stopTimesByTrip, directionId, activeServiceId, selectedShapeId]);
 

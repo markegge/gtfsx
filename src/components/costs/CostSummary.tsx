@@ -6,6 +6,8 @@ import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
 import { RailSubHeading } from '../ui/RailHeadings';
 import { useNavigate } from 'react-router-dom';
 import { useEditorPlan } from '../billing/useEditorPlan';
+import { useVisibleFeed } from '../../hooks/useVisibleFeed';
+import { RouteScopeNote } from '../ui/RouteScopeNote';
 
 function formatCurrency(n: number): string {
   return '$' + Math.round(n).toLocaleString();
@@ -13,9 +15,11 @@ function formatCurrency(n: number): string {
 
 export function CostSummary() {
   const {
-    routes, trips, stopTimes, calendars, calendarDates,
+    calendars, calendarDates,
     selectRoute, setEditingRouteId, setSidebarSection,
   } = useStore();
+  // Analysis is scoped to routes toggled visible on the map (scenario compare).
+  const { routes, trips, stopTimes, visibleRouteCount, totalRouteCount } = useVisibleFeed();
   const { byTrip: stopTimesByTrip } = useStopTimesIndex();
   const navigate = useNavigate();
   // CSV export is a paid (Pro/Agency) feature; the cost analysis itself is free.
@@ -83,6 +87,7 @@ export function CostSummary() {
 
   return (
     <div>
+      <RouteScopeNote visible={visibleRouteCount} total={totalRouteCount} />
       <RailSubHeading>Assumptions</RailSubHeading>
       <div className="bg-cream rounded-lg p-4 mb-5">
         <div className="grid grid-cols-2 gap-3 mb-3">

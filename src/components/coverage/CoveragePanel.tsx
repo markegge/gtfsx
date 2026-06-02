@@ -1,6 +1,8 @@
 import { useCallback } from 'react';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
+import { useVisibleFeed } from '../../hooks/useVisibleFeed';
+import { RouteScopeNote } from '../ui/RouteScopeNote';
 import { fetchCensusData, lookupFips } from '../../services/demographics';
 import {
   getBufferForRoute,
@@ -16,8 +18,8 @@ function formatNumber(n: number): string {
 }
 
 export function CoveragePanel() {
-  const stops = useStore((s) => s.stops);
-  const routes = useStore((s) => s.routes);
+  // Analysis is scoped to routes toggled visible on the map (scenario compare).
+  const { stops, routes, visibleRouteCount, totalRouteCount } = useVisibleFeed();
   const coverageData = useStore((s) => s.coverageData);
   const isFetchingCoverage = useStore((s) => s.isFetchingCoverage);
   const coverageError = useStore((s) => s.coverageError);
@@ -99,7 +101,13 @@ export function CoveragePanel() {
   }, [stops, routes, setCoverageData, setIsFetchingCoverage, setCoverageError]);
 
   if (stops.length === 0) {
-    return (
+    return totalRouteCount > 0 && visibleRouteCount === 0 ? (
+      <EmptyState
+        icon="🚏"
+        title="All routes hidden"
+        description="Toggle route visibility back on to analyze coverage for that scenario."
+      />
+    ) : (
       <EmptyState
         icon="🚏"
         title="No Stops Yet"
@@ -110,6 +118,7 @@ export function CoveragePanel() {
 
   return (
     <div className="space-y-4">
+      <RouteScopeNote visible={visibleRouteCount} total={totalRouteCount} />
       <p className="text-xs text-warm-gray">
         Population, households, workers, and equity demographics within a straight-line ¼–½ mi
         buffer of stops, from US Census ACS data. Buffers approximate walking reach; true

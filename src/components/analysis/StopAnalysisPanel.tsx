@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Papa from 'papaparse';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
+import { useVisibleFeed } from '../../hooks/useVisibleFeed';
+import { RouteScopeNote } from '../ui/RouteScopeNote';
 import { downloadBlob } from '../../services/gtfsExport';
 import { secondsToGtfsTime, formatTimeShort } from '../../utils/time';
 import {
@@ -147,11 +149,8 @@ function SpacingHistogram({
 /* ── main panel ── */
 
 export function StopAnalysisPanel() {
-  const stops = useStore((s) => s.stops);
-  const routes = useStore((s) => s.routes);
-  const routeStops = useStore((s) => s.routeStops);
-  const trips = useStore((s) => s.trips);
-  const stopTimes = useStore((s) => s.stopTimes);
+  // Analysis is scoped to routes toggled visible on the map (scenario compare).
+  const { stops, routes, routeStops, trips, stopTimes, visibleRouteCount, totalRouteCount } = useVisibleFeed();
   const calendars = useStore((s) => s.calendars);
   const calendarDates = useStore((s) => s.calendarDates);
   const selectRoute = useStore((s) => s.selectRoute);
@@ -218,7 +217,13 @@ export function StopAnalysisPanel() {
   useEffect(() => () => setStopAnalysisOverlay(null), [setStopAnalysisOverlay]);
 
   if (stops.length === 0) {
-    return (
+    return totalRouteCount > 0 && visibleRouteCount === 0 ? (
+      <EmptyState
+        icon="📊"
+        title="All routes hidden"
+        description="Toggle route visibility back on to run stop diagnostics for that scenario."
+      />
+    ) : (
       <EmptyState
         icon="📊"
         title="No Stops Yet"
@@ -231,6 +236,7 @@ export function StopAnalysisPanel() {
 
   return (
     <div className="space-y-3">
+      <RouteScopeNote visible={visibleRouteCount} total={totalRouteCount} />
       <p className="text-xs text-warm-gray">
         Industry-standard stop diagnostics computed from this feed. Spacing uses straight-line
         distance between stops; service metrics use the {serviceOverride ? 'selected' : 'busiest'}{' '}

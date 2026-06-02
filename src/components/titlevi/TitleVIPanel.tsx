@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
-import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
+import { useVisibleFeed } from '../../hooks/useVisibleFeed';
+import { RouteScopeNote } from '../ui/RouteScopeNote';
 import { fetchCensusData, lookupFips } from '../../services/demographics';
 import { calculateTitleVI, type TitleVIResult, type TitleVIGroup } from '../../services/titleVI';
 
@@ -52,7 +53,8 @@ function GroupColumn({ label, group, isMinority }: { label: string; group: Title
 }
 
 export function TitleVIPanel() {
-  const stops = useStore((s) => s.stops);
+  // Analysis is scoped to routes toggled visible on the map (scenario compare).
+  const { stops, stopTimes, visibleRouteCount, totalRouteCount } = useVisibleFeed();
   const [result, setResult] = useState<TitleVIResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,17 +69,22 @@ export function TitleVIPanel() {
       const avgLon = stops.reduce((sum, s) => sum + s.stop_lon, 0) / stops.length;
       const { stateFips, countyFips } = await lookupFips(avgLat, avgLon);
       const blockGroups = await fetchCensusData(stateFips, countyFips);
-      const state = useStore.getState();
-      setResult(calculateTitleVI(stops, blockGroups, state));
+      setResult(calculateTitleVI(stops, blockGroups, { stopTimes }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed');
     } finally {
       setLoading(false);
     }
-  }, [stops]);
+  }, [stops, stopTimes]);
 
   if (stops.length === 0) {
-    return (
+    return totalRouteCount > 0 && visibleRouteCount === 0 ? (
+      <EmptyState
+        icon="⚖"
+        title="All routes hidden"
+        description="Toggle route visibility back on to run a Title VI analysis for that scenario."
+      />
+    ) : (
       <EmptyState
         icon="⚖"
         title="No Stops Yet"
@@ -88,6 +95,7 @@ export function TitleVIPanel() {
 
   return (
     <div className="space-y-4">
+      <RouteScopeNote visible={visibleRouteCount} total={totalRouteCount} />
       <p className="text-xs text-warm-gray">
         Compares transit service levels between minority and non-minority block groups per
         FTA Circular 4702.1B. Threshold is the regional average minority share.

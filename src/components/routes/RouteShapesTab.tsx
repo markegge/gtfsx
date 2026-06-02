@@ -87,12 +87,19 @@ export function RouteShapesTab() {
   if (!route) return null;
 
   const handleDrawShape = () => {
-    // Default direction 0 for all new shapes — the per-draw direction
-    // picker was retired since routes can carry unlimited shape variants.
-    // The user re-assigns direction per trip from the Trips tab.
-    // Mirrors MapToolbar's place-stop pattern (sentinel pattern is
-    // documented in src/types/window.d.ts).
-    window.__drawingDirection = 0;
+    // Default a new shape to the direction that isn't represented yet: the
+    // first shape is outbound (0), and once outbound exists the next defaults
+    // to inbound (1) — the common out-and-back. This matters because route
+    // stops are stored per direction, so two shapes that share a direction
+    // share a stop list; defaulting the return trip to the other direction
+    // gives it its own stops. (Re-assignable per trip in the Trips tab.)
+    // Sentinel pattern documented in src/types/window.d.ts.
+    const dirsUsed = new Set(
+      trips
+        .filter((t) => t.route_id === route.route_id && t.shape_id)
+        .map((t) => t.direction_id),
+    );
+    window.__drawingDirection = dirsUsed.has(0) && !dirsUsed.has(1) ? 1 : 0;
     setDrawingRouteId(route.route_id);
     setMapMode('draw_route');
   };

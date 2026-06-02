@@ -38,6 +38,9 @@ export interface UISlice {
   selectedStopId: string | null;
   selectedTripId: string | null;
   drawingRouteId: string | null;
+  // When true, the in-progress draw creates a new route on finish (the default
+  // from the Draw Route tool). When false, the shape attaches to drawingRouteId.
+  drawingNewRoute: boolean;
   editingRouteId: string | null;
   editingShapeId: string | null;
   editingFlexZoneId: string | null;
@@ -102,6 +105,7 @@ export interface UISlice {
   selectStop: (id: string | null) => void;
   selectTrip: (id: string | null) => void;
   setDrawingRouteId: (id: string | null) => void;
+  setDrawingNewRoute: (v: boolean) => void;
   setEditingRouteId: (id: string | null) => void;
   setEditingShapeId: (id: string | null) => void;
   setEditingFlexZoneId: (id: string | null) => void;
@@ -139,6 +143,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   selectedStopId: null,
   selectedTripId: null,
   drawingRouteId: null,
+  drawingNewRoute: false,
   editingRouteId: null,
   editingShapeId: null,
   editingFlexZoneId: null,
@@ -239,6 +244,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   selectStop: (id) => set((state) => { state.selectedStopId = id; }),
   selectTrip: (id) => set((state) => { state.selectedTripId = id; }),
   setDrawingRouteId: (id) => set((state) => { state.drawingRouteId = id; }),
+  setDrawingNewRoute: (v) => set((state) => { state.drawingNewRoute = v; }),
   setEditingRouteId: (id) => set((state) => { state.editingRouteId = id; }),
   setEditingShapeId: (id) => set((state) => { state.editingShapeId = id; }),
   setEditingFlexZoneId: (id) => set((state) => { state.editingFlexZoneId = id; }),

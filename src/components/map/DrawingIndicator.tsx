@@ -36,8 +36,21 @@ export function DrawingIndicator() {
     );
   }
 
+  // draw_route renders the banner plus a target dropdown (new route — default —
+  // or an existing route the shape attaches to), anchored under the banner.
+  if (mapMode === 'draw_route') {
+    return (
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2">
+        <div className="bg-coral text-white px-5 py-2 rounded-full text-[13px] font-heading font-semibold shadow-md flex items-center gap-2">
+          <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+          Drawing Route Shape — Click to add points, double-click to finish
+        </div>
+        <DrawRouteTargetDialog />
+      </div>
+    );
+  }
+
   const messages: Record<string, string> = {
-    draw_route: 'Drawing Route Shape — Click to add points, double-click to finish',
     edit_vertices: 'Editing Shape — Drag vertices to adjust',
     move_stop: 'Moving Stop — Click the map or drag the stop to reposition. Press Esc to cancel.',
     edit_shape: 'Editing Shape — Drag vertices, click midpoints to add, Delete key to remove. Click Save when done.',
@@ -161,6 +174,58 @@ function PlaceStopDialog() {
         placeholder="Name (optional — cleared after placement)"
         className="w-full px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
       />
+    </div>
+  );
+}
+
+/** Anchored under the "Drawing Route Shape" banner: choose whether the shape
+ *  being drawn starts a new route (default) or attaches to an existing one.
+ *  The route isn't created until the shape is finished. */
+function DrawRouteTargetDialog() {
+  const routes = useStore((s) => s.routes);
+  const trips = useStore((s) => s.trips);
+  const drawingNewRoute = useStore((s) => s.drawingNewRoute);
+  const drawingRouteId = useStore((s) => s.drawingRouteId);
+  const setDrawingNewRoute = useStore((s) => s.setDrawingNewRoute);
+  const setDrawingRouteId = useStore((s) => s.setDrawingRouteId);
+
+  return (
+    <div
+      className="bg-white rounded-xl shadow-lg border border-sand px-3 py-2.5 flex items-center gap-2 w-[min(92vw,320px)]"
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <label className="text-[10px] font-semibold text-warm-gray uppercase tracking-wide shrink-0">
+        Add to
+      </label>
+      <select
+        value={drawingNewRoute ? 'new' : (drawingRouteId ?? 'new')}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === 'new') {
+            setDrawingNewRoute(true);
+            setDrawingRouteId(null);
+            window.__drawingDirection = 0;
+          } else {
+            setDrawingNewRoute(false);
+            setDrawingRouteId(v);
+            // Smart direction default for the chosen route: first shape
+            // outbound, next inbound.
+            const dirsUsed = new Set(
+              trips.filter((t) => t.route_id === v && t.shape_id).map((t) => t.direction_id),
+            );
+            window.__drawingDirection = dirsUsed.has(0) && !dirsUsed.has(1) ? 1 : 0;
+          }
+        }}
+        className="flex-1 px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral min-w-0"
+      >
+        <option value="new">New route</option>
+        {routes.map((r) => (
+          <option key={r.route_id} value={r.route_id}>
+            {r.route_short_name || r.route_long_name || 'Untitled route'}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

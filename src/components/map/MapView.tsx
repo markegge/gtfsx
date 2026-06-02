@@ -23,6 +23,7 @@ import type { MapStyleId } from './MapLayerControls';
 import type { MapMouseEvent, MapboxGeoJSONFeature } from 'mapbox-gl';
 import type { ShapePoint } from '../../types/gtfs';
 import { generateId } from '../../services/idGenerator';
+import { ROUTE_COLORS, getContrastTextColor } from '../../utils/colors';
 import { snapToRoadDetailed, type SnapStatus } from '../../services/snapToRoad';
 import { simplifyShapePoints } from '../../services/simplifyShape';
 import { suggestStopName } from '../../services/suggestStopName';
@@ -37,6 +38,26 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 // Round map-derived coordinates to 6 decimals (~0.1 m) so dragging/placing a
 // stop doesn't litter the lat/lon fields and stops.txt with float noise.
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
+
+/** Create a new blank route (next unused color) and select it. Used when a
+ *  drawn shape targets "new route" — created only on finish, never on cancel. */
+function createBlankRoute(): string {
+  const st = useStore.getState();
+  const usedColors = st.routes.map((r) => r.route_color);
+  const nextColor = ROUTE_COLORS.find((c) => !usedColors.includes(c)) || ROUTE_COLORS[0];
+  const id = generateId('route');
+  st.addRoute({
+    route_id: id,
+    agency_id: st.agencies[0]?.agency_id || '',
+    route_short_name: '',
+    route_long_name: '',
+    route_type: 3,
+    route_color: nextColor,
+    route_text_color: getContrastTextColor(nextColor),
+  });
+  st.selectRoute(id);
+  return id;
+}
 
 /** Create a shape from drawn coords + a stub trip pointing at it, for the given
  *  route and direction. Shared by the draw-finish handler and the snap-warning
@@ -134,7 +155,8 @@ export function MapView() {
   // user can keep their unsnapped drawing or discard it and redraw.
   const [snapWarning, setSnapWarning] = useState<{
     rawCoords: [number, number][];
-    routeId: string;
+    routeId: string | null; // null when the draw targets a new route
+    isNewRoute: boolean;
     direction: 0 | 1;
     status: Exclude<SnapStatus, 'ok'>;
   } | null>(null);
@@ -489,6 +511,7 @@ export function MapView() {
     window.__cancelDrawRoute = () => {
       if (drawRef.current) drawRef.current.deleteAll();
       useStore.getState().setDrawingRouteId(null);
+      useStore.getState().setDrawingNewRoute(false);
       useStore.getState().setMapMode('select');
     };
     return () => {
@@ -690,9 +713,10 @@ export function MapView() {
     }
 
     const currentDrawingRouteId = currentState.drawingRouteId;
+    const currentDrawingNewRoute = currentState.drawingNewRoute;
     const currentSnapToRoad = currentState.snapToRoad;
 
-    if (feature.geometry.type === 'LineString' && currentDrawingRouteId) {
+    if (feature.geometry.type === 'LineString' && (currentDrawingRouteId || currentDrawingNewRoute)) {
       const rawCoords = feature.geometry.coordinates as [number, number][];
 
       // Read the drawing direction from window (set by RouteEditor)
@@ -700,20 +724,32 @@ export function MapView() {
 
       if (drawRef.current) drawRef.current.deleteAll();
 
+      // Commit a shape: create the target route now if the draw targets "new",
+      // otherwise attach to the chosen existing route. Done only on commit, so
+      // cancelling or discarding never leaves an empty route behind.
+      const commitShape = (coords: [number, number][]) => {
+        const routeId = currentDrawingNewRoute || !currentDrawingRouteId
+          ? createBlankRoute()
+          : currentDrawingRouteId;
+        createShapeAndTrip(coords, routeId, drawingDirection);
+        useStore.getState().setDrawingNewRoute(false);
+        finishDrawingTo(routeId);
+      };
+
       if (currentSnapToRoad) {
         setIsSnapping(true);
         snapToRoadDetailed(rawCoords)
           .then((result) => {
             if (result.status === 'ok') {
-              createShapeAndTrip(result.snapped, currentDrawingRouteId, drawingDirection);
-              finishDrawingTo(currentDrawingRouteId);
+              commitShape(result.snapped);
             } else {
               // Couldn't fully snap (roadless diversion / no match). Ask whether
-              // to keep the unsnapped drawing or discard it and redraw, rather
-              // than silently saving a cut-off shape.
+              // to keep the unsnapped drawing or discard it, rather than silently
+              // saving a cut-off shape. Defer route creation until "keep".
               setSnapWarning({
                 rawCoords,
                 routeId: currentDrawingRouteId,
+                isNewRoute: currentDrawingNewRoute,
                 direction: drawingDirection,
                 status: result.status,
               });
@@ -723,34 +759,39 @@ export function MapView() {
             setSnapWarning({
               rawCoords,
               routeId: currentDrawingRouteId,
+              isNewRoute: currentDrawingNewRoute,
               direction: drawingDirection,
               status: 'failed',
             });
           })
           .finally(() => setIsSnapping(false));
       } else {
-        createShapeAndTrip(rawCoords, currentDrawingRouteId, drawingDirection);
-        finishDrawingTo(currentDrawingRouteId);
+        commitShape(rawCoords);
       }
     }
   }, []);
 
-  // Snap-warning resolutions: keep the raw drawn shape, or throw it away and
-  // re-arm the draw tool for another attempt on the same route + direction.
+  // Snap-warning resolutions: keep the raw drawn shape (creating the new route
+  // now if that's the target), or discard it and re-arm the draw tool.
   const handleKeepUnsnapped = () => {
     if (!snapWarning) return;
-    createShapeAndTrip(snapWarning.rawCoords, snapWarning.routeId, snapWarning.direction);
-    finishDrawingTo(snapWarning.routeId);
+    const routeId = snapWarning.isNewRoute || !snapWarning.routeId
+      ? createBlankRoute()
+      : snapWarning.routeId;
+    createShapeAndTrip(snapWarning.rawCoords, routeId, snapWarning.direction);
+    useStore.getState().setDrawingNewRoute(false);
+    finishDrawingTo(routeId);
     setSnapWarning(null);
   };
 
   const handleDiscardAndRedraw = () => {
     if (!snapWarning) return;
-    const { routeId, direction } = snapWarning;
+    const { routeId, isNewRoute, direction } = snapWarning;
     setSnapWarning(null);
     window.__drawingDirection = direction;
     const st = useStore.getState();
-    st.setDrawingRouteId(routeId);
+    st.setDrawingNewRoute(isNewRoute);
+    st.setDrawingRouteId(isNewRoute ? null : routeId);
     st.setMapMode('draw_route');
     if (drawRef.current) {
       try { drawRef.current.deleteAll(); } catch { /* ignore */ }

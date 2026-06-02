@@ -45,11 +45,12 @@ export function MapToolbar() {
       window.__cancelDrawRoute?.();
       return;
     }
-    const routeId = ensureActiveRoute();
-    window.__drawingDirection = state.stopPlacementDirection;
-    state.setDrawingRouteId(routeId);
-    state.setEditingRouteId(routeId);
-    state.setSidebarSection('routes');
+    // Default to a new route; the draw banner's dropdown can retarget to an
+    // existing route. The route is created only when the shape is finished, so
+    // cancelling leaves nothing behind.
+    state.setDrawingNewRoute(true);
+    state.setDrawingRouteId(null);
+    window.__drawingDirection = 0;
     state.setMapMode('draw_route');
   };
 

@@ -23,7 +23,7 @@ export function RouteShapesTab() {
     routes, trips, shapes, removeTrip,
     routeStops, addRouteStop,
     selectedRouteId,
-    setMapMode, setDrawingRouteId,
+    setMapMode, setDrawingRouteId, setDrawingNewRoute,
     setEditingShapeId,
     addShape, addTrip,
     removeShape, renameShape,
@@ -99,6 +99,7 @@ export function RouteShapesTab() {
         .map((t) => t.direction_id),
     );
     window.__drawingDirection = dirsUsed.has(0) && !dirsUsed.has(1) ? 1 : 0;
+    setDrawingNewRoute(false); // adding a shape to this existing route
     setDrawingRouteId(route.route_id);
     setMapMode('draw_route');
   };

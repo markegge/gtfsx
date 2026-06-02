@@ -36,7 +36,7 @@ function uniqueTripId(baseId: string, existingIds: Set<string>): string {
 export function TimetableGrid() {
   const {
     selectedRouteId, selectRoute, routes, trips, stops, routeStops, calendars,
-    setStopTime, addTrip, duplicateTrip, removeTrip, updateTrip, renameTripId,
+    setStopTime, addTrip, duplicateTrip, applyTripPattern, removeTrip, updateTrip, renameTripId,
     interpolateStopTimes,
   } = useStore();
   const { byTrip: stopTimesByTrip } = useStopTimesIndex();
@@ -139,6 +139,9 @@ export function TimetableGrid() {
   // Duplicate trip prompt state
   const [dupPrompt, setDupPrompt] = useState<{ tripId: string; defaultStartTime: string } | null>(null);
   const [dupStartTime, setDupStartTime] = useState('');
+
+  // "Apply to all trips" confirm state — holds the template trip id.
+  const [applyPrompt, setApplyPrompt] = useState<string | null>(null);
 
   // Ref map for Tab navigation between cells
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
@@ -286,6 +289,18 @@ export function TimetableGrid() {
     const newId = uniqueTripId(generateTripName(routeName, normalized, svcIdx), existingIds);
     duplicateTrip(dupPrompt.tripId, newId, offsetMinutes);
     setDupPrompt(null);
+  };
+
+  // Other trips this template would push its pattern to (the current view).
+  const applyTargets = useMemo(
+    () => (applyPrompt ? routeTrips.filter((t) => t.trip_id !== applyPrompt) : []),
+    [applyPrompt, routeTrips],
+  );
+
+  const handleApplyConfirm = () => {
+    if (!applyPrompt || applyTargets.length === 0) { setApplyPrompt(null); return; }
+    applyTripPattern(applyPrompt, applyTargets.map((t) => t.trip_id));
+    setApplyPrompt(null);
   };
 
   const handleCopyFromService = (sourceServiceId: string) => {
@@ -648,6 +663,15 @@ export function TimetableGrid() {
                     >
                       ⧉
                     </button>
+                    {routeTrips.length > 1 && (
+                      <button
+                        onClick={() => setApplyPrompt(trip.trip_id)}
+                        title="Apply this trip's stops + timing to all other trips on this route/direction (each keeps its own start time)"
+                        className="text-warm-gray hover:text-coral text-[11px]"
+                      >
+                        ⇶
+                      </button>
+                    )}
                     <button
                       onClick={() => removeTrip(trip.trip_id)}
                       title="Delete trip"
@@ -695,6 +719,39 @@ export function TimetableGrid() {
                 className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors"
               >
                 Add Trip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Apply-to-all-trips confirm */}
+      {applyPrompt && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black/20" onClick={() => setApplyPrompt(null)} />
+          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-sm mx-4">
+            <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
+              Apply to all trips
+            </h3>
+            <p className="text-sm text-warm-gray mb-4">
+              Re-lay the {applyTargets.length} other {directionName(route, directionId).toLowerCase()} trip
+              {applyTargets.length === 1 ? '' : 's'} on this route to match this trip&rsquo;s stops and
+              timing. Each keeps its own start time — headways and departures stay the same; only the
+              stop sequence and run/dwell times change.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setApplyPrompt(null)}
+                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApplyConfirm}
+                disabled={applyTargets.length === 0}
+                className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50"
+              >
+                Apply to {applyTargets.length}
               </button>
             </div>
           </div>

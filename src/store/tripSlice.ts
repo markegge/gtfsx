@@ -16,6 +16,11 @@ export interface TripSlice {
   setStopTimes: (stopTimes: StopTime[]) => void;
   renameTripId: (oldId: string, newId: string) => void;
   duplicateTrip: (trip_id: string, newTripId: string, offsetMinutes: number) => void;
+  /** Re-lay each target trip's stop_times to match the template trip's stop
+   *  sequence + relative timings, shifted so each target keeps its own start
+   *  time. Used to push a schedule edit (added stop / changed timing) to all
+   *  trips on a route/direction without delete-and-regenerate. */
+  applyTripPattern: (templateTripId: string, targetTripIds: string[]) => void;
   interpolateStopTimes: (tripId: string) => void;
 }
 
@@ -26,6 +31,20 @@ function addMinutesToGtfsTime(time: string, minutes: number): string {
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = totalSeconds % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function addSecondsToGtfsTime(time: string, seconds: number): string {
+  const total = gtfsTimeToSeconds(time) + seconds;
+  return secondsToGtfsTime(total);
+}
+
+/** A trip's anchor = the earliest-sequence stop_time that has a time set
+ *  (its start). Returns null if the trip has no times at all. */
+function tripAnchorSeconds(times: StopTime[]): number | null {
+  const ordered = [...times].sort((a, b) => a.stop_sequence - b.stop_sequence);
+  const anchor = ordered.find((st) => st.arrival_time)?.arrival_time
+    ?? ordered.find((st) => st.departure_time)?.departure_time;
+  return anchor ? gtfsTimeToSeconds(anchor) : null;
 }
 
 export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]], [], TripSlice> = (set, get) => ({
@@ -77,6 +96,38 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
         arrival_time: st.arrival_time ? addMinutesToGtfsTime(st.arrival_time, offsetMinutes) : '',
         departure_time: st.departure_time ? addMinutesToGtfsTime(st.departure_time, offsetMinutes) : '',
       });
+    }
+  }),
+  applyTripPattern: (templateTripId, targetTripIds) => set((state) => {
+    const tmplTimes = state.stopTimes
+      .filter((st) => st.trip_id === templateTripId)
+      .sort((a, b) => a.stop_sequence - b.stop_sequence);
+    const tmplAnchor = tripAnchorSeconds(tmplTimes);
+    if (tmplTimes.length === 0 || tmplAnchor === null) return;
+
+    const targets = new Set(targetTripIds.filter((id) => id !== templateTripId));
+    if (targets.size === 0) return;
+
+    // Capture each target's current start BEFORE we replace its times, so the
+    // re-laid pattern preserves that trip's departure time (and thus headway).
+    const offsetByTarget = new Map<string, number>();
+    for (const id of targets) {
+      const anchor = tripAnchorSeconds(state.stopTimes.filter((st) => st.trip_id === id));
+      offsetByTarget.set(id, (anchor ?? tmplAnchor) - tmplAnchor);
+    }
+
+    // Drop the targets' old stop_times, then re-lay from the template shifted.
+    state.stopTimes = state.stopTimes.filter((st) => !targets.has(st.trip_id));
+    for (const id of targets) {
+      const offset = offsetByTarget.get(id) ?? 0;
+      for (const st of tmplTimes) {
+        state.stopTimes.push({
+          ...st,
+          trip_id: id,
+          arrival_time: st.arrival_time ? addSecondsToGtfsTime(st.arrival_time, offset) : '',
+          departure_time: st.departure_time ? addSecondsToGtfsTime(st.departure_time, offset) : '',
+        });
+      }
     }
   }),
   interpolateStopTimes: (tripId) => set((state) => {

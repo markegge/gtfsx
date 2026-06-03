@@ -629,6 +629,61 @@ async function main() {
   // No route id → empty.
   assert('no route id → empty patterns', computeShapePatterns(null, spTrips, spRouteStops).length === 0);
 
+  // ---- PHASE 19: stop-balancing removal (removeRouteStop, route-only) ----
+  // Mirrors the Stop Analysis panel's "remove {stop}" action: it strips the
+  // flagged stop from one route's trips/stop sequence in that direction, but
+  // must leave the stop in stops.txt and untouched on other routes.
+  console.log('\nPhase 19: stop-balancing removal (route-only, keeps stops.txt)');
+  // Fresh, controlled mini-feed so assertions are deterministic.
+  s().setStops([
+    mkStop('RM1', -111.04, 45.67),
+    mkStop('RM2', -111.05, 45.68), // the stop we remove from RX
+    mkStop('RM3', -111.06, 45.69),
+  ]);
+  s().setRoutes([
+    { route_id: 'RX', agency_id: 'A', route_short_name: 'X', route_long_name: 'X Line', route_type: 3 },
+    { route_id: 'RY', agency_id: 'A', route_short_name: 'Y', route_long_name: 'Y Line', route_type: 3 },
+  ]);
+  s().setRouteStops([
+    { route_id: 'RX', stop_id: 'RM1', direction_id: 0, stop_sequence: 0, _snapped: false },
+    { route_id: 'RX', stop_id: 'RM2', direction_id: 0, stop_sequence: 1, _snapped: false },
+    { route_id: 'RX', stop_id: 'RM3', direction_id: 0, stop_sequence: 2, _snapped: false },
+    // RM2 is also served by RY in the same direction — must NOT be touched.
+    { route_id: 'RY', stop_id: 'RM2', direction_id: 0, stop_sequence: 0, _snapped: false },
+    { route_id: 'RY', stop_id: 'RM3', direction_id: 0, stop_sequence: 1, _snapped: false },
+  ]);
+  s().setTrips([
+    { trip_id: 'TX1', route_id: 'RX', service_id: 'SVC', direction_id: 0 },
+    { trip_id: 'TX2', route_id: 'RX', service_id: 'SVC', direction_id: 0 },
+    { trip_id: 'TY1', route_id: 'RY', service_id: 'SVC', direction_id: 0 },
+  ]);
+  s().setStopTimes([
+    { trip_id: 'TX1', stop_id: 'RM1', stop_sequence: 0, arrival_time: '08:00:00', departure_time: '08:00:00' },
+    { trip_id: 'TX1', stop_id: 'RM2', stop_sequence: 1, arrival_time: '08:05:00', departure_time: '08:05:00' },
+    { trip_id: 'TX1', stop_id: 'RM3', stop_sequence: 2, arrival_time: '08:10:00', departure_time: '08:10:00' },
+    { trip_id: 'TX2', stop_id: 'RM1', stop_sequence: 0, arrival_time: '09:00:00', departure_time: '09:00:00' },
+    { trip_id: 'TX2', stop_id: 'RM2', stop_sequence: 1, arrival_time: '09:05:00', departure_time: '09:05:00' },
+    { trip_id: 'TX2', stop_id: 'RM3', stop_sequence: 2, arrival_time: '09:10:00', departure_time: '09:10:00' },
+    // RY serves RM2 too — its stop_times must survive.
+    { trip_id: 'TY1', stop_id: 'RM2', stop_sequence: 0, arrival_time: '07:00:00', departure_time: '07:00:00' },
+    { trip_id: 'TY1', stop_id: 'RM3', stop_sequence: 1, arrival_time: '07:05:00', departure_time: '07:05:00' },
+  ]);
+
+  s().removeRouteStop('RX', 'RM2', 0); // no shape_id → scope by (route, direction)
+
+  assert('removal: route-stop dropped on RX',
+    s().routeStops.filter(rs => rs.route_id === 'RX' && rs.stop_id === 'RM2').length === 0);
+  assert('removal: stop_times for RM2 gone on RX trips',
+    s().stopTimes.filter(st => (st.trip_id === 'TX1' || st.trip_id === 'TX2') && st.stop_id === 'RM2').length === 0);
+  assert('removal: RX still serves its other stops',
+    s().stopTimes.filter(st => st.trip_id === 'TX1').map(st => st.stop_id).sort().join(',') === 'RM1,RM3');
+  assert('removal: stop RM2 STILL in stops.txt',
+    s().stops.some(st => st.stop_id === 'RM2'));
+  assert('removal: RM2 untouched on route RY (route-stop)',
+    s().routeStops.some(rs => rs.route_id === 'RY' && rs.stop_id === 'RM2'));
+  assert('removal: RM2 untouched on route RY (stop_times)',
+    s().stopTimes.some(st => st.trip_id === 'TY1' && st.stop_id === 'RM2'));
+
   // ---- SUMMARY ----
   console.log(`\n${'='.repeat(50)}`);
   console.log(`Results: ${passed} passed, ${failed} failed out of ${passed + failed} tests`);

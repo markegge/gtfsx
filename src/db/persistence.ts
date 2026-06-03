@@ -1,6 +1,7 @@
 import { db } from './dexie';
 import { useStore } from '../store';
 import type { StopTime, Shape, RouteStop, Trip } from '../types/gtfs';
+import { backfillRouteStopShapeIds } from '../services/routeStopMigration';
 
 // The heavy tables — millions of rows for a regional feed. Persisted in their
 // own IndexedDB record and only rewritten when they actually change.
@@ -121,19 +122,11 @@ export async function loadProject(projectId: string) {
   if (snapshot.calendarDates) state.setCalendarDates(snapshot.calendarDates);
   if (snapshot.routes) state.setRoutes(snapshot.routes);
   if (snapshot.routeStops) {
-    // Backfill shape_id on older snapshots (saved before route stops were keyed
-    // per shape) from each (route, direction)'s representative trip, so the
-    // editor's per-shape stop lists work without a mixed legacy state.
-    const snapTrips = (snapshot.trips ?? []) as Trip[];
-    const shapeForRouteDir = new Map<string, string>();
-    for (const t of snapTrips) {
-      if (!t.shape_id) continue;
-      const k = `${t.route_id}|${t.direction_id}`;
-      if (!shapeForRouteDir.has(k)) shapeForRouteDir.set(k, t.shape_id);
-    }
-    const restored = (snapshot.routeStops as RouteStop[]).map((rs) =>
-      rs.shape_id ? rs : { ...rs, shape_id: shapeForRouteDir.get(`${rs.route_id}|${rs.direction_id}`) });
-    state.setRouteStops(restored);
+    // Backfill shape_id on stops saved before per-shape keying (shared with the
+    // server load path so the two can't drift — see routeStopMigration).
+    state.setRouteStops(
+      backfillRouteStopShapeIds(snapshot.routeStops as RouteStop[], (snapshot.trips ?? []) as Trip[]),
+    );
   }
   if (snapshot.stops) state.setStops(snapshot.stops);
   if (snapshot.trips) state.setTrips(snapshot.trips);

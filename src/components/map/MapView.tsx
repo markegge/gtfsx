@@ -240,22 +240,37 @@ export function MapView() {
           e.preventDefault();
           e.stopPropagation();
           if (drawRef.current) {
-            // Try to undo the last placed vertex instead of deleting the whole line
-            const all = drawRef.current.getAll();
-            const feature = all.features[0];
+            const draw = drawRef.current;
+            const feature = draw.getAll().features[0];
             if (feature && feature.geometry.type === 'LineString') {
-              const coords = feature.geometry.coordinates;
-              // coords includes the cursor position as the last element during drawing,
-              // so >2 means at least 1 user-placed point + cursor
-              if (coords.length > 2) {
-                // Remove the last placed point (second to last; last is cursor)
-                coords.splice(coords.length - 2, 1);
-                drawRef.current.set(all);
-                return; // Stay in draw mode
+              // While drawing, the line's last coordinate is the live cursor; the
+              // user-placed vertices are everything before it.
+              const placed = (feature.geometry.coordinates as [number, number][]).slice(0, -1);
+              const kept = placed.slice(0, -1); // drop the most recently placed vertex
+              if (kept.length >= 1) {
+                // Re-enter draw_line_string from the kept vertices rather than
+                // splice()+set(): mapbox-gl-draw keeps an internal
+                // currentVertexPosition that set() doesn't update, so the next
+                // mousemove would re-append a vertex at the cursor — the bug this
+                // fixes. The continue API needs a >=2-coord line, so a single
+                // remaining vertex is padded; handleDrawCreate strips the dup.
+                const lineCoords = kept.length >= 2 ? kept : [kept[0], kept[0]];
+                draw.deleteAll();
+                const feat: GeoJSON.Feature<GeoJSON.LineString> = {
+                  type: 'Feature',
+                  properties: {},
+                  geometry: { type: 'LineString', coordinates: lineCoords },
+                };
+                const ids = draw.add(feat);
+                draw.changeMode('draw_line_string', {
+                  featureId: ids[0],
+                  from: lineCoords[lineCoords.length - 1],
+                });
+                return; // stay in draw mode, one vertex shorter
               }
             }
-            // No points left or couldn't undo — cancel drawing entirely
-            drawRef.current.deleteAll();
+            // Nothing left to keep — cancel drawing entirely.
+            draw.deleteAll();
           }
           useStore.getState().setMapMode('select');
           useStore.getState().setDrawingRouteId(null);
@@ -717,7 +732,12 @@ export function MapView() {
     const currentSnapToRoad = currentState.snapToRoad;
 
     if (feature.geometry.type === 'LineString' && (currentDrawingRouteId || currentDrawingNewRoute)) {
-      const rawCoords = feature.geometry.coordinates as [number, number][];
+      // Drop consecutive duplicate coordinates — a clean drawing never has them,
+      // but the Escape-to-undo re-entry pads a single remaining vertex (and a
+      // stray double-click can too); strip them so shapes have no zero-length legs.
+      const rawCoords = (feature.geometry.coordinates as [number, number][]).filter(
+        (c, i, arr) => i === 0 || c[0] !== arr[i - 1][0] || c[1] !== arr[i - 1][1],
+      );
 
       // Read the drawing direction from window (set by RouteEditor)
       const drawingDirection: 0 | 1 = window.__drawingDirection ?? 0;

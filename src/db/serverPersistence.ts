@@ -5,6 +5,7 @@ import {
   ConflictError,
 } from '../services/projectsApi';
 import { db } from './dexie';
+import { backfillRouteStopShapeIds } from '../services/routeStopMigration';
 
 // Editor state that round-trips through the server snapshot. Notably excludes
 // projectId and projectName: those are project-level metadata served by
@@ -135,7 +136,15 @@ export function applySnapshotToStore(snapshot: Record<string, unknown>) {
   if (Array.isArray(g('calendars'))) state.setCalendars(g('calendars') as never);
   if (Array.isArray(g('calendarDates'))) state.setCalendarDates(g('calendarDates') as never);
   if (Array.isArray(g('routes'))) state.setRoutes(g('routes') as never);
-  if (Array.isArray(g('routeStops'))) state.setRouteStops(g('routeStops') as never);
+  if (Array.isArray(g('routeStops'))) {
+    // Backfill shape_id on stops saved before per-shape keying — without this,
+    // feeds created before today's route/shape change load with stops the
+    // per-shape timetable + stops panel can't find (they show "Add stops to
+    // this route first"). Shared with the local loader so they stay in sync.
+    state.setRouteStops(
+      backfillRouteStopShapeIds(g('routeStops') as never, (g('trips') ?? []) as never) as never,
+    );
+  }
   if (Array.isArray(g('stops'))) state.setStops(g('stops') as never);
   if (Array.isArray(g('trips'))) state.setTrips(g('trips') as never);
   if (Array.isArray(g('stopTimes'))) state.setStopTimes(g('stopTimes') as never);

@@ -259,7 +259,7 @@ export function runValidation(state: AppStore): ValidationMessage[] {
 
   // Fare checks
   if (state.fareAttributes.length === 0) {
-    messages.push(msg('warning', 'No fare information defined — strongly recommended'));
+    messages.push(msg('warning', 'No fare information defined — strongly recommended', 'fare'));
   }
   for (const rule of state.fareRules) {
     if (rule.route_id && !routeIdSet.has(rule.route_id)) {

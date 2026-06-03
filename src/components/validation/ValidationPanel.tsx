@@ -7,11 +7,17 @@ export function ValidationPanel() {
   const state = useStore();
   // Depend on the specific entity slices the validator reads; `state` as a
   // whole would re-trigger on every unrelated store change (UI state,
-  // selection, etc.). Listing the slices is intentional.
+  // selection, etc.). Listing the slices is intentional — but it MUST cover
+  // everything runValidation() reads, or warnings go stale (e.g. adding a fare
+  // wouldn't clear "No fare information defined"). Keep this in sync with the
+  // `state.*` reads in services/validation.ts.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const messages = useMemo(() => runValidation(state), [
     state.agencies, state.calendars, state.calendarDates,
     state.routes, state.stops, state.trips, state.stopTimes, state.shapes,
+    state.fareAttributes, state.fareRules, state.transfers,
+    state.flexZones, state.frequencies, state.levels, state.pathways,
+    state.featureSettings,
   ]);
 
   const errors = messages.filter((m) => m.severity === 'error');
@@ -20,6 +26,8 @@ export function ValidationPanel() {
   const handleClick = (m: typeof messages[0]) => {
     if (m.entity_type === 'agency') state.setSidebarSection('agency');
     else if (m.entity_type === 'calendar') state.setSidebarSection('calendar');
+    else if (m.entity_type === 'fare' || m.entity_type === 'fare_rule') state.setSidebarSection('fares');
+    else if (m.entity_type === 'flex_zone') state.setSidebarSection('flex');
     else if (m.entity_type === 'route') {
       state.setSidebarSection('routes');
       if (m.entity_id) state.selectRoute(m.entity_id);

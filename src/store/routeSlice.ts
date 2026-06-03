@@ -143,10 +143,15 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
         route_long_name: newLongName,
       });
 
-      // Clone route_stops.
+      // Clone route_stops, remapping shape_id to the duplicated shapes so the
+      // copy's per-shape stop lists resolve (route stops are keyed per shape).
       for (const rs of fullState.routeStops) {
         if (rs.route_id !== route_id) continue;
-        state.routeStops.push({ ...rs, route_id: newRouteId });
+        state.routeStops.push({
+          ...rs,
+          route_id: newRouteId,
+          shape_id: rs.shape_id && shapeIdMap.has(rs.shape_id) ? shapeIdMap.get(rs.shape_id) : rs.shape_id,
+        });
       }
 
       // Clone shapes (only those exclusively used by this route's trips).

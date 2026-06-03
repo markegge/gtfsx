@@ -552,6 +552,52 @@ async function main() {
   assert('pointInPolygon: far point outside', pointInPolygon(50, 50, [[0, 0], [10, 0], [10, 10], [0, 10]]) === false);
   assert('lasso: degenerate ring → empty', stopsInsidePolygon(lassoStops, { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 1]]] } } as GeoJSON.Feature<GeoJSON.Polygon>).length === 0);
 
+  // ---- PHASE 17: duplicateRoute remaps route_stops' shape_id ----
+  // Regression for the bug where a duplicated route's cloned route_stops kept
+  // the ORIGINAL shape_id. Since route stops are keyed per shape, the copy's
+  // per-shape Stops panel/timetable then showed "No stops in this direction"
+  // even though the badge counted them. Build a mini-feed whose route_stops
+  // carry a shape_id matching the shape its trips use, duplicate it, and assert
+  // the copy's route_stops resolve under the copy's OWN shapes.
+  console.log('\nPhase 17: duplicateRoute remaps route_stops.shape_id');
+  s().setRoutes([{ route_id: 'DUP_R', agency_id: 'A1', route_short_name: 'D', route_long_name: 'Dup Line', route_type: 3 }]);
+  s().setShapes([{ shape_id: 'DUP_SHP', points: [
+    { shape_pt_lat: 45.0, shape_pt_lon: -111.0, shape_pt_sequence: 1, shape_dist_traveled: 0 },
+    { shape_pt_lat: 45.1, shape_pt_lon: -111.1, shape_pt_sequence: 2, shape_dist_traveled: 100 },
+  ] }]);
+  s().setTrips([{ trip_id: 'DUP_T1', route_id: 'DUP_R', service_id: 'WKDY', direction_id: 0, shape_id: 'DUP_SHP' }]);
+  s().setStopTimes([
+    { trip_id: 'DUP_T1', arrival_time: '08:00:00', departure_time: '08:00:00', stop_id: 'DUP_S1', stop_sequence: 1 },
+    { trip_id: 'DUP_T1', arrival_time: '08:10:00', departure_time: '08:10:00', stop_id: 'DUP_S2', stop_sequence: 2 },
+  ]);
+  s().setRouteStops([
+    { route_id: 'DUP_R', stop_id: 'DUP_S1', direction_id: 0, stop_sequence: 0, _snapped: true, shape_id: 'DUP_SHP' },
+    { route_id: 'DUP_R', stop_id: 'DUP_S2', direction_id: 0, stop_sequence: 1, _snapped: true, shape_id: 'DUP_SHP' },
+  ]);
+
+  const dupId = s().duplicateRoute('DUP_R');
+  assert('duplicateRoute returns a new id', !!dupId && dupId !== 'DUP_R', `got ${dupId}`);
+
+  const copyRouteStops = s().routeStops.filter(rs => rs.route_id === dupId);
+  const copyShapeIds = new Set(s().shapes
+    .filter(sh => s().trips.some(t => t.route_id === dupId && t.shape_id === sh.shape_id))
+    .map(sh => sh.shape_id));
+  const copyTripShapeIds = new Set(s().trips.filter(t => t.route_id === dupId).map(t => t.shape_id));
+
+  assert('copy has both route_stops', copyRouteStops.length === 2, `got ${copyRouteStops.length}`);
+  // (a) none of the copy's route_stops point at the ORIGINAL shape_id.
+  assert('copy route_stops no longer reference original shape_id',
+    copyRouteStops.every(rs => rs.shape_id !== 'DUP_SHP'),
+    copyRouteStops.map(rs => rs.shape_id).join(','));
+  // (b) every copy route_stop shape_id matches the copy's own shapes AND its
+  //     trips' shape_ids — i.e. the per-shape stop list resolves.
+  assert('copy route_stops resolve under copy shapes',
+    copyRouteStops.every(rs => !!rs.shape_id && copyShapeIds.has(rs.shape_id)),
+    `routeStops=[${copyRouteStops.map(rs => rs.shape_id).join(',')}] shapes=[${[...copyShapeIds].join(',')}]`);
+  assert('copy route_stops match copy trips\' shape_ids',
+    copyRouteStops.every(rs => copyTripShapeIds.has(rs.shape_id)),
+    `routeStops=[${copyRouteStops.map(rs => rs.shape_id).join(',')}] trips=[${[...copyTripShapeIds].join(',')}]`);
+
   // ---- SUMMARY ----
   console.log(`\n${'='.repeat(50)}`);
   console.log(`Results: ${passed} passed, ${failed} failed out of ${passed + failed} tests`);

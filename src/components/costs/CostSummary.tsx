@@ -7,7 +7,6 @@ import { RailSubHeading } from '../ui/RailHeadings';
 import { PaywallOverlay } from '../billing/PaywallOverlay';
 import { useEditorPlan } from '../billing/useEditorPlan';
 import { useVisibleFeed } from '../../hooks/useVisibleFeed';
-import { RouteScopeNote } from '../ui/RouteScopeNote';
 
 function formatCurrency(n: number): string {
   return '$' + Math.round(n).toLocaleString();
@@ -19,7 +18,7 @@ export function CostSummary() {
     selectRoute, setEditingRouteId, setSidebarSection,
   } = useStore();
   // Analysis is scoped to routes toggled visible on the map (scenario compare).
-  const { routes, trips, stopTimes, visibleRouteCount, totalRouteCount } = useVisibleFeed();
+  const { routes, trips, stopTimes } = useVisibleFeed();
   const { byTrip: stopTimesByTrip } = useStopTimesIndex();
   // System totals (above) are free; the route-level breakdown + CSV export are
   // Agency+ (analysis_basic) — the whole per-route section is gated below.
@@ -87,7 +86,6 @@ export function CostSummary() {
 
   return (
     <div>
-      <RouteScopeNote visible={visibleRouteCount} total={totalRouteCount} />
       <RailSubHeading>Assumptions</RailSubHeading>
       <div className="bg-cream rounded-lg p-4 mb-5">
         <div className="grid grid-cols-2 gap-3 mb-3">

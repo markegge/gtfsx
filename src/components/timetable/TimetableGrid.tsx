@@ -884,7 +884,24 @@ export function TimetableGrid() {
               </label>
               <div className="flex gap-3">
                 <label className="flex-1">
-                  <span className="text-xs font-semibold text-dark-brown">Dwell / stop (sec)</span>
+                  <span className="flex items-center gap-1 text-xs font-semibold text-dark-brown">
+                    Dwell / stop (sec)
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className="text-warm-gray shrink-0"
+                      aria-hidden
+                    >
+                      <title>Seconds the vehicle waits at each stop for boarding. Added to the driving time between stops when filling in the schedule.</title>
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="16" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                  </span>
                   <input
                     type="number"
                     min={0}
@@ -894,11 +911,23 @@ export function TimetableGrid() {
                   />
                 </label>
                 <label className="flex-1">
-                  <span
-                    className="text-xs font-semibold text-dark-brown"
-                    title="Multiplier on car travel time. Buses are slower than free-flow cars; ~1.3 is a reasonable urban default."
-                  >
+                  <span className="flex items-center gap-1 text-xs font-semibold text-dark-brown">
                     Speed factor
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className="text-warm-gray shrink-0"
+                      aria-hidden
+                    >
+                      <title>Multiplier on the road-network driving time, to account for traffic, signals, and acceleration. e.g. 1.1 adds 10% to the free-flow estimate; higher = slower.</title>
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="16" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
                   </span>
                   <input
                     type="number"

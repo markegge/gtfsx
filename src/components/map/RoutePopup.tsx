@@ -41,6 +41,22 @@ export function RoutePopup({ routeId, directionId, shapeId, lngLat, onClose }: R
 
   if (!route || !info) return null;
 
+  const handleEditShape = () => {
+    if (!shapeId) return;
+    // Suppress the next route-fit BEFORE we change any state that would trigger
+    // it. useFocusRouteOnMap reads + clears this flag the first time it runs.
+    // Window-based one-shot rather than store-based: it has to outlive the
+    // effect-ordering race between RouteShapesTab (which clears pendingShapeEditId
+    // synchronously) and RouteDetailPanel (whose useFocusRouteOnMap reads after).
+    window.__suppressNextRouteFit = true;
+    selectRoute(routeId);
+    setEditingRouteId(routeId);
+    setSidebarSection('routes');
+    setRouteDetailTab('shapes');
+    setPendingShapeEditId(shapeId);
+    onClose();
+  };
+
   return (
     <Popup
       longitude={lngLat.lng}
@@ -53,14 +69,27 @@ export function RoutePopup({ routeId, directionId, shapeId, lngLat, onClose }: R
       className="route-popup"
     >
       <div className="min-w-[220px] max-w-[300px]">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 pr-5">
           <div
-            className="w-4 h-4 rounded"
+            className="w-4 h-4 rounded shrink-0"
             style={{ backgroundColor: `#${route.route_color}` }}
           />
-          <h3 className="font-heading font-bold text-sm text-dark-brown">
+          <h3 className="font-heading font-bold text-sm text-dark-brown truncate min-w-0">
             {route.route_short_name || route.route_long_name}
           </h3>
+          {shapeId && (
+            <button
+              onClick={handleEditShape}
+              title="Edit shape"
+              aria-label="Edit shape"
+              className="ml-auto shrink-0 p-1 rounded text-warm-gray hover:text-coral hover:bg-coral-light transition-colors"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </button>
+          )}
         </div>
         {route.route_long_name && route.route_short_name && (
           <p className="text-xs text-warm-gray mb-1">{route.route_long_name}</p>
@@ -72,56 +101,31 @@ export function RoutePopup({ routeId, directionId, shapeId, lngLat, onClose }: R
           {ROUTE_TYPES[route.route_type] || 'Transit'} · {info.stopCount} stops · {info.tripCount} trips
         </p>
 
-        {/* Action buttons */}
-        <div className="border-t border-sand pt-2 flex flex-col gap-2">
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                selectRoute(routeId);
-                setEditingRouteId(routeId);
-                setSidebarSection('routes');
-                onClose();
-              }}
-              className="flex-1 px-3 py-1.5 bg-coral-light text-coral rounded-lg text-xs font-heading font-bold hover:bg-coral hover:text-white transition-colors"
-            >
-              Edit Route
-            </button>
-            <button
-              onClick={() => {
-                selectRoute(routeId);
-                useStore.getState().setBottomPanelOpen(true);
-                useStore.getState().setBottomPanelTab('timetable');
-                onClose();
-              }}
-              className="flex-1 px-3 py-1.5 bg-purple-light text-purple rounded-lg text-xs font-heading font-bold hover:bg-purple hover:text-white transition-colors"
-            >
-              Edit Timetable
-            </button>
-          </div>
-          {shapeId && (
-            <button
-              onClick={() => {
-                // Suppress the next route-fit BEFORE we change any state
-                // that would trigger it. useFocusRouteOnMap reads + clears
-                // this flag the first time it runs. Window-based one-shot
-                // rather than store-based: it has to outlive the effect
-                // ordering race between RouteShapesTab (which clears
-                // pendingShapeEditId synchronously in its effect) and
-                // RouteDetailPanel (whose useFocusRouteOnMap reads the
-                // store after that clear).
-                window.__suppressNextRouteFit = true;
-                selectRoute(routeId);
-                setEditingRouteId(routeId);
-                setSidebarSection('routes');
-                setRouteDetailTab('shapes');
-                setPendingShapeEditId(shapeId);
-                onClose();
-              }}
-              className="w-full px-3 py-1.5 bg-coral text-white rounded-lg text-xs font-heading font-bold hover:bg-[#d4603a] transition-colors"
-            >
-              Edit Shape
-            </button>
-          )}
+        {/* Action buttons — shape editing lives in the small pencil icon in the
+            header above, so the bottom row stays Edit Route / Edit Timetable. */}
+        <div className="border-t border-sand pt-2 flex gap-2">
+          <button
+            onClick={() => {
+              selectRoute(routeId);
+              setEditingRouteId(routeId);
+              setSidebarSection('routes');
+              onClose();
+            }}
+            className="flex-1 px-3 py-1.5 bg-coral-light text-coral rounded-lg text-xs font-heading font-bold hover:bg-coral hover:text-white transition-colors"
+          >
+            Edit Route
+          </button>
+          <button
+            onClick={() => {
+              selectRoute(routeId);
+              useStore.getState().setBottomPanelOpen(true);
+              useStore.getState().setBottomPanelTab('timetable');
+              onClose();
+            }}
+            className="flex-1 px-3 py-1.5 bg-purple-light text-purple rounded-lg text-xs font-heading font-bold hover:bg-purple hover:text-white transition-colors"
+          >
+            Edit Timetable
+          </button>
         </div>
       </div>
     </Popup>

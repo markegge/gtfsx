@@ -66,17 +66,17 @@ function pricingSeo(env: Env): MarketingSeo {
     offers: [
       offer('Free', 0, 'Edit and export GTFS feeds at no cost.'),
       offer('Pro', 49, 'Host and publish feeds — stable URLs, rider-facing embeds, Mobility Database submission.'),
-      offer('Agency', 299, 'Plan routes and service as a team — coverage, cost, Title VI, ridership propensity, and GTFS-Realtime Service Alerts.'),
+      offer('Agency', 299, 'Plan routes and service as a team — route-level coverage, cost, Title VI, scenario comparison, white-label rider site, and GTFS-Realtime Service Alerts.'),
     ],
   });
   const body = `
     <nav class="breadcrumb"><a href="/">GTFS·X</a> › Pricing</nav>
     <h1>GTFS·X Pricing</h1>
-    <p class="lede">Free editor, forever. Pro adds managed publishing at a stable URL. Agency adds the full transit-planning suite — demographic coverage, cost estimation, Title VI equity analysis, and ridership propensity — at roughly one-sixth the price of Remix.</p>
+    <p class="lede">Free editor, forever. Pro adds managed publishing at a stable URL. Agency adds the full transit-planning suite — demographic coverage, cost estimation, Title VI equity analysis, and scenario comparison — at roughly one-sixth the price of Remix.</p>
     <ul class="tiers">
-      <li><strong>Free — $0.</strong> Edit and export feeds. Up to 3 saved feeds in the cloud, GTFS ZIP export, GTFS-Flex authoring, community support.</li>
+      <li><strong>Free — $0.</strong> Create, edit, validate, and export GTFS feeds in your browser. Up to 3 saved feeds in the cloud, GTFS ZIP export, GTFS-Flex authoring, a nationwide demand-propensity map, community support.</li>
       <li><strong>Pro — $49/mo.</strong> Host and publish feeds. Up to 10 saved feeds, publish 1 feed to a stable URL, rider-facing embeds + mini-site, Mobility Database submission, named snapshot history.</li>
-      <li><strong>Agency — $299/mo.</strong> Plan routes and service as a team. Unlimited saved feeds, publish up to 5 feeds, demographic coverage, cost estimation, Title VI equity analysis, ridership propensity heatmap, GTFS-Realtime Service Alerts authoring, unlimited team members, cross-org membership.</li>
+      <li><strong>Agency — $299/mo.</strong> Plan routes and service as a team. Unlimited saved feeds, route operating cost estimates, demographic coverage, Title VI equity analysis, scenario comparison, GTFS-Realtime Service Alerts authoring, a fully white-labeled rider site, unlimited team members, cross-org membership for consultants. <a href="/planning">See all planning features →</a></li>
       <li><strong>Enterprise — custom.</strong> For state DOTs, RTAP networks, and large consortiums. Custom feed/seat limits, unlimited managed publishing, phone + email support with SLA.</li>
     </ul>
     <p><a href="mailto:hello@gtfsx.com?subject=GTFS%C2%B7X%20%E2%80%94%20Fix%20my%20feed">Fix my feed for me</a> — prefer a done-for-you service? We can build or repair your GTFS feed.</p>

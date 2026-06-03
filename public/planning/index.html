@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Route planning, built into the editor | GTFS·X</title>
+    <meta name="description" content="Cost, coverage, equity, stop spacing, and demand — computed straight from your GTFS, with no GIS to set up and nothing uploaded. The transit-planning suite built into the GTFS·X editor." />
+    <link rel="canonical" href="https://www.gtfsx.com/planning/" />
+    <meta property="og:title" content="Route planning, built into the editor" />
+    <meta property="og:description" content="Cost, coverage, equity, stop spacing, and demand — computed straight from your GTFS. The planning suite built into GTFS·X." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://www.gtfsx.com/planning/" />
+    <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@gtfsxapp" />
+    <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --accent-ink:#fff; --rule:#EADBC8; --card:#fff; }
+      * { box-sizing: border-box; }
+      html, body { overflow-x: hidden; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.55; }
+      a { color: var(--accent); }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
+      .site-header nav a:hover { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:10px; }
+      .site-header .cta { background:var(--accent); color:var(--accent-ink); padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:600; font-size:14px; white-space:nowrap; min-height:44px; display:inline-flex; align-items:center; }
+      @media (max-width: 720px) {
+        .site-header nav { display:none; }
+        .site-header { padding: 0 12px; gap:8px; }
+        .site-header .brand img { height:30px; }
+      }
+      section { padding: 56px 24px; }
+      section > .inner { max-width: 880px; margin: 0 auto; }
+      @media (max-width: 640px) { section { padding: 36px 20px; } }
+      .crumbs { color: var(--muted); font-size: 14px; margin-bottom: 16px; }
+      .crumbs a { color: var(--muted); text-decoration: none; }
+      .crumbs a:hover { color: var(--ink); }
+      .hero { padding-top: 56px; padding-bottom: 32px; }
+      .hero h1 { font-size: clamp(26px, 5vw, 46px); line-height: 1.15; letter-spacing: -0.015em; margin: 0 0 16px; text-wrap: balance; }
+      .hero .subhead { font-size: clamp(17px, 2.2vw, 21px); color: var(--muted); margin: 0 0 28px; max-width: 760px; }
+      .cta-row { display:flex; flex-wrap:wrap; gap:14px; align-items:center; }
+      .btn-primary { background:var(--accent); color:var(--accent-ink); padding:14px 24px; border-radius:8px; text-decoration:none; font-weight:700; font-size:17px; display:inline-flex; align-items:center; min-height:48px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+      .btn-primary:hover { filter: brightness(0.96); }
+      .btn-secondary { color:var(--muted); text-decoration:none; font-weight:600; padding:10px 8px; }
+      .btn-secondary:hover { color:var(--ink); }
+      .tools { background:#fff; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); }
+      .tool { padding: 22px 0; border-bottom: 1px solid var(--rule); }
+      .tool:last-child { border-bottom: 0; }
+      .tool h2 { font-size: 21px; margin: 0 0 8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+      .tool p { color: var(--muted); margin: 0 0 10px; font-size: 16px; }
+      .tool .doclink { font-weight: 600; font-size: 14px; }
+      .free-tag { font-size: 0.62em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; background:#E8EFD9; color:#3F6014; border:1px solid #C9D9A1; vertical-align: middle; }
+      .split { background: var(--bg); }
+      .split h2 { font-size: 22px; margin: 0 0 12px; }
+      .split p { color: var(--ink); margin: 0 0 8px; }
+      .split .label { font-weight: 700; }
+      .cta-secondary { text-align: center; background:#fff; border-top:1px solid var(--rule); }
+      .cta-secondary h2 { font-size: 24px; margin: 0 0 20px; }
+      footer { background:#fff; border-top:1px solid var(--rule); color: var(--muted); font-size: 14px; padding: 24px; }
+      footer .inner { max-width: 880px; margin: 0 auto; display:flex; flex-wrap:wrap; gap:18px; }
+      footer a { color: var(--muted); text-decoration: none; }
+      footer a:hover { color: var(--ink); }
+      .sticky-cta { display: none; }
+      @media (max-width: 640px) {
+        .sticky-cta {
+          display: flex; position: fixed; left: 0; right: 0; bottom: 0;
+          background: #fff; border-top: 1px solid var(--rule);
+          padding: 10px 12px; z-index: 20; gap: 10px;
+          box-shadow: 0 -2px 12px rgba(0,0,0,0.04);
+        }
+        .sticky-cta a { flex: 1; justify-content: center; }
+        body { padding-bottom: 80px; }
+      }
+    </style>
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "GTFS·X — Route planning",
+  "description": "Transit-planning tools built into the GTFS·X editor: operating cost estimates, demographic coverage, Title VI equity analysis, stop analysis, and a nationwide demand-propensity map — computed directly from your GTFS feed.",
+  "brand": { "@type": "Brand", "name": "GTFS·X" },
+  "url": "https://www.gtfsx.com/planning/",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "image": "https://www.gtfsx.com/og-default.png"
+}
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "GTFS·X", "item": "https://www.gtfsx.com/" },
+    { "@type": "ListItem", "position": 2, "name": "Route planning", "item": "https://www.gtfsx.com/planning/" }
+  ]
+}
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a href="/" class="brand" aria-label="GTFS·X home">
+        <img src="/gtfsx-lockup.svg" alt="GTFS·X" />
+      </a>
+      <nav>
+        <a href="/pricing/">Pricing</a>
+        <a href="/docs/">Docs</a>
+      </nav>
+      <div class="actions">
+        <a href="/pricing/#agency" class="cta" data-cta="planning_header_cta">Start free trial</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="inner">
+          <nav class="crumbs"><a href="/">GTFS·X</a> · Route planning</nav>
+          <h1>Route planning, built into the editor</h1>
+          <p class="subhead">The same feed you edit is the feed you analyze. Cost, coverage, equity, stop spacing, and demand — computed straight from your GTFS, with no GIS to set up and nothing uploaded anywhere. Methodology you can put in a board memo or a grant narrative, at a fraction of what a planning platform costs.</p>
+          <div class="cta-row">
+            <a href="/pricing/#agency" class="btn-primary" data-cta="planning_hero_trial">Start 14-day Agency trial</a>
+            <a href="/pricing/" class="btn-secondary" data-cta="planning_hero_pricing">See pricing</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="tools">
+        <div class="inner">
+          <div class="tool">
+            <h2>Operating cost estimates</h2>
+            <p>Answer "what does this service cost?" directly from the schedule. GTFS·X reads every revenue hour in the feed, computes the peak vehicle count, and multiplies by a cost-per-revenue-hour you control — per-route and system-wide weekly and annual figures, with one-click CSV export. Set your own loaded labor rate (NTD operating expense per vehicle-revenue-hour is a defensible starting point) and a deadhead factor for platform time. Compare a proposed alternative against today's service with a saved snapshot.</p>
+            <p class="doclink"><a href="/docs/cost-estimation/">Read the cost-estimation docs →</a></p>
+          </div>
+
+          <div class="tool">
+            <h2>Demographic coverage</h2>
+            <p>Population, households, and workers within walking distance of your stops — from US Census ACS five-year data, apportioned by buffering each stop (quarter-mile bus, half-mile rail) and overlapping the Census block groups it touches. Per-route and system-wide totals, the kind of number FTA discretionary programs ask for.</p>
+            <p class="doclink"><a href="/docs/demographic-coverage/">Read the demographic-coverage docs →</a></p>
+          </div>
+
+          <div class="tool">
+            <h2>Title VI equity analysis</h2>
+            <p>Run an equity check while you're still designing the change. GTFS·X compares trips-per-capita in minority vs non-minority block groups (ACS B03002) and reports an equity ratio against the four-fifths (0.80) convention from FTA Circular 4702.1B, with green/amber/red banding. Run it on the current feed and the proposed feed and compare.</p>
+            <p class="doclink"><a href="/docs/title-vi-analysis/">Read the Title VI docs →</a></p>
+          </div>
+
+          <div class="tool">
+            <h2>Stop analysis</h2>
+            <p>Four stop-level diagnostics most agencies never pull from their feed: stop-spacing distribution (against APTA / TransitWiki benchmarks), consolidation candidates with a time-saving estimate each, service intensity per stop, and wheelchair-accessibility completeness. Every table exports to CSV; findings highlight on the map.</p>
+            <p class="doclink"><a href="/docs/stop-analysis/">Read the stop-analysis docs →</a></p>
+          </div>
+
+          <div class="tool">
+            <h2>Rider propensity — Demand Dots <span class="free-tag">Free</span></h2>
+            <p>A nationwide map layer showing where transit demand concentrates: blue dots for high-propensity adults (renters, zero-vehicle households, ages 18–24), orange dots for jobs (LEHD LODES), one dot per five people or jobs. Toggle it on while sketching an alignment or sizing a flex zone. Free on every plan.</p>
+            <p class="doclink"><a href="/docs/rider-propensity/">Read the Demand Dots docs →</a></p>
+          </div>
+
+          <div class="tool">
+            <h2>Defensible by design</h2>
+            <p>Built for planners who have to defend a number: real Census vintages cited on every result (ACS 2022 5-year for coverage/Title VI; ACS 2020–2024 + LEHD LODES 2023 for Demand Dots); standards not guesses (FTA Circular 4702.1B four-fifths, conventional walk buffers, APTA stop spacing, NTD cost reference); and documentation that states plainly what each tool doesn't capture.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="split">
+        <div class="inner">
+          <h2>What's free vs. Agency</h2>
+          <p><span class="label">Free on every plan:</span> the Demand Dots layer, the <a href="/docs/service-summary/">Service Summary</a> (revenue hours, trips, peak vehicles, span), and the system-level headline figures for cost and coverage.</p>
+          <p><span class="label">Agency:</span> route-level cost and coverage depth, Title VI, stop analysis, scenario comparison, and team collaboration.</p>
+        </div>
+      </section>
+
+      <section class="cta-secondary">
+        <div class="inner">
+          <h2>Plan your next service change from the feed you already have.</h2>
+          <div class="cta-row" style="justify-content:center">
+            <a href="/pricing/#agency" class="btn-primary" data-cta="planning_footer_trial">Start 14-day Agency trial</a>
+            <a href="/pricing/" class="btn-secondary" data-cta="planning_footer_pricing">See pricing</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="inner">
+        <a href="/">Editor</a>
+        <a href="/pricing/">Pricing</a>
+        <a href="/docs/">Docs</a>
+        <a href="/compare/remix/">vs. Remix</a>
+        <a href="/compare/trillium/">vs. Trillium</a>
+        <a href="/about/">About</a>
+      </div>
+    </footer>
+
+    <div class="sticky-cta">
+      <a href="https://www.gtfsx.com/pricing/#agency" class="btn-primary" data-cta="planning_sticky_cta">Start free trial →</a>
+    </div>
+
+    <!--
+      Inline analytics beacon — mirrors src/services/trackBeacon.ts. Cookieless,
+      first-touch gclid/ref capture; page_view on load; cta_click on any element
+      with [data-cta] (label = attribute value). Captured gclid feeds the OCI
+      uploader (bundle 7).
+    -->
+    <script>
+    (function () {
+      var SK = 'gb_track_session', RK = 'gb_track_ref', GK = 'gb_track_gclid';
+      function rid() {
+        var b = new Uint8Array(16);
+        (self.crypto || self.msCrypto).getRandomValues(b);
+        var s = ''; for (var i = 0; i < b.length; i++) s += (b[i] < 16 ? '0' : '') + b[i].toString(16);
+        return s;
+      }
+      function get(k) { try { return sessionStorage.getItem(k); } catch (_) { return null; } }
+      function set(k, v) { try { sessionStorage.setItem(k, v); } catch (_) {} }
+      function sid() { var i = get(SK); if (!i) { i = rid(); set(SK, i); } return i; }
+      function capture(param, key, max) {
+        try {
+          if (get(key) !== null) return;
+          var p = new URLSearchParams(location.search);
+          var raw = p.get(param);
+          if (!raw) return;
+          var t = raw.trim().slice(0, max);
+          if (!t) return;
+          set(key, t);
+          p.delete(param);
+          var qs = p.toString();
+          history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+        } catch (_) {}
+      }
+      function send(kind, label) {
+        try {
+          fetch('/api/events/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-GB-Client': 'web' },
+            credentials: 'omit',
+            keepalive: true,
+            body: JSON.stringify({
+              kind: kind,
+              path: location.pathname,
+              ref: get(RK),
+              sessionId: sid(),
+              label: label || null,
+              gclid: get(GK)
+            })
+          }).catch(function () {});
+        } catch (_) {}
+      }
+      capture('ref', RK, 128);
+      capture('gclid', GK, 256);
+      send('page_view');
+      document.addEventListener('click', function (e) {
+        var t = e.target;
+        while (t && t !== document.body) {
+          if (t.getAttribute && t.getAttribute('data-cta')) {
+            send('cta_click', t.getAttribute('data-cta'));
+            return;
+          }
+          t = t.parentNode;
+        }
+      }, { capture: true, passive: true });
+    })();
+    </script>
+  </body>
+</html>

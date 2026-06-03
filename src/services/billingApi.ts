@@ -20,6 +20,10 @@ export interface PlanCatalogEntry {
   perSeat: boolean;
   tagline: string;
   features: string[];
+  // Optional "see more" link below the bullet list (mirrors the worker
+  // PlanCatalogEntry; e.g. the Agency card → /planning).
+  detailsHref?: string;
+  detailsLabel?: string;
 }
 
 export interface PlansResponse {

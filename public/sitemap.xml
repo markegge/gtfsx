@@ -11,6 +11,11 @@
     <changefreq>monthly</changefreq>
   </url>
   <url>
+    <loc>https://www.gtfsx.com/planning/</loc>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
     <loc>https://www.gtfsx.com/about/</loc>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>

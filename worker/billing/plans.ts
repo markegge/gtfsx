@@ -79,6 +79,10 @@ export interface PlanCatalogEntry {
   perSeat: boolean;
   tagline: string;
   features: string[];
+  // Optional "see more" link rendered below the bullet list (e.g. the Agency
+  // card → the /planning reference page).
+  detailsHref?: string;
+  detailsLabel?: string;
 }
 
 export const PLAN_CATALOG: PlanCatalogEntry[] = [
@@ -88,13 +92,15 @@ export const PLAN_CATALOG: PlanCatalogEntry[] = [
     monthlyPriceUsd: 0,
     annualPriceUsd: 0,
     perSeat: false,
-    tagline: 'Edit, analyze, and export feeds.',
+    tagline: 'Create, edit, validate, and export GTFS feeds — in your browser.',
     features: [
+      'Create and edit routes, stops, trips, and schedules on a live map',
+      'Add GTFS-Flex zones and booking rules to any feed',
+      'Validate against the GTFS spec as you work',
+      'Import an existing feed or start from scratch — no signup required',
+      'Export a spec-clean GTFS .zip and host it anywhere',
       'Up to 3 saved feeds in the cloud',
-      'GTFS ZIP export (host anywhere)',
-      'Demand-propensity map',
-      'System-level cost & coverage summaries',
-      'Live demo mini-site preview',
+      'Nationwide demand-propensity map',
       'Community support',
     ],
   },
@@ -125,17 +131,19 @@ export const PLAN_CATALOG: PlanCatalogEntry[] = [
     features: [
       'Everything in Pro',
       'Unlimited feeds',
-      'Route-level coverage analysis',
-      'Route-level cost analysis',
+      'Route operating cost estimates',
+      'Demographic coverage analysis',
       'Title VI equity analysis',
+      'Scenario comparison',
       'Service Alerts authoring (GTFS-Realtime)',
-      'Remove GTFS·X badge from embeds',
-      'Custom domain',
-      'Unlimited team members in your organization',
-      'Cross-org membership (work in unlimited client orgs)',
+      'Fully white-labeled rider site (your domain, your brand)',
+      'Unlimited team members',
+      'Cross-org membership for consultants',
       'Custom org logo',
-      'Phone support',
+      'Phone + email support',
     ],
+    detailsHref: '/planning',
+    detailsLabel: 'See all planning features →',
   },
   {
     plan: 'enterprise',

@@ -40,6 +40,7 @@ const DATA_KEYS = [
   'pathways',
   'flexZones',
   'featureSettings',
+  'visibilitySets',
 ] as const;
 
 type DataKey = (typeof DATA_KEYS)[number];
@@ -102,6 +103,7 @@ export function resetStoreEntities() {
   state.setPathways([] as never);
   state.setFlexZones([] as never);
   state.setFeatureSettings({});
+  state.setVisibilitySets([] as never);
 }
 
 export function applySnapshotToStore(snapshot: Record<string, unknown>) {
@@ -167,6 +169,7 @@ export function applySnapshotToStore(snapshot: Record<string, unknown>) {
   if (g('featureSettings') && typeof g('featureSettings') === 'object') {
     state.setFeatureSettings(g('featureSettings') as never);
   }
+  if (Array.isArray(g('visibilitySets'))) state.setVisibilitySets(g('visibilitySets') as never);
 
   state.markSaved();
 }

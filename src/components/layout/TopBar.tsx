@@ -10,7 +10,10 @@ import { patchProject } from '../../services/projectsApi';
 import { saveProjectNow } from '../../db/serverPersistence';
 import { backendEnabled } from '../../utils/featureFlags';
 import { AppBrand } from './AppBrand';
+import { ScenarioSwitcher } from './ScenarioSwitcher';
 import { UserMenu, UserMenuItems } from './UserMenu';
+import { useEditorPlan } from '../billing/useEditorPlan';
+import { planHasFeature } from '../billing/planConfig';
 
 // Re-export RoleBadge for callers that imported it from TopBar previously.
 export { RoleBadge } from './UserMenu';
@@ -24,6 +27,13 @@ export function TopBar() {
   const routesCount = useStore((s) => s.routes.length);
   const stopsCount = useStore((s) => s.stops.length);
   const agenciesCount = useStore((s) => s.agencies.length);
+  // When ≥1 saved scenario exists, the header shows the scenario switcher in
+  // place of the "GTFS Editor • Route Planner" tagline. Scenarios are Agency+,
+  // so the switcher only appears (and the tagline only yields to it) for plans
+  // that unlock the feature — matching ScenarioSwitcher's own gate.
+  const editorPlan = useEditorPlan();
+  const hasSavedScenarios = useStore((s) => s.visibilitySets.length > 0);
+  const hasScenarios = hasSavedScenarios && planHasFeature(editorPlan, 'scenarios');
   const navigate = useNavigate();
   // /demo is a read-only preview surface — drop the Save button so
   // visitors don't get prompted to upgrade or create an account just
@@ -94,7 +104,13 @@ export function TopBar() {
   return (
     <>
       <div className="h-14 bg-white border-b border-sand flex items-center px-3 sm:px-5 gap-2 sm:gap-3 shrink-0 min-w-0">
-        <AppBrand onResetRequest={() => setShowResetConfirm(true)} />
+        <AppBrand onResetRequest={() => setShowResetConfirm(true)} showTagline={!hasScenarios} />
+
+        {/* Scenario switcher — replaces the tagline once the user saves a
+            visibility set. Self-hides when none exist. */}
+        <div className="hidden min-[600px]:flex shrink-0">
+          <ScenarioSwitcher />
+        </div>
 
         {/* Project name */}
         {editing ? (

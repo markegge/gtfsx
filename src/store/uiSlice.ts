@@ -1,5 +1,15 @@
 import type { StateCreator } from 'zustand';
 import type { SidebarSection, BottomPanelTab, MapMode, StopPlacementMode, RouteDetailTab, StopDetailTab, CalendarDetailTab, StopAnalysisOverlay } from '../types/ui';
+import { generateId } from '../services/idGenerator';
+
+/** A saved route-visibility scenario. Captures which routes are hidden so the
+ *  user can re-apply it from the header switcher to scope the map + every
+ *  analysis panel (Cost / Coverage / Title VI / Stop analysis) to that subset. */
+export interface VisibilitySet {
+  id: string;
+  name: string;
+  hiddenRouteIds: string[];
+}
 
 export interface UISlice {
   sidebarSection: SidebarSection | null;
@@ -63,6 +73,9 @@ export interface UISlice {
   mapStopFilter: { matched: string[] } | null;
   snapToRoad: boolean;
   hiddenRouteIds: string[];
+  // Saved route-visibility scenarios. Empty = no scenarios defined (the header
+  // switcher stays hidden). See VisibilitySet.
+  visibilitySets: VisibilitySet[];
   // route_type values toggled OFF in the Routes panel's type filter. Empty =
   // no filter (all types shown). Routes of a hidden type are dimmed on the map.
   hiddenRouteTypes: number[];
@@ -90,6 +103,14 @@ export interface UISlice {
   selectedHolidayNames: string[];
   routeDeleteConfirmId: string | null;
   toggleRouteVisibility: (routeId: string) => void;
+  setHiddenRouteIds: (ids: string[]) => void;
+  /** Save the current route-visibility state as a named scenario; returns its id. */
+  saveVisibilitySet: (name: string) => string;
+  /** Apply a saved scenario's hidden-route set to the live view. */
+  applyVisibilitySet: (id: string) => void;
+  deleteVisibilitySet: (id: string) => void;
+  renameVisibilitySet: (id: string, name: string) => void;
+  setVisibilitySets: (sets: VisibilitySet[]) => void;
   toggleRouteType: (routeType: number) => void;
   toggleShapeVisibility: (shapeId: string) => void;
   setSidebarSection: (section: SidebarSection | null) => void;
@@ -159,6 +180,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   mapStopFilter: null,
   snapToRoad: true,
   hiddenRouteIds: [],
+  visibilitySets: [],
   hiddenRouteTypes: [],
   hiddenShapeIds: [],
   // Default width is set responsively in App init based on viewport — 96 for
@@ -188,6 +210,30 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     if (idx === -1) state.hiddenRouteIds.push(routeId);
     else state.hiddenRouteIds.splice(idx, 1);
   }),
+  setHiddenRouteIds: (ids) => set((state) => { state.hiddenRouteIds = ids; }),
+  saveVisibilitySet: (name) => {
+    const id = generateId('scenario');
+    set((state) => {
+      state.visibilitySets.push({
+        id,
+        name: name.trim() || `Scenario ${state.visibilitySets.length + 1}`,
+        hiddenRouteIds: [...state.hiddenRouteIds],
+      });
+    });
+    return id;
+  },
+  applyVisibilitySet: (id) => set((state) => {
+    const setDef = state.visibilitySets.find((v) => v.id === id);
+    if (setDef) state.hiddenRouteIds = [...setDef.hiddenRouteIds];
+  }),
+  deleteVisibilitySet: (id) => set((state) => {
+    state.visibilitySets = state.visibilitySets.filter((v) => v.id !== id);
+  }),
+  renameVisibilitySet: (id, name) => set((state) => {
+    const setDef = state.visibilitySets.find((v) => v.id === id);
+    if (setDef) setDef.name = name.trim() || setDef.name;
+  }),
+  setVisibilitySets: (sets) => set((state) => { state.visibilitySets = sets; }),
   toggleRouteType: (routeType) => set((state) => {
     const idx = state.hiddenRouteTypes.indexOf(routeType);
     if (idx === -1) state.hiddenRouteTypes.push(routeType);

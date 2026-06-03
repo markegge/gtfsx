@@ -20,6 +20,7 @@ export type FeatureKey =
   | 'org_logo'             // upload a custom org logo
   | 'brand_color'          // custom brand primary color
   | 'service_alerts'       // author GTFS-Realtime Service Alerts
+  | 'scenarios'            // save + switch named route-visibility sets
   | 'phone_support';       // SLA-backed phone support
 
 // Per-feature: which plans grant access. Free is excluded by absence.
@@ -46,6 +47,7 @@ export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
   org_logo:            ['agency', 'enterprise'],
   brand_color:         ['pro', 'agency', 'enterprise'],
   service_alerts:      ['agency', 'enterprise'],
+  scenarios:           ['agency', 'enterprise'],
   phone_support:       ['agency', 'enterprise'],
 };
 

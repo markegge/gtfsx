@@ -64,21 +64,21 @@ export function PaywallOverlay({
     : `/signup?next=${encodeURIComponent(`/pricing?feature=${feature}`)}`;
 
   return (
-    // `min-h-[420px]` keeps room for the card even when the wrapped child
-    // collapses to an empty state (Coverage/Title VI's "no data yet"); `h-full`
-    // still claims the parent's full height when one is defined (Costs panel,
-    // bottom-panel publish/embed) so the wash + card stay anchored at the top.
-    <div className={`relative h-full min-h-[420px] overflow-hidden ${className}`}>
+    // The card renders in normal flow so the wrapper hugs its content — no fixed
+    // `min-h`/`h-full`, which used to leave a tall washed-out empty block below
+    // the card in content-driven panels (the Costs/Coverage right rail). In
+    // `preview` mode the gated content is painted as a faded backdrop behind the
+    // card, clipped to the card's height.
+    <div className={`relative overflow-hidden ${className}`}>
       {preview && (
-        <div aria-hidden className="pointer-events-none select-none opacity-40 blur-[1.5px] h-full overflow-hidden">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 select-none overflow-hidden opacity-40 blur-[1.5px]"
+        >
           {children}
         </div>
       )}
-      <div
-        className={`${
-          preview ? 'absolute inset-0' : 'relative'
-        } flex items-start justify-center bg-cream/85 backdrop-blur-sm overflow-y-auto`}
-      >
+      <div className="relative flex items-start justify-center bg-cream/85 backdrop-blur-sm">
         <div className="m-6 max-w-md rounded-2xl border border-sand bg-white p-6 shadow-lg">
           <div className="mb-2 text-xs font-bold uppercase tracking-wide text-coral">
             {planDisplayName(target)} plan

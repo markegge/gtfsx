@@ -125,8 +125,7 @@ export function CoveragePanel() {
       <RouteScopeNote visible={visibleRouteCount} total={totalRouteCount} />
       <p className="text-xs text-warm-gray">
         Population, households, workers, and equity demographics within a straight-line ¼–½ mi
-        buffer of stops, from US Census ACS data. Buffers approximate walking reach; true
-        street-network walksheds are a future enhancement.
+        buffer of stops, from US Census ACS data.
       </p>
 
       <button

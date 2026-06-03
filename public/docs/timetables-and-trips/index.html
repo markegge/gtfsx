@@ -75,7 +75,7 @@
 
       <h2 id="the-grid">The trip grid</h2>
       <p>Open the Timetable from the footer, pick a route, and the grid loads. Rows are trips; columns are the stops in <code>stop_sequence</code> order; cells are times in <code>HH:MM:SS</code> format. The editor accepts shorthand input — type <code>7:30</code> or <code>730</code> and it auto-formats to <code>07:30:00</code>.</p>
-      <p>The direction toggle at the top of the grid switches between outbound (direction 0) and inbound (direction 1) trips. Each direction has its own trip list and its own stop order — the route's outbound shape's stops vs. inbound shape's stops.</p>
+      <p>The selector at the top of the grid switches which trips you're editing. For a route with a single shape per direction it reads as an outbound (direction 0) / inbound (direction 1) toggle; for routes with several shapes it becomes a <a href="#patterns">pattern dropdown</a>. Either way, each pattern has its own trip list and its own stop order — the columns are that shape's stops.</p>
 
       <h2 id="creating-trips">Creating trips</h2>
       <p>Click <strong>+ Add Trip</strong> to insert a new row. Each trip needs:</p>
@@ -90,6 +90,18 @@
       <h2 id="interpolation">Interpolation</h2>
       <p>Once the first stop time is set, click the interpolate button (arrow icon at the top of the trip row) to auto-fill intermediate stop times. The editor computes the segment lengths from the route shape, divides by an assumed average speed, and fills the cells.</p>
       <p>Default speed is configurable per trip. The default is reasonable for urban fixed-route bus; for express routes or rail you'll want a higher number. After interpolating, refine individual cells by typing — only the cell you edit changes, the surrounding interpolation stays put.</p>
+
+      <h2 id="estimate-times">Estimate times from the road network</h2>
+      <p>Interpolation divides the shape's <em>distance</em> by an assumed speed. <strong>Estimate times</strong> goes a step further: it asks Mapbox for the actual <em>driving time</em> along the road network the route follows, then turns that into a full schedule for the trip. Use it when you've drawn a snapped route and want a realistic first pass at the timetable instead of a constant-speed sketch.</p>
+      <p>Click the <strong>Estimate</strong> action on a trip row (the road-network icon) to open the dialog. Three inputs:</p>
+      <ul>
+        <li><strong>Start time</strong> — when the trip departs its first stop. Pre-filled from the trip's existing first time, or <code>08:00</code> for a fresh trip. Everything else is laid out forward from here.</li>
+        <li><strong>Dwell / stop (seconds)</strong> — how long the vehicle waits at each intermediate stop for boarding. Added to the driving time between stops. Default 18 seconds. The first stop gets the start time exactly; the last stop gets no dwell (the trip ends on arrival).</li>
+        <li><strong>Speed factor</strong> — a multiplier on the road-network driving time to account for traffic, signals, and acceleration that the car-based <code>driving</code> profile doesn't model. Default 1.3 (i.e. the schedule runs 30% slower than free-flow car). Raise it for congested urban service or frequent stops; lower it toward 1.0 for limited-stop or express running.</li>
+      </ul>
+      <p>Click <strong>Estimate</strong> in the dialog and the editor matches the trip's drawn shape to the road network, projects each stop onto that matched path to get the cumulative travel time at every stop, applies the dwell and speed factor, and writes arrival/departure times across the whole row. Then use the apply-to-all-trips action (⇶) on that row to push the same stop sequence and run/dwell timing to the route's other trips — each keeps its own start time, so headways and departures are untouched.</p>
+      <p>The estimate needs a drawn route shape and at least two stops; without a snapped shape there's no road geometry to time against. It's a online call (same Map Matching API as snap-to-road), so it needs an internet connection. If Mapbox can't match the path the dialog says so and leaves the times for you to set by hand.</p>
+      <p>Treat the output as a first draft. Mapbox's driving profile is car free-flow with a flat fudge factor — it doesn't know your bus's actual dwell distribution, layover policy, or peak-direction congestion. Refine the cells that matter (timepoints especially) after estimating; the surrounding values stay put.</p>
 
       <h2 id="frequencies">Frequency-based service (frequencies.txt)</h2>
       <p>For service that's described as a headway over a span ("every 10 minutes from 6am to 9pm") rather than as explicit trip times, use the <strong>Frequencies</strong> panel in the left rail. The idea: one trip you've already built in the timetable acts as the "pattern" — its stop times become the canonical reference run — and a frequency window says "repeat this trip every N minutes between a start and end time." Click <strong>+ Add Headway Window</strong> and set:</p>
@@ -109,6 +121,16 @@
 
       <h2 id="duplicate-direction">Duplicating a trip in the other direction</h2>
       <p>An outbound trip and its inbound counterpart aren't automatic — you have to create both. The editor's <strong>Duplicate</strong> action creates a copy on the opposite direction with the stop times reversed; refine from there. For most agencies the outbound and inbound runtimes are similar but not identical (turn lanes, peak-direction congestion).</p>
+
+      <h2 id="patterns">Patterns: picking the shape a trip belongs to</h2>
+      <p>A route can have more than one shape per direction — a peak express variant, a weekend deviation, a short-turn that only covers half the line (see <a href="/docs/routes-and-shapes/#multiple-variants">Routes &amp; shapes</a>). In GTFS·X each shape carries its own ordered stop list, so the timetable's columns are the stops of <em>the shape you're working on</em>, not a single direction-wide list.</p>
+      <p>The selector at the top of the timetable controls which pattern you're editing. When a route has shapes, it's a <strong>pattern dropdown</strong> that lists each shape by name ("Outbound — express", "Weekend deviation") and switches the grid — its columns, its trips — to that shape. A route with no shapes yet falls back to a plain Direction 0 / Direction 1 toggle. The dropdown is what makes <em>same-direction</em> variants reachable: two outbound shapes look identical to a two-way direction toggle, so name your shapes and pick from the list.</p>
+      <p>Selecting a pattern filters the trip grid to trips on that shape. New trips you add inherit the selected shape, so their stop columns line up. If you're authoring a short-turn variant, switch to its shape first, then add its trips — they'll reference the subset of stops that shape serves.</p>
+
+      <h2 id="rebuild-by-headway">Rebuilding a pattern: trip-less shapes &amp; Remove All Trips</h2>
+      <p>A shape stays a first-class pattern even when it has <em>zero</em> trips, as long as it still has stops. That's deliberate: it lets you rebuild a timetable from scratch without losing the alignment or the stop placement. The flow is <strong>change the stop order → remove all the trips → add one clean trip → replicate it by headway</strong>.</p>
+      <p>The <strong>Remove All Trips</strong> button (top of the timetable, shown when the current view has trips) clears every trip in the current pattern/direction view — and their stop times — after a confirm. It explicitly <em>keeps the shape and its stops</em>, so the pattern stays in the dropdown with an empty grid, ready for you to add a fresh trip and use <strong>Repeat Every…</strong> to spawn the new schedule. Use it when a schedule change is large enough that fixing trips one by one is slower than rebuilding: a frequency overhaul, a runtime retiming, a span change.</p>
+      <p>Because trip-less-but-stop-bearing shapes remain selectable, you can also start a brand-new pattern by drawing and stopping a shape, placing its stops, and authoring trips later — the pattern is usable the moment it has stops, trips or not.</p>
 
       <h2 id="blocks">Vehicle blocks (block_id)</h2>
       <p>A <strong>block</strong> is the set of trips one physical vehicle runs in sequence over a service day — finish an outbound trip on Route 5, deadhead over, and start an inbound on Route 12, all on the same bus. Trips in the same block share a <code>block_id</code>, which lets trip planners offer "stay on board" transfers and lets the Service Summary count peak vehicles correctly.</p>
@@ -130,6 +152,7 @@
           <li><a href="/docs/service-calendars/">Service calendars</a> — every trip references a service pattern from here.</li>
           <li><a href="/docs/stops/">Stops</a> — the columns of the grid.</li>
           <li><a href="/docs/service-summary/">Service summary</a> — derives revenue hours and peak-vehicle counts from the trips you author here.</li>
+          <li><a href="/docs/scenario-analysis/">Scenario analysis</a> — save and compare networks; cost and coverage re-scope to the active scenario.</li>
         </ul>
       </div>
     </main>

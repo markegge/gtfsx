@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Source, Layer } from 'react-map-gl/mapbox';
 import { featureCollection } from '@turf/helpers';
 import { useStore } from '../../store';
+import { featureEnabled } from '../../store/featuresSlice';
 
 const DEFAULT_FLEX_COLOR = '#7C3AED';
 
@@ -16,6 +17,9 @@ export function FlexLayer() {
   const routes = useStore((s) => s.routes);
   const editingFlexZoneId = useStore((s) => s.editingFlexZoneId);
   const hiddenRouteIds = useStore((s) => s.hiddenRouteIds);
+  // Demand response can be turned off in Settings (data is kept but hidden) —
+  // when it's off, the zones shouldn't render on the map either.
+  const demandResponseOn = useStore((s) => featureEnabled(s, 'demandResponse'));
 
   const combinedGeojson = useMemo(() => {
     // Exclude the zone currently being edited in draw (draw renders it instead)
@@ -59,7 +63,7 @@ export function FlexLayer() {
     return featureCollection(allFeatures) as GeoJSON.FeatureCollection;
   }, [flexZones, editingFlexZoneId, routes, hiddenRouteIds]);
 
-  if (flexZones.length === 0) return null;
+  if (!demandResponseOn || flexZones.length === 0) return null;
 
   return (
     <Source id="flex-zones" type="geojson" data={combinedGeojson}>

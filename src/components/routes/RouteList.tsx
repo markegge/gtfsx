@@ -15,20 +15,30 @@ export function RouteList() {
     hiddenRouteIds, toggleRouteVisibility,
     hiddenRouteTypes, toggleRouteType,
   } = useStore();
+  const flexZones = useStore((s) => s.flexZones);
 
   // Quick text filter (short name / long name / description).
   const [text, setText] = useState('');
 
+  // Flex zones are materialized as routes (route_type 3, "… (Flex)") so they
+  // export cleanly and the validator sees them, but they're created/edited/
+  // deleted in the Flex Zones panel — keep them out of the Routes list so they
+  // don't read as regular routes here.
+  const managedRoutes = useMemo(() => {
+    const flexRouteIds = new Set(flexZones.map((z) => z.routeId).filter(Boolean));
+    return routes.filter((r) => !flexRouteIds.has(r.route_id));
+  }, [routes, flexZones]);
+
   // Distinct route_types present in the feed, in a stable order. The type
   // pillbox only appears when there's more than one mode to filter between.
   const presentTypes = useMemo(
-    () => [...new Set(routes.map((r) => r.route_type))].sort((a, b) => a - b),
-    [routes],
+    () => [...new Set(managedRoutes.map((r) => r.route_type))].sort((a, b) => a - b),
+    [managedRoutes],
   );
 
   const filteredRoutes = useMemo(() => {
     const q = text.trim().toLowerCase();
-    return routes.filter((r) => {
+    return managedRoutes.filter((r) => {
       if (hiddenRouteTypes.includes(r.route_type)) return false;
       if (!q) return true;
       return (
@@ -37,7 +47,7 @@ export function RouteList() {
         r.route_desc?.toLowerCase().includes(q)
       );
     });
-  }, [routes, hiddenRouteTypes, text]);
+  }, [managedRoutes, hiddenRouteTypes, text]);
 
   const handleAdd = () => {
     const usedColors = routes.map((r) => r.route_color);
@@ -79,7 +89,7 @@ export function RouteList() {
   // Otherwise show the route list
   return (
     <div>
-      {routes.length === 0 ? (
+      {managedRoutes.length === 0 ? (
         <EmptyState
           icon="🗺️"
           title="No routes yet"
@@ -90,7 +100,7 @@ export function RouteList() {
       ) : (
         <>
           <div className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-2">
-            Routes ({filteredRoutes.length === routes.length ? routes.length : `${filteredRoutes.length} of ${routes.length}`})
+            Routes ({filteredRoutes.length === managedRoutes.length ? managedRoutes.length : `${filteredRoutes.length} of ${managedRoutes.length}`})
           </div>
 
           {/* Quick text filter */}

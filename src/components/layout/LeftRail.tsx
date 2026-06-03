@@ -236,7 +236,12 @@ function useItemCounts(): ItemCounts {
   });
   const fares = useStore((s) => s.fareAttributes.length);
   const calendars = useStore((s) => s.calendars.length);
-  const routes = useStore((s) => s.routes.length);
+  // Exclude flex-backed routes — they're managed in the Flex Zones panel, not
+  // the Routes panel, so the badge should match the Routes list (which hides them).
+  const routes = useStore((s) => {
+    const flexRouteIds = new Set(s.flexZones.map((z) => z.routeId).filter(Boolean));
+    return s.routes.filter((r) => !flexRouteIds.has(r.route_id)).length;
+  });
   const stops = useStore((s) => s.stops.length);
   const flex = useStore((s) => s.flexZones.length);
   return { agencyValid, fares, calendars, routes, stops, flex };

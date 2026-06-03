@@ -4,11 +4,12 @@ import type { TripSlice } from './tripSlice';
 import type { ShapeSlice } from './shapeSlice';
 import type { FareSlice } from './fareSlice';
 import type { StopSlice } from './stopSlice';
+import type { FlexSlice } from './flexSlice';
 
 // Cross-slice mutations need to see fields from neighbouring slices.
 // Casting state to this intersection is narrower than `any` and surfaces
 // real typos in field names.
-type CrossSliceState = RouteSlice & TripSlice & ShapeSlice & FareSlice & StopSlice;
+type CrossSliceState = RouteSlice & TripSlice & ShapeSlice & FareSlice & StopSlice & FlexSlice;
 
 export interface RouteSlice {
   routes: Route[];
@@ -41,7 +42,7 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
 
     // Snapshot the routeStops BEFORE we remove this route's associations,
     // so we can compute "unique to this route" against the original graph.
-    const fullState = get() as unknown as RouteSlice & TripSlice & ShapeSlice & FareSlice & StopSlice;
+    const fullState = get() as unknown as CrossSliceState;
     const thisRouteStopIds = new Set(
       fullState.routeStops
         .filter((rs) => rs.route_id === route_id)
@@ -91,6 +92,10 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
     }
     // Remove fare rules for this route
     (state as CrossSliceState).fareRules = fullState.fareRules.filter((fr) => fr.route_id !== route_id);
+    // A flex zone is materialized as a route; deleting that route must also drop
+    // the zone, or it orphans — left on the map with a dangling routeId and no
+    // longer reachable from the Flex Zones panel's delete.
+    (state as CrossSliceState).flexZones = fullState.flexZones.filter((z) => z.routeId !== route_id);
 
     // Optionally remove the stops that are now orphaned (not used by any
     // other route). When `deleteOrphanedStops` is false, the stops stay

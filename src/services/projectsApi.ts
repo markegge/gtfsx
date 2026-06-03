@@ -19,6 +19,12 @@ export interface ProjectSummary {
   brandPrimaryColor?: string | null;
   /** Absolute URL of the small route-map thumbnail; null when none generated. */
   thumbnailUrl?: string | null;
+  /**
+   * Lock guard (issue #36). A locked feed pins to the top of the feed list,
+   * can't be renamed/deleted, and opens in the editor as a detached draft
+   * (Save → Save As). Enforced server-side too.
+   */
+  locked: boolean;
 }
 
 export interface ProjectQuota {
@@ -152,12 +158,21 @@ export function patchProject(
     slug?: string;
     archivedAt?: null | 'now';
     brandPrimaryColor?: string | null;
+    locked?: boolean;
   },
 ): Promise<ProjectSummary> {
   return requestJson<ProjectSummary>(`/api/projects/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: input,
   });
+}
+
+/**
+ * Lock or unlock a feed (issue #36). Routed through PATCH; the server requires
+ * admin-level access (same level that can delete the project).
+ */
+export function setProjectLocked(id: string, locked: boolean): Promise<ProjectSummary> {
+  return patchProject(id, { locked });
 }
 
 export function deleteProject(id: string): Promise<void> {

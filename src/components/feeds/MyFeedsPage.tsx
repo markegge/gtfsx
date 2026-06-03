@@ -14,6 +14,7 @@ import {
   listProjects,
   patchProject,
   saveWorkingState,
+  setProjectLocked,
   transferProject,
   type ProjectSummary,
   type TransferResult,
@@ -61,6 +62,13 @@ export function MyFeedsPage() {
   const [renameTarget, setRenameTarget] = useState<ProjectSummary | null>(null);
   const [moveTarget, setMoveTarget] = useState<ProjectSummary | null>(null);
   const [moveResult, setMoveResult] = useState<{ message: string } | null>(null);
+
+  // Locked feeds pin to the top of the list (issue #36). The server already
+  // sorts by last-edited; this is a stable partition that preserves that order
+  // within the locked and unlocked groups.
+  const sortedProjects = useMemo(() => {
+    return [...feedsProjects].sort((a, b) => Number(b.locked) - Number(a.locked));
+  }, [feedsProjects]);
 
   const activeWorkspace = useStore((s) => s.activeWorkspace);
   const userOrgs = useStore((s) => s.userOrgs);
@@ -214,13 +222,22 @@ export function MyFeedsPage() {
           </div>
         ) : (
           <div className="grid gap-3">
-            {feedsProjects.map((p) => (
+            {sortedProjects.map((p) => (
               <FeedCard
                 key={p.id}
                 project={p}
                 onOpen={() => navigate(`/feeds/${encodeURIComponent(p.slug)}`)}
                 onRename={() => setRenameTarget(p)}
                 onMove={() => setMoveTarget(p)}
+                onLockToggle={async () => {
+                  try {
+                    const updated = await setProjectLocked(p.id, !p.locked);
+                    upsertFeedProject(updated);
+                  } catch (err) {
+                    const msg = err instanceof ApiError ? err.message : 'Update failed';
+                    alert(msg);
+                  }
+                }}
                 onArchiveToggle={async () => {
                   try {
                     const updated = await patchProject(p.id, {
@@ -373,6 +390,7 @@ function FeedCard({
   onOpen,
   onRename,
   onMove,
+  onLockToggle,
   onArchiveToggle,
   onDelete,
 }: {
@@ -380,10 +398,12 @@ function FeedCard({
   onOpen: () => void;
   onRename: () => void;
   onMove: () => void;
+  onLockToggle: () => void;
   onArchiveToggle: () => void;
   onDelete: () => void;
 }) {
   const archived = !!project.archivedAt;
+  const locked = project.locked;
   const lastEdited = project.workingStateUpdatedAt ?? project.updatedAt;
 
   return (
@@ -409,6 +429,11 @@ function FeedCard({
         className="flex-1 text-left focus:outline-none"
       >
         <div className="flex items-center gap-2 mb-1">
+          {locked && (
+            <span title="Locked — protected from edits and deletion" aria-label="Locked">
+              🔒
+            </span>
+          )}
           <span className="font-heading font-bold text-base text-dark-brown">{project.name}</span>
           {archived && <Badge variant="warning">Archived</Badge>}
         </div>
@@ -440,12 +465,26 @@ function FeedCard({
             className="bg-white rounded-xl shadow-lg border border-sand p-1 w-44 z-50"
           >
             <PopoverItem onSelect={onOpen}>Open</PopoverItem>
-            <PopoverItem onSelect={onRename}>Rename</PopoverItem>
+            <PopoverItem
+              onSelect={onRename}
+              disabled={locked}
+              title={locked ? 'Unlock the feed to rename it' : undefined}
+            >
+              Rename
+            </PopoverItem>
             <PopoverItem onSelect={onMove}>Move to…</PopoverItem>
+            <PopoverItem onSelect={onLockToggle}>
+              {locked ? 'Unlock' : 'Lock'}
+            </PopoverItem>
             <PopoverItem onSelect={onArchiveToggle}>
               {archived ? 'Unarchive' : 'Archive'}
             </PopoverItem>
-            <PopoverItem onSelect={onDelete} danger>
+            <PopoverItem
+              onSelect={onDelete}
+              danger
+              disabled={locked}
+              title={locked ? 'Unlock the feed to delete it' : undefined}
+            >
               Delete
             </PopoverItem>
           </Popover.Content>
@@ -459,25 +498,32 @@ function PopoverItem({
   onSelect,
   children,
   danger = false,
+  disabled = false,
+  title,
 }: {
   onSelect: () => void;
   children: React.ReactNode;
   danger?: boolean;
+  disabled?: boolean;
+  title?: string;
 }) {
-  return (
-    <Popover.Close asChild>
-      <button
-        onClick={onSelect}
-        className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-          danger
-            ? 'text-red-600 hover:bg-red-50'
-            : 'text-dark-brown hover:bg-cream'
-        }`}
-      >
-        {children}
-      </button>
-    </Popover.Close>
+  const button = (
+    <button
+      onClick={disabled ? undefined : onSelect}
+      disabled={disabled}
+      title={title}
+      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+        danger
+          ? 'text-red-600 hover:bg-red-50 disabled:hover:bg-transparent'
+          : 'text-dark-brown hover:bg-cream disabled:hover:bg-transparent'
+      }`}
+    >
+      {children}
+    </button>
   );
+  // A disabled item keeps the menu open (no Popover.Close wrapper) so the user
+  // sees the tooltip / can pick a different action.
+  return disabled ? button : <Popover.Close asChild>{button}</Popover.Close>;
 }
 
 function CreateFeedDialog({

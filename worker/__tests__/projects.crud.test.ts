@@ -5,6 +5,7 @@ import { beforeEach, afterEach, describe, expect, it } from 'vitest';
 import { makeClient, type TestClient } from './_client';
 import {
   applyMigrations,
+  gzip,
   resetDb,
   seedUser,
   setupEmailCapture,
@@ -112,5 +113,90 @@ describe('/api/projects CRUD', () => {
     const { client: clientB } = await loggedInClient('bob-crud@example.com');
     const res = await clientB.get(`/api/projects/${proj.id}`);
     expect(res.status).toBe(404);
+  });
+
+  // ─── Lockable feeds (issue #36) ──────────────────────────────────────────
+
+  it('projects are unlocked by default; PATCH locked:true sets it', async () => {
+    const { client } = await loggedInClient('lock1@example.com');
+    const created = await client.json<{ id: string; locked: boolean }>(
+      await client.post('/api/projects', { name: 'Lockable' }),
+    );
+    expect(created.locked).toBe(false);
+
+    const patched = await client.json<{ locked: boolean }>(
+      await client.patch(`/api/projects/${created.id}`, { locked: true }),
+    );
+    expect(patched.locked).toBe(true);
+
+    // The lock is reflected in the list + detail responses.
+    const list = await client.json<{ projects: { id: string; locked: boolean }[] }>(
+      await client.get('/api/projects'),
+    );
+    expect(list.projects.find((p) => p.id === created.id)?.locked).toBe(true);
+    const detail = await client.json<{ locked: boolean }>(
+      await client.get(`/api/projects/${created.id}`),
+    );
+    expect(detail.locked).toBe(true);
+  });
+
+  it('DELETE on a locked feed returns 409; unlocking then deleting succeeds', async () => {
+    const { client } = await loggedInClient('lock2@example.com');
+    const created = await client.json<{ id: string }>(
+      await client.post('/api/projects', { name: 'Protected' }),
+    );
+    await client.patch(`/api/projects/${created.id}`, { locked: true });
+
+    const blocked = await client.delete(`/api/projects/${created.id}`);
+    expect(blocked.status).toBe(409);
+    const body = (await blocked.json()) as { error: string };
+    expect(body.error).toBe('conflict');
+
+    // Unlock, then the delete goes through.
+    await client.patch(`/api/projects/${created.id}`, { locked: false });
+    const ok = await client.delete(`/api/projects/${created.id}`);
+    expect(ok.status).toBe(204);
+  });
+
+  it('renaming a locked feed returns 409 (lock protects name/slug)', async () => {
+    const { client } = await loggedInClient('lock3@example.com');
+    const created = await client.json<{ id: string }>(
+      await client.post('/api/projects', { name: 'NoRename' }),
+    );
+    await client.patch(`/api/projects/${created.id}`, { locked: true });
+
+    const blocked = await client.patch(`/api/projects/${created.id}`, { name: 'Renamed' });
+    expect(blocked.status).toBe(409);
+
+    // Unlock + rename in the same request is allowed.
+    const ok = await client.json<{ name: string; locked: boolean }>(
+      await client.patch(`/api/projects/${created.id}`, { name: 'Renamed', locked: false }),
+    );
+    expect(ok.name).toBe('Renamed');
+    expect(ok.locked).toBe(false);
+  });
+
+  it('working-state PUT on a locked feed returns 409', async () => {
+    const { client } = await loggedInClient('lock4@example.com');
+    const created = await client.json<{ id: string }>(
+      await client.post('/api/projects', { name: 'NoSave' }),
+    );
+    await client.patch(`/api/projects/${created.id}`, { locked: true });
+
+    const res = await client.put(`/api/projects/${created.id}/working-state`, undefined, {
+      body: await gzip(JSON.stringify({ routes: [] })),
+      headers: { 'Content-Encoding': 'gzip', 'If-Match': '0' },
+    });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('conflict');
+
+    // After unlocking, the save succeeds.
+    await client.patch(`/api/projects/${created.id}`, { locked: false });
+    const ok = await client.put(`/api/projects/${created.id}/working-state`, undefined, {
+      body: await gzip(JSON.stringify({ routes: [] })),
+      headers: { 'Content-Encoding': 'gzip', 'If-Match': '0' },
+    });
+    expect(ok.status).toBe(200);
   });
 });

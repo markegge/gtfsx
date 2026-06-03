@@ -60,6 +60,7 @@ interface ProjectRow {
   created_at: number;
   updated_at: number;
   brand_primary_color: string | null;
+  locked: number;
   thumbnail_version?: number | null;
 }
 
@@ -109,6 +110,7 @@ function shapeProject(row: ProjectRow) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     brandPrimaryColor: row.brand_primary_color,
+    locked: row.locked === 1,
   };
 }
 
@@ -168,7 +170,7 @@ export async function requireOwnedProject(
   const row = await env.DB.prepare(
     `SELECT id, slug, name, description, owner_type, owner_id,
             working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
-            archived_at, deleted_at, created_at, updated_at, brand_primary_color
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked
        FROM feed_project WHERE id = ?`,
   )
     .bind(projectId)
@@ -234,6 +236,9 @@ const patchSchema = z.object({
   archivedAt: z.union([z.null(), z.literal('now')]).optional(),
   // 6-char hex without leading "#", or null to clear.
   brandPrimaryColor: z.union([z.string().regex(/^[0-9a-fA-F]{6}$/), z.null()]).optional(),
+  // Lock/unlock the feed (issue #36). Toggling requires admin-level access
+  // (the same level that can delete the project) — see the handler below.
+  locked: z.boolean().optional(),
 });
 
 const importItemSchema = z.object({
@@ -311,7 +316,7 @@ projectsRouter.post('/', async (c) => {
   const row = await c.env.DB.prepare(
     `SELECT id, slug, name, description, owner_type, owner_id,
             working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
-            archived_at, deleted_at, created_at, updated_at, brand_primary_color
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked
        FROM feed_project WHERE id = ?`,
   )
     .bind(id)
@@ -353,7 +358,7 @@ projectsRouter.get('/', async (c) => {
   const rows = await c.env.DB.prepare(
     `SELECT p.id, p.slug, p.name, p.description, p.owner_type, p.owner_id,
             p.working_state_r2_key, p.working_state_version, p.working_state_size, p.working_state_updated_at,
-            p.archived_at, p.deleted_at, p.created_at, p.updated_at, p.brand_primary_color, p.thumbnail_version,
+            p.archived_at, p.deleted_at, p.created_at, p.updated_at, p.brand_primary_color, p.locked, p.thumbnail_version,
             (SELECT COUNT(*) FROM feed_snapshot v WHERE v.project_id = p.id) AS snapshot_count,
             (SELECT MAX(v.created_at) FROM feed_snapshot v WHERE v.project_id = p.id) AS last_snapshot_created_at
        FROM feed_project p
@@ -413,11 +418,28 @@ projectsRouter.patch('/:id', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');
   const body = await parseJson(c, patchSchema);
-  const { row: current } = await requireOwnedProject(c.env, user, id, 'editor');
+  // Locking/unlocking is a delete-grade guard rail, so it needs admin-level
+  // access; the rest of PATCH (rename, slug, archive, brand color) needs only
+  // editor. Require the higher level whenever `locked` is being changed.
+  const required = body.locked !== undefined ? 'admin' : 'editor';
+  const { row: current } = await requireOwnedProject(c.env, user, id, required);
+
+  // Rename/slug on a locked feed is exactly what the lock protects against.
+  // Refuse those (the client also disables them) unless the same request is
+  // unlocking the feed.
+  const mutatesProtectedFields = body.name !== undefined || body.slug !== undefined;
+  const willBeLocked = body.locked !== undefined ? body.locked : current.locked === 1;
+  if (current.locked === 1 && mutatesProtectedFields && willBeLocked) {
+    throw conflict('This feed is locked. Unlock it before renaming.');
+  }
 
   const updates: string[] = [];
   const binds: unknown[] = [];
 
+  if (body.locked !== undefined) {
+    updates.push('locked = ?');
+    binds.push(body.locked ? 1 : 0);
+  }
   if (body.name !== undefined) {
     updates.push('name = ?');
     binds.push(body.name);
@@ -477,6 +499,7 @@ projectsRouter.patch('/:id', async (c) => {
       description: body.description !== undefined,
       slug: body.slug !== undefined,
       archived: body.archivedAt !== undefined,
+      locked: body.locked,
     },
     ip: clientIp(c.req.raw),
   });
@@ -484,7 +507,7 @@ projectsRouter.patch('/:id', async (c) => {
   const updated = await c.env.DB.prepare(
     `SELECT id, slug, name, description, owner_type, owner_id,
             working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
-            archived_at, deleted_at, created_at, updated_at, brand_primary_color
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked
        FROM feed_project WHERE id = ?`,
   )
     .bind(current.id)
@@ -496,6 +519,11 @@ projectsRouter.delete('/:id', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');
   const { row: current } = await requireOwnedProject(c.env, user, id, 'admin');
+
+  // A locked feed is protected from deletion. Unlock it first (PATCH locked:false).
+  if (current.locked === 1) {
+    throw conflict('This feed is locked. Unlock it before deleting.');
+  }
 
   const now = Date.now();
   await c.env.DB.prepare(`UPDATE feed_project SET deleted_at = ?, updated_at = ? WHERE id = ?`)
@@ -593,7 +621,7 @@ projectsRouter.post('/:id/transfer', async (c) => {
   const fresh = await c.env.DB.prepare(
     `SELECT id, slug, name, description, owner_type, owner_id,
             working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
-            archived_at, deleted_at, created_at, updated_at, brand_primary_color
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked
        FROM feed_project WHERE id = ?`,
   )
     .bind(current.id)
@@ -632,6 +660,14 @@ projectsRouter.put('/:id/working-state', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');
   const { row } = await requireOwnedProject(c.env, user, id, 'editor');
+
+  // A locked feed can't be saved over — this is what protects the published
+  // demo feed (and any agency's live feed). The editor opens locked feeds as a
+  // detached draft so it never even attempts this, but enforce it server-side
+  // too so a stale client or a direct API call can't bypass the lock.
+  if (row.locked === 1) {
+    throw conflict('This feed is locked. Unlock it before saving, or use Save As to fork it.');
+  }
 
   const ifMatchHeader = c.req.header('If-Match');
   const ifMatch = ifMatchHeader != null ? parseInt(ifMatchHeader, 10) : NaN;
@@ -844,6 +880,11 @@ projectsRouter.post('/:id/snapshots/:vid/restore', async (c) => {
   const vid = c.req.param('vid');
   const { row } = await requireOwnedProject(c.env, user, id, 'editor');
   await requireOwnerFeature(c.env, row.owner_type as OwnerType, row.owner_id, 'snapshot_history', user);
+  // Restoring a snapshot overwrites working state, so it's blocked on a locked
+  // feed for the same reason a direct save is.
+  if (row.locked === 1) {
+    throw conflict('This feed is locked. Unlock it before restoring a snapshot.');
+  }
   const snapshot = await requireOwnedSnapshot(c.env, row.id, vid);
 
   const source = await getFeedBlob(c.env, snapshot.state_r2_key);
@@ -1064,7 +1105,7 @@ projectsRouter.post('/import', async (c) => {
     const row = await c.env.DB.prepare(
       `SELECT id, slug, name, description, owner_type, owner_id,
               working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
-              archived_at, deleted_at, created_at, updated_at
+              archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked
          FROM feed_project WHERE id = ?`,
     )
       .bind(projectId)

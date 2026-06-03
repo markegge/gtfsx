@@ -171,6 +171,10 @@ function ServerEditorRoute() {
 
   const [projectId, setProjectId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A locked feed opens as a detached draft (issue #36): edits are allowed but
+  // it's never attached as the active cloud project, so autosave-to-cloud stays
+  // off and Save routes to Save As. We track it just to show the banner.
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     if (!authChecked) return;
@@ -180,6 +184,7 @@ function ServerEditorRoute() {
     }
     let cancelled = false;
     let localUnsub: (() => void) | null = null;
+    setLocked(false);
     const resolveAndLoad = async () => {
       try {
         let proj = feedsProjects.find((p) => p.slug === slug);
@@ -204,7 +209,15 @@ function ServerEditorRoute() {
           return;
         }
         setProjectId(proj.id);
-        setActiveServerProject(proj.id);
+        setLocked(proj.locked);
+        // A locked feed opens as a detached draft: load its working state but
+        // do NOT attach it as the active cloud project. With
+        // activeServerProjectId left null, autosave-to-cloud is off (it falls
+        // back to the local IndexedDB draft) and TopBar's Save routes to the
+        // Save-As dialog — exactly the "behaves like an imported feed" rule.
+        if (!proj.locked) {
+          setActiveServerProject(proj.id);
+        }
         // Set project metadata in the store BEFORE loading the snapshot,
         // so the markSaved() at the end of the snapshot apply also covers
         // the name/id assignment. Setting them after would re-mark dirty.
@@ -251,6 +264,15 @@ function ServerEditorRoute() {
 
   return (
     <>
+      {locked && (
+        <div className="px-4 py-2 bg-gold-light text-amber-700 text-sm flex items-center gap-2 border-b border-amber-200">
+          <span aria-hidden>🔒</span>
+          <span className="flex-1">
+            Locked — changes won't be saved here. Use <strong>Save As</strong> to fork
+            this feed, or unlock it from the feed list to edit.
+          </span>
+        </div>
+      )}
       {restoredBanner && (
         <div className="px-4 py-2 bg-teal-light text-teal text-sm flex items-center gap-3">
           <span className="flex-1">{restoredBanner}</span>
@@ -264,7 +286,10 @@ function ServerEditorRoute() {
         </div>
       )}
       <AppShell />
-      {projectId && <ConflictDialog projectId={projectId} />}
+      {/* ConflictDialog is only relevant for cloud-attached projects; a locked
+          feed is a detached draft (no active server project, no autosave-to-cloud)
+          so there's no working-state version to conflict on. */}
+      {projectId && !locked && <ConflictDialog projectId={projectId} />}
     </>
   );
 }

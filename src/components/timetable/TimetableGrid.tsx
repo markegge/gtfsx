@@ -95,8 +95,8 @@ export function TimetableGrid() {
   // legacy direction-only toggle so we keep authoring useful for in-progress
   // feeds before a shape exists.
   const patterns = useMemo(
-    () => computeShapePatterns(selectedRouteId, trips),
-    [selectedRouteId, trips],
+    () => computeShapePatterns(selectedRouteId, trips, routeStops),
+    [selectedRouteId, trips, routeStops],
   );
 
   // When the route changes or the pattern list updates, sync the store's
@@ -158,6 +158,9 @@ export function TimetableGrid() {
 
   // "Apply to all trips" confirm state — holds the template trip id.
   const [applyPrompt, setApplyPrompt] = useState<string | null>(null);
+
+  // "Remove all trips" confirm state — true while the destructive confirm is up.
+  const [removeAllPrompt, setRemoveAllPrompt] = useState(false);
 
   // "Estimate times" dialog — holds the trip id being timed + its config.
   const [estimatePrompt, setEstimatePrompt] = useState<string | null>(null);
@@ -342,6 +345,14 @@ export function TimetableGrid() {
     setApplyPrompt(null);
   };
 
+  // Remove every trip currently shown in the grid (this route + service +
+  // direction + shape). The shape and its route_stops are untouched, so the
+  // user can immediately add one fresh trip and replicate it by headway.
+  const handleRemoveAllConfirm = () => {
+    for (const t of routeTrips) removeTrip(t.trip_id);
+    setRemoveAllPrompt(false);
+  };
+
   // Ordered [lng, lat] vertices of a trip's drawn shape (empty if none).
   const shapeCoordsForTrip = useCallback((tripId: string): [number, number][] => {
     const trip = trips.find((t) => t.trip_id === tripId);
@@ -514,6 +525,15 @@ export function TimetableGrid() {
           />
           Arr / Dep
         </label>
+        {routeTrips.length > 0 && (
+          <button
+            onClick={() => setRemoveAllPrompt(true)}
+            title="Delete every trip in this view (keeps the shape and its stops)"
+            className="px-3 py-1 border-2 border-dashed border-sand rounded-md text-xs font-semibold text-warm-gray hover:border-red-400 hover:text-red-500 transition-colors whitespace-nowrap"
+          >
+            Remove All Trips
+          </button>
+        )}
         <button
           onClick={() => setShowRepeatForm((v) => !v)}
           disabled={!hasStops}
@@ -853,6 +873,38 @@ export function TimetableGrid() {
                 className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50"
               >
                 Apply to {applyTargets.length}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove-all-trips confirm */}
+      {removeAllPrompt && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black/20" onClick={() => setRemoveAllPrompt(false)} />
+          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-sm mx-4">
+            <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
+              Remove all trips
+            </h3>
+            <p className="text-sm text-warm-gray mb-4">
+              Delete all {routeTrips.length} {directionName(route, directionId).toLowerCase()} trip
+              {routeTrips.length === 1 ? '' : 's'} shown for {route.route_short_name || route.route_long_name || route.route_id}?
+              This also removes their stop times. The shape and its stops are kept, so you can add a
+              fresh trip and replicate it by headway.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setRemoveAllPrompt(false)}
+                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRemoveAllConfirm}
+                className="flex-1 px-3 py-2 bg-red-500 text-white rounded-lg font-heading font-bold text-sm hover:bg-red-600 transition-colors"
+              >
+                Remove {routeTrips.length}
               </button>
             </div>
           </div>

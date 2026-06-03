@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Papa from 'papaparse';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
+import { AuthButton } from '../auth/AuthButton';
 import { useVisibleFeed } from '../../hooks/useVisibleFeed';
 import { RouteScopeNote } from '../ui/RouteScopeNote';
 import { downloadBlob } from '../../services/gtfsExport';
@@ -14,6 +15,7 @@ import {
   representativeDay,
   DEFAULT_SPACING_BENCHMARKS,
   type FeedSlice,
+  type BalancingCandidate,
 } from '../../services/stopAnalysis';
 
 type MapOverlayKind = 'balancing' | 'intensity' | 'accessibility' | null;
@@ -154,9 +156,13 @@ export function StopAnalysisPanel() {
   const calendars = useStore((s) => s.calendars);
   const calendarDates = useStore((s) => s.calendarDates);
   const selectRoute = useStore((s) => s.selectRoute);
+  const removeRouteStop = useStore((s) => s.removeRouteStop);
   const setStopAnalysisOverlay = useStore((s) => s.setStopAnalysisOverlay);
   const setBottomPanelOpen = useStore((s) => s.setBottomPanelOpen);
   const setBottomPanelTab = useStore((s) => s.setBottomPanelTab);
+
+  // Candidate pending a remove confirmation (destructive: edits stop_times).
+  const [removeTarget, setRemoveTarget] = useState<BalancingCandidate | null>(null);
 
   const feed: FeedSlice = useMemo(
     () => ({ stops, routes, routeStops, trips, stopTimes, calendars, calendarDates }),
@@ -340,7 +346,14 @@ export function StopAnalysisPanel() {
                   </div>
                   <div className="text-warm-gray truncate">{c.stopAName} → {c.stopBName}</div>
                   <div className="text-[10px] text-warm-gray mt-0.5">
-                    {c.tripsPerDay} trips/day · ~{(c.savingsSecPerDay / 60).toFixed(0)} min/day · remove <span className="text-coral font-medium">{c.removalStopName}</span>
+                    {c.tripsPerDay} trips/day · ~{(c.savingsSecPerDay / 60).toFixed(0)} min/day · remove{' '}
+                    <button
+                      onClick={() => setRemoveTarget(c)}
+                      className="text-coral font-medium hover:underline"
+                      title={`Remove ${c.removalStopName} from ${c.routeName} (${c.directionLabel})`}
+                    >
+                      {c.removalStopName}
+                    </button>
                   </div>
                 </div>
               ))}
@@ -468,6 +481,75 @@ export function StopAnalysisPanel() {
           <p className="text-xs text-teal font-medium">✓ Every board point has wheelchair info.</p>
         )}
       </Section>
+
+      {removeTarget && (
+        <RemoveStopConfirm
+          candidate={removeTarget}
+          // Removal isn't service-day-scoped — it strips stop_times from EVERY
+          // trip on this route in this direction, so count those (not the
+          // service-day-filtered tripsPerDay) for an honest warning.
+          affectedTripCount={
+            trips.filter(
+              (t) => t.route_id === removeTarget.routeId && t.direction_id === removeTarget.directionId,
+            ).length
+          }
+          onCancel={() => setRemoveTarget(null)}
+          onConfirm={() => {
+            // No shape_id on the candidate, so scope by (route, direction):
+            // removeRouteStop drops every matching route_stop (across the
+            // direction's shapes) AND the stop_times for that stop on the
+            // direction's trips. It leaves the stop in stops.txt untouched.
+            removeRouteStop(removeTarget.routeId, removeTarget.removalStopId, removeTarget.directionId);
+            setRemoveTarget(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Confirmation for removing a too-close stop from a route's stop sequence.
+ *  Names the stop + route, warns it strips stop_times on N trips, and makes
+ *  explicit that the stop record itself stays in the feed. */
+function RemoveStopConfirm({
+  candidate,
+  affectedTripCount,
+  onConfirm,
+  onCancel,
+}: {
+  candidate: BalancingCandidate;
+  affectedTripCount: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-50">
+      <div className="absolute inset-0 bg-black/20" onClick={onCancel} />
+      <div className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-sm mx-4">
+        <h3 className="font-heading font-bold text-lg text-dark-brown mb-2">
+          Remove "{candidate.removalStopName}" from this route?
+        </h3>
+        <p className="text-sm text-warm-gray mb-3">
+          This removes <span className="font-medium text-dark-brown">{candidate.removalStopName}</span> from{' '}
+          <span className="font-medium text-dark-brown">{candidate.routeName}</span> ({candidate.directionLabel}),
+          deleting its stop_times on{' '}
+          <span className="font-medium text-dark-brown">
+            {affectedTripCount} {affectedTripCount === 1 ? 'trip' : 'trips'}
+          </span>{' '}
+          so those trips no longer serve it.
+        </p>
+        <p className="text-sm text-warm-gray mb-5">
+          The stop stays in your feed (stops.txt) and on any other routes — only this route stops serving it.
+        </p>
+        <div className="flex justify-end gap-2">
+          <AuthButton variant="secondary" onClick={onCancel}>
+            Cancel
+          </AuthButton>
+          <AuthButton variant="danger" onClick={onConfirm}>
+            Remove from route
+          </AuthButton>
+        </div>
+      </div>
     </div>
   );
 }

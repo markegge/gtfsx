@@ -89,14 +89,13 @@ function PanelBody({ section }: { section: SidebarSection }) {
     case 'blocks':
       return <BlocksPanel />;
     case 'costs':
-      // Cost analysis is free; only the CSV export inside it is gated (Pro/Agency).
+      // System cost totals are free; the per-route breakdown + CSV export are
+      // gated (analysis_basic / Agency+) inside CostSummary. Keep it unwrapped.
       return <CostSummary />;
     case 'coverage':
-      return (
-        <PaywallOverlay feature="analysis_basic" currentPlan={plan}>
-          <CoveragePanel />
-        </PaywallOverlay>
-      );
+      // System coverage summary is free; the per-route coverage is gated
+      // (analysis_basic) inside CoveragePanel. Keep it unwrapped here.
+      return <CoveragePanel />;
     case 'titlevi':
       return (
         <PaywallOverlay feature="analysis_title_vi" currentPlan={plan}>

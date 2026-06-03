@@ -1,7 +1,4 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useStore } from '../../store';
-import { planHasFeature } from '../billing/planConfig';
 
 export type MapStyleId = 'light' | 'satellite';
 
@@ -19,13 +16,7 @@ export function MapLayerControls({
   onShowDemandDotsChange,
 }: MapLayerControlsProps) {
   const [open, setOpen] = useState(false);
-  const currentUser = useStore((s) => s.currentUser);
-  // Treat the same as the Coverage/Costs paywall: any signed-in user on Pro+
-  // gets access. Anonymous users see the upgrade affordance.
-  const propensityUnlocked = planHasFeature(currentUser?.plan ?? null, 'analysis_propensity');
-  const upgradeHref = currentUser
-    ? '/pricing?feature=analysis_propensity'
-    : '/signup?next=' + encodeURIComponent('/pricing?feature=analysis_propensity');
+  // Demand dots (propensity map) are free for everyone, incl. anonymous — no gate.
 
   return (
     <div className="absolute top-3 left-3 z-10">
@@ -65,41 +56,16 @@ export function MapLayerControls({
           <div className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5">
             Transit Demand
           </div>
-          {propensityUnlocked ? (
-            <label className="flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] font-semibold cursor-pointer hover:bg-cream transition-colors">
-              <input
-                type="checkbox"
-                checked={showDemandDots}
-                onChange={(e) => onShowDemandDotsChange(e.target.checked)}
-                className="accent-coral"
-              />
-              <span className="text-dark-brown">Demand Dots</span>
-            </label>
-          ) : (
-            <div className="px-2 py-1.5 rounded-md text-[11px]">
-              <div className="flex items-center gap-2 text-warm-gray">
-                <input
-                  type="checkbox"
-                  checked={false}
-                  disabled
-                  className="accent-coral opacity-50"
-                  aria-label="Demand Dots (Pro plan required)"
-                />
-                <span className="font-semibold">Demand Dots</span>
-                <span className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-coral-light text-coral">
-                  Pro
-                </span>
-              </div>
-              <Link
-                to={upgradeHref}
-                className="block mt-1 text-[10px] text-coral hover:underline"
-                onClick={() => setOpen(false)}
-              >
-                Upgrade to enable →
-              </Link>
-            </div>
-          )}
-          {propensityUnlocked && showDemandDots && (
+          <label className="flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] font-semibold cursor-pointer hover:bg-cream transition-colors">
+            <input
+              type="checkbox"
+              checked={showDemandDots}
+              onChange={(e) => onShowDemandDotsChange(e.target.checked)}
+              className="accent-coral"
+            />
+            <span className="text-dark-brown">Demand Dots</span>
+          </label>
+          {showDemandDots && (
             <div className="flex flex-col gap-0.5 mt-1 px-2">
               <div className="flex items-center gap-1.5 text-[10px]">
                 <span className="w-2 h-2 rounded-full" style={{ background: '#2563eb' }} />

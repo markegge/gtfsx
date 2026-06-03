@@ -1,5 +1,6 @@
 import type { Env } from '../env';
 import { getFeedBlob } from '../projects/r2';
+import type { Plan } from '../projects/quotas';
 import type { FeedState, LoadedEmbedFeed } from './types';
 
 interface PublicationRow {
@@ -20,7 +21,8 @@ interface ProjectRow {
   thumbnail_version: number;
 }
 
-interface OrgLogoRow {
+interface OrgRow {
+  plan: string;
   brand_logo_r2_key: string | null;
   brand_logo_updated_at: number | null;
 }
@@ -57,17 +59,26 @@ export async function loadEmbedFeed(env: Env, slug: string): Promise<LoadedEmbed
   if (!snapshot || !project) return null;
 
   let brandLogoUrl: string | null = null;
+  // Resolve the owner's plan (drives white-label entitlements). Defaults to
+  // 'free' if the owner row is missing.
+  let ownerPlan: Plan = 'free';
   if (project.owner_type === 'org') {
-    const orgLogo = await env.DB.prepare(
-      `SELECT brand_logo_r2_key, brand_logo_updated_at FROM organization WHERE id = ? AND deleted_at IS NULL`,
+    const org = await env.DB.prepare(
+      `SELECT plan, brand_logo_r2_key, brand_logo_updated_at FROM organization WHERE id = ? AND deleted_at IS NULL`,
     )
       .bind(project.owner_id)
-      .first<OrgLogoRow>();
-    if (orgLogo?.brand_logo_r2_key) {
+      .first<OrgRow>();
+    if (org?.plan) ownerPlan = org.plan as Plan;
+    if (org?.brand_logo_r2_key) {
       const origin = env.FEEDS_ORIGIN.replace(/\/$/, '');
-      const v = orgLogo.brand_logo_updated_at ? `?v=${orgLogo.brand_logo_updated_at}` : '';
+      const v = org.brand_logo_updated_at ? `?v=${org.brand_logo_updated_at}` : '';
       brandLogoUrl = `${origin}/_/orgs/${project.owner_id}/logo${v}`;
     }
+  } else {
+    const user = await env.DB.prepare(`SELECT plan FROM user WHERE id = ?`)
+      .bind(project.owner_id)
+      .first<{ plan: string }>();
+    if (user?.plan) ownerPlan = user.plan as Plan;
   }
 
   const blob = await getFeedBlob(env, snapshot.state_r2_key);
@@ -102,6 +113,7 @@ export async function loadEmbedFeed(env: Env, slug: string): Promise<LoadedEmbed
     snapshotId: pub.snapshot_id,
     publishedAt: pub.published_at,
     projectName: project.name,
+    ownerPlan,
     brandPrimaryColor: project.brand_primary_color,
     brandLogoUrl,
     thumbnailVersion: project.thumbnail_version ?? 0,

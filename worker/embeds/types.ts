@@ -3,6 +3,8 @@
 // `src/db/serverPersistence.ts:DATA_KEYS`). Keep field names lowercase
 // snake_case to match GTFS / `src/types/gtfs.ts`.
 
+import type { Plan } from '../projects/quotas';
+
 export interface Agency {
   agency_id: string;
   agency_name: string;
@@ -111,6 +113,9 @@ export interface LoadedEmbedFeed {
   snapshotId: string;
   publishedAt: number;
   projectName: string;
+  // Plan of the project's owner (user or org). Drives white-label entitlements
+  // like removing the "Powered by GTFS·X" embed badge (embed_remove_badge).
+  ownerPlan: Plan;
   // 6-char hex (no leading #) or null. Drives the embed accent CSS var.
   brandPrimaryColor: string | null;
   // Public URL for the owning org's brand logo (resolves on FEEDS_ORIGIN).

@@ -180,7 +180,12 @@ export function BottomPanel() {
             </PaywallOverlay>
           )}
           {bottomPanelTab === 'embed' && activeServerProjectId && (
-            <PaywallOverlay feature="embeds" currentPlan={editorPlan}>
+            <PaywallOverlay
+              feature="embeds"
+              currentPlan={editorPlan}
+              exampleHref="https://feeds.gtfsx.com/svt-demo/"
+              exampleLabel="See a live example mini-site"
+            >
               <EmbedPanel />
             </PaywallOverlay>
           )}

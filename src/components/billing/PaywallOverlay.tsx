@@ -20,6 +20,10 @@ interface PaywallOverlayProps {
   description?: string;
   /** Optional className for the outer wrapper. */
   className?: string;
+  /** Optional "see a live example" link in the overlay card (e.g. the embeds
+   *  gate links free users to the public demo mini-site). */
+  exampleHref?: string;
+  exampleLabel?: string;
 }
 
 export function PaywallOverlay({
@@ -30,6 +34,8 @@ export function PaywallOverlay({
   title,
   description,
   className = '',
+  exampleHref,
+  exampleLabel,
 }: PaywallOverlayProps) {
   const currentUser = useStore((s) => s.currentUser);
   const navigate = useNavigate();
@@ -83,6 +89,16 @@ export function PaywallOverlay({
           <p className="mt-1.5 text-sm text-warm-gray">
             {description ?? copy.description}
           </p>
+          {exampleHref && (
+            <a
+              href={exampleHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-block text-sm font-semibold text-coral hover:underline"
+            >
+              {exampleLabel ?? 'See a live example'} →
+            </a>
+          )}
           <div className="mt-4 flex gap-2">
             <AuthButton onClick={() => navigate(upgradeHref)}>{cta}</AuthButton>
             <AuthButton variant="ghost" onClick={() => navigate('/pricing')}>

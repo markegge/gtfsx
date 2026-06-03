@@ -1,5 +1,19 @@
 import { html, raw } from 'hono/html';
 import { mapboxAssetTags } from './map';
+import { planHasFeature } from '../billing/plans';
+import type { Plan } from '../projects/quotas';
+
+/**
+ * The "Powered by GTFS·X" embed footer, with an optional agency suffix. Returns
+ * empty for owners entitled to remove it (embed_remove_badge — Agency+), so
+ * paid white-label feeds render no badge. Shared by all embed renderers.
+ */
+export function embedFooter(ownerPlan: Plan, suffix?: string) {
+  if (planHasFeature(ownerPlan, 'embed_remove_badge')) return '';
+  return html`<footer class="embed-footer">
+      Powered by <a href="https://gtfsx.com" target="_blank" rel="noopener">GTFS·X</a>${suffix ? html` · ${suffix}` : ''}
+    </footer>`;
+}
 
 const STYLES = `
   *, *::before, *::after { box-sizing: border-box; }

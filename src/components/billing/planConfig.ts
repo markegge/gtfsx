@@ -8,6 +8,7 @@ export type FeatureKey =
   | 'draft_links'
   | 'mobility_db_submit'
   | 'embeds'
+  | 'embed_remove_badge'
   | 'snapshot_history'
   | 'analysis_basic'
   | 'analysis_title_vi'
@@ -19,24 +20,26 @@ export type FeatureKey =
   | 'service_alerts'
   | 'phone_support';
 
-// Pricing v2 (May 2026): analysis_basic moved up from Pro to Agency (DB id
-// 'agency') as part of the publish-vs-plan tier split. See worker/billing/plans.ts
-// for the rationale.
+// Pricing v3 (Jun 2026): demand dots are free for all; cost/coverage split into a
+// free system-level summary + a paywalled route-level breakdown (analysis_basic
+// stays Agency+); embeds stay Pro+ but only Agency+ removes the badge
+// (embed_remove_badge); phone_support → Agency+. See worker/billing/plans.ts.
 export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
   managed_publishing:  ['pro', 'agency', 'enterprise'],
   draft_links:         ['pro', 'agency', 'enterprise'],
   mobility_db_submit:  ['pro', 'agency', 'enterprise'],
   embeds:              ['pro', 'agency', 'enterprise'],
-  snapshot_history:     ['pro', 'agency', 'enterprise'],
+  embed_remove_badge:  ['agency', 'enterprise'],
+  snapshot_history:    ['pro', 'agency', 'enterprise'],
   analysis_basic:      ['agency', 'enterprise'],
   analysis_title_vi:   ['agency', 'enterprise'],
-  analysis_propensity: ['agency', 'enterprise'],
+  analysis_propensity: ['free', 'pro', 'agency', 'enterprise'],
   org_workspace:       ['agency', 'enterprise'],
   cross_org_member:    ['agency', 'enterprise'],
   org_logo:            ['agency', 'enterprise'],
   brand_color:         ['pro', 'agency', 'enterprise'],
   service_alerts:      ['agency', 'enterprise'],
-  phone_support:       ['enterprise'],
+  phone_support:       ['agency', 'enterprise'],
 };
 
 const PLAN_ORDER: Plan[] = ['free', 'pro', 'agency', 'enterprise'];
@@ -59,7 +62,7 @@ export function planDisplayName(plan: Plan): string {
     case 'pro': return 'Pro';
     // Internal id is 'agency' (DB column, code paths); the Stripe env-var names
     // (STRIPE_PRICE_TEAM_*) and product id stay 'team' for stability. 'Agency'
-    // is the May-2026 display rename. See docs/PRICING_RESTRUCTURE.md.
+    // is the May-2026 display rename. See docs/REQUIREMENTS.md.
     case 'agency': return 'Agency';
     case 'enterprise': return 'Enterprise';
   }
@@ -84,13 +87,17 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
     title: 'Rider-facing embeds and mini-site',
     description: 'Drop schedules, route maps, and stop times into any website with copy-paste embed snippets.',
   },
+  embed_remove_badge: {
+    title: 'Remove the GTFS·X badge',
+    description: 'Serve your embeds and mini-site white-label — without the “Powered by GTFS·X” badge.',
+  },
   snapshot_history: {
     title: 'Named snapshots',
     description: 'Keep a history of named snapshots and restore any prior state with one click.',
   },
   analysis_basic: {
-    title: 'Coverage and cost analysis',
-    description: 'Visualize who your service reaches and estimate the operating cost of a proposed schedule — part of the Agency planning suite.',
+    title: 'Route-level coverage and cost analysis',
+    description: 'System-level summaries are free. Unlock the per-route breakdown — coverage and operating cost route by route — with the Agency planning suite.',
   },
   analysis_title_vi: {
     title: 'Title VI equity analysis',
@@ -122,6 +129,6 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   },
   phone_support: {
     title: 'Phone support with SLA',
-    description: 'Direct phone line + 24-hour response SLA, available on Enterprise plans.',
+    description: 'Direct phone line + 24-hour response SLA, available on Agency and Enterprise plans.',
   },
 };

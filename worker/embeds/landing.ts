@@ -1,7 +1,7 @@
 import { html } from 'hono/html';
 import type { Env } from '../env';
 import { loadEmbedFeed } from './loader';
-import { renderLayout } from './layout';
+import { renderLayout, embedFooter } from './layout';
 import { buildSystemMapData, renderMap } from './map';
 import { renderExpiryWarning } from './route';
 import {
@@ -116,10 +116,7 @@ export async function renderLandingPage(
     <p class="landing-footnote">
       Click any stop on the map for upcoming departures.
     </p>
-    <footer class="embed-footer">
-      Powered by <a href="https://gtfsx.com" target="_blank" rel="noopener">GTFS·X</a>
-      · ${agencyName}
-    </footer>
+    ${embedFooter(feed.ownerPlan, agencyName)}
   `;
 
   const thumbUrl =

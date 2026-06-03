@@ -1,7 +1,7 @@
 import { html } from 'hono/html';
 import type { Env } from '../env';
 import { loadEmbedFeed } from './loader';
-import { embedHeaders, renderLayout } from './layout';
+import { embedHeaders, renderLayout, embedFooter } from './layout';
 import { renderMap } from './map';
 import { renderExpiryWarning } from './route';
 import { formatGtfsTime } from './schedule';
@@ -161,10 +161,7 @@ export async function renderStopEmbed(
           <div class="route-list">${routesList}</div>
         `
       : ''}
-    <footer class="embed-footer">
-      Powered by <a href="https://gtfsx.com" target="_blank" rel="noopener">GTFS·X</a>
-      · ${agencyName}
-    </footer>
+    ${embedFooter(feed.ownerPlan, agencyName)}
   `;
 
   const html5 = await renderLayout({

@@ -1,5 +1,7 @@
 // Feature gating — which plans unlock which capabilities.
-// See docs/FREEMIUM_PLAN.md §1.1 for the source-of-truth matrix.
+// See docs/REQUIREMENTS.md for the source-of-truth tier/feature map.
+// NOTE: this matrix is mirrored by hand in src/components/billing/planConfig.ts —
+// edit BOTH in lockstep.
 
 import type { Plan } from '../projects/quotas';
 
@@ -8,6 +10,7 @@ export type FeatureKey =
   | 'draft_links'          // POST /api/projects/:id/draft-links → public share URLs
   | 'mobility_db_submit'   // submit feed to Mobility Database
   | 'embeds'               // rider-facing embed widgets + mini-site
+  | 'embed_remove_badge'   // serve embeds without the "Powered by GTFS·X" badge
   | 'snapshot_history'     // named snapshots + restore + delete
   | 'analysis_basic'       // demographic coverage + cost estimation
   | 'analysis_title_vi'    // Title VI equity analysis
@@ -21,26 +24,29 @@ export type FeatureKey =
 
 // Per-feature: which plans grant access. Free is excluded by absence.
 //
-// Pricing v2 (May 2026): Pro is positioned as the "host and publish feeds"
-// tier — all publishing-adjacent features live here. The Agency tier (DB id:
-// 'agency') consolidates the planning/analysis suite so it competes head-to-head
-// with Remix at ~1/6 of Remix's price. The single feature that moved was
-// analysis_basic (cost + coverage), reassigned from Pro to Agency-and-up.
+// Pricing v3 (Jun 2026): richer, more shareable free tier without giving away
+// the two paid pillars (hosting/embeds + route-level analysis). Demand dots
+// (analysis_propensity) are free for everyone; the cost & coverage panels split
+// into a free system-level summary and a paywalled route-level breakdown
+// (analysis_basic stays Agency+). Embeds stay Pro+, but only Agency+ may remove
+// the "Powered by GTFS·X" badge (embed_remove_badge). phone_support moves to
+// Agency+ to match the catalog.
 export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
   managed_publishing:  ['pro', 'agency', 'enterprise'],
   draft_links:         ['pro', 'agency', 'enterprise'],
   mobility_db_submit:  ['pro', 'agency', 'enterprise'],
   embeds:              ['pro', 'agency', 'enterprise'],
+  embed_remove_badge:  ['agency', 'enterprise'],
   snapshot_history:    ['pro', 'agency', 'enterprise'],
   analysis_basic:      ['agency', 'enterprise'],
   analysis_title_vi:   ['agency', 'enterprise'],
-  analysis_propensity: ['agency', 'enterprise'],
+  analysis_propensity: ['free', 'pro', 'agency', 'enterprise'],
   org_workspace:       ['agency', 'enterprise'],
   cross_org_member:    ['agency', 'enterprise'],
   org_logo:            ['agency', 'enterprise'],
   brand_color:         ['pro', 'agency', 'enterprise'],
   service_alerts:      ['agency', 'enterprise'],
-  phone_support:       ['enterprise'],
+  phone_support:       ['agency', 'enterprise'],
 };
 
 export function planHasFeature(plan: Plan, feature: FeatureKey): boolean {
@@ -82,11 +88,13 @@ export const PLAN_CATALOG: PlanCatalogEntry[] = [
     monthlyPriceUsd: 0,
     annualPriceUsd: 0,
     perSeat: false,
-    tagline: 'Edit and export feeds.',
+    tagline: 'Edit, analyze, and export feeds.',
     features: [
       'Up to 3 saved feeds in the cloud',
       'GTFS ZIP export (host anywhere)',
-      'Free forever',
+      'Demand-propensity map',
+      'System-level cost & coverage summaries',
+      'Live demo mini-site preview',
       'Community support',
     ],
   },
@@ -100,7 +108,7 @@ export const PLAN_CATALOG: PlanCatalogEntry[] = [
     features: [
       'Up to 10 saved feeds',
       'Publish 1 feed to a stable URL',
-      'Rider-facing embeds + mini-site',
+      'Rider-facing embeds + mini-site (with GTFS·X badge)',
       'Submit to the Mobility Database',
       'Named snapshot history',
       'Custom brand color',
@@ -117,11 +125,12 @@ export const PLAN_CATALOG: PlanCatalogEntry[] = [
     features: [
       'Everything in Pro',
       'Unlimited feeds',
-      'Demographic coverage analysis',
-      'Cost estimation analysis',
+      'Route-level coverage analysis',
+      'Route-level cost analysis',
       'Title VI equity analysis',
-      'Ridership propensity heatmap',
       'Service Alerts authoring (GTFS-Realtime)',
+      'Remove GTFS·X badge from embeds',
+      'Custom domain',
       'Unlimited team members in your organization',
       'Cross-org membership (work in unlimited client orgs)',
       'Custom org logo',

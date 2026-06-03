@@ -1,7 +1,7 @@
 import { html } from 'hono/html';
 import type { Env } from '../env';
 import { loadEmbedFeed } from './loader';
-import { embedHeaders, renderLayout } from './layout';
+import { embedHeaders, renderLayout, embedFooter } from './layout';
 import { buildSystemMapData, renderMap } from './map';
 import { renderExpiryWarning } from './route';
 import { todayInTimezone } from './services';
@@ -68,9 +68,7 @@ export async function renderSystemMapEmbed(
     ${map}
     <h3>Routes</h3>
     <div class="route-list">${routeLinks}</div>
-    <footer class="embed-footer">
-      Powered by <a href="https://gtfsx.com" target="_blank" rel="noopener">GTFS·X</a>
-    </footer>
+    ${embedFooter(feed.ownerPlan)}
   `;
 
   const html5 = await renderLayout({

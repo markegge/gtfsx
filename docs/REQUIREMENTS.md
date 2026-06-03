@@ -328,14 +328,15 @@ Self-serve subscriptions via Stripe — live in production since 2026-05-15
 (`worker/billing/*`, `src/components/billing/*`; gated by `BILLING_ENABLED`).
 
 - ✅ Four tiers — **Free / Pro / Agency / Enterprise** (internal plan ids `free` / `pro` / `agency` / `enterprise`; `agency` was `team` before the pricing-v2 rename, migration 0017):
-  - **Free** $0 — editor + up to 3 cloud-saved feeds; no publishing.
-  - **Pro** $49/mo · $499/yr — Premium Feed Management (hosting, publishing, embeds, mini-site).
-  - **Agency** $299/mo · $2,499/yr — adds the full route-planning suite + org workspaces + unlimited feeds + GTFS-Realtime Service Alerts authoring (§4.5); 14-day free trial (card up front).
+  - **Free** $0 — editor + up to 3 cloud-saved feeds; **demand-propensity map + system-level cost & coverage summaries** + a live demo mini-site preview; no publishing. (Pricing v3.)
+  - **Pro** $49/mo · $499/yr — Premium Feed Management (hosting, publishing, rider-facing embeds + mini-site *with the "Powered by GTFS·X" badge*).
+  - **Agency** $299/mo · $2,499/yr — adds the **route-level** planning suite (per-route cost & coverage, Title VI) + org workspaces + unlimited feeds + GTFS-Realtime Service Alerts authoring (§4.5) + **white-label embeds** (`embed_remove_badge` — removes the GTFS·X badge) + custom domain + phone support; 14-day free trial (card up front).
   - **Enterprise** — custom (talk to sales).
 - ✅ Stripe Checkout upgrade flow (`/upgrade`; per-card monthly/annual toggle, defaults to annual).
 - ✅ Stripe customer portal for managing / cancelling; 30-day prorated-refund policy.
 - ✅ Webhooks (`/api/billing/webhooks/stripe`) sync subscription state → D1 `subscription` + cached `plan`/status on `user` / `organization`.
-- ✅ Server-side feature gating via `requireOwnerFeature` (e.g. `managed_publishing`, `draft_links`, `analysis_basic`, `analysis_title_vi`, `org_workspace`, `org_logo`, `brand_color`, `service_alerts`); `PaywallOverlay` is the client surface. `service_alerts` → Agency + Enterprise.
+- ✅ Server-side feature gating via `requireOwnerFeature` (e.g. `managed_publishing`, `draft_links`, `analysis_basic`, `analysis_title_vi`, `org_workspace`, `org_logo`, `brand_color`, `service_alerts`, `embed_remove_badge`); `PaywallOverlay` is the client surface. `service_alerts` + `phone_support` → Agency + Enterprise.
+- ✅ **Pricing v3 (2026-06) feature reallocation** (code-config, no migration): demand dots (`analysis_propensity`) are free for everyone incl. anonymous; the cost & coverage panels split into a free **system-level** summary and a paywalled **route-level** breakdown (`analysis_basic`, Agency+); embeds stay Pro+ but only Agency+ removes the badge (`embed_remove_badge`); the free embed paywall links to the demo mini-site; `phone_support` → Agency+.
 - ✅ Org workspaces are an Agency+ feature — Free/Pro users are routed to `/upgrade` rather than creating empty orgs.
 - ✅ Plan catalog served from the worker, with an in-SPA fallback for the public `/pricing` page; done-for-you services (fix / build a feed) advertised there via a scoping-call booking + email (not a billed product).
 - Pricing history (the Team→Agency rename + the v2 price change) is preserved in the archived `PRICING_RESTRUCTURE.md`.

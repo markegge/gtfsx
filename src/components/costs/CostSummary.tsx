@@ -4,7 +4,7 @@ import { calculateRouteSpans, applyRouteCosts } from '../../services/costEstimat
 import type { RouteStats } from '../../services/costEstimation';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
 import { RailSubHeading } from '../ui/RailHeadings';
-import { useNavigate } from 'react-router-dom';
+import { PaywallOverlay } from '../billing/PaywallOverlay';
 import { useEditorPlan } from '../billing/useEditorPlan';
 import { useVisibleFeed } from '../../hooks/useVisibleFeed';
 import { RouteScopeNote } from '../ui/RouteScopeNote';
@@ -21,9 +21,9 @@ export function CostSummary() {
   // Analysis is scoped to routes toggled visible on the map (scenario compare).
   const { routes, trips, stopTimes, visibleRouteCount, totalRouteCount } = useVisibleFeed();
   const { byTrip: stopTimesByTrip } = useStopTimesIndex();
-  const navigate = useNavigate();
-  // CSV export is a paid (Pro/Agency) feature; the cost analysis itself is free.
-  const canExportCsv = useEditorPlan() !== 'free';
+  // System totals (above) are free; the route-level breakdown + CSV export are
+  // Agency+ (analysis_basic) — the whole per-route section is gated below.
+  const plan = useEditorPlan();
 
   const [defaultCostPerHour, setDefaultCostPerHour] = useState(100);
   const [deadheadFactor, setDeadheadFactor] = useState(1.1);
@@ -144,6 +144,7 @@ export function CostSummary() {
         </div>
       </div>
 
+      <PaywallOverlay feature="analysis_basic" currentPlan={plan} preview>
       <RailSubHeading count={routes.length}>Per-Route Breakdown</RailSubHeading>
 
       {routes.length === 0 ? (
@@ -168,7 +169,6 @@ export function CostSummary() {
           </div>
           <button
             onClick={() => {
-              if (!canExportCsv) { navigate('/pricing'); return; }
               const rows = [
                 ['Route', 'Rev Hours/Wk', 'Total Hours/Wk', 'Trips/Wk', 'Peak Vehicles', 'Cost/Hour', 'Weekly Cost', 'Annual Cost'],
                 ...routeRows.map(({ route, stats }) => {
@@ -199,18 +199,13 @@ export function CostSummary() {
               a.click();
               URL.revokeObjectURL(url);
             }}
-            title={canExportCsv ? undefined : 'Export to CSV is available on Pro and Agency plans'}
             className="mt-4 w-full px-3 py-2 border-2 border-dashed border-sand rounded-lg text-xs font-semibold text-warm-gray hover:border-coral hover:text-coral hover:bg-coral-light transition-colors flex items-center justify-center gap-1.5"
           >
             Export to CSV
-            {!canExportCsv && (
-              <span className="text-[10px] font-bold uppercase tracking-wide rounded-full bg-coral text-white px-1.5 py-0.5">
-                Pro
-              </span>
-            )}
           </button>
         </>
       )}
+      </PaywallOverlay>
     </div>
   );
 }

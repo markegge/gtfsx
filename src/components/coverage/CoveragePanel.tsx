@@ -3,6 +3,8 @@ import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import { useVisibleFeed } from '../../hooks/useVisibleFeed';
 import { RouteScopeNote } from '../ui/RouteScopeNote';
+import { PaywallOverlay } from '../billing/PaywallOverlay';
+import { useEditorPlan } from '../billing/useEditorPlan';
 import { fetchCensusData, lookupFips } from '../../services/demographics';
 import {
   getBufferForRoute,
@@ -20,6 +22,8 @@ function formatNumber(n: number): string {
 export function CoveragePanel() {
   // Analysis is scoped to routes toggled visible on the map (scenario compare).
   const { stops, routes, visibleRouteCount, totalRouteCount } = useVisibleFeed();
+  // System summary + demographic profile are free; per-route coverage is Agency+.
+  const plan = useEditorPlan();
   const coverageData = useStore((s) => s.coverageData);
   const isFetchingCoverage = useStore((s) => s.isFetchingCoverage);
   const coverageError = useStore((s) => s.coverageError);
@@ -171,27 +175,29 @@ export function CoveragePanel() {
             baseline={baselineShares(coverageData.blockGroups)}
           />
 
-          {/* Per-route breakdown */}
-          <div className="space-y-2">
-            <h3 className="font-heading font-bold text-sm text-dark-brown">
-              Per-Route Coverage
-            </h3>
-            {coverageData.routeResults.map(({ routeId, result }) => {
-              const route = routes.find((r) => r.route_id === routeId);
-              if (!route) return null;
-              return (
-                <RouteRow
-                  key={routeId}
-                  routeName={route.route_short_name || route.route_long_name}
-                  routeColor={route.route_color}
-                  bufferMiles={result.bufferMiles}
-                  population={result.totalPopulation}
-                  households={result.totalHouseholds}
-                  workers={result.totalWorkers}
-                />
-              );
-            })}
-          </div>
+          {/* Per-route breakdown (Agency+) */}
+          <PaywallOverlay feature="analysis_basic" currentPlan={plan} preview>
+            <div className="space-y-2">
+              <h3 className="font-heading font-bold text-sm text-dark-brown">
+                Per-Route Coverage
+              </h3>
+              {coverageData.routeResults.map(({ routeId, result }) => {
+                const route = routes.find((r) => r.route_id === routeId);
+                if (!route) return null;
+                return (
+                  <RouteRow
+                    key={routeId}
+                    routeName={route.route_short_name || route.route_long_name}
+                    routeColor={route.route_color}
+                    bufferMiles={result.bufferMiles}
+                    population={result.totalPopulation}
+                    households={result.totalHouseholds}
+                    workers={result.totalWorkers}
+                  />
+                );
+              })}
+            </div>
+          </PaywallOverlay>
         </>
       )}
     </div>

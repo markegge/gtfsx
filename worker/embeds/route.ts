@@ -1,7 +1,7 @@
 import { html } from 'hono/html';
 import type { Env } from '../env';
 import { loadEmbedFeed } from './loader';
-import { embedHeaders, renderLayout } from './layout';
+import { embedHeaders, renderLayout, embedFooter } from './layout';
 import { buildRouteMapData, renderMap } from './map';
 import { renderScheduleTables } from './schedule';
 import {
@@ -105,10 +105,7 @@ export async function renderRouteEmbed(
       ? html`<nav class="service-tabs" aria-label="Service day">${tabs}</nav>`
       : ''}
     ${schedule}
-    <footer class="embed-footer">
-      Powered by <a href="https://gtfsx.com" target="_blank" rel="noopener">GTFS·X</a>
-      · ${agency?.agency_name ?? feed.projectName}
-    </footer>
+    ${embedFooter(feed.ownerPlan, agency?.agency_name ?? feed.projectName)}
   `;
 
   const html5 = await renderLayout({

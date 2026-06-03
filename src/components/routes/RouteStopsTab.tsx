@@ -148,7 +148,7 @@ export function RouteStopsTab() {
   // toggle can't represent them, so we swap in the shared pattern dropdown
   // (matches the Timetable tab). Picking a pattern sets its direction — route
   // stops are stored per direction, so same-direction variants share a list.
-  const patterns = useMemo(() => computeShapePatterns(routeId, trips), [routeId, trips]);
+  const patterns = useMemo(() => computeShapePatterns(routeId, trips, routeStops), [routeId, trips, routeStops]);
   // Ignore a selection that isn't in the current route's patterns (e.g. left
   // over from another route) — fall back to the pattern for the active
   // direction. Avoids resetting state in an effect.

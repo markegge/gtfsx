@@ -19,7 +19,8 @@ import { useStore } from './src/store';
 import { getUSHolidaysForYear, getUSHolidaysInRange } from './src/utils/holidays';
 import { pointInPolygon } from './src/utils/geometry';
 import { stopsInsidePolygon } from './src/components/fares/fareZoneHelpers';
-import type { Stop } from './src/types/gtfs';
+import { computeShapePatterns } from './src/components/ui/shapePatterns';
+import type { RouteStop, Stop, Trip } from './src/types/gtfs';
 
 const FIXTURE_DIR = 'streamline_gtfs_march_2026';
 
@@ -597,6 +598,36 @@ async function main() {
   assert('copy route_stops match copy trips\' shape_ids',
     copyRouteStops.every(rs => copyTripShapeIds.has(rs.shape_id)),
     `routeStops=[${copyRouteStops.map(rs => rs.shape_id).join(',')}] trips=[${[...copyTripShapeIds].join(',')}]`);
+
+  // ---- PHASE 18: computeShapePatterns includes trip-less but stop-bearing shapes ----
+  // A shape whose last trip was deleted must still surface as a pattern (so the
+  // user can rebuild its timetable: remove all trips → add one → repeat). It
+  // takes its direction from a routeStop; shapes with trips keep trip direction.
+  console.log('\nPhase 18: computeShapePatterns unions trips + routeStops');
+  const spTrips: Trip[] = [
+    { trip_id: 'P_T1', route_id: 'P_R', service_id: 'WKDY', direction_id: 0, shape_id: 'SHP_A' },
+    { trip_id: 'P_T2', route_id: 'OTHER', service_id: 'WKDY', direction_id: 0, shape_id: 'SHP_X' },
+  ];
+  const spRouteStops: RouteStop[] = [
+    // SHP_A still has a trip (above) — direction comes from the trip.
+    { route_id: 'P_R', stop_id: 'P_S1', direction_id: 0, stop_sequence: 0, _snapped: true, shape_id: 'SHP_A' },
+    // SHP_B is trip-less but stop-bearing, inbound — must appear with dir 1.
+    { route_id: 'P_R', stop_id: 'P_S2', direction_id: 1, stop_sequence: 0, _snapped: true, shape_id: 'SHP_B' },
+    // a routeStop for a different route must be ignored.
+    { route_id: 'OTHER', stop_id: 'P_S3', direction_id: 1, stop_sequence: 0, _snapped: true, shape_id: 'SHP_Z' },
+  ];
+  const sp = computeShapePatterns('P_R', spTrips, spRouteStops);
+  assert('patterns include both trip and trip-less shapes', sp.length === 2, `got ${sp.length}: ${sp.map(p => p.shapeId).join(',')}`);
+  const shpA = sp.find(p => p.shapeId === 'SHP_A');
+  const shpB = sp.find(p => p.shapeId === 'SHP_B');
+  assert('shape with trips keeps trip direction', shpA?.directionId === 0, `got ${shpA?.directionId}`);
+  assert('trip-less shape takes routeStop direction', shpB?.directionId === 1, `got ${shpB?.directionId}`);
+  assert('other routes\' shapes excluded', !sp.some(p => p.shapeId === 'SHP_X' || p.shapeId === 'SHP_Z'), sp.map(p => p.shapeId).join(','));
+  // Back-compat: omitting routeStops behaves like the old trips-only signature.
+  const spLegacy = computeShapePatterns('P_R', spTrips);
+  assert('routeStops arg defaults to [] (trips-only)', spLegacy.length === 1 && spLegacy[0].shapeId === 'SHP_A', spLegacy.map(p => p.shapeId).join(','));
+  // No route id → empty.
+  assert('no route id → empty patterns', computeShapePatterns(null, spTrips, spRouteStops).length === 0);
 
   // ---- SUMMARY ----
   console.log(`\n${'='.repeat(50)}`);

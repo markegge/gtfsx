@@ -54,13 +54,20 @@ export function RouteShapesTab() {
   const routeShapes = useMemo(() => {
     if (!selectedRouteId) return [];
     const routeTrips = trips.filter((t) => t.route_id === selectedRouteId);
-    const shapeIds = [...new Set(routeTrips.map((t) => t.shape_id).filter(Boolean))] as string[];
+    // Derive the route's shapes from the UNION of (a) its trips' shape_ids and
+    // (b) its routeStops' shape_ids. A shape that still has stops on this route
+    // stays listed even after its last trip is deleted — deleting a trip never
+    // removes the shape from state.shapes, so the panel shouldn't drop it.
+    const shapeIds = [...new Set([
+      ...routeTrips.map((t) => t.shape_id),
+      ...routeStops.filter((rs) => rs.route_id === selectedRouteId).map((rs) => rs.shape_id),
+    ].filter(Boolean))] as string[];
     return shapeIds.map((sid) => {
       const shape = shapes.find((s) => s.shape_id === sid);
       const shapeTrips = routeTrips.filter((t) => t.shape_id === sid);
       return { shape, trips: shapeTrips, trip: shapeTrips[0] };
     }).filter((s) => s.shape);
-  }, [selectedRouteId, trips, shapes]);
+  }, [selectedRouteId, trips, shapes, routeStops]);
 
   const handleEditShape = (shapeId: string) => {
     const shape = shapes.find((s) => s.shape_id === shapeId);

@@ -29,8 +29,15 @@ export async function renderRouteEmbed(
 
   const url = new URL(request.url);
   const requestedTab = url.searchParams.get('service');
+  // `view` lets the widgets.js web components ask for a single section:
+  //   view=map      → just the route map (powers <gtfs-route-map>)
+  //   view=schedule → just the schedule table + service-day tabs (<gtfs-schedule>)
+  //   anything else → the full combined page (default; iframe + mini-site links).
+  const viewParam = url.searchParams.get('view');
+  const view: 'map' | 'schedule' | 'full' =
+    viewParam === 'map' ? 'map' : viewParam === 'schedule' ? 'schedule' : 'full';
   const ifNoneMatch = request.headers.get('If-None-Match');
-  const etagBase = `"${feed.snapshotId}-${routeId}-${requestedTab ?? 'auto'}"`;
+  const etagBase = `"${feed.snapshotId}-${routeId}-${requestedTab ?? 'auto'}-${view}"`;
   if (ifNoneMatch && ifNoneMatch.includes(etagBase)) {
     const headers = embedHeaders(feed.snapshotId, feed.publishedAt);
     headers.set('ETag', etagBase);
@@ -87,7 +94,7 @@ export async function renderRouteEmbed(
     ? `${shortName} ${longName} schedule and route map.`
     : `${shortName} schedule and route map.`;
 
-  const body = html`
+  const header = html`
     <header class="embed-header">
       ${feed.brandLogoUrl
         ? html`<img class="brand-logo" src="${feed.brandLogoUrl}" alt="${agency?.agency_name ?? feed.projectName} logo" />`
@@ -98,15 +105,41 @@ export async function renderRouteEmbed(
         ${effective ? html`<div class="effective">${effective}</div>` : ''}
       </div>
     </header>
-    ${expiryWarning}
-    ${todayBanner}
-    ${map}
+  `;
+  const scheduleSection = html`
     ${profiles.length > 1
       ? html`<nav class="service-tabs" aria-label="Service day">${tabs}</nav>`
       : ''}
     ${schedule}
-    ${embedFooter(feed.ownerPlan, agency?.agency_name ?? feed.projectName)}
   `;
+
+  // Sectioned views (view=map / view=schedule) power the standalone
+  // <gtfs-route-map> / <gtfs-schedule> web components. The full view stays
+  // the combined page used by the iframe snippets and direct links.
+  const body =
+    view === 'map'
+      ? html`
+          ${header}
+          ${expiryWarning}
+          ${map}
+          ${embedFooter(feed.ownerPlan, agency?.agency_name ?? feed.projectName)}
+        `
+      : view === 'schedule'
+        ? html`
+            ${header}
+            ${expiryWarning}
+            ${todayBanner}
+            ${scheduleSection}
+            ${embedFooter(feed.ownerPlan, agency?.agency_name ?? feed.projectName)}
+          `
+        : html`
+            ${header}
+            ${expiryWarning}
+            ${todayBanner}
+            ${map}
+            ${scheduleSection}
+            ${embedFooter(feed.ownerPlan, agency?.agency_name ?? feed.projectName)}
+          `;
 
   const html5 = await renderLayout({
     title: titleText,

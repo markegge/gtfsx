@@ -21,6 +21,7 @@ import { renderRouteEmbed } from '../embeds/route';
 import { renderSystemMapEmbed } from '../embeds/systemMap';
 import { renderStopEmbed } from '../embeds/stop';
 import { renderLandingPage } from '../embeds/landing';
+import { renderWidgetsLoader } from '../embeds/widgets';
 import { buildFeedMessage, encodeFeedMessage, feedMessageToJson } from '../alerts/render';
 import { loadActiveAlertRecords } from '../alerts/store';
 
@@ -163,6 +164,16 @@ export async function feedsHandler(
       status: 200,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
+  }
+
+  // Declarative web-component loader (origin-level, no slug). One <script src>
+  // covers every feed; the served JS registers <gtfs-route-map> / <gtfs-schedule>
+  // / <gtfs-system-map> / <gtfs-stop> that wrap the per-feed embed pages below.
+  if (url.pathname === '/widgets.js') {
+    if (method !== 'GET' && method !== 'HEAD') {
+      return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
+    }
+    return renderWidgetsLoader(request, env);
   }
 
   if (method !== 'GET' && method !== 'HEAD') {

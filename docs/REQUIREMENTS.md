@@ -385,6 +385,8 @@ Architecture: server-rendered HTML on the FEEDS origin (Hono `html` template), e
 | Per-route embed | `feeds.*/<slug>/embed/route/<route_id>` | ✅ — route map + schedule table with seasonal/day-pattern tabs, defaults to today's pattern |
 | Per-stop embed | `feeds.*/<slug>/embed/stop/<stop_id>` | ✅ — chronological "departures today" + map + routes serving the stop |
 | System-map embed | `feeds.*/<slug>/embed/system-map` | ✅ — all routes coloured, clickable stop dots, route list |
+| Sectioned route embed | `feeds.*/<slug>/embed/route/<route_id>?view=map\|schedule` | ✅ — map-only / schedule-only variants of the per-route page; powers the standalone web components |
+| Widgets loader | `feeds.*/widgets.js` | ✅ — declarative web-component loader registering `<gtfs-system-map>` / `<gtfs-route-map>` / `<gtfs-schedule>` / `<gtfs-stop>`, each wrapping the matching embed page in a sandboxed iframe |
 | Demo agency page | `/embed-demo/` (editor origin) | ✅ — fake "Sunny Valley Transit" page demonstrating iframe usage |
 
 Cross-cutting embed features:
@@ -396,8 +398,8 @@ Cross-cutting embed features:
 - ✅ Open Graph + Twitter card meta on every embed page.
 - ✅ Auto-generated route-map thumbnail (whole-system map, routes in `route_color`) via the Mapbox Static Images API, cached in R2 (migration 0016); used as the `og:image` on the mini-site and as the card image in the feeds list. A styled fallback (gray bus outline + GTFS·X wordmark) renders before the thumbnail exists.
 - ✅ Mobile responsive layout (220px map on phones, sticky stop-name column, narrower tabs).
-- ✅ Editor "Embed" bottom-tab on a published feed: copy-pasteable iframe snippets per route + system map; live brand-color picker.
-- 🔲 `widgets.js` declarative web-component loader (`<gtfs-route-map>`, `<gtfs-schedule>`).
+- ✅ Editor "Embed" bottom-tab on a published feed: copy-pasteable iframe snippets per route + system map; live brand-color picker; web-component (widgets.js) tag snippets.
+- ✅ `widgets.js` declarative web-component loader (`<gtfs-system-map>`, `<gtfs-route-map>`, `<gtfs-schedule>`, `<gtfs-stop>`) — one origin-level script; each tag wraps the matching embed page in a sandboxed iframe (read-only, snapshot-scoped, badge gate inherited). Map/schedule tags use the new `?view=` sectioned route embed.
 - 🔲 Headless JSON API at `feeds.*/<slug>/api/*`.
 - 🔲 Localization — UI strings in English only; Spanish queued (Streamline already publishes Spanish PDFs, so demand exists). Per-route display-name overrides + `translations.txt` consumption deferred to the same phase.
 - 🔲 Per-stop / per-route impression counters (`embed_view_count`) and the agency-facing usage view.

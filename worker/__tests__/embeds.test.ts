@@ -163,6 +163,65 @@ describe('embed routes', () => {
     expect(html).toContain('Saturday');
   });
 
+  it('GET /<slug>/embed/route/<id>?view=map renders only the map (no schedule table)', async () => {
+    const client = await loggedInClient('emb-vm@example.com');
+    const { slug } = await createPublishedProject(client, 'EmbedRouteMapView');
+
+    const res = await SELF.fetch(`http://feeds.example.com/${slug}/embed/route/R1?view=map`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    // Map container present, route name in the header.
+    expect(html).toContain('id="gtfs-embed-map"');
+    expect(html).toContain('Downtown');
+    // No schedule grid in the map-only view.
+    expect(html).not.toContain('table class="schedule"');
+    expect(html).not.toContain('class="service-tabs"');
+  });
+
+  it('GET /<slug>/embed/route/<id>?view=schedule renders only the schedule (no map)', async () => {
+    const client = await loggedInClient('emb-vs@example.com');
+    const { slug } = await createPublishedProject(client, 'EmbedRouteSchedView');
+
+    const res = await SELF.fetch(`http://feeds.example.com/${slug}/embed/route/R1?view=schedule`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    // Schedule grid present.
+    expect(html).toContain('Main &amp; 1st');
+    expect(html).toContain('8:00a');
+    // No map container in the schedule-only view.
+    expect(html).not.toContain('id="gtfs-embed-map"');
+  });
+
+  it('GET /widgets.js serves the web-component loader (origin-level, no slug)', async () => {
+    const res = await SELF.fetch('http://feeds.example.com/widgets.js');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('javascript');
+    // Cross-origin by design — the host page lives anywhere.
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    const js = await res.text();
+    // Registers all four custom elements.
+    expect(js).toContain("defineWidget('gtfs-system-map')");
+    expect(js).toContain("defineWidget('gtfs-route-map')");
+    expect(js).toContain("defineWidget('gtfs-schedule')");
+    expect(js).toContain("defineWidget('gtfs-stop')");
+    // The map/schedule widgets request the sectioned views.
+    expect(js).toContain('?view=map');
+    expect(js).toContain('?view=schedule');
+    // No origin placeholder left unresolved.
+    expect(js).not.toContain('__ORIGIN__');
+  });
+
+  it('GET /widgets.js supports conditional requests via ETag', async () => {
+    const first = await SELF.fetch('http://feeds.example.com/widgets.js');
+    expect(first.status).toBe(200);
+    const etag = first.headers.get('ETag');
+    expect(etag).toBeTruthy();
+    const second = await SELF.fetch('http://feeds.example.com/widgets.js', {
+      headers: { 'If-None-Match': etag as string },
+    });
+    expect(second.status).toBe(304);
+  });
+
   it('GET /<slug>/embed/route/<unknown> returns 404', async () => {
     const client = await loggedInClient('emb3@example.com');
     const { slug } = await createPublishedProject(client, 'EmbedMiss');

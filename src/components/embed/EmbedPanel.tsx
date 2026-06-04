@@ -47,6 +47,7 @@ export function EmbedPanel() {
       <BrandColorSection projectId={project.id} initialColor={project.brandPrimaryColor ?? null} />
       <SystemMapSnippet slug={pub.slug} />
       <RouteSnippets slug={pub.slug} routes={routes} />
+      <WidgetsSection slug={pub.slug} routes={routes} />
     </div>
   );
 }
@@ -220,6 +221,84 @@ function RouteSnippets({
         })}
       </div>
     </section>
+  );
+}
+
+/**
+ * Web-component (widgets.js) section. The declarative loader lets a developer
+ * drop <gtfs-route-map> / <gtfs-schedule> / <gtfs-system-map> / <gtfs-stop>
+ * tags straight into their CMS/HTML instead of hand-writing iframe markup —
+ * each tag wraps the matching embed page. One <script> include covers them all.
+ */
+function WidgetsSection({
+  slug,
+  routes,
+}: {
+  slug: string;
+  routes: { route_id: string; route_short_name: string; route_long_name: string }[];
+}) {
+  const scriptTag = `<script src="${FEEDS_ORIGIN}/widgets.js" defer></script>`;
+  // Pick a representative route id for the example tags so the copied snippet
+  // works as-is when the feed has routes.
+  const sample = useMemo(() => {
+    const sorted = routes.slice().sort((a, b) => {
+      const an = a.route_short_name || a.route_id;
+      const bn = b.route_short_name || b.route_id;
+      return an.localeCompare(bn, undefined, { numeric: true });
+    });
+    return sorted[0]?.route_id ?? 'ROUTE_ID';
+  }, [routes]);
+
+  const slugAttr = escapeAttr(slug);
+  const routeAttr = escapeAttr(sample);
+
+  return (
+    <section>
+      <h3 className="font-heading font-bold text-sm text-dark-brown mb-1">
+        Web component widgets
+      </h3>
+      <p className="text-xs text-warm-gray mb-2">
+        For developers: include the loader once, then drop these custom tags
+        anywhere in your HTML — no iframe markup to maintain. Each tag renders the
+        same data as the iframes above.
+      </p>
+      <div className="mb-3">
+        <p className="text-[11px] font-heading font-semibold text-brown mb-1">
+          1. Include the loader once (in your &lt;head&gt; or before &lt;/body&gt;)
+        </p>
+        <CopyableSnippet label="script" snippet={scriptTag} />
+      </div>
+      <p className="text-[11px] font-heading font-semibold text-brown mb-1">
+        2. Drop in any of these tags
+      </p>
+      <div className="space-y-3">
+        <WidgetTag
+          desc="Interactive map of every route."
+          snippet={`<gtfs-system-map feed="${slugAttr}"></gtfs-system-map>`}
+        />
+        <WidgetTag
+          desc="A single route’s map."
+          snippet={`<gtfs-route-map feed="${slugAttr}" route="${routeAttr}"></gtfs-route-map>`}
+        />
+        <WidgetTag
+          desc="A single route’s schedule table (with service-day tabs)."
+          snippet={`<gtfs-schedule feed="${slugAttr}" route="${routeAttr}"></gtfs-schedule>`}
+        />
+        <WidgetTag
+          desc="Departures from one stop (replace STOP_ID)."
+          snippet={`<gtfs-stop feed="${slugAttr}" stop="STOP_ID"></gtfs-stop>`}
+        />
+      </div>
+    </section>
+  );
+}
+
+function WidgetTag({ desc, snippet }: { desc: string; snippet: string }) {
+  return (
+    <div className="border border-sand rounded-lg p-3">
+      <p className="text-xs text-warm-gray mb-2">{desc}</p>
+      <CopyableSnippet label="tag" snippet={snippet} />
+    </div>
   );
 }
 

@@ -22,6 +22,7 @@ import { renderSystemMapEmbed } from '../embeds/systemMap';
 import { renderStopEmbed } from '../embeds/stop';
 import { renderLandingPage } from '../embeds/landing';
 import { renderWidgetsLoader } from '../embeds/widgets';
+import { isApiPath, handleApiRequest } from '../embeds/api';
 import { buildFeedMessage, encodeFeedMessage, feedMessageToJson } from '../alerts/render';
 import { loadActiveAlertRecords } from '../alerts/store';
 
@@ -174,6 +175,27 @@ export async function feedsHandler(
       return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
     }
     return renderWidgetsLoader(request, env);
+  }
+
+  // Read-only JSON API for integrators: feeds.*/<slug>/api/v1/... Served from
+  // the same canonical published snapshot as the HTML embeds (read-only,
+  // edge-cached, snapshot ETag, CORS-open), gated behind the `embeds` plan.
+  if (isApiPath(url.pathname)) {
+    if (method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          'Access-Control-Allow-Headers': 'If-None-Match',
+          'Access-Control-Max-Age': '86400',
+        },
+      });
+    }
+    if (method !== 'GET' && method !== 'HEAD') {
+      return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD, OPTIONS' } });
+    }
+    return handleApiRequest(request, env);
   }
 
   if (method !== 'GET' && method !== 'HEAD') {

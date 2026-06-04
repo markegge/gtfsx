@@ -20,6 +20,15 @@ import { exportGtfsZip } from '../../services/gtfsExport';
 import { applySnapshotToStore, buildSnapshot } from '../../db/serverPersistence';
 import { DraftLinksSection } from './DraftLinksPanel';
 
+// Env-aware public feeds origin (mirrors EmbedPanel): staging publishes to
+// staging-feeds.gtfsx.com, prod to feeds.gtfsx.com. Used for the canonical-URL
+// fallback when the /history response omits it.
+const FEEDS_ORIGIN =
+  (import.meta.env.VITE_FEEDS_ORIGIN as string | undefined) ||
+  (typeof window !== 'undefined' && window.location.hostname.startsWith('staging.')
+    ? 'https://staging-feeds.gtfsx.com'
+    : 'https://feeds.gtfsx.com');
+
 function formatDate(ms: number | null | undefined): string {
   if (!ms) return '—';
   return new Date(ms).toLocaleString(undefined, {
@@ -626,7 +635,7 @@ function CurrentPublicationView({
   const url =
     pub.canonicalUrl ??
     (project
-      ? `https://feeds.gtfsx.com/${project.slug}/gtfs.zip`
+      ? `${FEEDS_ORIGIN}/${project.slug}/gtfs.zip`
       : null);
 
   return (

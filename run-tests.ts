@@ -51,8 +51,8 @@ async function buildBundleFixtureZip(): Promise<Buffer> {
     'agency_id,agency_name,agency_url,agency_timezone\n' +
     'A1,Bundle Test,https://example.com,America/Denver\n');
   zip.file('routes.txt',
-    'route_id,agency_id,route_short_name,route_long_name,route_type\n' +
-    'R1,A1,1,Main Line,3\n');
+    'route_id,agency_id,route_short_name,route_long_name,route_type,continuous_pickup,continuous_drop_off\n' +
+    'R1,A1,1,Main Line,3,1,1\n');
   zip.file('stops.txt',
     'stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station,level_id\n' +
     'S1,First St,45.6770,-111.0429,0,,\n' +
@@ -78,16 +78,20 @@ async function buildBundleFixtureZip(): Promise<Buffer> {
     'R1,WKDY,T_BLK_A,BLOCK1\n' +
     'R1,WKDY,T_BLK_B,BLOCK1\n' +
     'R1,SAT,T_SAT,\n');
+  // T_FREQ row 1 carries per-stop_time continuous overrides (continuous_pickup=0
+  // continuous_drop_off=3) that differ from the route default (both 1). The
+  // column is sparse — only one of eight rows sets it — so this also exercises
+  // the toCSV column-union round-trip for stop_times-level overrides (#29 part 1).
   zip.file('stop_times.txt',
-    'trip_id,arrival_time,departure_time,stop_id,stop_sequence\n' +
-    'T_FREQ,06:00:00,06:00:00,S1,1\n' +
-    'T_FREQ,06:30:00,06:30:00,S2,2\n' +
-    'T_BLK_A,08:00:00,08:00:00,S1,1\n' +
-    'T_BLK_A,08:30:00,08:30:00,S2,2\n' +
-    'T_BLK_B,08:15:00,08:15:00,S1,1\n' +
-    'T_BLK_B,08:45:00,08:45:00,S2,2\n' +
-    'T_SAT,09:00:00,09:00:00,S1,1\n' +
-    'T_SAT,09:30:00,09:30:00,S2,2\n');
+    'trip_id,arrival_time,departure_time,stop_id,stop_sequence,continuous_pickup,continuous_drop_off\n' +
+    'T_FREQ,06:00:00,06:00:00,S1,1,0,3\n' +
+    'T_FREQ,06:30:00,06:30:00,S2,2,,\n' +
+    'T_BLK_A,08:00:00,08:00:00,S1,1,,\n' +
+    'T_BLK_A,08:30:00,08:30:00,S2,2,,\n' +
+    'T_BLK_B,08:15:00,08:15:00,S1,1,,\n' +
+    'T_BLK_B,08:45:00,08:45:00,S2,2,,\n' +
+    'T_SAT,09:00:00,09:00:00,S1,1,,\n' +
+    'T_SAT,09:30:00,09:30:00,S2,2,,\n');
   zip.file('frequencies.txt',
     'trip_id,start_time,end_time,headway_secs,exact_times\n' +
     'T_FREQ,06:00:00,09:00:00,600,\n' +
@@ -441,6 +445,14 @@ async function main() {
   assert('bundle import: pathway optional cols', s().pathways.find(p => p.pathway_id === 'PW2')?.stair_count === 18);
   assert('bundle import: pathway PW1 optionals undefined', s().pathways.find(p => p.pathway_id === 'PW1')?.length === undefined);
 
+  // Per-stop_time continuous pickup/drop-off overrides (#29 part 1).
+  const stFreqS1 = () => s().stopTimes.find(st => st.trip_id === 'T_FREQ' && st.stop_id === 'S1');
+  const stFreqS2 = () => s().stopTimes.find(st => st.trip_id === 'T_FREQ' && st.stop_id === 'S2');
+  assert('bundle import: route-level continuous default', s().routes.find(r => r.route_id === 'R1')?.continuous_pickup === 1);
+  assert('bundle import: stop_time continuous_pickup override', stFreqS1()?.continuous_pickup === 0);
+  assert('bundle import: stop_time continuous_drop_off override', stFreqS1()?.continuous_drop_off === 3);
+  assert('bundle import: unset stop_time inherits (undefined)', stFreqS2()?.continuous_pickup === undefined && stFreqS2()?.continuous_drop_off === undefined);
+
   // Export → re-import. Optional columns absent on row 0 (exact_times, level_id,
   // pathway length/traversal/stairs) must survive via the toCSV column union.
   const bundleBlob = await exportGtfsZip();
@@ -459,6 +471,10 @@ async function main() {
   assert('bundle round-trip: pathway length survived', s().pathways.find(p => p.pathway_id === 'PW2')?.length === 12.5);
   assert('bundle round-trip: pathway mode survived', s().pathways.find(p => p.pathway_id === 'PW1')?.pathway_mode === 5);
   assert('bundle round-trip: block_id survived', s().trips.find(t => t.trip_id === 'T_BLK_A')?.block_id === 'BLOCK1');
+  assert('bundle round-trip: route-level continuous default', s().routes.find(r => r.route_id === 'R1')?.continuous_pickup === 1);
+  assert('bundle round-trip: stop_time continuous_pickup override survived', stFreqS1()?.continuous_pickup === 0);
+  assert('bundle round-trip: stop_time continuous_drop_off override survived', stFreqS1()?.continuous_drop_off === 3);
+  assert('bundle round-trip: unset stop_time stays inherited (undefined)', stFreqS2()?.continuous_pickup === undefined && stFreqS2()?.continuous_drop_off === undefined);
 
   // ---- PHASE 14: bundle validation rules (#12/#13/#16/#17) ----
   console.log('\nPhase 14: validation rules (#12/#13/#16/#17)');

@@ -172,6 +172,11 @@ export function TimetableGrid() {
   const [estimating, setEstimating] = useState(false);
   const [estError, setEstError] = useState<string | null>(null);
 
+  // Flag-stop (continuous pickup/drop-off) per-stop override editor. Holds the
+  // stop_id whose popover is open, or null. Most feeds never touch this, so the
+  // affordance stays a small icon in the stop header until clicked.
+  const [flexStopId, setFlexStopId] = useState<string | null>(null);
+
   // Ref map for Tab navigation between cells
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
@@ -220,6 +225,53 @@ export function TimetableGrid() {
     }
     return ids;
   }, [stopTimesByTrip, orderedStops, selectedRouteId, trips]);
+
+  // Per-stop continuous pickup/drop-off overrides for this route. In GTFS these
+  // live on each stop_time row and override the route-level default for the
+  // segment after the stop; the editor authors them per-stop (like timepoint),
+  // applying one override across every trip's stop_time at that stop. Map keyed
+  // by stop_id → the override values found (undefined = inherit route default).
+  const continuousOverrides = useMemo(() => {
+    const map = new Map<string, { pickup?: 0 | 1 | 2 | 3; dropOff?: 0 | 1 | 2 | 3 }>();
+    if (selectedRouteId) {
+      const routeTripIds = new Set(
+        trips.filter((t) => t.route_id === selectedRouteId).map((t) => t.trip_id),
+      );
+      for (const tripId of routeTripIds) {
+        const tripSTs = stopTimesByTrip.get(tripId);
+        if (!tripSTs) continue;
+        for (const st of tripSTs) {
+          if (st.continuous_pickup === undefined && st.continuous_drop_off === undefined) continue;
+          // First non-empty wins per stop; the editor keeps them in sync across trips.
+          if (!map.has(st.stop_id)) {
+            map.set(st.stop_id, {
+              pickup: st.continuous_pickup,
+              dropOff: st.continuous_drop_off,
+            });
+          }
+        }
+      }
+    }
+    return map;
+  }, [stopTimesByTrip, selectedRouteId, trips]);
+
+  // Write a continuous pickup/drop-off override to every trip's stop_time at the
+  // given stop on the current route. Passing undefined clears the override on
+  // that field (the stop_time then inherits the route-level default on export).
+  const setContinuousOverride = useCallback(
+    (stopId: string, field: 'continuous_pickup' | 'continuous_drop_off', value: 0 | 1 | 2 | 3 | undefined) => {
+      if (!selectedRouteId) return;
+      const routeTripIds = trips
+        .filter((t) => t.route_id === selectedRouteId)
+        .map((t) => t.trip_id);
+      const allStopTimes = useStore.getState().stopTimes;
+      for (const tripId of routeTripIds) {
+        const st = allStopTimes.find((s) => s.trip_id === tripId && s.stop_id === stopId);
+        if (st) setStopTime(tripId, stopId, st.stop_sequence, { [field]: value });
+      }
+    },
+    [selectedRouteId, trips, setStopTime],
+  );
 
   // Get trips for this route filtered by direction and service pattern.
   // When a specific shape is selected (3+ pattern case), also filter by
@@ -679,14 +731,45 @@ export function TimetableGrid() {
               </th>
               {orderedStops.map((stop) => {
                 const isTimepoint = timepointStopIds.has(stop.stop_id);
+                const ov = continuousOverrides.get(stop.stop_id);
+                const hasOverride = ov && (ov.pickup !== undefined || ov.dropOff !== undefined);
                 return (
                   <th
                     key={stop.stop_id}
-                    className={`px-2 py-2 text-left font-semibold text-warm-gray text-[11px] border-b border-sand whitespace-nowrap ${
+                    className={`relative px-2 py-2 text-left font-semibold text-warm-gray text-[11px] border-b border-sand whitespace-nowrap ${
                       isTimepoint ? 'bg-coral/10' : ''
                     }`}
                   >
-                    {stop.stop_name.length > 20 ? stop.stop_name.slice(0, 18) + '\u2026' : stop.stop_name}
+                    <span className="inline-flex items-center gap-1">
+                      <span>{stop.stop_name.length > 20 ? stop.stop_name.slice(0, 18) + '\u2026' : stop.stop_name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setFlexStopId((cur) => (cur === stop.stop_id ? null : stop.stop_id))}
+                        title={hasOverride
+                          ? 'Flag-stop override set for this stop \u2014 click to edit'
+                          : 'Set per-stop flag-stop (continuous pickup/drop-off) override'}
+                        aria-label="Flag-stop override"
+                        aria-expanded={flexStopId === stop.stop_id}
+                        className={`shrink-0 leading-none text-[11px] rounded px-0.5 transition-opacity ${
+                          hasOverride
+                            ? 'text-coral opacity-100'
+                            : 'text-warm-gray/40 opacity-40 hover:opacity-100 hover:text-coral'
+                        }`}
+                      >
+                        {/* flag glyph */}
+                        {'\u2691'}
+                      </button>
+                    </span>
+                    {flexStopId === stop.stop_id && (
+                      <ContinuousOverridePopover
+                        pickup={ov?.pickup}
+                        dropOff={ov?.dropOff}
+                        routePickup={route?.continuous_pickup}
+                        routeDropOff={route?.continuous_drop_off}
+                        onSet={(field, value) => setContinuousOverride(stop.stop_id, field, value)}
+                        onClose={() => setFlexStopId(null)}
+                      />
+                    )}
                   </th>
                 );
               })}
@@ -1047,6 +1130,108 @@ export function TimetableGrid() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Labels for the GTFS continuous_pickup / continuous_drop_off enum. */
+const CONTINUOUS_LABELS: Record<0 | 1 | 2 | 3, string> = {
+  0: '0 — Continuous',
+  1: '1 — None',
+  2: '2 — Phone agency',
+  3: '3 — Coordinate w/ driver',
+};
+
+/**
+ * Per-stop flag-stop override popover. Lets the user override the route-level
+ * continuous_pickup / continuous_drop_off for a single stop (applied to every
+ * trip's stop_time at that stop). "Inherit route default" clears the override.
+ */
+function ContinuousOverridePopover({
+  pickup,
+  dropOff,
+  routePickup,
+  routeDropOff,
+  onSet,
+  onClose,
+}: {
+  pickup?: 0 | 1 | 2 | 3;
+  dropOff?: 0 | 1 | 2 | 3;
+  routePickup?: 0 | 1 | 2 | 3;
+  routeDropOff?: 0 | 1 | 2 | 3;
+  onSet: (field: 'continuous_pickup' | 'continuous_drop_off', value: 0 | 1 | 2 | 3 | undefined) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  // Dismiss on outside click or Escape.
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+
+  const inheritLabel = (routeVal?: 0 | 1 | 2 | 3) =>
+    routeVal === undefined
+      ? 'Inherit route default (none)'
+      : `Inherit route default (${CONTINUOUS_LABELS[routeVal]})`;
+
+  const renderSelect = (
+    label: string,
+    field: 'continuous_pickup' | 'continuous_drop_off',
+    value: 0 | 1 | 2 | 3 | undefined,
+    routeVal: 0 | 1 | 2 | 3 | undefined,
+  ) => (
+    <label className="block">
+      <span className="block text-[10px] text-warm-gray mb-0.5">{label}</span>
+      <select
+        value={value === undefined ? '' : String(value)}
+        onChange={(e) =>
+          onSet(field, e.target.value === '' ? undefined : (Number(e.target.value) as 0 | 1 | 2 | 3))
+        }
+        className="w-full px-2 py-1 border-2 border-sand rounded-lg text-[11px] bg-cream focus:outline-none focus:border-coral font-normal"
+      >
+        <option value="">{inheritLabel(routeVal)}</option>
+        <option value="0">{CONTINUOUS_LABELS[0]}</option>
+        <option value="1">{CONTINUOUS_LABELS[1]}</option>
+        <option value="2">{CONTINUOUS_LABELS[2]}</option>
+        <option value="3">{CONTINUOUS_LABELS[3]}</option>
+      </select>
+    </label>
+  );
+
+  return (
+    <div
+      ref={ref}
+      className="absolute z-30 top-full left-0 mt-1 w-60 p-3 bg-white border-2 border-sand rounded-xl shadow-lg text-left normal-case"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[11px] font-semibold text-warm-gray">Flag-stop override</span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="text-warm-gray/60 hover:text-warm-gray text-xs leading-none"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="space-y-2">
+        {renderSelect('Continuous pickup', 'continuous_pickup', pickup, routePickup)}
+        {renderSelect('Continuous drop-off', 'continuous_drop_off', dropOff, routeDropOff)}
+      </div>
+      <p className="text-[10px] text-warm-gray/80 mt-2 font-normal">
+        Overrides the route default for boarding/alighting along the segment after this stop. Applies to every trip on this route. Leave on “Inherit” for normal fixed stops.
+      </p>
     </div>
   );
 }

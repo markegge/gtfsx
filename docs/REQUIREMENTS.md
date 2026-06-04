@@ -169,7 +169,8 @@ Full GTFS-Flex authoring is shipped (`src/store/flexSlice.ts`, `gtfsImport.ts` /
 - ✅ Additional service windows per zone (e.g. morning + evening shuttles); travel-time duration factors (mean/safe).
 - ✅ `calendar_dates` exception handling; flex route-type customization (715, 1551, 1564).
 - ✅ Zone ↔ route ↔ service_id linkage preserved on round-trip; validation + pre-export checks for incomplete zones.
-- 🔲 Per-`stop_time` continuous pickup/drop-off overrides surfaced in the timetable UI (route-level covers ~95%); mixed polygon+group zones in a single zone (rare). Tracked in GitHub issues.
+- ✅ Per-`stop_time` continuous pickup/drop-off overrides surfaced in the timetable UI (flag icon in each stop header → popover; overrides the route default per stop, applied across the route's trips; round-trips through import/export).
+- 🔲 Mixed polygon+group zones in a single zone (rare) — needs separate model design. Tracked in GitHub issues (#29 part 2).
 
 ### 1.8 Validation, import, export
 

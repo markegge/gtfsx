@@ -18,6 +18,12 @@ export function ValidationPanel() {
     state.fareAttributes, state.fareRules, state.transfers,
     state.flexZones, state.frequencies, state.levels, state.pathways,
     state.featureSettings,
+    // GTFS-Fares v2 slices — the validator reads them, so list them here or v2
+    // warnings go stale (e.g. adding a fare product wouldn't clear a
+    // "non-existent fare product" leg-rule error).
+    state.fareAreas, state.stopAreas, state.fareNetworks, state.routeNetworks,
+    state.timeframes, state.riderCategories, state.fareMedia, state.fareProducts,
+    state.fareLegRules, state.fareTransferRules,
   ]);
 
   const errors = messages.filter((m) => m.severity === 'error');
@@ -28,7 +34,12 @@ export function ValidationPanel() {
     else if (m.entity_type === 'calendar') state.setSidebarSection('calendar');
     else if (
       m.entity_type === 'fare' || m.entity_type === 'fare_rule' ||
-      m.entity_type === 'area' || m.entity_type === 'stop_area'
+      // GTFS-Fares v2 entity types all live in the Fares panel (v2 sub-tabs).
+      m.entity_type === 'area' || m.entity_type === 'stop_area' ||
+      m.entity_type === 'network' || m.entity_type === 'route_network' ||
+      m.entity_type === 'timeframe' || m.entity_type === 'rider_category' ||
+      m.entity_type === 'fare_media' || m.entity_type === 'fare_product' ||
+      m.entity_type === 'fare_leg_rule' || m.entity_type === 'fare_transfer_rule'
     ) state.setSidebarSection('fares');
     else if (m.entity_type === 'flex_zone') state.setSidebarSection('flex');
     else if (m.entity_type === 'route') {

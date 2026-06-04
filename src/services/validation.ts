@@ -538,5 +538,171 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     }
   }
 
+  // ── GTFS-Fares v2: the rest of the pricing chain (#32) ─────────────────────
+  // Each file's editor enforces these at author time; we re-check here so an
+  // imported feed (or a cascade we missed) still surfaces issues. Required
+  // fields, id uniqueness, and foreign-key existence across networks, rider
+  // categories, fare media/products, timeframes, and leg/transfer rules.
+  const flagDuplicateIds = (
+    items: { id?: string }[], file: string, field: string, entityType: string,
+  ): Set<string> => {
+    const counts = new Map<string, number>();
+    for (const it of items) {
+      if (!it.id) {
+        messages.push(msg('error', `A row in ${file} is missing ${field}.`, entityType));
+        continue;
+      }
+      counts.set(it.id, (counts.get(it.id) ?? 0) + 1);
+    }
+    for (const [id, n] of counts) {
+      if (n > 1) {
+        messages.push(msg(
+          'error',
+          `${field} "${id}" is defined ${n} times in ${file} -- it must be unique.`,
+          entityType, id,
+        ));
+      }
+    }
+    return new Set(counts.keys());
+  };
+
+  // networks.txt -- network_id unique.
+  const networkIdSet = flagDuplicateIds(
+    state.fareNetworks.map((n) => ({ id: n.network_id })),
+    'networks.txt', 'network_id', 'network',
+  );
+  // route_networks.txt -- references must resolve; one route per network is the spec.
+  const reportedRouteNetOrphan = new Set<string>();
+  const reportedRouteNetMissingRoute = new Set<string>();
+  const routeNetworkByRoute = new Map<string, string>();
+  for (const rn of state.routeNetworks) {
+    if (rn.network_id && !networkIdSet.has(rn.network_id) && !reportedRouteNetOrphan.has(rn.network_id)) {
+      reportedRouteNetOrphan.add(rn.network_id);
+      messages.push(msg('error', `route_networks references non-existent network "${rn.network_id}".`, 'route_network', rn.network_id));
+    }
+    if (rn.route_id && !routeIdSet.has(rn.route_id) && !reportedRouteNetMissingRoute.has(rn.route_id)) {
+      reportedRouteNetMissingRoute.add(rn.route_id);
+      messages.push(msg('error', `route_networks references non-existent route "${rn.route_id}".`, 'route_network', rn.route_id));
+    }
+    if (rn.route_id) {
+      const prev = routeNetworkByRoute.get(rn.route_id);
+      if (prev !== undefined && prev !== rn.network_id) {
+        messages.push(msg('warning', `Route "${rn.route_id}" is assigned to more than one network -- most consumers expect one network per route.`, 'route_network', rn.route_id));
+      } else {
+        routeNetworkByRoute.set(rn.route_id, rn.network_id);
+      }
+    }
+  }
+
+  // rider_categories.txt -- id unique, name required, at most one default.
+  const riderIdSet = flagDuplicateIds(
+    state.riderCategories.map((c) => ({ id: c.rider_category_id })),
+    'rider_categories.txt', 'rider_category_id', 'rider_category',
+  );
+  let defaultRiderCount = 0;
+  for (const c of state.riderCategories) {
+    if (c.rider_category_id && !c.rider_category_name) {
+      messages.push(msg('error', `Rider category "${c.rider_category_id}" is missing rider_category_name.`, 'rider_category', c.rider_category_id));
+    }
+    if (c.is_default_fare_category === 1) defaultRiderCount++;
+  }
+  if (defaultRiderCount > 1) {
+    messages.push(msg('warning', `${defaultRiderCount} rider categories are marked is_default_fare_category -- only one should be the default.`, 'rider_category'));
+  }
+
+  // fare_media.txt -- id unique, fare_media_type required (0-4).
+  const mediaIdSet = flagDuplicateIds(
+    state.fareMedia.map((m) => ({ id: m.fare_media_id })),
+    'fare_media.txt', 'fare_media_id', 'fare_media',
+  );
+  for (const m of state.fareMedia) {
+    if (m.fare_media_id && (m.fare_media_type == null || Number.isNaN(Number(m.fare_media_type)))) {
+      messages.push(msg('error', `Fare medium "${m.fare_media_id}" is missing fare_media_type.`, 'fare_media', m.fare_media_id));
+    }
+  }
+
+  // fare_products.txt -- id unique, amount + currency required, FK refs resolve.
+  const productIdSet = flagDuplicateIds(
+    state.fareProducts.map((p) => ({ id: p.fare_product_id })),
+    'fare_products.txt', 'fare_product_id', 'fare_product',
+  );
+  for (const p of state.fareProducts) {
+    if (!p.fare_product_id) continue;
+    if (p.amount === '' || p.amount == null) {
+      messages.push(msg('error', `Fare product "${p.fare_product_id}" is missing an amount.`, 'fare_product', p.fare_product_id));
+    }
+    if (!p.currency) {
+      messages.push(msg('error', `Fare product "${p.fare_product_id}" is missing a currency.`, 'fare_product', p.fare_product_id));
+    }
+    if (p.rider_category_id && !riderIdSet.has(p.rider_category_id)) {
+      messages.push(msg('error', `Fare product "${p.fare_product_id}" references non-existent rider category "${p.rider_category_id}".`, 'fare_product', p.fare_product_id));
+    }
+    if (p.fare_media_id && !mediaIdSet.has(p.fare_media_id)) {
+      messages.push(msg('error', `Fare product "${p.fare_product_id}" references non-existent fare medium "${p.fare_media_id}".`, 'fare_product', p.fare_product_id));
+    }
+  }
+
+  // timeframes.txt -- service_id required + must resolve; collect group ids.
+  const calendarDateServiceIds = new Set(state.calendarDates.map((d) => d.service_id));
+  const timeframeGroupIdSet = new Set<string>();
+  const reportedTimeframeMissingService = new Set<string>();
+  for (const tf of state.timeframes) {
+    if (tf.timeframe_group_id) timeframeGroupIdSet.add(tf.timeframe_group_id);
+    if (!tf.service_id) {
+      messages.push(msg('error', `A timeframe in group "${tf.timeframe_group_id || '(unnamed)'}" is missing service_id.`, 'timeframe', tf.timeframe_group_id));
+    } else if (!serviceIdSet.has(tf.service_id) && !calendarDateServiceIds.has(tf.service_id) && !reportedTimeframeMissingService.has(tf.service_id)) {
+      reportedTimeframeMissingService.add(tf.service_id);
+      messages.push(msg('error', `Timeframe references non-existent service "${tf.service_id}".`, 'timeframe', tf.timeframe_group_id));
+    }
+  }
+
+  // fare_leg_rules.txt -- fare_product_id required + resolves; optional FKs resolve.
+  const legGroupIdSet = new Set<string>();
+  state.fareLegRules.forEach((r, i) => {
+    if (r.leg_group_id) legGroupIdSet.add(r.leg_group_id);
+    const ref = r.leg_group_id || `#${i + 1}`;
+    if (!r.fare_product_id) {
+      messages.push(msg('error', `Leg rule ${ref} is missing fare_product_id (required).`, 'fare_leg_rule', r.leg_group_id));
+    } else if (!productIdSet.has(r.fare_product_id)) {
+      messages.push(msg('error', `Leg rule ${ref} references non-existent fare product "${r.fare_product_id}".`, 'fare_leg_rule', r.leg_group_id));
+    }
+    if (r.network_id && !networkIdSet.has(r.network_id)) {
+      messages.push(msg('error', `Leg rule ${ref} references non-existent network "${r.network_id}".`, 'fare_leg_rule', r.leg_group_id));
+    }
+    if (r.from_area_id && !areaIdSet.has(r.from_area_id)) {
+      messages.push(msg('error', `Leg rule ${ref} references non-existent from_area "${r.from_area_id}".`, 'fare_leg_rule', r.leg_group_id));
+    }
+    if (r.to_area_id && !areaIdSet.has(r.to_area_id)) {
+      messages.push(msg('error', `Leg rule ${ref} references non-existent to_area "${r.to_area_id}".`, 'fare_leg_rule', r.leg_group_id));
+    }
+    if (r.from_timeframe_group_id && !timeframeGroupIdSet.has(r.from_timeframe_group_id)) {
+      messages.push(msg('error', `Leg rule ${ref} references non-existent from_timeframe "${r.from_timeframe_group_id}".`, 'fare_leg_rule', r.leg_group_id));
+    }
+    if (r.to_timeframe_group_id && !timeframeGroupIdSet.has(r.to_timeframe_group_id)) {
+      messages.push(msg('error', `Leg rule ${ref} references non-existent to_timeframe "${r.to_timeframe_group_id}".`, 'fare_leg_rule', r.leg_group_id));
+    }
+  });
+
+  // fare_transfer_rules.txt -- type required; product required for types 1/2
+  // and must resolve; leg-group refs resolve.
+  state.fareTransferRules.forEach((r, i) => {
+    const ref = `#${i + 1}`;
+    if (r.fare_transfer_type == null || Number.isNaN(Number(r.fare_transfer_type))) {
+      messages.push(msg('error', `Transfer rule ${ref} is missing fare_transfer_type (required).`, 'fare_transfer_rule'));
+    }
+    if ((r.fare_transfer_type === 1 || r.fare_transfer_type === 2) && !r.fare_product_id) {
+      messages.push(msg('error', `Transfer rule ${ref} has fare_transfer_type ${r.fare_transfer_type} but no fare_product_id.`, 'fare_transfer_rule'));
+    }
+    if (r.fare_product_id && !productIdSet.has(r.fare_product_id)) {
+      messages.push(msg('error', `Transfer rule ${ref} references non-existent fare product "${r.fare_product_id}".`, 'fare_transfer_rule'));
+    }
+    if (r.from_leg_group_id && !legGroupIdSet.has(r.from_leg_group_id)) {
+      messages.push(msg('error', `Transfer rule ${ref} references non-existent from_leg_group "${r.from_leg_group_id}".`, 'fare_transfer_rule'));
+    }
+    if (r.to_leg_group_id && !legGroupIdSet.has(r.to_leg_group_id)) {
+      messages.push(msg('error', `Transfer rule ${ref} references non-existent to_leg_group "${r.to_leg_group_id}".`, 'fare_transfer_rule'));
+    }
+  });
+
   return messages;
 }

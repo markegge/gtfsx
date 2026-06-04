@@ -48,6 +48,7 @@ export function EmbedPanel() {
       <SystemMapSnippet slug={pub.slug} />
       <RouteSnippets slug={pub.slug} routes={routes} />
       <WidgetsSection slug={pub.slug} routes={routes} />
+      <JsonApiSection slug={pub.slug} />
     </div>
   );
 }
@@ -288,6 +289,56 @@ function WidgetsSection({
           desc="Departures from one stop (replace STOP_ID)."
           snippet={`<gtfs-stop feed="${slugAttr}" stop="STOP_ID"></gtfs-stop>`}
         />
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Read-only JSON API section. Surfaces the integrator API base URL plus the
+ * available endpoints, mirroring the served `/<slug>/api/v1` discovery doc.
+ * Like the rest of the panel this is only visible to embeds-entitled owners;
+ * the endpoints themselves serve the canonical published snapshot.
+ */
+function JsonApiSection({ slug }: { slug: string }) {
+  const base = `${FEEDS_ORIGIN}/${encodeURIComponent(slug)}/api/v1`;
+  const endpoints: { method: string; path: string; desc: string }[] = [
+    { method: 'GET', path: '', desc: 'Feed metadata + endpoint discovery.' },
+    { method: 'GET', path: '/agencies', desc: 'All agencies.' },
+    { method: 'GET', path: '/routes', desc: 'All routes (with trip counts).' },
+    { method: 'GET', path: '/routes/{route_id}', desc: 'One route, its trips, and the stops it serves.' },
+    { method: 'GET', path: '/stops', desc: 'All stops.' },
+    { method: 'GET', path: '/stops/{stop_id}', desc: 'One stop and the routes that serve it.' },
+    { method: 'GET', path: '/stops/{stop_id}/schedule', desc: 'A stop’s departures, grouped by service.' },
+  ];
+
+  return (
+    <section>
+      <h3 className="font-heading font-bold text-sm text-dark-brown mb-1">JSON API</h3>
+      <p className="text-xs text-warm-gray mb-2">
+        For developers: a read-only REST API over this feed’s published snapshot.
+        Returns JSON, CORS-open, edge-cached, and revalidated by ETag. Updates
+        automatically when you republish.
+      </p>
+      <div className="mb-3">
+        <p className="text-[11px] font-heading font-semibold text-brown mb-1">Base URL</p>
+        <CopyableSnippet label="url" snippet={base} />
+        <PreviewLink url={base} />
+      </div>
+      <p className="text-[11px] font-heading font-semibold text-brown mb-1">Endpoints</p>
+      <div className="border border-sand rounded-lg overflow-hidden">
+        {endpoints.map((e) => (
+          <div
+            key={e.path || '/'}
+            className="flex items-baseline gap-2 px-3 py-2 border-b border-sand last:border-b-0"
+          >
+            <span className="text-[10px] font-mono font-bold text-coral shrink-0">{e.method}</span>
+            <code className="text-[11px] font-mono text-dark-brown break-all">
+              /api/v1{e.path}
+            </code>
+            <span className="text-[11px] text-warm-gray ml-auto text-right">{e.desc}</span>
+          </div>
+        ))}
       </div>
     </section>
   );

@@ -110,7 +110,7 @@ export function BottomPanel() {
             ? {
                 timetable: 'Timetable',
                 stops: 'Stops',
-                'service-summary': 'Summary',
+                'service-summary': 'Visualization',
                 validation: 'Validation',
                 snapshots: 'Snapshots',
                 publish: 'Share',
@@ -120,7 +120,7 @@ export function BottomPanel() {
             : {
                 timetable: 'Timetable',
                 stops: 'Stops',
-                'service-summary': 'Service Summary',
+                'service-summary': 'Visualization',
                 validation: 'Validation',
                 snapshots: 'Snapshots',
                 publish: 'Share & Publish',

@@ -698,16 +698,34 @@ export function MapView() {
 
     const currentState = useStore.getState();
 
-    // Flex zone drawn — save as new zone + paired route
+    // Flex zone drawn. Two cases:
+    //  (a) __flexAddPolygonZoneId is set → append this polygon to an existing
+    //      zone (used to add polygon geometry to a group zone, making it
+    //      "mixed"); leaves the zone's stop group intact.
+    //  (b) otherwise → save as a brand-new polygon zone + paired route.
     if (currentState.mapMode === 'draw_flex_zone' && feature.geometry.type === 'Polygon') {
-      const geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [feature] };
-      const zoneNum = currentState.flexZones.length + 1;
-      createFlexZoneWithRoute({
-        id: `flex-zone-${Date.now()}`,
-        name: `Zone ${zoneNum}`,
-        bufferMiles: 0,
-        geojson,
-      });
+      const addToZoneId = window.__flexAddPolygonZoneId;
+      if (addToZoneId) {
+        const zone = currentState.flexZones.find((z) => z.id === addToZoneId);
+        if (zone) {
+          currentState.updateFlexZone(addToZoneId, {
+            geojson: {
+              type: 'FeatureCollection',
+              features: [...(zone.geojson.features || []), feature],
+            },
+          });
+        }
+        delete window.__flexAddPolygonZoneId;
+      } else {
+        const geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [feature] };
+        const zoneNum = currentState.flexZones.length + 1;
+        createFlexZoneWithRoute({
+          id: `flex-zone-${Date.now()}`,
+          name: `Zone ${zoneNum}`,
+          bufferMiles: 0,
+          geojson,
+        });
+      }
       useStore.getState().setMapMode('select');
       if (drawRef.current) drawRef.current.deleteAll();
       return;

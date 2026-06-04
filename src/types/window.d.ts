@@ -18,6 +18,10 @@ declare global {
      *  to select mode. Used by the toolbar's Draw Route toggle. */
     __cancelDrawRoute?: () => void;
     __flexZoneExpand?: string;
+    /** When set, the next polygon drawn in 'draw_flex_zone' mode is appended to
+     *  this existing flex zone (making it a mixed polygon + group zone) instead
+     *  of creating a new zone. Cleared by MapView after the draw completes. */
+    __flexAddPolygonZoneId?: string;
     __drawingDirection?: 0 | 1;
     /** Target zone_id for the Fares > Fare-zone lasso. Set by FareZoneTool
      *  before entering 'draw_fare_zone' mode; read by MapView's draw-complete

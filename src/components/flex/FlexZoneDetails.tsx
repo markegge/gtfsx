@@ -1,5 +1,6 @@
 import { useStore } from '../../store';
 import type { FlexZone, BookingRule } from '../../store/flexSlice';
+import { flexZoneHasGroup, flexZoneHasPolygons } from '../../store/flexSlice';
 
 interface Props {
   zone: FlexZone;
@@ -29,8 +30,22 @@ function describeServicePattern(c: {
 }
 
 export function FlexZoneDetails({ zone }: Props) {
-  const { updateFlexZone, updateFlexZoneBooking, fareAttributes, calendars, calendarDates, stops, setSidebarSection } = useStore();
-  const isGroupZone = Array.isArray(zone.stopIds);
+  const {
+    updateFlexZone, updateFlexZoneBooking, fareAttributes, calendars, calendarDates,
+    stops, setSidebarSection,
+    addFlexZoneGroup, removeFlexZoneGroup, clearFlexZonePolygons, setMapMode,
+  } = useStore();
+  const hasGroup = flexZoneHasGroup(zone);
+  const hasPolygons = flexZoneHasPolygons(zone);
+
+  // Begin drawing a polygon that gets appended to THIS zone (turning a
+  // group-only zone into a mixed polygon + group zone, or adding another
+  // polygon to a polygon zone). MapView reads __flexAddPolygonZoneId on draw
+  // complete and appends the feature instead of creating a new zone.
+  const drawPolygonIntoZone = () => {
+    window.__flexAddPolygonZoneId = zone.id;
+    setMapMode('draw_flex_zone');
+  };
 
   // A service_id may be defined in calendar.txt, calendar_dates.txt, or both.
   // Surface everything so the user can attach a zone to a dates-only service.
@@ -60,54 +75,147 @@ export function FlexZoneDetails({ zone }: Props) {
 
   return (
     <div className="px-3 pb-3 pt-1 space-y-3 bg-purple-50/30 border-l-2 border-purple-200">
-      {/* Stops in group (only for group-based zones) */}
-      {isGroupZone && (
-        <div>
-          <div className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5">
-            Stops in This Group ({zone.stopIds?.length || 0})
-          </div>
-          {zone.stopIds && zone.stopIds.length > 0 ? (
-            <ul className="bg-white border border-sand rounded divide-y divide-sand mb-2 max-h-36 overflow-y-auto">
-              {zone.stopIds.map((sid) => {
-                const stop = stops.find((s) => s.stop_id === sid);
-                return (
-                  <li key={sid} className="flex items-center justify-between gap-2 px-2 py-1">
-                    <span className="text-xs text-dark-brown truncate">
-                      {stop ? (stop.stop_name || stop.stop_id) : sid}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeStop(sid)}
-                      className="text-[11px] text-warm-gray hover:text-red-500 shrink-0"
-                    >
-                      ×
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="text-[11px] text-warm-gray mb-2">No stops added yet.</p>
-          )}
-          <select
-            value=""
-            onChange={(e) => { addStop(e.target.value); e.target.value = ''; }}
-            className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
-          >
-            <option value="">— Add a stop —</option>
-            {stops
-              .filter((s) => !(zone.stopIds || []).includes(s.stop_id))
-              .map((s) => (
-                <option key={s.stop_id} value={s.stop_id}>
-                  {s.stop_name || s.stop_id}
-                </option>
-              ))}
-          </select>
-          <p className="text-[10px] text-warm-gray/80 mt-1">
-            Exported as <code>location_groups.txt</code> + <code>location_group_stops.txt</code>. The flex trip references <code>location_group_id</code> instead of a polygon.
-          </p>
+      {/* Service area composition: polygon area(s) and/or a stop group. A
+          zone may carry both (a "mixed" zone) — each exports independently
+          (locations.geojson + location_groups.txt) and both are referenced
+          from the same flex trip. */}
+      <div>
+        <div className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5">
+          Service Area
         </div>
-      )}
+
+        {/* Polygon component */}
+        <div className="bg-white border border-sand rounded p-2 mb-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-dark-brown">
+              Polygon area{hasPolygons ? `s · ${zone.geojson.features.length}` : ''}
+            </span>
+            {hasPolygons ? (
+              <div className="flex gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={drawPolygonIntoZone}
+                  className="px-1.5 py-0.5 text-[11px] font-semibold text-purple hover:bg-purple-50 rounded"
+                  title="Draw another polygon into this zone"
+                >
+                  + Polygon
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearFlexZonePolygons(zone.id)}
+                  className="px-1.5 py-0.5 text-[11px] text-warm-gray hover:text-red-500 rounded"
+                  title="Remove all polygon geometry"
+                  disabled={!hasGroup}
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={drawPolygonIntoZone}
+                className="px-1.5 py-0.5 text-[11px] font-semibold text-purple hover:bg-purple-50 rounded shrink-0"
+                title="Draw a polygon service area into this zone"
+              >
+                + Add polygon
+              </button>
+            )}
+          </div>
+          {hasPolygons ? (
+            <p className="text-[10px] text-warm-gray/80 mt-1">
+              Exported to <code>locations.geojson</code>. Edit shape on the map via "Edit Shape".
+            </p>
+          ) : (
+            <p className="text-[10px] text-warm-gray/80 mt-1">
+              No polygon yet. Add one to cover an on-demand area.
+            </p>
+          )}
+          {hasPolygons && !hasGroup && (
+            <p className="text-[10px] text-warm-gray/60 mt-0.5">
+              Add a stop group below to make this a mixed zone.
+            </p>
+          )}
+        </div>
+
+        {/* Stop-group component */}
+        <div className="bg-white border border-sand rounded p-2">
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <span className="text-xs font-semibold text-dark-brown">
+              Stop group{hasGroup ? ` · ${zone.stopIds?.length || 0}` : ''}
+            </span>
+            {hasGroup ? (
+              <button
+                type="button"
+                onClick={() => removeFlexZoneGroup(zone.id)}
+                className="px-1.5 py-0.5 text-[11px] text-warm-gray hover:text-red-500 rounded shrink-0"
+                title="Remove the stop group from this zone"
+                disabled={!hasPolygons}
+              >
+                Remove
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => addFlexZoneGroup(zone.id)}
+                className="px-1.5 py-0.5 text-[11px] font-semibold text-purple hover:bg-purple-50 rounded shrink-0"
+                title="Add a named stop group to this zone"
+              >
+                + Add stop group
+              </button>
+            )}
+          </div>
+
+          {hasGroup && (
+            <>
+              {zone.stopIds && zone.stopIds.length > 0 ? (
+                <ul className="bg-cream border border-sand rounded divide-y divide-sand mb-2 max-h-36 overflow-y-auto">
+                  {zone.stopIds.map((sid) => {
+                    const stop = stops.find((s) => s.stop_id === sid);
+                    return (
+                      <li key={sid} className="flex items-center justify-between gap-2 px-2 py-1">
+                        <span className="text-xs text-dark-brown truncate">
+                          {stop ? (stop.stop_name || stop.stop_id) : sid}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeStop(sid)}
+                          className="text-[11px] text-warm-gray hover:text-red-500 shrink-0"
+                        >
+                          ×
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-[11px] text-warm-gray mb-2">No stops added yet.</p>
+              )}
+              <select
+                value=""
+                onChange={(e) => { addStop(e.target.value); e.target.value = ''; }}
+                className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
+              >
+                <option value="">— Add a stop —</option>
+                {stops
+                  .filter((s) => !(zone.stopIds || []).includes(s.stop_id))
+                  .map((s) => (
+                    <option key={s.stop_id} value={s.stop_id}>
+                      {s.stop_name || s.stop_id}
+                    </option>
+                  ))}
+              </select>
+              <p className="text-[10px] text-warm-gray/80 mt-1">
+                Exported as <code>location_groups.txt</code> + <code>location_group_stops.txt</code>; the flex trip references <code>location_group_id</code>.
+              </p>
+            </>
+          )}
+          {!hasGroup && (
+            <p className="text-[10px] text-warm-gray/80">
+              No stop group. Add one to serve a named set of stops{hasPolygons ? ' alongside the polygon area' : ''}.
+            </p>
+          )}
+        </div>
+      </div>
 
       {/* Service window + days */}
       <div>

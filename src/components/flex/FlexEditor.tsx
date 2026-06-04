@@ -4,10 +4,26 @@ import { featureCollection, multiLineString } from '@turf/helpers';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import type { FlexZone } from '../../store/flexSlice';
+import { flexZoneShape } from '../../store/flexSlice';
 import { FlexZoneDetails } from './FlexZoneDetails';
 import { createFlexZoneWithRoute, deleteFlexZoneWithRoute } from './flexHelpers';
 
 const DEFAULT_FLEX_BUFFER_MILES = 0.75;
+
+/** One-line description of a zone's service-area shape for the zone list. */
+function describeFlexZoneShape(zone: FlexZone): string {
+  const shape = flexZoneShape(zone);
+  const polyCount = zone.geojson.features.length;
+  const stopCount = zone.stopIds?.length ?? 0;
+  const polyText = `${polyCount} polygon${polyCount !== 1 ? 's' : ''}${zone.bufferMiles > 0 ? ` · ${zone.bufferMiles} mi buffer` : ''}`;
+  const stopText = `${stopCount} stop${stopCount !== 1 ? 's' : ''}`;
+  switch (shape) {
+    case 'mixed': return `${polyText} + ${stopText}`;
+    case 'group': return stopText;
+    case 'polygon': return `${polyText}${zone.bufferMiles > 0 ? '' : ' · hand-drawn'}`;
+    default: return 'empty — add geometry';
+  }
+}
 
 let zoneCounter = 1;
 
@@ -336,9 +352,7 @@ export function FlexEditor() {
                       </button>
                     )}
                     <p className="text-[11px] text-warm-gray">
-                      {Array.isArray(zone.stopIds) && zone.stopIds.length >= 0 && !zone.geojson.features.length
-                        ? `${zone.stopIds.length} stop${zone.stopIds.length !== 1 ? 's' : ''}`
-                        : `${zone.geojson.features.length} polygon${zone.geojson.features.length !== 1 ? 's' : ''}${zone.bufferMiles > 0 ? ` · ${zone.bufferMiles} mi buffer` : ' · hand-drawn'}`}
+                      {describeFlexZoneShape(zone)}
                       {hasBooking && ' · booking set'}
                       {zone.fareId && ` · fare ${zone.fareId}`}
                     </p>
@@ -355,13 +369,15 @@ export function FlexEditor() {
                       >
                         Details {expanded ? '▾' : '▸'}
                       </button>
-                      <button
-                        onClick={() => handleEditZone(zone)}
-                        className="px-2 py-1 text-[11px] font-semibold text-warm-gray hover:text-purple hover:bg-purple-50 rounded transition-colors"
-                        title="Edit zone shape on the map"
-                      >
-                        Edit Shape
-                      </button>
+                      {zone.geojson.features.length > 0 && (
+                        <button
+                          onClick={() => handleEditZone(zone)}
+                          className="px-2 py-1 text-[11px] font-semibold text-warm-gray hover:text-purple hover:bg-purple-50 rounded transition-colors"
+                          title="Edit zone shape on the map"
+                        >
+                          Edit Shape
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           if (skipDeleteConfirmRef.current) {
@@ -397,8 +413,10 @@ export function FlexEditor() {
 
       <div className="border-t border-sand pt-3">
         <p className="text-[10px] text-warm-gray">
-          Exported as <code className="px-1 bg-sand rounded">locations.geojson</code> +{' '}
+          Exported as <code className="px-1 bg-sand rounded">locations.geojson</code>,{' '}
+          <code className="px-1 bg-sand rounded">location_groups.txt</code> +{' '}
           <code className="px-1 bg-sand rounded">booking_rules.txt</code> per the GTFS-Flex spec.
+          A zone may mix polygon area(s) and a stop group.
         </p>
       </div>
 

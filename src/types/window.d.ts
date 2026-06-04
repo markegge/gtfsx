@@ -30,6 +30,16 @@ declare global {
     /** Set by FareZoneTool so MapView can report back how many stops the lasso
      *  assigned (for the panel's confirmation message). */
     __onFareZoneAssigned?: (count: number, zoneId: string) => void;
+    /** Target area_id for the Fares v2 Areas "select stops by polygon" lasso.
+     *  Set by AreasEditor before entering 'select_stops_polygon' mode; read by
+     *  MapView's draw-complete handler to bulk-add every stop inside the drawn
+     *  polygon to that area's stop_areas. The polygon itself is NOT persisted —
+     *  Fares v2 areas have no geometry — it's discarded right after selection. */
+    __lassoStopAreaId?: string;
+    /** Set by AreasEditor so MapView can report back how many stops the polygon
+     *  selection added to the area (added = newly inserted, skipping ones already
+     *  assigned), for the panel's confirmation message. */
+    __onStopAreaPolygonSelect?: (added: number, areaId: string) => void;
     /** Set by the Routes > Shapes tab's Trim button before entering
      *  'trim_shape' map mode. MapView's click handler reads these to know
      *  which shape to mutate and which side to cut from. */

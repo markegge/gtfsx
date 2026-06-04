@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { FormField } from '../ui/FormField';
 import { Badge } from '../ui/Badge';
@@ -26,6 +26,8 @@ export function AreasEditor() {
   const removeFareArea = useStore((s) => s.removeFareArea);
   const addStopToArea = useStore((s) => s.addStopToArea);
   const removeStopFromArea = useStore((s) => s.removeStopFromArea);
+  const mapMode = useStore((s) => s.mapMode);
+  const setMapMode = useStore((s) => s.setMapMode);
 
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
   // Local draft of the editable area_id, committed on blur (renames cascade to
@@ -34,8 +36,49 @@ export function AreasEditor() {
   const [idDraft, setIdDraft] = useState('');
   const [idError, setIdError] = useState<string | undefined>();
   const [stopFilter, setStopFilter] = useState('');
+  // Result of the most recent polygon (lasso) stop selection, shown briefly
+  // under the controls. { added } is how many NEW stops the polygon added to
+  // the area (stops already assigned are skipped).
+  const [lassoResult, setLassoResult] = useState<{ added: number; areaId: string } | null>(null);
 
   const selectedArea = fareAreas.find((a) => a.area_id === selectedAreaId) ?? null;
+
+  // True while the map is in the Areas polygon-selection lasso for THIS area.
+  const isLassoing = mapMode === 'select_stops_polygon';
+
+  // Let MapView report back how many stops the polygon selection added.
+  useEffect(() => {
+    window.__onStopAreaPolygonSelect = (added, areaId) => setLassoResult({ added, areaId });
+    return () => { window.__onStopAreaPolygonSelect = undefined; };
+  }, []);
+
+  // Begin a polygon (lasso) selection targeting the currently-open area. The
+  // polygon is transient: MapView computes the stops inside on completion,
+  // bulk-adds them to this area's stop_areas, then discards the shape (Fares v2
+  // areas have no geometry). Leaving the editor / switching areas cancels it.
+  const startPolygonSelect = () => {
+    if (!selectedArea) return;
+    window.__lassoStopAreaId = selectedArea.area_id;
+    setLassoResult(null);
+    setMapMode('select_stops_polygon');
+  };
+
+  const cancelPolygonSelect = () => {
+    delete window.__lassoStopAreaId;
+    setMapMode('select');
+  };
+
+  // Cancel any in-flight lasso when the user navigates away from this area
+  // (back to the list or to a different area) so the draw tool never lingers
+  // pointed at a stale area_id.
+  useEffect(() => {
+    return () => {
+      if (useStore.getState().mapMode === 'select_stops_polygon') {
+        delete window.__lassoStopAreaId;
+        useStore.getState().setMapMode('select');
+      }
+    };
+  }, [selectedAreaId]);
 
   // stop_id → count of areas it belongs to (a stop may be in many areas).
   const stopCountByArea = useMemo(() => {
@@ -235,6 +278,43 @@ export function AreasEditor() {
       <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
         Add stops
       </label>
+
+      {/* Polygon (lasso) selection — adds every stop inside a drawn shape at
+          once, on top of the one-at-a-time search/add below. The polygon is a
+          transient selection tool: it's discarded after the stops are added
+          (Fares v2 areas carry no geometry). */}
+      {isLassoing ? (
+        <div className="mb-2 p-2 rounded-lg bg-gold-light border border-amber-200">
+          <p className="text-[11px] text-amber-800 mb-2">
+            Drawing a selection polygon for <strong>{selectedArea.area_name || selectedArea.area_id}</strong> —
+            click the map to add vertices, double-click to finish. Every stop inside the shape is added to this area.
+          </p>
+          <button
+            onClick={cancelPolygonSelect}
+            className="w-full px-3 py-1.5 rounded-lg text-sm font-semibold bg-sand text-brown hover:bg-red-100 hover:text-red-600 transition-colors"
+          >
+            Cancel selection
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={startPolygonSelect}
+          disabled={stops.length === 0}
+          className="w-full mb-2 px-3 py-2 rounded-lg text-sm font-heading font-bold bg-cream border-2 border-coral text-coral hover:bg-coral hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+          title="Draw a polygon on the map to select every stop inside it"
+        >
+          <span aria-hidden>⬡</span> Select stops by polygon
+        </button>
+      )}
+
+      {lassoResult && lassoResult.areaId === selectedArea.area_id && !isLassoing && (
+        <p className="mb-2 text-[12px] text-teal font-semibold">
+          {lassoResult.added > 0
+            ? `Added ${lassoResult.added} stop${lassoResult.added === 1 ? '' : 's'}.`
+            : 'No new stops in that polygon (all already assigned or none inside).'}
+        </p>
+      )}
+
       <input
         type="text"
         value={stopFilter}

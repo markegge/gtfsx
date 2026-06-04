@@ -103,6 +103,29 @@ describe('stop assignment', () => {
     s.removeStopFromArea('a1', 's1');
     expect(useStore.getState().stopAreas).toEqual([{ area_id: 'a1', stop_id: 's2' }]);
   });
+
+  it('bulk-adds stops to an area, deduping against existing + in-batch repeats', () => {
+    // Powers the "select stops by polygon" lasso: a many-stop selection lands
+    // as a single store write, skipping stops already assigned to the area.
+    const s = useStore.getState();
+    s.addFareArea({ area_id: 'a1' });
+    s.addStopToArea('a1', 's1'); // already assigned
+    s.addStopsToArea('a1', ['s1', 's2', 's2', 's3']);
+    const ids = useStore.getState().stopAreas
+      .filter((sa) => sa.area_id === 'a1')
+      .map((sa) => sa.stop_id)
+      .sort();
+    expect(ids).toEqual(['s1', 's2', 's3']);
+  });
+
+  it('addStopsToArea only dedups within the same area (a stop can be in many)', () => {
+    const s = useStore.getState();
+    s.addFareArea({ area_id: 'a1' });
+    s.addFareArea({ area_id: 'a2' });
+    s.addStopToArea('a1', 's1');
+    s.addStopsToArea('a2', ['s1', 's2']);
+    expect(useStore.getState().stopAreas).toHaveLength(3);
+  });
 });
 
 describe('faresV2 feature gating', () => {

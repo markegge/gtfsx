@@ -66,6 +66,11 @@ export interface FareV2Slice {
   removeFareArea: (areaId: string) => void;
   /** Assign a stop to an area. No-op if the (area_id, stop_id) pair exists. */
   addStopToArea: (areaId: string, stopId: string) => void;
+  /** Bulk-assign many stops to an area in one update, deduping against the
+   *  mappings already present (and against duplicate ids within the batch).
+   *  Used by the "select stops by polygon" lasso so a many-stop selection is a
+   *  single store write. No-op for stops already in the area. */
+  addStopsToArea: (areaId: string, stopIds: string[]) => void;
   /** Remove a stop from an area. */
   removeStopFromArea: (areaId: string, stopId: string) => void;
 
@@ -177,6 +182,16 @@ export const createFareV2Slice: StateCreator<FareV2Slice, [['zustand/immer', nev
   addStopToArea: (areaId, stopId) => set((state) => {
     if (state.stopAreas.some((sa) => sa.area_id === areaId && sa.stop_id === stopId)) return;
     state.stopAreas.push({ area_id: areaId, stop_id: stopId });
+  }),
+  addStopsToArea: (areaId, stopIds) => set((state) => {
+    const existing = new Set(
+      state.stopAreas.filter((sa) => sa.area_id === areaId).map((sa) => sa.stop_id),
+    );
+    for (const stopId of stopIds) {
+      if (existing.has(stopId)) continue;
+      existing.add(stopId); // also dedup repeats within the incoming batch
+      state.stopAreas.push({ area_id: areaId, stop_id: stopId });
+    }
   }),
   removeStopFromArea: (areaId, stopId) => set((state) => {
     state.stopAreas = state.stopAreas.filter(

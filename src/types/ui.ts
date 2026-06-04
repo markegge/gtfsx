@@ -44,7 +44,8 @@ export type MapMode =
   | 'trim_shape'
   | 'draw_flex_zone'
   | 'edit_flex_zone'
-  | 'draw_fare_zone';
+  | 'draw_fare_zone'
+  | 'select_stops_polygon';
 
 export type StopPlacementMode = 'snap_to_route' | 'freehand';
 

@@ -19,7 +19,7 @@ import { DemandDotsLayer } from './DemandDotsLayer';
 import { MapLayerControls } from './MapLayerControls';
 import { createFlexZoneWithRoute } from '../flex/flexHelpers';
 import { shapeEditLabel } from './shapeEditLabel';
-import { stopsInsidePolygon } from '../fares/fareZoneHelpers';
+import { stopsInsidePolygon, stopsInPolygonTurf } from '../fares/fareZoneHelpers';
 import type { MapStyleId } from './MapLayerControls';
 import type { MapMouseEvent, MapboxGeoJSONFeature } from 'mapbox-gl';
 import type { ShapePoint } from '../../types/gtfs';
@@ -291,6 +291,14 @@ export function MapView() {
         }
         if (currentMode === 'draw_flex_zone') {
           if (drawRef.current) drawRef.current.deleteAll();
+          useStore.getState().setMapMode('select');
+          return;
+        }
+        if (currentMode === 'select_stops_polygon') {
+          // Cancel the Fares v2 Areas lasso: drop the in-progress polygon and
+          // return to select without touching stop_areas.
+          if (drawRef.current) drawRef.current.deleteAll();
+          delete window.__lassoStopAreaId;
           useStore.getState().setMapMode('select');
           return;
         }
@@ -595,10 +603,15 @@ export function MapView() {
       editDrawFeatureIdRef.current = featureId;
 
       drawRef.current.changeMode('direct_select', { featureId });
-    } else if (currentMode === 'draw_flex_zone' || currentMode === 'draw_fare_zone') {
-      // Both draw a fresh polygon. draw_fare_zone is a one-shot lasso: the
-      // draw-complete handler stamps a zone_id onto the enclosed stops and
-      // returns to select mode (no persisted zone geometry).
+    } else if (
+      currentMode === 'draw_flex_zone' ||
+      currentMode === 'draw_fare_zone' ||
+      currentMode === 'select_stops_polygon'
+    ) {
+      // All draw a fresh polygon. draw_fare_zone and select_stops_polygon are
+      // one-shot lassos: the draw-complete handler stamps the enclosed stops
+      // (a zone_id, or a Fares v2 stop_areas membership) and returns to select
+      // mode without persisting any polygon geometry.
       drawRef.current.deleteAll();
       drawRef.current.changeMode('draw_polygon');
     } else if (currentMode === 'draw_route') {
@@ -748,6 +761,36 @@ export function MapView() {
           );
         }
         window.__onFareZoneAssigned?.(insideIds.size, zoneId);
+      }
+      useStore.getState().setMapMode('select');
+      if (drawRef.current) drawRef.current.deleteAll();
+      return;
+    }
+
+    // Fares v2 Areas "select stops by polygon" lasso — bulk-add every stop
+    // inside the drawn polygon to the target area's stop_areas, then discard
+    // the polygon. The polygon is a transient selection tool only: GTFS-Fares
+    // v2 areas have NO geometry (membership lives in stop_areas.txt), so nothing
+    // about the drawn shape is persisted and no flex zone is created.
+    if (currentState.mapMode === 'select_stops_polygon' && feature.geometry.type === 'Polygon') {
+      const areaId = (window.__lassoStopAreaId ?? '').trim();
+      if (areaId) {
+        const insideIds = stopsInPolygonTurf(
+          currentState.stops,
+          feature as GeoJSON.Feature<GeoJSON.Polygon>,
+        );
+        // Count only the stops not already assigned to this area (what we
+        // actually add) so the panel's confirmation reflects the real delta.
+        const already = new Set(
+          currentState.stopAreas
+            .filter((sa) => sa.area_id === areaId)
+            .map((sa) => sa.stop_id),
+        );
+        const addedCount = insideIds.reduce((n, id) => (already.has(id) ? n : n + 1), 0);
+        if (insideIds.length > 0) {
+          currentState.addStopsToArea(areaId, insideIds);
+        }
+        window.__onStopAreaPolygonSelect?.(addedCount, areaId);
       }
       useStore.getState().setMapMode('select');
       if (drawRef.current) drawRef.current.deleteAll();
@@ -1139,6 +1182,7 @@ export function MapView() {
   }, []);
 
   const cursor = mapMode === 'draw_route' || mapMode === 'draw_flex_zone' ? 'crosshair'
+    : mapMode === 'draw_fare_zone' || mapMode === 'select_stops_polygon' ? 'crosshair'
     : mapMode === 'place_stop' ? 'crosshair'
     : mapMode === 'trim_shape' ? 'crosshair'
     : mapMode === 'move_stop' ? (hoveringStop ? 'grab' : 'crosshair')
@@ -1165,7 +1209,7 @@ export function MapView() {
         doubleClickZoom={mapMode !== 'place_stop'}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        interactiveLayerIds={mapMode === 'edit_shape' || mapMode === 'edit_flex_zone' || mapMode === 'draw_flex_zone' || mapMode === 'draw_fare_zone' ? [] : ['stop-circles', 'stop-cluster-points', 'stop-clusters', 'route-lines', 'flex-zone-fill']}
+        interactiveLayerIds={mapMode === 'edit_shape' || mapMode === 'edit_flex_zone' || mapMode === 'draw_flex_zone' || mapMode === 'draw_fare_zone' || mapMode === 'select_stops_polygon' ? [] : ['stop-circles', 'stop-cluster-points', 'stop-clusters', 'route-lines', 'flex-zone-fill']}
       >
         <NavigationControl position="bottom-right" />
         <DrawControl

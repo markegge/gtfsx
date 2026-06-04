@@ -397,12 +397,16 @@ import { billingRouter } from './billing/routes';
 import { eventsRouter } from './events/routes';
 import { importRouter } from './import/routes';
 import { forumRouter } from './forum/routes';
+import { validatorRouter } from './validator/routes';
 apiRouter.route('/orgs', orgsRouter);
 apiRouter.route('/admin', adminRouter);
 apiRouter.route('/billing', billingRouter);
 apiRouter.route('/events', eventsRouter);
 apiRouter.route('/import', importRouter);
 apiRouter.route('/forum', forumRouter);
+// Canonical MobilityData GTFS validator proxy (/api/validator/*). Public (no
+// auth) like /import — the anonymous editor can validate too.
+apiRouter.route('/validator', validatorRouter);
 // Publication and distribution endpoints hang off the projects router
 // (/api/projects/:id/publish, /catalog-submissions, etc.) so project-ownership
 // checks stay co-located with their endpoints. See worker/projects/routes.ts.

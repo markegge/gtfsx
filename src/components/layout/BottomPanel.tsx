@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../../store';
 import { TimetableGrid } from '../timetable/TimetableGrid';
-import { MareyChart } from '../timetable/MareyChart';
 import { ServiceSummary } from '../timetable/ServiceSummary';
 import { ValidationPanel } from '../validation/ValidationPanel';
 import { SnapshotHistoryPanel } from '../snapshots/SnapshotHistoryPanel';
@@ -101,8 +100,8 @@ export function BottomPanel() {
         <span className="text-xs text-warm-gray">{bottomPanelOpen ? '▼' : '▲'}</span>
         {(
           activeServerProjectId
-            ? (['timetable', 'marey', 'service-summary', 'validation', 'snapshots', 'publish', 'embed', 'audit'] as const)
-            : (['timetable', 'marey', 'service-summary', 'validation'] as const)
+            ? (['timetable', 'service-summary', 'validation', 'snapshots', 'publish', 'embed', 'audit'] as const)
+            : (['timetable', 'service-summary', 'validation'] as const)
         ).map((tab) => {
           // Tab labels collapse on narrow viewports (<800 px — tablets and
           // the demo-capture window size). Shortens the two longest tabs so
@@ -110,7 +109,6 @@ export function BottomPanel() {
           const labels: Record<string, string> = compactLabels
             ? {
                 timetable: 'Timetable',
-                marey: 'Marey',
                 stops: 'Stops',
                 'service-summary': 'Summary',
                 validation: 'Validation',
@@ -121,7 +119,6 @@ export function BottomPanel() {
               }
             : {
                 timetable: 'Timetable',
-                marey: 'Marey',
                 stops: 'Stops',
                 'service-summary': 'Service Summary',
                 validation: 'Validation',
@@ -170,7 +167,6 @@ export function BottomPanel() {
       {bottomPanelOpen && (
         <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
           {bottomPanelTab === 'timetable' && <TimetableGrid />}
-          {bottomPanelTab === 'marey' && <MareyChart />}
           {bottomPanelTab === 'service-summary' && <ServiceSummary />}
           {bottomPanelTab === 'validation' && <ValidationPanel />}
           {bottomPanelTab === 'snapshots' && activeServerProjectId && (

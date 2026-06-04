@@ -19,6 +19,9 @@ import { useStore } from '../../store';
 import { gtfsTimeToSeconds } from '../../utils/time';
 import { directionName } from '../../utils/constants';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
+import { MareyChart } from './MareyChart';
+
+type SummaryView = 'summary' | 'marey';
 
 interface TripDot {
   routeName: string;
@@ -31,6 +34,36 @@ interface TripDot {
 }
 
 export function ServiceSummary() {
+  // View toggle is local-only — no need to persist across panel re-opens.
+  const [view, setView] = useState<SummaryView>('summary');
+
+  return (
+    <div className="flex flex-col min-h-0 flex-1">
+      {/* View toggle — segmented control matching the app's Tailwind styling */}
+      <div className="flex items-center gap-1 px-3 pt-2 shrink-0">
+        <div className="inline-flex items-center gap-0.5 p-0.5 rounded-md bg-cream border border-sand">
+          {(['summary', 'marey'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`text-xs font-heading font-semibold px-3 py-1 rounded transition-colors
+                ${view === v
+                  ? 'bg-white text-coral shadow-sm'
+                  : 'text-warm-gray hover:text-dark-brown'
+                }`}
+            >
+              {v === 'summary' ? 'Summary' : 'Marey'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {view === 'summary' ? <SummaryView /> : <MareyChart />}
+    </div>
+  );
+}
+
+function SummaryView() {
   const {
     routes, trips, calendars, routeStops,
     hiddenRouteIds,

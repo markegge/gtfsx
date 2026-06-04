@@ -418,11 +418,11 @@ projectsRouter.patch('/:id', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');
   const body = await parseJson(c, patchSchema);
-  // Locking/unlocking is a delete-grade guard rail, so it needs admin-level
-  // access; the rest of PATCH (rename, slug, archive, brand color) needs only
-  // editor. Require the higher level whenever `locked` is being changed.
-  const required = body.locked !== undefined ? 'admin' : 'editor';
-  const { row: current } = await requireOwnedProject(c.env, user, id, required);
+  // PATCH (rename, slug, archive, brand color, and lock/unlock) all require
+  // editor-level access. Lock/unlock is intentionally editor-grade — any
+  // collaborator who can edit a feed can also protect it (and undo that
+  // protection) — rather than delete-grade admin.
+  const { row: current } = await requireOwnedProject(c.env, user, id, 'editor');
 
   // Rename/slug on a locked feed is exactly what the lock protects against.
   // Refuse those (the client also disables them) unless the same request is

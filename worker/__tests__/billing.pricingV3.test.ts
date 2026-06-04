@@ -19,6 +19,13 @@ describe('Pricing v3 entitlements', () => {
     expect(planHasFeature('agency', 'analysis_basic')).toBe(true);
   });
 
+  it('network walksheds (Mapbox isochrone coverage) are Agency+', () => {
+    expect(planHasFeature('free', 'network_walksheds')).toBe(false);
+    expect(planHasFeature('pro', 'network_walksheds')).toBe(false);
+    expect(planHasFeature('agency', 'network_walksheds')).toBe(true);
+    expect(planHasFeature('enterprise', 'network_walksheds')).toBe(true);
+  });
+
   it('phone support is Agency+', () => {
     expect(planHasFeature('pro', 'phone_support')).toBe(false);
     expect(planHasFeature('agency', 'phone_support')).toBe(true);

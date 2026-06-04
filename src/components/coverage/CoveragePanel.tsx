@@ -1,10 +1,12 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import { useVisibleFeed } from '../../hooks/useVisibleFeed';
 import { RouteScopeNote } from '../ui/RouteScopeNote';
 import { PaywallOverlay } from '../billing/PaywallOverlay';
 import { useEditorPlan } from '../billing/useEditorPlan';
+import { planHasFeature, cheapestPlanFor, planDisplayName } from '../billing/planConfig';
 import { fetchCensusData, lookupFips } from '../../services/demographics';
 import {
   getBufferForRoute,
@@ -14,6 +16,13 @@ import {
   baselineShares,
   type DemographicShares,
 } from '../../services/coverageAnalysis';
+import {
+  buildNetworkWalkshed,
+  coverageFromWalkshed,
+  walkshedGeoJSON,
+  WALK_MINUTE_OPTIONS,
+  type WalkMinutes,
+} from '../../services/networkWalkshed';
 
 function formatNumber(n: number): string {
   return n.toLocaleString();
@@ -31,11 +40,25 @@ export function CoveragePanel() {
   const setIsFetchingCoverage = useStore((s) => s.setIsFetchingCoverage);
   const setCoverageError = useStore((s) => s.setCoverageError);
 
+  // Network walksheds (street distance) — a paid-tier capability. Free users
+  // keep the straight-line buffer; the toggle is disabled + paywalled for them.
+  const canUseWalksheds = planHasFeature(plan, 'network_walksheds');
+  const [useNetworkWalksheds, setUseNetworkWalksheds] = useState(false);
+  const [walkMinutes, setWalkMinutes] = useState<WalkMinutes>(10);
+  // Non-blocking notice when the walkshed run fell back to the straight-line
+  // buffer (API error / over the request cap). Cleared on each analysis.
+  const [walkshedNotice, setWalkshedNotice] = useState<string | null>(null);
+
   const handleAnalyze = useCallback(async () => {
     if (stops.length === 0) return;
 
     setIsFetchingCoverage(true);
     setCoverageError(null);
+    setWalkshedNotice(null);
+
+    // Network walksheds are gated; never run them for a plan without access even
+    // if the toggle somehow got set (server still enforces the real gate).
+    const networkMode = useNetworkWalksheds && canUseWalksheds;
 
     try {
       // Compute centroid of all stops
@@ -51,12 +74,49 @@ export function CoveragePanel() {
       // Get the full store state for headway calculations
       const state = useStore.getState();
 
-      // Per-route coverage (uses per-route buffer: 0.5mi for light rail /
-      // headway ≤15min, 0.25mi otherwise)
-      const routeResults = routes.map((route) => ({
-        routeId: route.route_id,
-        result: getBufferForRoute(route.route_id, state, blockGroups),
-      }));
+      // If network mode is requested, try to build the per-route + system
+      // walkshed polygons up front. On any error / over-cap we flip back to the
+      // straight-line buffer for the WHOLE analysis and surface a notice, so the
+      // numbers and the map always agree on which geometry was used.
+      let walkshedByRoute: Map<string, GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> | null> | null = null;
+      if (networkMode) {
+        walkshedByRoute = new Map();
+        for (const route of routes) {
+          const routeStopIds = new Set(
+            state.routeStops.filter((rs) => rs.route_id === route.route_id).map((rs) => rs.stop_id),
+          );
+          const routeStops = state.stops.filter((s) => routeStopIds.has(s.stop_id));
+          const res = await buildNetworkWalkshed(routeStops, walkMinutes);
+          if (res.status === 'capped' || res.status === 'error') {
+            setWalkshedNotice(res.message ?? 'Network walksheds unavailable — using straight-line buffer.');
+            walkshedByRoute = null; // fall back entirely
+            break;
+          }
+          walkshedByRoute.set(route.route_id, res.polygon);
+        }
+      }
+
+      // Per-route coverage. Network mode apportions against the route's walkshed
+      // polygon; otherwise the straight-line per-route buffer (0.5mi light rail,
+      // 0.25mi else). Both feed the SAME coverageFromFractions summation.
+      const routeResults = routes.map((route) => {
+        if (walkshedByRoute) {
+          const poly = walkshedByRoute.get(route.route_id);
+          const bufferMiles = route.route_type === 0 ? 0.5 : 0.25;
+          if (poly) {
+            return { routeId: route.route_id, result: coverageFromWalkshed(poly, blockGroups, bufferMiles) };
+          }
+          // No reachable area for this route's stops → empty result.
+          return {
+            routeId: route.route_id,
+            result: coverageFromFractions(new Map<string, number>(), blockGroups, bufferMiles),
+          };
+        }
+        return {
+          routeId: route.route_id,
+          result: getBufferForRoute(route.route_id, state, blockGroups),
+        };
+      });
 
       // System summary: for each block group, take the max apportionment
       // fraction across all routes, then sum apportioned counts via the shared
@@ -69,25 +129,24 @@ export function CoveragePanel() {
       }
       const systemResult = coverageFromFractions(systemFractions, blockGroups, 0.25);
 
-      // Generate buffer GeoJSON for map display
-      // Combine buffers: for each route, use its specific buffer distance
+      // GeoJSON for map display — walkshed polygons in network mode, else the
+      // per-route straight-line buffers.
       const allFeatures: GeoJSON.Feature[] = [];
       for (const { routeId, result } of routeResults) {
-        const routeStopIds = new Set(
-          state.routeStops
-            .filter((rs) => rs.route_id === routeId)
-            .map((rs) => rs.stop_id),
-        );
-        const routeStops = state.stops.filter((s) => routeStopIds.has(s.stop_id));
         const route = state.routes.find((r) => r.route_id === routeId);
-        const bufferGeo = generateBufferGeoJSON(routeStops, result.bufferMiles);
-        for (const feat of bufferGeo.features) {
-          feat.properties = {
-            ...feat.properties,
-            route_id: routeId,
-            route_color: route ? `#${route.route_color}` : '#888888',
-          };
-          allFeatures.push(feat);
+        const color = route ? `#${route.route_color}` : '#888888';
+        if (walkshedByRoute) {
+          allFeatures.push(...walkshedGeoJSON(walkshedByRoute.get(routeId) ?? null, color, routeId));
+        } else {
+          const routeStopIds = new Set(
+            state.routeStops.filter((rs) => rs.route_id === routeId).map((rs) => rs.stop_id),
+          );
+          const routeStops = state.stops.filter((s) => routeStopIds.has(s.stop_id));
+          const bufferGeo = generateBufferGeoJSON(routeStops, result.bufferMiles);
+          for (const feat of bufferGeo.features) {
+            feat.properties = { ...feat.properties, route_id: routeId, route_color: color };
+            allFeatures.push(feat);
+          }
         }
       }
 
@@ -96,13 +155,28 @@ export function CoveragePanel() {
         features: allFeatures,
       };
 
-      setCoverageData({ blockGroups, systemResult, routeResults, bufferGeoJSON });
+      setCoverageData({
+        blockGroups,
+        systemResult,
+        routeResults,
+        bufferGeoJSON,
+        walkshed: walkshedByRoute ? { mode: 'network', minutes: walkMinutes } : { mode: 'buffer' },
+      });
     } catch (err) {
       setCoverageError(err instanceof Error ? err.message : 'Failed to fetch coverage data');
     } finally {
       setIsFetchingCoverage(false);
     }
-  }, [stops, routes, setCoverageData, setIsFetchingCoverage, setCoverageError]);
+  }, [
+    stops,
+    routes,
+    setCoverageData,
+    setIsFetchingCoverage,
+    setCoverageError,
+    useNetworkWalksheds,
+    canUseWalksheds,
+    walkMinutes,
+  ]);
 
   if (stops.length === 0) {
     return totalRouteCount > 0 && visibleRouteCount === 0 ? (
@@ -124,9 +198,20 @@ export function CoveragePanel() {
     <div className="space-y-4">
       <RouteScopeNote visible={visibleRouteCount} total={totalRouteCount} />
       <p className="text-xs text-warm-gray">
-        Population, households, workers, and equity demographics within a straight-line ¼–½ mi
-        buffer of stops, from US Census ACS data.
+        Population, households, workers, and equity demographics within a{' '}
+        {useNetworkWalksheds && canUseWalksheds
+          ? `${walkMinutes}-minute walk along the street network`
+          : 'straight-line ¼–½ mi buffer'}{' '}
+        of stops, from US Census ACS data.
       </p>
+
+      <WalkshedModeControl
+        canUse={canUseWalksheds}
+        enabled={useNetworkWalksheds}
+        onToggle={setUseNetworkWalksheds}
+        minutes={walkMinutes}
+        onMinutes={setWalkMinutes}
+      />
 
       <button
         onClick={handleAnalyze}
@@ -136,10 +221,20 @@ export function CoveragePanel() {
         {isFetchingCoverage ? 'Analyzing...' : coverageData ? 'Re-analyze Coverage' : 'Analyze Coverage'}
       </button>
 
+      {walkshedNotice && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <p className="text-xs text-amber-800">{walkshedNotice}</p>
+        </div>
+      )}
+
       {isFetchingCoverage && (
         <div className="text-center py-6">
           <div className="inline-block w-6 h-6 border-2 border-teal border-t-transparent rounded-full animate-spin mb-2" />
-          <p className="text-sm text-warm-gray">Fetching Census data...</p>
+          <p className="text-sm text-warm-gray">
+            {useNetworkWalksheds && canUseWalksheds
+              ? 'Computing street-network walksheds…'
+              : 'Fetching Census data...'}
+          </p>
         </div>
       )}
 
@@ -155,7 +250,10 @@ export function CoveragePanel() {
           {/* System summary */}
           <div className="bg-teal-light rounded-lg p-3 space-y-2">
             <h3 className="font-heading font-bold text-sm text-teal">
-              System Summary (1/4 mi buffer)
+              System Summary
+              {coverageData.walkshed?.mode === 'network'
+                ? ` (${coverageData.walkshed.minutes}-min walk network)`
+                : ' (1/4 mi buffer)'}
             </h3>
             <div className="grid grid-cols-3 gap-2">
               <SummaryCard label="Population" value={coverageData.systemResult.totalPopulation} />
@@ -189,6 +287,11 @@ export function CoveragePanel() {
                     routeName={route.route_short_name || route.route_long_name}
                     routeColor={route.route_color}
                     bufferMiles={result.bufferMiles}
+                    walkMinutes={
+                      coverageData.walkshed?.mode === 'network'
+                        ? coverageData.walkshed.minutes
+                        : null
+                    }
                     population={result.totalPopulation}
                     households={result.totalHouseholds}
                     workers={result.totalWorkers}
@@ -198,6 +301,78 @@ export function CoveragePanel() {
             </div>
           </PaywallOverlay>
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Walkshed-mode selector. Paid users get a checkbox to switch Coverage from the
+ * straight-line buffer to Mapbox street-network walksheds plus a walk-time
+ * picker; free/pro users see a disabled control with the standard upgrade
+ * affordance (a Link to /pricing carrying the feature, mirroring the Scenarios
+ * upsell in RouteList).
+ */
+function WalkshedModeControl({
+  canUse,
+  enabled,
+  onToggle,
+  minutes,
+  onMinutes,
+}: {
+  canUse: boolean;
+  enabled: boolean;
+  onToggle: (v: boolean) => void;
+  minutes: WalkMinutes;
+  onMinutes: (m: WalkMinutes) => void;
+}) {
+  const target = planDisplayName(cheapestPlanFor('network_walksheds'));
+
+  if (!canUse) {
+    return (
+      <Link
+        to="/pricing?feature=network_walksheds"
+        className="flex w-full items-center gap-2 rounded-lg border border-sand bg-cream px-3 py-2 text-xs font-semibold text-warm-gray transition-colors hover:border-teal hover:text-teal"
+        title="Replace the straight-line buffer with real walking-time isochrones — an Agency plan feature"
+      >
+        <span aria-hidden>🚶</span>
+        <span>Network walksheds (street distance)</span>
+        <span className="ml-auto rounded border border-sand bg-white px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-warm-gray">
+          {target}
+        </span>
+      </Link>
+    );
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-sand bg-cream p-3">
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-dark-brown">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => onToggle(e.target.checked)}
+          className="h-4 w-4 accent-teal"
+        />
+        <span className="font-semibold">Network walksheds (street distance)</span>
+      </label>
+      {enabled && (
+        <div className="flex items-center gap-2 pl-6">
+          <label className="text-xs text-warm-gray" htmlFor="walk-minutes">
+            Walk time
+          </label>
+          <select
+            id="walk-minutes"
+            value={minutes}
+            onChange={(e) => onMinutes(Number(e.target.value) as WalkMinutes)}
+            className="rounded border border-sand bg-white px-2 py-1 text-xs text-dark-brown"
+          >
+            {WALK_MINUTE_OPTIONS.map((o) => (
+              <option key={o.minutes} value={o.minutes}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
     </div>
   );
@@ -279,6 +454,7 @@ function RouteRow({
   routeName,
   routeColor,
   bufferMiles,
+  walkMinutes,
   population,
   households,
   workers,
@@ -286,11 +462,13 @@ function RouteRow({
   routeName: string;
   routeColor: string;
   bufferMiles: number;
+  walkMinutes: number | null;
   population: number;
   households: number;
   workers: number;
 }) {
-  const bufferLabel = bufferMiles === 0.5 ? '1/2 mi' : '1/4 mi';
+  const bufferLabel =
+    walkMinutes != null ? `${walkMinutes} min walk` : bufferMiles === 0.5 ? '1/2 mi' : '1/4 mi';
 
   return (
     <div className="bg-cream rounded-lg p-2.5 space-y-1.5">

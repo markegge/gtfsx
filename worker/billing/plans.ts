@@ -15,6 +15,7 @@ export type FeatureKey =
   | 'analysis_basic'       // demographic coverage + cost estimation
   | 'analysis_title_vi'    // Title VI equity analysis
   | 'analysis_propensity'  // propensity heatmap
+  | 'network_walksheds'    // street-network (Mapbox isochrone) coverage walksheds
   | 'org_workspace'        // create or be a member of an org
   | 'cross_org_member'     // member of orgs you don't own (e.g. consultants in client orgs)
   | 'org_logo'             // upload a custom org logo
@@ -42,6 +43,7 @@ export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
   analysis_basic:      ['agency', 'enterprise'],
   analysis_title_vi:   ['agency', 'enterprise'],
   analysis_propensity: ['free', 'pro', 'agency', 'enterprise'],
+  network_walksheds:   ['agency', 'enterprise'],
   org_workspace:       ['agency', 'enterprise'],
   cross_org_member:    ['agency', 'enterprise'],
   org_logo:            ['agency', 'enterprise'],

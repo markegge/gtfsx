@@ -214,14 +214,14 @@ Resolution: TIGER block (TABBLOCK20) geometries, with ACS variables apportioned 
 
 ### 2.2 Demographic coverage
 
-Apportioned **buffer coverage** — for the system, each route, or a single stop, how many people / households / workers live within a configurable straight-line buffer (¼ mi default, ½ mi for light rail). ACS block-group totals are apportioned via a circle–circle overlap formula (`coverageAnalysis.ts`), not a binary centroid-in-buffer test. Straight-line buffers approximate walking reach; true street-network walksheds (isochrones) are a planned enhancement, not yet built — the UI labels coverage as "buffer," not "walkshed."
+Apportioned **buffer coverage** — for the system, each route, or a single stop, how many people / households / workers live within a configurable straight-line buffer (¼ mi default, ½ mi for light rail). ACS block-group totals are apportioned via a circle–circle overlap formula (`coverageAnalysis.ts`), not a binary centroid-in-buffer test. Straight-line buffers approximate walking reach; **street-network walksheds** (Mapbox walking isochrones) are an Agency+ option that swaps the circle buffer for the real reachable area — see below.
 
 - ✅ Tract centroids bundled per state in `public/census/TR<FIPS>.txt` (CORS-free); block groups inherit their parent tract's centroid.
 - ✅ ACS 5-year (2022) variables fetched live from `api.census.gov` (`demographics.ts`): population (B01003), housing units (B25001), workers (B08301), race/ethnicity (B03002), low-income <200% FPL (C17002), zero-vehicle households (B25044), and age 65+/under-18 (B01001). Variables are chosen to be tabulated at **block-group** geography — tract-only tables (B08201 vehicles, B09001 under-18) are deliberately avoided because they return null at block-group level.
 - ✅ `CoveragePanel` (system + per-route) with covered population/household/worker totals plus a **demographic profile** table reporting five equity shares (minority, low-income, zero-vehicle, senior, youth) as coverage-vs-county-baseline ratios.
 - ✅ Per-stop Coverage tab (`StopCoveragePanel`) — distance to adjacent stops on each route, plus this stop's own buffer demographics and equity shares.
 - ✅ Map overlay shading the covered block-group buffers.
-- 🔲 Network-distance walksheds (OSM / isochrone service) — deferred; straight-line buffers only for now.
+- ✅ **Network-distance walksheds (Agency+)** — `network_walksheds` feature key (Agency/Enterprise, lockstep in `planConfig.ts` + `worker/billing/plans.ts`). The Coverage panel offers a "Network walksheds (street distance)" toggle + walk-time picker (5/10/15 min ≈ ¼/½/¾ mi); free/Pro users see a disabled control with the standard upgrade link. When on, `networkWalkshed.ts` fetches a Mapbox **walking Isochrone** per distinct stop (deduped by rounded coord, in-memory cached, capped at 200 requests/analysis), unions them with `@turf/union`, and apportions block groups against the polygon (ring-sampled circle–polygon overlap) through the **same** `coverageFromFractions` summation — so demographics update identically, just with tighter geometry. Graceful fallback to the straight-line buffer (with a notice) on API error/timeout or over the request cap; the result records which geometry was used so headers/labels stay honest.
 
 ### 2.3 Title VI equity analysis
 

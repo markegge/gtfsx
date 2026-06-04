@@ -14,7 +14,8 @@
     "test:frontend": "vitest run --config vitest.frontend.config.ts",
     "test:worker": "vitest run --fileParallelism=false",
     "test:editor": "tsx run-tests.ts",
-    "test:external": "tsx tests/external/check.ts"
+    "test:external": "tsx tests/external/check.ts",
+    "test:validator-parity": "tsx tests/external/validator-parity.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

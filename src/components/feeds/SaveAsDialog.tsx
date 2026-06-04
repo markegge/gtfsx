@@ -90,6 +90,11 @@ export function SaveAsDialog({ onClose }: { onClose: () => void }) {
         setActiveWorkspace({ type: 'personal' });
       }
 
+      // Close the dialog before navigating. In the EditorRoute path the route
+      // change unmounts us anyway, but in the TopBar path (a locked feed opened
+      // as a detached draft) navigating to the new slug keeps TopBar mounted —
+      // without this its showSaveAs state would leave the modal stuck open.
+      onClose();
       navigate(`/feeds/${encodeURIComponent(project.slug)}`);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Save failed';

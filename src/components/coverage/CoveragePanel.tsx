@@ -20,12 +20,32 @@ import {
   buildNetworkWalkshed,
   coverageFromWalkshed,
   walkshedGeoJSON,
-  WALK_MINUTE_OPTIONS,
-  type WalkMinutes,
+  autoMinutesByStop,
+  WALK_MODE_OPTIONS,
+  AUTO_FREQUENT_MINUTES,
+  AUTO_INFREQUENT_MINUTES,
+  FREQUENT_HEADWAY_MAX_MIN,
+  type WalkMode,
 } from '../../services/networkWalkshed';
 
 function formatNumber(n: number): string {
   return n.toLocaleString();
+}
+
+/** Prose for the intro line describing the walkshed area for the chosen mode. */
+function walkAreaDescription(mode: WalkMode): string {
+  return mode === 'auto'
+    ? `walk along the street network sized per stop — ${AUTO_FREQUENT_MINUTES}-min (≈½ mi) at ` +
+        `frequent stops, ${AUTO_INFREQUENT_MINUTES}-min (≈¼ mi) elsewhere`
+    : `${mode}-minute walk along the street network`;
+}
+
+/** Short badge for a per-route row given the walkshed mode used. */
+function walkBadgeLabel(
+  walkshed: { mode: 'buffer' } | { mode: 'network'; auto: boolean; minutes: number | null } | undefined,
+): string | null {
+  if (walkshed?.mode !== 'network') return null;
+  return walkshed.auto ? 'auto walk' : `${walkshed.minutes} min walk`;
 }
 
 export function CoveragePanel() {
@@ -44,7 +64,10 @@ export function CoveragePanel() {
   // keep the straight-line buffer; the toggle is disabled + paywalled for them.
   const canUseWalksheds = planHasFeature(plan, 'network_walksheds');
   const [useNetworkWalksheds, setUseNetworkWalksheds] = useState(false);
-  const [walkMinutes, setWalkMinutes] = useState<WalkMinutes>(10);
+  // Walk-time mode. Default 'auto': each stop's walk-time is driven by its own
+  // service frequency (10-min / ½-mi when frequent, else 5-min / ¼-mi). The
+  // fixed 5/10/15 options apply one walk-time uniformly.
+  const [walkMode, setWalkMode] = useState<WalkMode>('auto');
   // Non-blocking notice when the walkshed run fell back to the straight-line
   // buffer (API error / over the request cap). Cleared on each analysis.
   const [walkshedNotice, setWalkshedNotice] = useState<string | null>(null);
@@ -74,6 +97,16 @@ export function CoveragePanel() {
       // Get the full store state for headway calculations
       const state = useStore.getState();
 
+      // Auto mode: resolve each stop's walk-time from its own service frequency
+      // (10 min when frequent ≤15-min headway, else 5 min). A fixed mode applies
+      // one walk-time to every stop. The resolver is fed to buildNetworkWalkshed
+      // so each stop's isochrone is the right size.
+      const autoMinutes = networkMode && walkMode === 'auto' ? autoMinutesByStop(state) : null;
+      const minutesResolver =
+        walkMode === 'auto'
+          ? (stop: { stop_id: string }) => autoMinutes!.get(stop.stop_id) ?? AUTO_INFREQUENT_MINUTES
+          : (walkMode as number);
+
       // If network mode is requested, try to build the per-route + system
       // walkshed polygons up front. On any error / over-cap we flip back to the
       // straight-line buffer for the WHOLE analysis and surface a notice, so the
@@ -86,7 +119,7 @@ export function CoveragePanel() {
             state.routeStops.filter((rs) => rs.route_id === route.route_id).map((rs) => rs.stop_id),
           );
           const routeStops = state.stops.filter((s) => routeStopIds.has(s.stop_id));
-          const res = await buildNetworkWalkshed(routeStops, walkMinutes);
+          const res = await buildNetworkWalkshed(routeStops, minutesResolver);
           if (res.status === 'capped' || res.status === 'error') {
             setWalkshedNotice(res.message ?? 'Network walksheds unavailable — using straight-line buffer.');
             walkshedByRoute = null; // fall back entirely
@@ -160,7 +193,11 @@ export function CoveragePanel() {
         systemResult,
         routeResults,
         bufferGeoJSON,
-        walkshed: walkshedByRoute ? { mode: 'network', minutes: walkMinutes } : { mode: 'buffer' },
+        walkshed: walkshedByRoute
+          ? walkMode === 'auto'
+            ? { mode: 'network', auto: true, minutes: null }
+            : { mode: 'network', auto: false, minutes: walkMode }
+          : { mode: 'buffer' },
       });
     } catch (err) {
       setCoverageError(err instanceof Error ? err.message : 'Failed to fetch coverage data');
@@ -175,7 +212,7 @@ export function CoveragePanel() {
     setCoverageError,
     useNetworkWalksheds,
     canUseWalksheds,
-    walkMinutes,
+    walkMode,
   ]);
 
   if (stops.length === 0) {
@@ -200,7 +237,7 @@ export function CoveragePanel() {
       <p className="text-xs text-warm-gray">
         Population, households, workers, and equity demographics within a{' '}
         {useNetworkWalksheds && canUseWalksheds
-          ? `${walkMinutes}-minute walk along the street network`
+          ? walkAreaDescription(walkMode)
           : 'straight-line ¼–½ mi buffer'}{' '}
         of stops, from US Census ACS data.
       </p>
@@ -209,8 +246,8 @@ export function CoveragePanel() {
         canUse={canUseWalksheds}
         enabled={useNetworkWalksheds}
         onToggle={setUseNetworkWalksheds}
-        minutes={walkMinutes}
-        onMinutes={setWalkMinutes}
+        mode={walkMode}
+        onMode={setWalkMode}
       />
 
       <button
@@ -252,7 +289,9 @@ export function CoveragePanel() {
             <h3 className="font-heading font-bold text-sm text-teal">
               System Summary
               {coverageData.walkshed?.mode === 'network'
-                ? ` (${coverageData.walkshed.minutes}-min walk network)`
+                ? coverageData.walkshed.auto
+                  ? ' (auto walk network)'
+                  : ` (${coverageData.walkshed.minutes}-min walk network)`
                 : ' (1/4 mi buffer)'}
             </h3>
             <div className="grid grid-cols-3 gap-2">
@@ -287,11 +326,7 @@ export function CoveragePanel() {
                     routeName={route.route_short_name || route.route_long_name}
                     routeColor={route.route_color}
                     bufferMiles={result.bufferMiles}
-                    walkMinutes={
-                      coverageData.walkshed?.mode === 'network'
-                        ? coverageData.walkshed.minutes
-                        : null
-                    }
+                    walkLabel={walkBadgeLabel(coverageData.walkshed)}
                     population={result.totalPopulation}
                     households={result.totalHouseholds}
                     workers={result.totalWorkers}
@@ -317,14 +352,14 @@ function WalkshedModeControl({
   canUse,
   enabled,
   onToggle,
-  minutes,
-  onMinutes,
+  mode,
+  onMode,
 }: {
   canUse: boolean;
   enabled: boolean;
   onToggle: (v: boolean) => void;
-  minutes: WalkMinutes;
-  onMinutes: (m: WalkMinutes) => void;
+  mode: WalkMode;
+  onMode: (m: WalkMode) => void;
 }) {
   const target = planDisplayName(cheapestPlanFor('network_walksheds'));
 
@@ -356,22 +391,33 @@ function WalkshedModeControl({
         <span className="font-semibold">Network walksheds (street distance)</span>
       </label>
       {enabled && (
-        <div className="flex items-center gap-2 pl-6">
-          <label className="text-xs text-warm-gray" htmlFor="walk-minutes">
-            Walk time
-          </label>
-          <select
-            id="walk-minutes"
-            value={minutes}
-            onChange={(e) => onMinutes(Number(e.target.value) as WalkMinutes)}
-            className="rounded border border-sand bg-white px-2 py-1 text-xs text-dark-brown"
-          >
-            {WALK_MINUTE_OPTIONS.map((o) => (
-              <option key={o.minutes} value={o.minutes}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+        <div className="space-y-1.5 pl-6">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-warm-gray" htmlFor="walk-mode">
+              Walk time
+            </label>
+            <select
+              id="walk-mode"
+              value={String(mode)}
+              onChange={(e) =>
+                onMode(e.target.value === 'auto' ? 'auto' : (Number(e.target.value) as WalkMode))
+              }
+              className="rounded border border-sand bg-white px-2 py-1 text-xs text-dark-brown"
+            >
+              {WALK_MODE_OPTIONS.map((o) => (
+                <option key={String(o.value)} value={String(o.value)}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {mode === 'auto' && (
+            <p className="text-[11px] text-warm-gray">
+              Each stop's walkshed is sized by its service frequency:{' '}
+              {AUTO_FREQUENT_MINUTES}-min (≈½ mi) where headway is ≤ {FREQUENT_HEADWAY_MAX_MIN} min,
+              otherwise {AUTO_INFREQUENT_MINUTES}-min (≈¼ mi).
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -454,7 +500,7 @@ function RouteRow({
   routeName,
   routeColor,
   bufferMiles,
-  walkMinutes,
+  walkLabel,
   population,
   households,
   workers,
@@ -462,13 +508,14 @@ function RouteRow({
   routeName: string;
   routeColor: string;
   bufferMiles: number;
-  walkMinutes: number | null;
+  /** Network-mode walk-time badge ('auto' / '10 min walk'); null = straight-line. */
+  walkLabel: string | null;
   population: number;
   households: number;
   workers: number;
 }) {
   const bufferLabel =
-    walkMinutes != null ? `${walkMinutes} min walk` : bufferMiles === 0.5 ? '1/2 mi' : '1/4 mi';
+    walkLabel != null ? walkLabel : bufferMiles === 0.5 ? '1/2 mi' : '1/4 mi';
 
   return (
     <div className="bg-cream rounded-lg p-2.5 space-y-1.5">

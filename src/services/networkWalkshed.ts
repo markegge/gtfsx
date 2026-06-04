@@ -33,8 +33,10 @@ import union from '@turf/union';
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
 import { point, featureCollection } from '@turf/helpers';
 import type { Feature, Polygon, MultiPolygon } from 'geojson';
-import type { Stop } from '../types/gtfs';
+import type { Stop, Frequency } from '../types/gtfs';
 import type { BlockGroupData } from './demographics';
+import { gtfsTimeToSeconds } from '../utils/time';
+import { representativeDay, type FeedSlice } from './stopAnalysis';
 import {
   coverageFromFractions,
   computeBgRadii,
@@ -79,10 +81,136 @@ export const WALK_MINUTES_FOR_DISTANCE: Record<string, number> = {
 
 export type WalkMinutes = 5 | 10 | 15;
 
+/** Walk-time selection. `'auto'` derives each stop's walk-time from that stop's
+ *  service frequency (see {@link minutesForHeadway}); the numeric modes apply
+ *  one walk-time uniformly to every stop. */
+export type WalkMode = 'auto' | WalkMinutes;
+
+/** The two walk-times the Auto rule chooses between, and their distance labels.
+ *  Frequent stops earn the bigger ½-mi shed; infrequent stops the ¼-mi shed. */
+export const AUTO_FREQUENT_MINUTES: WalkMinutes = 10;
+export const AUTO_INFREQUENT_MINUTES: WalkMinutes = 5;
+
+/** Headway (minutes) at/under which a stop counts as "frequent service" for the
+ *  Auto walk-time rule. The transit-industry convention treats service every
+ *  15 minutes or better as "frequent" (riders can show up without a schedule),
+ *  so a stop with headway ≤ 15 min gets the 10-min / ½-mi walkshed and anything
+ *  less frequent (or with too few departures to measure a headway) gets the
+ *  5-min / ¼-mi walkshed. */
+export const FREQUENT_HEADWAY_MAX_MIN = 15;
+
+/**
+ * The Auto-mode walk-time (minutes) for a stop given its representative-day
+ * average headway in minutes (null = unknown / too few departures to measure).
+ *
+ *   headway ≤ 15 min  → 10-min / ½-mi  walkshed   (frequent service)
+ *   otherwise / null  →  5-min / ¼-mi  walkshed
+ *
+ * Pure + exported so the classification rule is unit-tested directly.
+ */
+export function minutesForHeadway(headwayMin: number | null): WalkMinutes {
+  return headwayMin != null && headwayMin <= FREQUENT_HEADWAY_MAX_MIN
+    ? AUTO_FREQUENT_MINUTES
+    : AUTO_INFREQUENT_MINUTES;
+}
+
+/**
+ * Per-stop average headway (minutes) on the representative service day, used by
+ * Auto mode to size each stop's walkshed. Computed from stop_times/trips:
+ *
+ *   - Restrict to trips active on the representative day (busiest weekday, via
+ *     {@link representativeDay} — the same day the Stop Analysis panel uses).
+ *   - Collect each active trip's departure time at the stop. A trip listed in
+ *     `frequencies.txt` is frequency-based: it represents one departure every
+ *     `headway_secs` between `start_time` and `end_time`, so we expand it into
+ *     that many departures at the stop (honoring the `frequenciesSlice`).
+ *   - Average headway = service span (last − first departure) ÷ (departures − 1).
+ *     A single departure has no measurable headway → null (treated as
+ *     infrequent). Returned in minutes.
+ *
+ * This is intentionally a whole-day average rather than peak/off-peak windows
+ * (which `computeServiceIntensity` already exposes but can return null when a
+ * stop has no departures inside the fixed peak band) — Auto just needs a robust
+ * frequent-vs-infrequent signal for every served stop.
+ */
+export function stopHeadwaysMin(feed: FeedSlice): Map<string, number> {
+  const serviceIds = representativeDay(feed).serviceIds;
+  const activeTripIds = new Set(
+    feed.trips.filter((t) => !serviceIds.size || serviceIds.has(t.service_id)).map((t) => t.trip_id),
+  );
+
+  // trip_id → frequency windows (a trip may have several non-overlapping ones).
+  const freqByTrip = new Map<string, Frequency[]>();
+  for (const f of feed.frequencies ?? []) {
+    if (!f.headway_secs || f.headway_secs <= 0) continue;
+    let arr = freqByTrip.get(f.trip_id);
+    if (!arr) { arr = []; freqByTrip.set(f.trip_id, arr); }
+    arr.push(f);
+  }
+
+  // stop_id → expanded departure times (seconds) across all active trips.
+  const depsByStop = new Map<string, number[]>();
+  for (const st of feed.stopTimes) {
+    if (!activeTripIds.has(st.trip_id)) continue;
+    const baseTime = st.departure_time || st.arrival_time;
+    if (!baseTime) continue;
+    const baseSec = gtfsTimeToSeconds(baseTime);
+
+    let arr = depsByStop.get(st.stop_id);
+    if (!arr) { arr = []; depsByStop.set(st.stop_id, arr); }
+
+    const windows = freqByTrip.get(st.trip_id);
+    if (windows) {
+      // Frequency-based: emit one departure per headway in each window. The
+      // stop_times time is the trip's reference start, so offset each window's
+      // departures by the same per-window cadence beginning at start_time.
+      for (const w of windows) {
+        const start = gtfsTimeToSeconds(w.start_time);
+        const end = gtfsTimeToSeconds(w.end_time);
+        for (let t = start; t < end; t += w.headway_secs) arr.push(t);
+      }
+    } else {
+      arr.push(baseSec);
+    }
+  }
+
+  const out = new Map<string, number>();
+  for (const [stopId, depsRaw] of depsByStop) {
+    if (depsRaw.length < 2) continue; // one departure → no measurable headway
+    const deps = depsRaw;
+    const first = Math.min(...deps);
+    const last = Math.max(...deps);
+    const spanSec = last - first;
+    if (spanSec <= 0) continue;
+    out.set(stopId, spanSec / (deps.length - 1) / 60);
+  }
+  return out;
+}
+
+/**
+ * Resolve each stop's Auto-mode walk-time (minutes) from its headway. Stops
+ * with no measured headway fall through {@link minutesForHeadway} to the
+ * infrequent (5-min) default. Returns a stop_id → minutes lookup.
+ */
+export function autoMinutesByStop(feed: FeedSlice): Map<string, WalkMinutes> {
+  const headways = stopHeadwaysMin(feed);
+  const out = new Map<string, WalkMinutes>();
+  for (const s of feed.stops) {
+    out.set(s.stop_id, minutesForHeadway(headways.get(s.stop_id) ?? null));
+  }
+  return out;
+}
+
 export const WALK_MINUTE_OPTIONS: { minutes: WalkMinutes; label: string }[] = [
   { minutes: 5, label: '5 min walk (≈ ¼ mi)' },
   { minutes: 10, label: '10 min walk (≈ ½ mi)' },
   { minutes: 15, label: '15 min walk (≈ ¾ mi)' },
+];
+
+/** Picker options: Auto (the default) above the fixed walk-times. */
+export const WALK_MODE_OPTIONS: { value: WalkMode; label: string }[] = [
+  { value: 'auto', label: 'Auto (by frequency)' },
+  ...WALK_MINUTE_OPTIONS.map((o) => ({ value: o.minutes as WalkMode, label: o.label })),
 ];
 
 export type WalkshedStatus = 'ok' | 'capped' | 'error' | 'empty';
@@ -154,10 +282,22 @@ async function fetchIsochrone(
   return result;
 }
 
+/** A fixed walk-time for every stop, or a per-stop resolver (Auto mode). */
+export type MinutesResolver = number | ((stop: Stop) => number);
+
+function resolveMinutes(resolver: MinutesResolver, stop: Stop): number {
+  return typeof resolver === 'function' ? resolver(stop) : resolver;
+}
+
 /**
  * Build a unioned street-network walkshed for a set of stops.
  *
- * - Dedupes stops by rounded coordinate (one isochrone per distinct location).
+ * - `minutes` may be a single walk-time applied to every stop, or a resolver
+ *   `(stop) => minutes` so Auto mode can size each stop's isochrone by its own
+ *   service frequency (frequent → 10 min, else 5 min). One isochrone request is
+ *   issued per distinct (rounded-coordinate, walk-time) pair — the same cache
+ *   key the session cache already uses — so two stops at one location asking for
+ *   different walk-times each get their own (correct) isochrone.
  * - Caps the number of API calls; returns status 'capped' (no truncation) when
  *   a feed needs more than MAX_ISOCHRONE_REQUESTS distinct isochrones.
  * - Returns status 'error' (with the polygon null) if any request fails, so the
@@ -165,13 +305,15 @@ async function fetchIsochrone(
  */
 export async function buildNetworkWalkshed(
   stops: Stop[],
-  minutes: number,
+  minutes: MinutesResolver,
 ): Promise<NetworkWalkshedResult> {
-  // Distinct rounded coordinates.
-  const distinct = new Map<string, { lon: number; lat: number }>();
+  // Distinct (rounded coordinate, walk-time) pairs — Auto can ask for different
+  // walk-times at the same location, so the walk-time is part of the dedupe key.
+  const distinct = new Map<string, { lon: number; lat: number; minutes: number }>();
   for (const s of stops) {
-    const k = `${roundCoord(s.stop_lon)},${roundCoord(s.stop_lat)}`;
-    if (!distinct.has(k)) distinct.set(k, { lon: s.stop_lon, lat: s.stop_lat });
+    const m = resolveMinutes(minutes, s);
+    const k = cacheKey(s.stop_lon, s.stop_lat, m);
+    if (!distinct.has(k)) distinct.set(k, { lon: s.stop_lon, lat: s.stop_lat, minutes: m });
   }
   const coords = [...distinct.values()];
 
@@ -181,7 +323,7 @@ export async function buildNetworkWalkshed(
 
   // Count how many of those actually need a (non-cached) request.
   const uncached = coords.filter(
-    (c) => !isochroneCache.has(cacheKey(c.lon, c.lat, minutes)),
+    (c) => !isochroneCache.has(cacheKey(c.lon, c.lat, c.minutes)),
   );
   if (uncached.length > MAX_ISOCHRONE_REQUESTS) {
     return {
@@ -201,8 +343,8 @@ export async function buildNetworkWalkshed(
   let requestCount = 0;
   try {
     for (const c of coords) {
-      const wasCached = isochroneCache.has(cacheKey(c.lon, c.lat, minutes));
-      const iso = await fetchIsochrone(c.lon, c.lat, minutes);
+      const wasCached = isochroneCache.has(cacheKey(c.lon, c.lat, c.minutes));
+      const iso = await fetchIsochrone(c.lon, c.lat, c.minutes);
       if (!wasCached) requestCount++;
       if (!iso) continue;
       polygon = polygon ? unionTwo(polygon, iso) : iso;
@@ -297,7 +439,7 @@ export function coverageFromWalkshed(
  */
 export async function walkshedForStops(
   stops: Stop[],
-  minutes: number,
+  minutes: MinutesResolver,
 ): Promise<WalkshedPolygon | null> {
   const res = await buildNetworkWalkshed(stops, minutes);
   return res.polygon;

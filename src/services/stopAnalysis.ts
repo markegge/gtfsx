@@ -1,7 +1,7 @@
 import distance from '@turf/distance';
 import { point } from '@turf/helpers';
 import type {
-  Stop, Route, RouteStop, Trip, StopTime, Calendar, CalendarDate,
+  Stop, Route, RouteStop, Trip, StopTime, Calendar, CalendarDate, Frequency,
 } from '../types/gtfs';
 import { gtfsTimeToSeconds } from '../utils/time';
 import { directionName } from '../utils/constants';
@@ -28,6 +28,9 @@ export interface FeedSlice {
   stopTimes: StopTime[];
   calendars: Calendar[];
   calendarDates: CalendarDate[];
+  /** frequencies.txt (optional) — used by network-walkshed Auto mode to expand
+   *  frequency-based trips into per-stop departures for headway estimation. */
+  frequencies?: Frequency[];
 }
 
 const FT_PER_MILE = 5280;

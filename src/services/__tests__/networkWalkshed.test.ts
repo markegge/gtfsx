@@ -1,12 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Feature, Polygon } from 'geojson';
-import type { Stop } from '../../types/gtfs';
+import type { Stop, Trip, StopTime, Calendar, Frequency } from '../../types/gtfs';
 import type { BlockGroupData } from '../demographics';
+import type { FeedSlice } from '../stopAnalysis';
 import {
   buildNetworkWalkshed,
   circlePolygonOverlapFraction,
   coverageFromWalkshed,
   walkshedGeoJSON,
+  minutesForHeadway,
+  stopHeadwaysMin,
+  autoMinutesByStop,
+  AUTO_FREQUENT_MINUTES,
+  AUTO_INFREQUENT_MINUTES,
+  FREQUENT_HEADWAY_MAX_MIN,
   MAX_ISOCHRONE_REQUESTS,
   _clearIsochroneCache,
 } from '../networkWalkshed';
@@ -170,5 +177,140 @@ describe('walkshedGeoJSON', () => {
 
   it('returns nothing for a null polygon', () => {
     expect(walkshedGeoJSON(null, '#fff', 'R1')).toHaveLength(0);
+  });
+});
+
+/* ─────────────── Auto-by-frequency walk-time classification ─────────────── */
+
+describe('minutesForHeadway', () => {
+  it('gives the frequent (10-min / ½-mi) walkshed at exactly the 15-min cutoff', () => {
+    expect(minutesForHeadway(FREQUENT_HEADWAY_MAX_MIN)).toBe(AUTO_FREQUENT_MINUTES);
+    expect(minutesForHeadway(15)).toBe(10);
+    expect(minutesForHeadway(5)).toBe(10);
+  });
+
+  it('gives the infrequent (5-min / ¼-mi) walkshed above the cutoff', () => {
+    expect(minutesForHeadway(15.1)).toBe(AUTO_INFREQUENT_MINUTES);
+    expect(minutesForHeadway(30)).toBe(5);
+    expect(minutesForHeadway(60)).toBe(5);
+  });
+
+  it('treats an unknown headway (null) as infrequent', () => {
+    expect(minutesForHeadway(null)).toBe(AUTO_INFREQUENT_MINUTES);
+  });
+});
+
+// Minimal feed builders for the headway computation. One all-week calendar so
+// the representative day picks up every trip.
+const ALL_WEEK: Calendar = {
+  service_id: 'WK',
+  monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 1, sunday: 1,
+  start_date: '20260101', end_date: '20261231',
+};
+
+function trip(id: string, routeId = 'R1'): Trip {
+  return { trip_id: id, route_id: routeId, service_id: 'WK', direction_id: 0 };
+}
+
+/** A stop_time at `stopId` for `tripId` departing at HH:MM:SS. */
+function st(tripId: string, stopId: string, time: string, seq = 1): StopTime {
+  return { trip_id: tripId, stop_id: stopId, arrival_time: time, departure_time: time, stop_sequence: seq };
+}
+
+function feed(over: Partial<FeedSlice>): FeedSlice {
+  return {
+    stops: [], routes: [], routeStops: [], trips: [], stopTimes: [],
+    calendars: [ALL_WEEK], calendarDates: [], frequencies: [],
+    ...over,
+  };
+}
+
+describe('stopHeadwaysMin', () => {
+  it('computes average headway = span ÷ (departures − 1)', () => {
+    // Stop F served at 08:00, 08:10, 08:20, 08:30 → span 30 min over 3 gaps = 10 min.
+    const f = feed({
+      stops: [stop('F', 40, -100)],
+      trips: [trip('t1'), trip('t2'), trip('t3'), trip('t4')],
+      stopTimes: [
+        st('t1', 'F', '08:00:00'),
+        st('t2', 'F', '08:10:00'),
+        st('t3', 'F', '08:20:00'),
+        st('t4', 'F', '08:30:00'),
+      ],
+    });
+    expect(stopHeadwaysMin(f).get('F')).toBeCloseTo(10, 5);
+  });
+
+  it('returns no headway for a stop with a single departure', () => {
+    const f = feed({
+      stops: [stop('S', 40, -100)],
+      trips: [trip('t1')],
+      stopTimes: [st('t1', 'S', '08:00:00')],
+    });
+    expect(stopHeadwaysMin(f).has('S')).toBe(false);
+  });
+
+  it('honors frequencies.txt by expanding a frequency-based trip into departures', () => {
+    // One trip, but frequencies says it runs every 12 min from 06:00 to 09:00
+    // (span 180 min). Departures = 06:00,06:12,…,08:48 → 15 deps, 14 gaps,
+    // average ≈ 168/14 = 12 min ≤ 15 → frequent.
+    const freq: Frequency = { trip_id: 't1', start_time: '06:00:00', end_time: '09:00:00', headway_secs: 720 };
+    const f = feed({
+      stops: [stop('Q', 40, -100)],
+      trips: [trip('t1')],
+      stopTimes: [st('t1', 'Q', '06:00:00')],
+      frequencies: [freq],
+    });
+    const hw = stopHeadwaysMin(f).get('Q');
+    expect(hw).toBeDefined();
+    expect(hw!).toBeLessThanOrEqual(FREQUENT_HEADWAY_MAX_MIN);
+    expect(hw!).toBeCloseTo(12, 5);
+  });
+});
+
+describe('autoMinutesByStop', () => {
+  it('assigns 10 min to frequent stops and 5 min to infrequent ones', () => {
+    // Frequent stop A: 4 trips, 10-min headway. Infrequent stop B: 2 trips, 60-min apart.
+    const f = feed({
+      stops: [stop('A', 40, -100), stop('B', 41, -100)],
+      trips: [trip('a1'), trip('a2'), trip('a3'), trip('a4'), trip('b1'), trip('b2')],
+      stopTimes: [
+        st('a1', 'A', '08:00:00'),
+        st('a2', 'A', '08:10:00'),
+        st('a3', 'A', '08:20:00'),
+        st('a4', 'A', '08:30:00'),
+        st('b1', 'B', '08:00:00'),
+        st('b2', 'B', '09:00:00'),
+      ],
+    });
+    const m = autoMinutesByStop(f);
+    expect(m.get('A')).toBe(AUTO_FREQUENT_MINUTES); // 10 min
+    expect(m.get('B')).toBe(AUTO_INFREQUENT_MINUTES); // 5 min
+  });
+
+  it('defaults an unserved stop (no departures) to the infrequent walkshed', () => {
+    const f = feed({ stops: [stop('Z', 40, -100)] });
+    expect(autoMinutesByStop(f).get('Z')).toBe(AUTO_INFREQUENT_MINUTES);
+  });
+});
+
+describe('buildNetworkWalkshed with a per-stop minutes resolver', () => {
+  it('issues a separate isochrone per (coord, walk-time) and resolves per stop', async () => {
+    const poly = squarePolygon(-100, 40, 0.02);
+    const fetchMock = vi.fn().mockResolvedValue(isochroneResponse(poly));
+    vi.stubGlobal('fetch', fetchMock);
+
+    // Two distinct locations; resolver asks for 10 min at the first, 5 at the second.
+    const stops = [stop('frequent', 40, -100), stop('infrequent', 41, -100)];
+    const minutesByStop = new Map([['frequent', 10], ['infrequent', 5]]);
+    const res = await buildNetworkWalkshed(stops, (s) => minutesByStop.get(s.stop_id) ?? 5);
+
+    expect(res.status).toBe('ok');
+    expect(res.requestCount).toBe(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // The 10-min request must carry contours_minutes=10, the 5-min one =5.
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.includes('contours_minutes=10'))).toBe(true);
+    expect(urls.some((u) => u.includes('contours_minutes=5'))).toBe(true);
   });
 });

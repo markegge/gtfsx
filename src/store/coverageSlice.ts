@@ -8,8 +8,13 @@ export interface CoverageData {
   routeResults: { routeId: string; result: CoverageResult }[];
   bufferGeoJSON: GeoJSON.FeatureCollection;
   /** Walkshed geometry used: straight-line buffer (default) or, for paid users,
-   *  a Mapbox street-network isochrone with the chosen walk-time in minutes. */
-  walkshed?: { mode: 'buffer' } | { mode: 'network'; minutes: number };
+   *  a Mapbox street-network isochrone. In network mode `auto` true means each
+   *  stop's walk-time was chosen by its service frequency (10 min when frequent,
+   *  else 5 min) and `minutes` is null; otherwise `minutes` is the fixed
+   *  walk-time applied to every stop. */
+  walkshed?:
+    | { mode: 'buffer' }
+    | { mode: 'network'; auto: boolean; minutes: number | null };
 }
 
 export interface CoverageSlice {

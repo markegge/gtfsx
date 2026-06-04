@@ -295,6 +295,19 @@ export async function runAllTests(zipFile: File): Promise<TestResult[]> {
   // =============================================
   console.log('\n--- Phase 10: Export & Round-trip ---');
 
+  // GTFS-Fares v2 areas (#32, Phase 1): seed areas.txt + stop_areas.txt so we
+  // can assert they round-trip through export → re-import. Use two real stops
+  // from the feed so stop_areas references resolve.
+  const v2StopA = s().stops[0]?.stop_id;
+  const v2StopB = s().stops[1]?.stop_id;
+  if (v2StopA && v2StopB) {
+    s().addFareArea({ area_id: 'test-area-downtown', area_name: 'Downtown Zone' });
+    s().addStopToArea('test-area-downtown', v2StopA);
+    s().addStopToArea('test-area-downtown', v2StopB);
+  }
+  const preAreas = s().fareAreas.length;
+  const preStopAreas = s().stopAreas.length;
+
   const blob = await exportGtfsZip();
   assert('Export: produces ZIP', blob.size > 1000,
     `ZIP size: ${blob.size} bytes`);
@@ -318,6 +331,19 @@ export async function runAllTests(zipFile: File): Promise<TestResult[]> {
     `Expected ${preTrips}, got ${s().trips.length}`);
   assert('Round-trip: fares preserved', s().fareAttributes.length === preFares,
     `Expected ${preFares}, got ${s().fareAttributes.length}`);
+
+  // GTFS-Fares v2 areas survive the round-trip (areas.txt + stop_areas.txt).
+  assert('Round-trip: fare areas preserved', s().fareAreas.length === preAreas,
+    `Expected ${preAreas}, got ${s().fareAreas.length}`);
+  assert('Round-trip: stop areas preserved', s().stopAreas.length === preStopAreas,
+    `Expected ${preStopAreas}, got ${s().stopAreas.length}`);
+  if (v2StopA && v2StopB) {
+    const rtArea = s().fareAreas.find(a => a.area_id === 'test-area-downtown');
+    assert('Round-trip: area name preserved', rtArea?.area_name === 'Downtown Zone',
+      `Got "${rtArea?.area_name}"`);
+    assert('Round-trip: stop_area mapping preserved',
+      s().stopAreas.some(sa => sa.area_id === 'test-area-downtown' && sa.stop_id === v2StopA));
+  }
 
   // Verify modifications survived round-trip
   assert('Round-trip: agency phone preserved', s().agencies[0]?.agency_phone === '412-555-1234');

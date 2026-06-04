@@ -15,7 +15,18 @@ function reset() {
   s.setPathways([]);
   s.setFlexZones([]);
   s.setTrips([]);
+  // Clear every Fares v2 file so the faresV2 auto-on-when-data rule doesn't
+  // leak across tests (it enables on any populated v2 file).
+  s.setFareAreas([]);
+  s.setStopAreas([]);
+  s.setFareNetworks([]);
+  s.setRouteNetworks([]);
+  s.setTimeframes([]);
+  s.setRiderCategories([]);
+  s.setFareMedia([]);
+  s.setFareProducts([]);
   s.setFareLegRules([]);
+  s.setFareTransferRules([]);
   s.setCurrentPublication(null);
 }
 beforeEach(reset);
@@ -25,7 +36,7 @@ describe('feature defaults', () => {
   it('demand response is on by default; the rest are off', () => {
     const s = useStore.getState();
     expect(featureEnabled(s, 'demandResponse')).toBe(true);
-    for (const f of ['transfers', 'frequencies', 'stations', 'blocks', 'serviceAlerts'] as const) {
+    for (const f of ['transfers', 'frequencies', 'stations', 'blocks', 'serviceAlerts', 'faresV2'] as const) {
       expect(featureEnabled(s, f)).toBe(false);
     }
   });

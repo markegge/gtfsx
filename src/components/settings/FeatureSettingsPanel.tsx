@@ -19,6 +19,15 @@ function describeData(s: AppStore, f: AdvancedFeature): string {
     case 'blocks': return `${s.trips.filter((t) => !!t.block_id).length} block assignment(s)`;
     case 'demandResponse': return `${s.flexZones.length} flex zone(s)`;
     case 'serviceAlerts': return 'service alerts'; // alerts aren't feed data; this prompt won't fire
+    case 'faresV2': {
+      const total =
+        s.fareAreas.length + s.stopAreas.length +
+        s.fareNetworks.length + s.routeNetworks.length +
+        s.timeframes.length + s.riderCategories.length +
+        s.fareMedia.length + s.fareProducts.length +
+        s.fareLegRules.length + s.fareTransferRules.length;
+      return `${total} Fares v2 record(s) across areas, stop areas, and other v2 files`;
+    }
   }
 }
 

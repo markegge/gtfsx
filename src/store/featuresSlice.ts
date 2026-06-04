@@ -13,7 +13,8 @@ export type AdvancedFeature =
   | 'stations'
   | 'blocks'
   | 'demandResponse'
-  | 'serviceAlerts';
+  | 'serviceAlerts'
+  | 'faresV2';
 
 export interface FeaturesSlice {
   // The user's explicit per-feature choice. Absent → use the default rule.
@@ -127,9 +128,22 @@ export const ADVANCED_FEATURES: FeatureMeta[] = [
     files: [],
     autoShowOnData: false,
   },
-  // Note: GTFS-Fares v2 is import/export round-trip only (no authoring UI yet),
-  // so there's no section to gate — it isn't listed here. Add it when the v2
-  // editor ships (see REQUIREMENTS §1.6.2 Phase 2).
+  {
+    key: 'faresV2',
+    label: 'Fares v2',
+    description:
+      'GTFS-Fares v2 — areas, networks, rider categories, fare products, and leg/transfer rules. The modern, more expressive fare model that consumers prefer over fare_attributes/fare_rules. Off by default; turning it on reveals the v2 authoring tabs in the Fares panel. Auto-on when the imported feed already carries v2 files.',
+    defaultOn: false,
+    // No standalone nav section — v2 authoring lives as tabs inside the Fares
+    // panel (like Transfers), gated by this toggle. Files listed for reference;
+    // the exporter only emits a file once it has rows. Phase 1 ships the Areas
+    // editor (areas.txt + stop_areas.txt); later phases add the rest.
+    files: [
+      'areas.txt', 'stop_areas.txt', 'networks.txt', 'route_networks.txt',
+      'timeframes.txt', 'rider_categories.txt', 'fare_media.txt',
+      'fare_products.txt', 'fare_leg_rules.txt', 'fare_transfer_rules.txt',
+    ],
+  },
 ];
 
 export const FEATURE_BY_KEY: Record<AdvancedFeature, FeatureMeta> = Object.fromEntries(
@@ -146,6 +160,15 @@ export function featureHasData(s: AppStore, f: AdvancedFeature): boolean {
     case 'blocks': return s.trips.some((t) => !!t.block_id);
     case 'demandResponse': return s.flexZones.length > 0;
     case 'serviceAlerts': return false; // alerts live server-side, not in the feed store
+    case 'faresV2':
+      // Any of the 10 v2 files carrying rows means the feed uses v2.
+      return (
+        s.fareAreas.length > 0 || s.stopAreas.length > 0 ||
+        s.fareNetworks.length > 0 || s.routeNetworks.length > 0 ||
+        s.timeframes.length > 0 || s.riderCategories.length > 0 ||
+        s.fareMedia.length > 0 || s.fareProducts.length > 0 ||
+        s.fareLegRules.length > 0 || s.fareTransferRules.length > 0
+      );
   }
 }
 
@@ -177,5 +200,14 @@ export function clearFeatureData(s: AppStore, f: AdvancedFeature): void {
       s.setTrips(s.trips.map((t) => ({ ...t, block_id: undefined })));
       break;
     case 'serviceAlerts': break; // alerts aren't feed data — nothing to clear here
+    case 'faresV2':
+      // Clear every v2 file. v1 fares (fare_attributes/fare_rules) are a
+      // separate feature and untouched.
+      s.setFareAreas([]); s.setStopAreas([]);
+      s.setFareNetworks([]); s.setRouteNetworks([]);
+      s.setTimeframes([]); s.setRiderCategories([]);
+      s.setFareMedia([]); s.setFareProducts([]);
+      s.setFareLegRules([]); s.setFareTransferRules([]);
+      break;
   }
 }

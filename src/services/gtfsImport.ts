@@ -106,6 +106,17 @@ export function loadImportIntoStore(data: Awaited<ReturnType<typeof importGtfsZi
   if (data.transfers.length) fs.transfers = true;
   if (data.frequencies.length) fs.frequencies = true;
   if (data.levels.length || data.pathways.length) fs.stations = true;
+  // Fares v2: auto-on when the imported feed already carries any v2 file, so
+  // its authoring tabs surface without the user hunting for the toggle.
+  if (
+    data.fareAreas.length || data.stopAreas.length ||
+    data.fareNetworks.length || data.routeNetworks.length ||
+    data.timeframes.length || data.riderCategories.length ||
+    data.fareMedia.length || data.fareProducts.length ||
+    data.fareLegRules.length || data.fareTransferRules.length
+  ) {
+    fs.faresV2 = true;
+  }
   store.setFeatureSettings(fs);
 }
 

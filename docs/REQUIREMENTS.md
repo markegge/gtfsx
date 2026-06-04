@@ -138,9 +138,10 @@ GTFS-Fares v2 is a parallel set of files alongside v1; consumers prefer v2 when 
 - ✅ Export (`gtfsExport.ts`) emits each file when populated; v1 and v2 coexist in the same ZIP.
 - ✅ Persistence layer (`persistence.ts`, `serverPersistence.ts`) snapshots the v2 state alongside the rest of the editor.
 
-**Phase 2 — editor UI (planned).** Authoring requires new panels because the v2 cross-references go several levels deep. Recommended build order, each piece blocked on the prior:
+**Phase 2 — editor UI (in progress).** Authoring requires new panels because the v2 cross-references go several levels deep. Gated behind a per-feed **"Fares v2"** feature toggle (Settings panel): off by default, auto-on when the imported feed already carries any v2 file. When on, v2 authoring tabs appear in the Fares panel (alongside Fares / Zones / Transfers). Recommended build order, each piece blocked on the prior:
 
-- 🔲 Areas editor — name an area, assign stops on the map (replaces v1 zone assignment for v2-only feeds).
+- ✅ **Fares v2 toggle** — `featuresSlice.ts` `faresV2` key + `FeatureSettingsPanel.tsx`; gates the v2 authoring tabs. Off by default; auto-on if the feed has v2 files.
+- ✅ **Areas editor** — `src/components/fares/AreasEditor.tsx` (Fares panel → Areas tab). Create / rename / delete areas (area_id unique, area_name optional) and assign/unassign stops (stop_areas.txt). CRUD lives in `fareV2Slice.ts`.
 - 🔲 Networks editor — group routes for fare purposes.
 - 🔲 Rider Categories editor — first-class records for adult / senior / student / child.
 - 🔲 Fare Media editor — cash vs smart card vs cEMV vs mobile app.
@@ -149,8 +150,9 @@ GTFS-Fares v2 is a parallel set of files alongside v1; consumers prefer v2 when 
 - 🔲 Leg Rules editor — which (area + network + timeframe + rider category) combo costs which fare product.
 - 🔲 Transfer Rules editor — free / discounted / time-bounded transfer pricing. Distinct from `transfers.txt` (routing semantics) — these are fare rules. Lives under the Fares panel when built.
 
-**Phase 3 — validation (planned).** v2's referential integrity is dense and bad references silently break trip-planner fare display.
+**Phase 3 — validation (in progress).** v2's referential integrity is dense and bad references silently break trip-planner fare display.
 
+- ✅ Areas: `area_id` unique in areas.txt; every stop_areas row references an existing area and an existing stop (orphan / missing-stop errors); duplicate (area, stop) mapping warned. In `validation.ts`.
 - 🔲 Cross-reference checks: `fare_leg_rules.fare_product_id` exists in `fare_products`; `fare_leg_rules.network_id` exists in `networks`; same for `area_id`, `timeframe_group_id`, etc.
 - 🔲 Validation that every route is covered by at least one applicable leg rule (or surface a "no fare defined for route X" warning analogous to the v1 check).
 - 🔲 Detect v1/v2 conflicts when both are present (e.g. a route priced differently in v1 and v2).
@@ -185,7 +187,7 @@ Full GTFS-Flex authoring is shipped (`src/store/flexSlice.ts`, `gtfsImport.ts` /
 
 Advanced GTFS features clutter the editor for small agencies that don't use them, so they're gated behind a per-feed **Settings** panel (gear in the left rail). A feature is shown when the user turns it on *or* the feed already contains its data ("the feed has the file enables it"). Settings live with the feed (working-state snapshot — IndexedDB + server R2), not a database setting, and never change the exported GTFS. Turning a feature off warns and clears its data.
 
-- ✅ Gated, **off by default**: Transfers (a Fares sub-tab), Frequencies, Stations (`levels.txt`/`pathways.txt`), Blocks (`block_id` — a trips column, no file). (Fares v2 isn't toggleable — it's round-trip-only with no authoring UI; see [§1.6.2](#162-gtfs-fares-v2--phase-1-shipped-phases-23-planned).)
+- ✅ Gated, **off by default**: Transfers (a Fares sub-tab), Frequencies, Stations (`levels.txt`/`pathways.txt`), Blocks (`block_id` — a trips column, no file), **Fares v2** (gates the v2 authoring tabs in the Fares panel; auto-on when the feed already carries v2 files; see [§1.6.2](#162-gtfs-fares-v2--phase-1-shipped-phases-23-planned)).
 - ✅ **Demand response / paratransit** — GTFS-Flex; **on by default** to drive Flex adoption. Off hides Flex Zones. A soft (non-blocking) validation nudge fires when it's on but the feed has no flex zones.
 - ✅ Import seeds the settings from the feed's contents; gated nav sections (and the Transfers tab) hide/show accordingly.
 - 🔲 Emitting header-only empty files on export for enabled-but-empty features (full bare-zip round-trip of the on-state) — deferred; needs import-side file-manifest detection and trips validator "empty file" notices.

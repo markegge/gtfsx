@@ -26,7 +26,10 @@ export function ValidationPanel() {
   const handleClick = (m: typeof messages[0]) => {
     if (m.entity_type === 'agency') state.setSidebarSection('agency');
     else if (m.entity_type === 'calendar') state.setSidebarSection('calendar');
-    else if (m.entity_type === 'fare' || m.entity_type === 'fare_rule') state.setSidebarSection('fares');
+    else if (
+      m.entity_type === 'fare' || m.entity_type === 'fare_rule' ||
+      m.entity_type === 'area' || m.entity_type === 'stop_area'
+    ) state.setSidebarSection('fares');
     else if (m.entity_type === 'flex_zone') state.setSidebarSection('flex');
     else if (m.entity_type === 'route') {
       state.setSidebarSection('routes');

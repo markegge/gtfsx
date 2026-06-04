@@ -479,5 +479,64 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     ));
   }
 
+  // ── GTFS-Fares v2: areas.txt + stop_areas.txt (#32, Phase 3) ───────────────
+  // area_id must be unique within areas.txt; every stop_areas row must point at
+  // an area that exists and a stop that exists. (Later phases add the deeper
+  // cross-reference checks for networks, products, and leg/transfer rules.)
+  const areaIdCounts = new Map<string, number>();
+  for (const a of state.fareAreas) {
+    if (!a.area_id) {
+      messages.push(msg('error', 'A fare area is missing area_id.', 'area'));
+      continue;
+    }
+    areaIdCounts.set(a.area_id, (areaIdCounts.get(a.area_id) ?? 0) + 1);
+  }
+  for (const [areaId, count] of areaIdCounts) {
+    if (count > 1) {
+      messages.push(msg(
+        'error',
+        `Fare area "${areaId}" is defined ${count} times in areas.txt — area_id must be unique.`,
+        'area', areaId,
+      ));
+    }
+  }
+  const areaIdSet = new Set(areaIdCounts.keys());
+  // De-dup the orphan/missing references so a feed with many bad rows surfaces
+  // one message per offending area_id / stop_id rather than dozens.
+  const reportedOrphanArea = new Set<string>();
+  const reportedMissingStop = new Set<string>();
+  const seenStopAreaPairs = new Set<string>();
+  for (const sa of state.stopAreas) {
+    if (sa.area_id && !areaIdSet.has(sa.area_id) && !reportedOrphanArea.has(sa.area_id)) {
+      reportedOrphanArea.add(sa.area_id);
+      messages.push(msg(
+        'error',
+        `stop_areas references non-existent area "${sa.area_id}" (no matching row in areas.txt).`,
+        'stop_area', sa.area_id,
+      ));
+    }
+    if (sa.stop_id && !stopIdSet.has(sa.stop_id) && !reportedMissingStop.has(sa.stop_id)) {
+      reportedMissingStop.add(sa.stop_id);
+      messages.push(msg(
+        'error',
+        `stop_areas references non-existent stop "${sa.stop_id}".`,
+        'stop_area', sa.stop_id,
+      ));
+    }
+    // Duplicate (area_id, stop_id) mapping — harmless but redundant; flag once.
+    const key = `${sa.area_id} ${sa.stop_id}`;
+    if (sa.area_id && sa.stop_id) {
+      if (seenStopAreaPairs.has(key)) {
+        messages.push(msg(
+          'warning',
+          `Stop "${sa.stop_id}" is assigned to area "${sa.area_id}" more than once in stop_areas.`,
+          'stop_area', sa.area_id,
+        ));
+      } else {
+        seenStopAreaPairs.add(key);
+      }
+    }
+  }
+
   return messages;
 }

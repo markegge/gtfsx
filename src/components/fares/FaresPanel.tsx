@@ -3,6 +3,7 @@ import { useStore } from '../../store';
 import { featureEnabled } from '../../store/featuresSlice';
 import { FaresEditor } from './FaresEditor';
 import { FareZoneTool } from './FareZoneTool';
+import { AreasEditor } from './AreasEditor';
 import { TransfersEditor } from '../transfers/TransfersEditor';
 
 /**
@@ -10,16 +11,25 @@ import { TransfersEditor } from '../transfers/TransfersEditor';
  * fare data (both describe inter-route relationships) and rare enough in
  * authoring that giving it its own sidebar entry was disproportionate. Tabs
  * keep both reachable in one place without crowding the rail.
+ *
+ * GTFS-Fares v2 authoring also lives here, gated behind the per-feed "Fares v2"
+ * feature toggle. Phase 1 ships the Areas tab (areas.txt + stop_areas.txt);
+ * later phases add Networks, Rider Categories, Fare Media/Products, Timeframes,
+ * and Leg/Transfer Rules tabs.
  */
-type FaresTab = 'fares' | 'zones' | 'transfers';
+type FaresTab = 'fares' | 'zones' | 'areas' | 'transfers';
 
 export function FaresPanel() {
   const transferCount = useStore((s) => s.transfers.length);
-  // Transfers is gated by the per-feed feature setting (Settings panel). Hidden
-  // tab → fall back to Fares so we never render a dead tab.
+  const areaCount = useStore((s) => s.fareAreas.length);
+  // Transfers + Fares v2 are gated by per-feed feature settings (Settings
+  // panel). A hidden tab → fall back to Fares so we never render a dead tab.
   const showTransfers = useStore((s) => featureEnabled(s, 'transfers'));
+  const showFaresV2 = useStore((s) => featureEnabled(s, 'faresV2'));
   const [tab, setTab] = useState<FaresTab>('fares');
-  const effectiveTab: FaresTab = tab === 'transfers' && !showTransfers ? 'fares' : tab;
+  let effectiveTab: FaresTab = tab;
+  if (effectiveTab === 'transfers' && !showTransfers) effectiveTab = 'fares';
+  if (effectiveTab === 'areas' && !showFaresV2) effectiveTab = 'fares';
 
   return (
     <div>
@@ -30,6 +40,20 @@ export function FaresPanel() {
         <TabButton active={effectiveTab === 'zones'} onClick={() => setTab('zones')}>
           Zones
         </TabButton>
+        {showFaresV2 && (
+          <TabButton active={effectiveTab === 'areas'} onClick={() => setTab('areas')}>
+            Areas
+            {areaCount > 0 && (
+              <span
+                className={`ml-1.5 inline-flex items-center justify-center min-w-[20px] h-4 px-1 rounded text-[10px] font-bold tabular-nums ${
+                  effectiveTab === 'areas' ? 'bg-coral text-white' : 'bg-sand text-warm-gray'
+                }`}
+              >
+                {areaCount.toLocaleString()}
+              </span>
+            )}
+          </TabButton>
+        )}
         {showTransfers && (
           <TabButton active={effectiveTab === 'transfers'} onClick={() => setTab('transfers')}>
             Transfers
@@ -45,7 +69,15 @@ export function FaresPanel() {
           </TabButton>
         )}
       </div>
-      {effectiveTab === 'fares' ? <FaresEditor /> : effectiveTab === 'zones' ? <FareZoneTool /> : <TransfersEditor />}
+      {effectiveTab === 'fares' ? (
+        <FaresEditor />
+      ) : effectiveTab === 'zones' ? (
+        <FareZoneTool />
+      ) : effectiveTab === 'areas' ? (
+        <AreasEditor />
+      ) : (
+        <TransfersEditor />
+      )}
     </div>
   );
 }

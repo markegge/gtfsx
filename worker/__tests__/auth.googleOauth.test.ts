@@ -208,6 +208,36 @@ describe('auth /google', () => {
     expect(me.user.id).toBe(existing.id);
   });
 
+  it('SECURITY: linking to an unverified (pending) account drops its password credential (pre-hijacking)', async () => {
+    // Attack: a squatter pre-creates a password account on the victim's email
+    // and leaves it pending (can't verify — no inbox access). When the real
+    // owner signs in with Google, we must NOT keep the squatter's password,
+    // or the squatter could log in to the now-active account.
+    const squatter = await seedUser({ email: 'victim@example.com', status: 'pending_verification' });
+    g = mockGoogle({ sub: 'g-hijack-1', email: 'victim@example.com', email_verified: true, name: 'Real Owner' });
+    const client = makeClient();
+    const { state } = await startFlow(client);
+
+    const cb = await client.get(`/auth/google/callback?code=abc&state=${state}`);
+    expect(cb.status).toBe(302);
+
+    // Same user, now active — no duplicate.
+    const users = await dbAll<{ id: string; status: string }>(
+      `SELECT id, status FROM user WHERE email = ?`,
+      'victim@example.com',
+    );
+    expect(users).toHaveLength(1);
+    expect(users[0].id).toBe(squatter.id);
+    expect(users[0].status).toBe('active');
+
+    // The squatter's password credential is GONE; only the Google link remains.
+    const creds = await dbAll<{ kind: string }>(
+      `SELECT kind FROM credential WHERE user_id = ?`,
+      squatter.id,
+    );
+    expect(creds.map((c) => c.kind).sort()).toEqual(['google_oauth']);
+  });
+
   it('returning user: a known Google sub signs in without creating another credential', async () => {
     // First login creates the user + credential.
     g = mockGoogle({ sub: 'g-return-1', email: 'returner@example.com', email_verified: true });

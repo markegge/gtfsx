@@ -268,6 +268,25 @@ googleRouter.get('/callback', async (c) => {
         return fail();
       }
       userId = byEmail.id;
+
+      // SECURITY (account pre-hijacking): if this account never verified its own
+      // email, it has NOT proven it controls the address — a squatter could have
+      // pre-created a password signup on the victim's email and left it pending.
+      // Google has now proven ownership, so before activating we drop any
+      // untrusted password credential (otherwise the squatter's password would
+      // work on the now-active account) and reset the squatter-chosen display
+      // name. An account that is already active proved ownership (verify-email
+      // link, magic link, or invitation-token possession), so it's the
+      // legitimate owner — we keep its password and simply add the Google link.
+      if (byEmail.status === 'pending_verification') {
+        await c.env.DB.prepare(`DELETE FROM credential WHERE user_id = ? AND kind = 'password'`)
+          .bind(userId)
+          .run();
+        await c.env.DB.prepare(`UPDATE user SET display_name = ? WHERE id = ?`)
+          .bind(displayName, userId)
+          .run();
+      }
+
       // Link the Google identity. The (oauth_provider, oauth_subject) unique
       // index protects against a duplicate link if two callbacks race.
       await c.env.DB.prepare(
@@ -276,19 +295,12 @@ googleRouter.get('/callback', async (c) => {
       )
         .bind(ulid(), userId, sub, now, now)
         .run();
-      // Google verified this address; if the account was still pending its own
-      // email verification, activate it now (Google proved inbox control).
-      if (byEmail.status === 'pending_verification') {
-        await c.env.DB.prepare(
-          `UPDATE user SET status = 'active', email_verified = 1, updated_at = ? WHERE id = ?`,
-        )
-          .bind(now, userId)
-          .run();
-      } else {
-        await c.env.DB.prepare(`UPDATE user SET email_verified = 1, updated_at = ? WHERE id = ?`)
-          .bind(now, userId)
-          .run();
-      }
+      // Google verified this address → the account is active + email-verified.
+      await c.env.DB.prepare(
+        `UPDATE user SET status = 'active', email_verified = 1, updated_at = ? WHERE id = ?`,
+      )
+        .bind(now, userId)
+        .run();
       auditAction = 'user.oauth_linked';
     } else {
       // 3) Brand-new user. Google verified the email, so go straight to active.

@@ -262,10 +262,13 @@ function ServerEditorRoute() {
     );
   }
 
+  // Full-viewport flex column: banners are non-shrinking rows at the top and
+  // AppShell takes the remaining height. This keeps any top banner inside the
+  // viewport instead of pushing AppShell (and its bottom panel) off-screen.
   return (
-    <>
+    <div className="h-full flex flex-col">
       {locked && (
-        <div className="px-4 py-2 bg-gold-light text-amber-700 text-sm flex items-center gap-2 border-b border-amber-200">
+        <div className="shrink-0 px-4 py-2 bg-gold-light text-amber-700 text-sm flex items-center gap-2 border-b border-amber-200">
           <span aria-hidden>🔒</span>
           <span className="flex-1">
             Locked — changes won't be saved here. Use <strong>Save As</strong> to fork
@@ -274,7 +277,7 @@ function ServerEditorRoute() {
         </div>
       )}
       {restoredBanner && (
-        <div className="px-4 py-2 bg-teal-light text-teal text-sm flex items-center gap-3">
+        <div className="shrink-0 px-4 py-2 bg-teal-light text-teal text-sm flex items-center gap-3">
           <span className="flex-1">{restoredBanner}</span>
           <button
             onClick={() => setRestoredBanner(null)}
@@ -285,12 +288,14 @@ function ServerEditorRoute() {
           </button>
         </div>
       )}
-      <AppShell />
+      <div className="flex-1 min-h-0">
+        <AppShell />
+      </div>
       {/* ConflictDialog is only relevant for cloud-attached projects; a locked
           feed is a detached draft (no active server project, no autosave-to-cloud)
           so there's no working-state version to conflict on. */}
       {projectId && !locked && <ConflictDialog projectId={projectId} />}
-    </>
+    </div>
   );
 }
 

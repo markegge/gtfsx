@@ -13,6 +13,7 @@ export type FeatureKey =
   | 'analysis_basic'
   | 'analysis_title_vi'
   | 'analysis_propensity'
+  | 'network_walksheds'
   | 'org_workspace'
   | 'cross_org_member'
   | 'org_logo'
@@ -35,6 +36,7 @@ export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
   analysis_basic:      ['agency', 'enterprise'],
   analysis_title_vi:   ['agency', 'enterprise'],
   analysis_propensity: ['free', 'pro', 'agency', 'enterprise'],
+  network_walksheds:   ['agency', 'enterprise'],
   org_workspace:       ['agency', 'enterprise'],
   cross_org_member:    ['agency', 'enterprise'],
   org_logo:            ['agency', 'enterprise'],
@@ -108,6 +110,10 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   analysis_propensity: {
     title: 'Ridership propensity heatmap',
     description: 'Layer ride-likelihood density onto your map to prioritize service investments.',
+  },
+  network_walksheds: {
+    title: 'Street-network walksheds',
+    description: 'Swap the straight-line ¼–½ mi coverage buffer for real walking-time isochrones — coverage and demographics that respect rivers, freeways, and the actual street grid.',
   },
   org_workspace: {
     title: 'Team workspace',

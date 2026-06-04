@@ -7,6 +7,9 @@ export interface CoverageData {
   systemResult: CoverageResult;
   routeResults: { routeId: string; result: CoverageResult }[];
   bufferGeoJSON: GeoJSON.FeatureCollection;
+  /** Walkshed geometry used: straight-line buffer (default) or, for paid users,
+   *  a Mapbox street-network isochrone with the chosen walk-time in minutes. */
+  walkshed?: { mode: 'buffer' } | { mode: 'network'; minutes: number };
 }
 
 export interface CoverageSlice {

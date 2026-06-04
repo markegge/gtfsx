@@ -430,6 +430,21 @@ async function main() {
   assert('v2 round-trip: leg rule timeframe', s().fareLegRules[0]?.from_timeframe_group_id === 'PEAK');
   assert('v2 round-trip: transfer count -1', s().fareTransferRules[0]?.transfer_count === -1);
 
+  // The synthetic v2 feed is internally consistent (every FK resolves), so the
+  // v2 validation rules (#32 editors) must report no v2 errors on it.
+  const v2ValTypes = new Set([
+    'area', 'stop_area', 'network', 'route_network', 'timeframe',
+    'rider_category', 'fare_media', 'fare_product', 'fare_leg_rule', 'fare_transfer_rule',
+  ]);
+  const v2ValErrors = runValidation(s()).filter(m => m.severity === 'error' && m.entity_type && v2ValTypes.has(m.entity_type));
+  assert('v2 validation: clean for a consistent feed', v2ValErrors.length === 0,
+    v2ValErrors.map(e => e.message).join('; '));
+  // Break a foreign key and confirm the validator flags it.
+  s().updateFareProduct('SINGLE', { rider_category_id: 'GHOST' });
+  const v2BadRef = runValidation(s()).filter(m => m.message.includes('non-existent rider category "GHOST"'));
+  assert('v2 validation: flags a dangling rider_category FK', v2BadRef.length > 0);
+  s().updateFareProduct('SINGLE', { rider_category_id: 'ADULT' }); // restore
+
   // ---- PHASE 13: spec-completeness bundle round-trip (#12/#13 plumbing) ----
   console.log('\nPhase 13: frequencies / pathways / levels round-trip');
   const bundleBytes = await buildBundleFixtureZip();

@@ -11,8 +11,10 @@ import {
   todayInTimezone,
 } from './services';
 import type { Route, Trip } from './types';
-
-const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+import { resolveLang, type EmbedStrings } from './i18n';
+import { parseTheme, themeCacheKey, themeStyle } from './theme';
+import { renderImpressionBeacon } from './beacon';
+import { hasRtSource, renderRtStopEnhancer } from './rt';
 
 /**
  * Per-stop page: shows the stop, a small map centred on it, and the
@@ -31,15 +33,25 @@ export async function renderStopEmbed(
   if (!stop) return new Response('Stop not found', { status: 404 });
 
   const url = new URL(request.url);
+  const agency = feed.state.agencies[0];
+
+  // Theme + language fold into the ETag for cache safety (see route.ts).
+  const theme = parseTheme(url.searchParams);
+  const { lang, t } = resolveLang(
+    url.searchParams.get('lang'),
+    feed.state.feedInfo?.feed_lang,
+    agency?.agency_lang,
+  );
+  const variant = `${themeCacheKey(theme)}-${lang}`;
+
   const ifNoneMatch = request.headers.get('If-None-Match');
-  const etag = `"${feed.snapshotId}-stop-${stopId}"`;
+  const etag = `"${feed.snapshotId}-stop-${stopId}-${variant}"`;
   if (ifNoneMatch && ifNoneMatch.includes(etag)) {
     const headers = embedHeaders(feed.snapshotId, feed.publishedAt);
     headers.set('ETag', etag);
     return new Response(null, { status: 304, headers });
   }
 
-  const agency = feed.state.agencies[0];
   const tz = agency?.agency_timezone;
   const today = todayInTimezone(tz);
   const dow = dayOfWeekInTimezone(tz);
@@ -49,6 +61,7 @@ export async function renderStopEmbed(
   const tripsById = new Map<string, Trip>(feed.state.trips.map((t) => [t.trip_id, t]));
   const routeById = new Map<string, Route>(feed.state.routes.map((r) => [r.route_id, r]));
   type Departure = {
+    tripId: string;
     timeStr: string;
     timeMinutes: number;
     route: Route;
@@ -68,6 +81,7 @@ export async function renderStopEmbed(
     const route = routeById.get(trip.route_id);
     if (!route) continue;
     departures.push({
+      tripId: trip.trip_id,
       timeStr: time,
       timeMinutes: parseToMinutes(time),
       route,
@@ -96,18 +110,22 @@ export async function renderStopEmbed(
       return an.localeCompare(bn, undefined, { numeric: true });
     });
 
-  const dayName = DAY_NAMES[dow] ?? '';
-  const expiryWarning = renderExpiryWarning(feed.state.feedInfo?.feed_end_date, today);
+  const dayName = t.dayNames[dow] ?? '';
+  const expiryWarning = renderExpiryWarning(feed.state.feedInfo?.feed_end_date, today, t);
   const agencyName = agency?.agency_name ?? feed.projectName;
+
+  // Live RT annotations are added client-side (cache-safe) when the feed has a
+  // trip_updates source. Each <li> carries data-trip so the enhancer can match.
+  const rtEnabled = await hasRtSource(env, feed.projectId, 'trip_updates');
 
   const departuresList =
     departures.length === 0
-      ? html`<p class="empty">No more departures today from this stop.</p>`
+      ? html`<p class="empty">${t.noMoreDepartures}</p>`
       : html`
           <ol class="departures">
             ${departures.slice(0, 60).map(
               (d) => html`
-                <li>
+                <li data-trip="${d.tripId}" data-stop="${stopId}">
                   <span class="dep-time">${formatGtfsTime(d.timeStr)}</span>
                   <a class="dep-route" href="${d.routeUrl}">
                     <span
@@ -135,7 +153,7 @@ export async function renderStopEmbed(
     `;
   });
 
-  const stopAccessibility = formatAccessibility(stop.wheelchair_boarding);
+  const stopAccessibility = formatAccessibility(stop.wheelchair_boarding, t);
   const titleText = `${stop.stop_name} — ${agencyName}`;
   const description = `Departures from ${stop.stop_name} on ${agencyName}.`;
 
@@ -147,27 +165,31 @@ export async function renderStopEmbed(
       <div>
         <h1>${stop.stop_name}</h1>
         <div class="effective">
-          ${stop.stop_code ? html`Stop ID: ${stop.stop_code} · ` : ''}${routesServingStop.length} route${routesServingStop.length === 1 ? '' : 's'}${stopAccessibility ? html` · ${stopAccessibility}` : ''}
+          ${stop.stop_code ? html`${t.stopIdLabel}: ${stop.stop_code} · ` : ''}${t.routeCount(routesServingStop.length)}${stopAccessibility ? html` · ${stopAccessibility}` : ''}
         </div>
       </div>
     </header>
     ${expiryWarning}
     ${map}
-    <h3>Departures today (${dayName})</h3>
+    <h3>${t.departuresToday(dayName)}</h3>
     ${departuresList}
     ${routesServingStop.length > 0
       ? html`
-          <h3>Routes that serve this stop</h3>
+          <h3>${t.routesServingStop}</h3>
           <div class="route-list">${routesList}</div>
         `
       : ''}
-    ${embedFooter(feed.ownerPlan, agencyName)}
+    ${embedFooter(feed.ownerPlan, agencyName, t.poweredBy)}
+    ${renderImpressionBeacon(slug, 'stop', stopId)}
+    ${rtEnabled ? renderRtStopEnhancer(slug, stopId, t.liveLabel) : ''}
   `;
 
   const html5 = await renderLayout({
     title: titleText,
     social: { title: titleText, description, url: url.toString() },
     brandColor: feed.brandPrimaryColor,
+    themeStyle: themeStyle(theme),
+    lang,
     body: await body,
   });
   const headers = embedHeaders(feed.snapshotId, feed.publishedAt);
@@ -181,8 +203,8 @@ function parseToMinutes(t: string): number {
   return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
 }
 
-function formatAccessibility(code: number | undefined): string | null {
-  if (code === 1) return 'Wheelchair accessible';
-  if (code === 2) return 'Not wheelchair accessible';
+function formatAccessibility(code: number | undefined, t: EmbedStrings): string | null {
+  if (code === 1) return t.wheelchairAccessible;
+  if (code === 2) return t.notWheelchairAccessible;
   return null;
 }

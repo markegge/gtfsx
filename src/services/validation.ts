@@ -1,6 +1,7 @@
 import type { ValidationMessage } from '../types/ui';
 import type { AppStore } from '../store';
 import { featureEnabled } from '../store/featuresSlice';
+import { flexZoneHasGroup, flexZoneHasPolygons, flexZoneShape } from '../store/flexSlice';
 import { gtfsTimeToSeconds } from '../utils/time';
 import { getUSHolidaysInRange } from '../utils/holidays';
 
@@ -534,6 +535,84 @@ export function runValidation(state: AppStore): ValidationMessage[] {
         ));
       } else {
         seenStopAreaPairs.add(key);
+      }
+    }
+  }
+
+  // ── GTFS-Flex zones (polygon / group / mixed) ──────────────────────────
+  // Only validate when the demand-response feature is on and zones exist —
+  // otherwise this is a no-op for ordinary fixed-route feeds.
+  if (featureEnabled(state, 'demandResponse') && state.flexZones.length > 0) {
+    for (const zone of state.flexZones) {
+      const shape = flexZoneShape(zone);
+      const label = zone.name || zone.id;
+
+      // A zone must carry at least one service-area shape (polygon or group).
+      if (shape === 'empty') {
+        messages.push(msg(
+          'warning',
+          `Flex zone "${label}" has no service area — add a polygon or a stop group, or remove the zone.`,
+          'flex_zone', zone.id,
+        ));
+      }
+
+      // A group component with no stops won't export a usable
+      // location_group_stops.txt row.
+      if (flexZoneHasGroup(zone) && (zone.stopIds?.length ?? 0) === 0) {
+        messages.push(msg(
+          'warning',
+          `Flex zone "${label}" has a stop group with no stops. Add stops to the group${flexZoneHasPolygons(zone) ? ' or remove the group to keep this a polygon-only zone' : ''}.`,
+          'flex_zone', zone.id,
+        ));
+      }
+
+      // Every stop referenced by a group must exist in stops.txt.
+      if (flexZoneHasGroup(zone)) {
+        const seen = new Set<string>();
+        for (const sid of zone.stopIds ?? []) {
+          if (seen.has(sid)) {
+            messages.push(msg(
+              'warning',
+              `Flex zone "${label}" lists stop "${sid}" in its group more than once.`,
+              'flex_zone', zone.id,
+            ));
+            continue;
+          }
+          seen.add(sid);
+          if (!stopIdSet.has(sid)) {
+            messages.push(msg(
+              'error',
+              `Flex zone "${label}" references stop "${sid}" in its group, but no such stop exists.`,
+              'flex_zone', zone.id,
+            ));
+          }
+        }
+      }
+
+      // A zone only materializes into a flex trip (and thus exports its
+      // locations / location_group references) when it has a pickup window;
+      // flag a zone that has a service area but no window so the user knows it
+      // won't appear in the exported feed.
+      if (shape !== 'empty' && (!zone.pickupWindowStart || !zone.pickupWindowEnd)) {
+        messages.push(msg(
+          'warning',
+          `Flex zone "${label}" has no pickup window set, so it won't be exported as a flex trip. Set a pickup start/end in the zone's Details.`,
+          'flex_zone', zone.id,
+        ));
+      }
+
+      // A zone with a window needs a service pattern to materialize a trip.
+      if (shape !== 'empty' && zone.pickupWindowStart && zone.pickupWindowEnd) {
+        const hasService = zone.serviceId
+          ? serviceIdSet.has(zone.serviceId) || state.calendarDates.some((d) => d.service_id === zone.serviceId)
+          : state.calendars.length > 0;
+        if (!hasService) {
+          messages.push(msg(
+            'warning',
+            `Flex zone "${label}" has no valid service pattern, so it can't be exported as a flex trip. Pick a calendar in the zone's Details.`,
+            'flex_zone', zone.id,
+          ));
+        }
       }
     }
   }

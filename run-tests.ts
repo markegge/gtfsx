@@ -700,6 +700,132 @@ async function main() {
   assert('removal: RM2 untouched on route RY (stop_times)',
     s().stopTimes.some(st => st.trip_id === 'TY1' && st.stop_id === 'RM2'));
 
+  // ---- PHASE 20: GTFS-Flex mixed (polygon + stop group) zones (#29 part 2) ----
+  console.log('\nPhase 20: GTFS-Flex mixed polygon + group flex zones round-trip');
+  // Controlled mini-feed: one agency, one calendar, a few stops, and three flex
+  // zones exercising every shape — polygon-only, group-only, and mixed.
+  s().setAgencies([{ agency_id: 'FA', agency_name: 'Flex Co', agency_url: 'https://ex.com', agency_timezone: 'America/Denver' }]);
+  s().setCalendars([{
+    service_id: 'FLEX_SVC', monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 0, sunday: 0,
+    start_date: '20260101', end_date: '20271231',
+  }]);
+  s().setCalendarDates([]);
+  s().setStops([
+    mkStop('FS1', -111.04, 45.67),
+    mkStop('FS2', -111.05, 45.68),
+    mkStop('FS3', -111.06, 45.69),
+  ]);
+  // Pre-create the paired routes so export reuses them (mirrors createFlexZoneWithRoute).
+  s().setRoutes([
+    { route_id: 'R_POLY', agency_id: 'FA', route_short_name: 'Poly', route_long_name: 'Poly (Flex)', route_type: 3 },
+    { route_id: 'R_GROUP', agency_id: 'FA', route_short_name: 'Group', route_long_name: 'Group (Flex)', route_type: 3 },
+    { route_id: 'R_MIXED', agency_id: 'FA', route_short_name: 'Mixed', route_long_name: 'Mixed (Flex)', route_type: 3 },
+  ]);
+  s().setTrips([]);
+  s().setStopTimes([]);
+  s().setFareAttributes([]);
+  s().setFareRules([]);
+
+  const sqPolygon = (cx: number, cy: number): GeoJSON.Feature => ({
+    type: 'Feature',
+    properties: {},
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[[cx, cy], [cx + 0.01, cy], [cx + 0.01, cy + 0.01], [cx, cy + 0.01], [cx, cy]]],
+    },
+  });
+
+  s().setFlexZones([
+    {
+      id: 'zpoly', name: 'Poly Area', bufferMiles: 0,
+      geojson: { type: 'FeatureCollection', features: [sqPolygon(-111.10, 45.70)] },
+      serviceId: 'FLEX_SVC', routeId: 'R_POLY',
+      pickupWindowStart: '08:00:00', pickupWindowEnd: '17:00:00',
+      bookingRule: { bookingType: 1, priorNoticeDurationMin: 60, phoneNumber: '406-555-0100' },
+    },
+    {
+      id: 'zgroup', name: 'Stop Group', bufferMiles: 0,
+      geojson: { type: 'FeatureCollection', features: [] },
+      stopIds: ['FS1', 'FS2'],
+      serviceId: 'FLEX_SVC', routeId: 'R_GROUP',
+      pickupWindowStart: '09:00:00', pickupWindowEnd: '15:00:00',
+    },
+    {
+      id: 'zmixed', name: 'Mixed Zone', bufferMiles: 0,
+      geojson: { type: 'FeatureCollection', features: [sqPolygon(-111.20, 45.60)] },
+      stopIds: ['FS2', 'FS3'],
+      serviceId: 'FLEX_SVC', routeId: 'R_MIXED',
+      pickupWindowStart: '07:30:00', pickupWindowEnd: '18:30:00',
+      bookingRule: { bookingType: 2, priorNoticeLastDay: 1, priorNoticeLastTime: '17:00:00' },
+    },
+  ]);
+
+  // Export the feed and confirm the flex artifacts are present.
+  const flexBlob = await exportGtfsZip();
+  const flexZip = await JSZip.loadAsync(Buffer.from(await flexBlob.arrayBuffer()));
+  const locationsTxt = await flexZip.file('locations.geojson')?.async('string') ?? '';
+  const locGroupsTxt = await flexZip.file('location_groups.txt')?.async('string') ?? '';
+  const locGroupStopsTxt = await flexZip.file('location_group_stops.txt')?.async('string') ?? '';
+  const stopTimesTxt = await flexZip.file('stop_times.txt')?.async('string') ?? '';
+
+  const locFeatures = (JSON.parse(locationsTxt) as GeoJSON.FeatureCollection).features ?? [];
+  // Polygon features: zpoly (1) + zmixed (1) = 2. Group-only zone has none.
+  assert('export: locations.geojson has poly + mixed features', locFeatures.length === 2, `got ${locFeatures.length}`);
+  // Two location_groups (zgroup + zmixed), not the polygon-only zone.
+  assert('export: 2 location_groups (group + mixed)',
+    (locGroupsTxt.match(/^[^\n]/gm)?.length ?? 0) - 1 === 2, locGroupsTxt);
+  // location_group_stops: zgroup (FS1,FS2) + zmixed (FS2,FS3) = 4 rows.
+  assert('export: 4 location_group_stops rows',
+    (locGroupStopsTxt.trim().split('\n').length - 1) === 4, locGroupStopsTxt);
+  // The mixed zone's trip carries BOTH a location_id row and a
+  // location_group_id row (two flex stop_times on the same trip).
+  const mixedStopTimeRows = stopTimesTxt.split('\n').filter(l => l.startsWith('zmixed-trip,'));
+  assert('export: mixed zone has 2 flex stop_times rows', mixedStopTimeRows.length === 2, `got ${mixedStopTimeRows.length}`);
+  assert('export: mixed has a location_id row', mixedStopTimeRows.some(r => r.includes('zmixed-0')));
+  assert('export: mixed has a location_group_id row', mixedStopTimeRows.some(r => r.includes('zmixed-group')));
+
+  // Round-trip: re-import and confirm all three zones reconstruct with the
+  // correct shapes — and crucially the mixed zone comes back as ONE zone with
+  // both polygon geometry AND its stop group (not two split zones).
+  const flexRe = await importGtfsZip(Buffer.from(await flexBlob.arrayBuffer()) as unknown as File);
+  loadImportIntoStore(flexRe);
+
+  const zones = s().flexZones;
+  assert('round-trip: 3 flex zones', zones.length === 3, `got ${zones.length}: ${zones.map(z => z.id).join(',')}`);
+
+  const rtPoly = zones.find(z => z.id === 'zpoly');
+  const rtGroup = zones.find(z => z.id === 'zgroup');
+  const rtMixed = zones.find(z => z.id === 'zmixed');
+
+  assert('round-trip: polygon-only kept polygon, no group',
+    !!rtPoly && rtPoly.geojson.features.length === 1 && !Array.isArray(rtPoly.stopIds),
+    `poly=${rtPoly?.geojson.features.length} group=${JSON.stringify(rtPoly?.stopIds)}`);
+  assert('round-trip: group-only kept stops, no polygon',
+    !!rtGroup && (rtGroup.geojson.features.length === 0) && (rtGroup.stopIds?.length === 2),
+    `poly=${rtGroup?.geojson.features.length} stops=${JSON.stringify(rtGroup?.stopIds)}`);
+  assert('round-trip: MIXED zone has BOTH polygon and stop group',
+    !!rtMixed && rtMixed.geojson.features.length === 1 && (rtMixed.stopIds?.length === 2),
+    `poly=${rtMixed?.geojson.features.length} stops=${JSON.stringify(rtMixed?.stopIds)}`);
+  assert('round-trip: mixed zone stop group is FS2,FS3',
+    !!rtMixed && [...(rtMixed.stopIds ?? [])].sort().join(',') === 'FS2,FS3',
+    JSON.stringify(rtMixed?.stopIds));
+  assert('round-trip: mixed zone window preserved',
+    rtMixed?.pickupWindowStart === '07:30:00' && rtMixed?.pickupWindowEnd === '18:30:00');
+  assert('round-trip: mixed zone booking rule preserved',
+    rtMixed?.bookingRule?.bookingType === 2 && rtMixed?.bookingRule?.priorNoticeLastDay === 1);
+  assert('round-trip: polygon zone booking rule preserved',
+    rtPoly?.bookingRule?.bookingType === 1 && rtPoly?.bookingRule?.priorNoticeDurationMin === 60);
+
+  // Validation: a clean mixed feed produces no flex errors; a group with a
+  // dangling stop ref produces an error.
+  const flexErrors = runValidation(s()).filter(m => m.severity === 'error' && m.entity_type === 'flex_zone');
+  assert('validation: clean mixed feed has no flex errors', flexErrors.length === 0,
+    flexErrors.map(e => e.message).join('; '));
+
+  s().updateFlexZone('zmixed', { stopIds: ['FS2', 'GHOST_STOP'] });
+  const flexBadRefs = runValidation(s()).filter(m => m.severity === 'error' && m.message.includes('GHOST_STOP'));
+  assert('validation: dangling group stop ref flagged', flexBadRefs.length === 1, `got ${flexBadRefs.length}`);
+
   // ---- SUMMARY ----
   console.log(`\n${'='.repeat(50)}`);
   console.log(`Results: ${passed} passed, ${failed} failed out of ${passed + failed} tests`);

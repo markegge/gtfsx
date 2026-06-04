@@ -699,12 +699,23 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
   const locationsText = await readFile('locations.geojson');
   const flexZones: FlexZone[] = [];
 
+  const numOrU = (v: unknown) => (v === '' || v == null ? undefined : Number(v));
+
+  // Track the set of trip_ids each emitted group zone references, so a
+  // polygon zone whose flex stop_times row shares the same trip can be merged
+  // into it (= a "mixed" polygon + group zone). Our exporter puts both rows on
+  // the same trip; third-party mixed feeds do the same per the spec (one trip,
+  // two stop_times rows: one location_id, one location_group_id).
+  const groupZoneByTrip = new Map<string, FlexZone>();
+  const groupZoneById = new Map<string, FlexZone>();
+
   // ── Group-based zones ─────────────────────────────────────────────
   for (const [groupId, stopIds] of groupStopsById) {
     const groupName = groupNameById.get(groupId) || groupId;
-    const flexRow = flexStopTimeRows.find(
+    const myGroupRows = flexStopTimeRows.filter(
       (r) => String(r.location_group_id) === groupId,
     );
+    const flexRow = myGroupRows[0];
     const bookingId =
       flexRow?.pickup_booking_rule_id ||
       flexRow?.drop_off_booking_rule_id;
@@ -722,8 +733,7 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
       }
     }
 
-    const numOrU = (v: unknown) => (v === '' || v == null ? undefined : Number(v));
-    flexZones.push({
+    const zone: FlexZone = {
       // Mirror our own export's naming so a round-trip is stable.
       id: groupId.replace(/-group$/, ''),
       name: groupName,
@@ -739,7 +749,13 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
       meanDurationOffset: numOrU(flexRow?.mean_duration_offset),
       safeDurationFactor: numOrU(flexRow?.safe_duration_factor),
       safeDurationOffset: numOrU(flexRow?.safe_duration_offset),
-    });
+    };
+    flexZones.push(zone);
+    groupZoneById.set(zone.id, zone);
+    for (const r of myGroupRows) {
+      const tid = String(r.trip_id || '');
+      if (tid) groupZoneByTrip.set(tid, zone);
+    }
   }
   if (locationsText) {
     try {
@@ -791,7 +807,6 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
           }
         }
 
-        const numOrU = (v: unknown) => (v === '' || v == null ? undefined : Number(v));
         const additionalWindows = extraRows.map((r) => {
           const t = trips.find((t) => t.trip_id === String(r.trip_id));
           return {
@@ -800,6 +815,44 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
             pickupWindowEnd: String(r.end_pickup_drop_off_window || ''),
           };
         }).filter((w) => w.pickupWindowStart && w.pickupWindowEnd && w.serviceId);
+
+        // ── Mixed-zone merge ────────────────────────────────────────────
+        // If these polygons belong to a flex trip that already produced a
+        // group zone (or share its zone id), this is a single mixed zone:
+        // fold the polygon geometry into the existing group zone rather than
+        // creating a duplicate. The group zone keeps its stopIds; we add the
+        // polygon features (and the polygon side's richer window data).
+        const myTripIds = new Set(myFlexRows.map((r) => String(r.trip_id || '')));
+        let mergeTarget: FlexZone | undefined = groupZoneById.get(zoneId);
+        if (!mergeTarget) {
+          for (const tid of myTripIds) {
+            const z = groupZoneByTrip.get(tid);
+            if (z) { mergeTarget = z; break; }
+          }
+        }
+        if (mergeTarget) {
+          mergeTarget.geojson = {
+            type: 'FeatureCollection',
+            features: [...(mergeTarget.geojson.features || []), ...features],
+          };
+          // Prefer concrete polygon-side window/route/service data when the
+          // group side left them blank (e.g. third-party feed where the group
+          // row omits the window but the polygon row carries it).
+          mergeTarget.pickupWindowStart ||= pickupStart ? String(pickupStart) : undefined;
+          mergeTarget.pickupWindowEnd ||= pickupEnd ? String(pickupEnd) : undefined;
+          mergeTarget.serviceId ||= serviceId;
+          mergeTarget.routeId ||= routeId;
+          mergeTarget.bookingRule ||= bookingRule;
+          mergeTarget.meanDurationFactor ??= numOrU(flexRow?.mean_duration_factor);
+          mergeTarget.meanDurationOffset ??= numOrU(flexRow?.mean_duration_offset);
+          mergeTarget.safeDurationFactor ??= numOrU(flexRow?.safe_duration_factor);
+          mergeTarget.safeDurationOffset ??= numOrU(flexRow?.safe_duration_offset);
+          if (additionalWindows.length > 0 && !mergeTarget.additionalWindows) {
+            mergeTarget.additionalWindows = additionalWindows;
+          }
+          continue;
+        }
+
         flexZones.push({
           id: zoneId,
           name: String(props.stop_name || props.name || zoneId),

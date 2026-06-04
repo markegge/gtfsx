@@ -3,6 +3,7 @@ import Papa from 'papaparse';
 import length from '@turf/length';
 import { lineString } from '@turf/helpers';
 import { useStore } from '../store';
+import { flexZoneHasGroup, flexZoneHasPolygons } from '../store/flexSlice';
 import type { Calendar, Route, ShapePoint, Trip } from '../types/gtfs';
 
 /** Mirror of shapeSlice.recalcShapeDistances used as a last-resort safety
@@ -143,7 +144,12 @@ function materializeFlex(state: ReturnType<typeof useStore.getState>): FlexMater
     }
 
     const bookingId = zone.bookingRule ? `${zone.id}-booking` : undefined;
-    const isGroupZone = Array.isArray(zone.stopIds) && zone.stopIds.length > 0;
+    // A zone may carry polygon geometry, a stop group, or BOTH (mixed). In
+    // GTFS-Flex a single stop_times row references one location_id OR one
+    // location_group_id — never both — so a mixed zone emits two stop_times
+    // rows per window (one polygon, one group) on the same trip.
+    const hasGroup = flexZoneHasGroup(zone) && (zone.stopIds?.length ?? 0) > 0;
+    const hasPolygons = flexZoneHasPolygons(zone);
 
     // Build the list of (service_id, window) pairs. The primary pair is
     // the zone's top-level serviceId + pickup window; any additionalWindows
@@ -172,7 +178,7 @@ function materializeFlex(state: ReturnType<typeof useStore.getState>): FlexMater
 
     // Emit location_groups / location_group_stops once per zone (not per window)
     let groupId: string | undefined;
-    if (isGroupZone) {
+    if (hasGroup) {
       groupId = `${zone.id}-group`;
       out.locationGroups.push({
         location_group_id: groupId,
@@ -186,7 +192,29 @@ function materializeFlex(state: ReturnType<typeof useStore.getState>): FlexMater
       }
     }
 
-    // Now one trip + one stop_times row per window.
+    // The shared booking/duration fields written on every flex stop_times row.
+    const flexRowExtras: Record<string, unknown> = {
+      ...(bookingId ? {
+        pickup_booking_rule_id: bookingId,
+        drop_off_booking_rule_id: bookingId,
+      } : {}),
+      ...(zone.meanDurationFactor != null ? { mean_duration_factor: zone.meanDurationFactor } : {}),
+      ...(zone.meanDurationOffset != null ? { mean_duration_offset: zone.meanDurationOffset } : {}),
+      ...(zone.safeDurationFactor != null ? { safe_duration_factor: zone.safeDurationFactor } : {}),
+      ...(zone.safeDurationOffset != null ? { safe_duration_offset: zone.safeDurationOffset } : {}),
+    };
+
+    // The location references this zone contributes, in stop_sequence order:
+    // polygon first (location_id), then stop group (location_group_id). A
+    // mixed zone produces both; single-shape zones produce one. If a zone is
+    // somehow empty (no polygon, no group), skip it — nothing to reference.
+    const locationRefs: Array<Record<string, unknown>> = [];
+    if (hasPolygons) locationRefs.push({ location_id: `${zone.id}-0` });
+    if (hasGroup) locationRefs.push({ location_group_id: groupId });
+    if (locationRefs.length === 0) continue;
+
+    // Now one trip per window; one stop_times row per location reference on
+    // that trip (mixed zones get two rows on the same trip).
     for (const w of windows) {
       const tripId = `${zone.id}${w.suffix}`;
       out.trips.push({
@@ -196,24 +224,17 @@ function materializeFlex(state: ReturnType<typeof useStore.getState>): FlexMater
         direction_id: 0,
         trip_headsign: zone.name,
       });
-      out.flexStopTimes.push({
-        trip_id: tripId,
-        stop_sequence: 1,
-        ...(isGroupZone
-          ? { location_group_id: groupId }
-          : { location_id: `${zone.id}-0` }),
-        start_pickup_drop_off_window: w.start,
-        end_pickup_drop_off_window: w.end,
-        pickup_type: 2,
-        drop_off_type: 2,
-        ...(bookingId ? {
-          pickup_booking_rule_id: bookingId,
-          drop_off_booking_rule_id: bookingId,
-        } : {}),
-        ...(zone.meanDurationFactor != null ? { mean_duration_factor: zone.meanDurationFactor } : {}),
-        ...(zone.meanDurationOffset != null ? { mean_duration_offset: zone.meanDurationOffset } : {}),
-        ...(zone.safeDurationFactor != null ? { safe_duration_factor: zone.safeDurationFactor } : {}),
-        ...(zone.safeDurationOffset != null ? { safe_duration_offset: zone.safeDurationOffset } : {}),
+      locationRefs.forEach((ref, i) => {
+        out.flexStopTimes.push({
+          trip_id: tripId,
+          stop_sequence: i + 1,
+          ...ref,
+          start_pickup_drop_off_window: w.start,
+          end_pickup_drop_off_window: w.end,
+          pickup_type: 2,
+          drop_off_type: 2,
+          ...flexRowExtras,
+        });
       });
     }
 
@@ -423,10 +444,10 @@ export async function exportGtfsZip(): Promise<Blob> {
     zip.file('location_group_stops.txt', toCSV(flex.locationGroupStops));
   }
 
-  // locations.geojson (GTFS-Flex, polygon-based zones only)
-  const polygonZones = state.flexZones.filter(
-    (z) => !(Array.isArray(z.stopIds) && z.stopIds.length > 0),
-  );
+  // locations.geojson (GTFS-Flex) — every zone that has polygon geometry,
+  // including mixed (polygon + group) zones. Group-only zones contribute no
+  // features here (their service area lives in location_group_stops.txt).
+  const polygonZones = state.flexZones.filter((z) => flexZoneHasPolygons(z));
   if (polygonZones.length > 0) {
     const allFeatures = polygonZones.flatMap((zone) => {
       const bookingId = zone.bookingRule ? `${zone.id}-booking` : undefined;

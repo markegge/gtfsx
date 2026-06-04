@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useStore } from '../../store';
+import { flexZoneHasGroup, flexZoneHasPolygons } from '../../store/flexSlice';
 import { exportGtfsZip, downloadBlob } from '../../services/gtfsExport';
 import { runValidation } from '../../services/validation';
 import { trackFeedExported } from '../../services/trackBeacon';
@@ -155,8 +156,11 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
         {(() => {
           const exportableFlex = state.flexZones.filter((z) => z.pickupWindowStart && z.pickupWindowEnd);
           const skippedFlex = state.flexZones.filter((z) => !(z.pickupWindowStart && z.pickupWindowEnd));
-          const polygonZones = state.flexZones.filter((z) => !(Array.isArray(z.stopIds) && z.stopIds.length > 0));
-          const groupZones = state.flexZones.filter((z) => Array.isArray(z.stopIds) && z.stopIds.length > 0);
+          // Match the exporter's filters: locations.geojson is written for any
+          // zone with polygon geometry (incl. mixed zones); location_groups.txt
+          // for any zone with a non-empty stop group (incl. mixed zones).
+          const polygonZones = state.flexZones.filter((z) => flexZoneHasPolygons(z));
+          const groupZones = state.flexZones.filter((z) => flexZoneHasGroup(z) && (z.stopIds?.length ?? 0) > 0);
           const hasFlexBooking = state.flexZones.some((z) => z.bookingRule);
           const hasDirections = state.routes.some(
             (r) => r._direction_0_name || r._direction_1_name,

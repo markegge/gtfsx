@@ -34,18 +34,23 @@ export interface FlexZone {
   bufferMiles: number;
   /**
    * GeoJSON FeatureCollection of Polygon features making up the service
-   * area. REQUIRED for polygon-based zones; empty FeatureCollection for
-   * group-based zones (where `stopIds` is the authoritative service area).
+   * area. Non-empty for polygon-based zones; may be empty for group-only
+   * zones (where `stopIds` is the authoritative service area). A "mixed"
+   * zone carries BOTH polygon features here AND a stop group in `stopIds`.
    */
   geojson: GeoJSON.FeatureCollection;
   /**
-   * Optional: for group-based zones this is the list of stop_id values that
-   * make up the flex service area (exported as `location_groups.txt` +
-   * `location_group_stops.txt`). When set, the zone's flex stop_times row
-   * references `location_group_id` instead of `location_id`.
+   * Optional list of stop_id values that make up a named stop-group service
+   * area (exported as `location_groups.txt` + `location_group_stops.txt`).
+   * When present (even if empty), the zone has a stop-group component, and
+   * the export emits a flex stop_times row referencing `location_group_id`.
    *
-   * Mutually exclusive with geojson features — a zone is either polygon or
-   * group, not both.
+   * A zone may have polygon geometry (`geojson.features`) AND a stop group
+   * (`stopIds`) at the same time — a "mixed" zone. In GTFS-Flex a single
+   * stop_times row references one location_id OR one location_group_id (never
+   * both), so a mixed zone materializes to two stop_times rows on the same
+   * flex trip: one for the polygon area(s) and one for the stop group. See
+   * `flexZoneShape` for the canonical polygon/group/mixed classification.
    */
   stopIds?: string[];
   /** Optional booking rule. Exported to booking_rules.txt with id `${zone.id}-booking`. */
@@ -93,6 +98,44 @@ export interface FlexZone {
   }>;
 }
 
+/** A flex zone's authoritative service-area shape. */
+export type FlexZoneShape = 'polygon' | 'group' | 'mixed' | 'empty';
+
+/** True when the zone has at least one polygon feature. */
+export function flexZoneHasPolygons(z: FlexZone): boolean {
+  return (z.geojson?.features?.length ?? 0) > 0;
+}
+
+/**
+ * True when the zone has a stop-group component. `stopIds` being an array at
+ * all (even empty) marks the zone as group-bearing — matching the existing
+ * "Create Stop Group" flow, which seeds `stopIds: []` before any stops are
+ * added so the Details panel shows the stop picker.
+ */
+export function flexZoneHasGroup(z: FlexZone): boolean {
+  return Array.isArray(z.stopIds);
+}
+
+/**
+ * Canonical classification used by the editor UI, export, and validation:
+ *  - 'mixed'   — has BOTH polygon geometry and a stop group
+ *  - 'group'   — stop group only (no polygons)
+ *  - 'polygon' — polygon geometry only
+ *  - 'empty'   — neither (a freshly-created zone awaiting geometry)
+ *
+ * NOTE: a mixed zone's group may currently be empty (stopIds === []) while the
+ * user is still adding stops; that still classifies as 'mixed' so the export
+ * keeps both shape slots and the UI shows both editors.
+ */
+export function flexZoneShape(z: FlexZone): FlexZoneShape {
+  const poly = flexZoneHasPolygons(z);
+  const group = flexZoneHasGroup(z);
+  if (poly && group) return 'mixed';
+  if (group) return 'group';
+  if (poly) return 'polygon';
+  return 'empty';
+}
+
 export interface FlexSlice {
   flexZones: FlexZone[];
   addFlexZone: (zone: FlexZone) => void;
@@ -100,6 +143,12 @@ export interface FlexSlice {
   updateFlexZoneBooking: (id: string, updates: Partial<BookingRule>) => void;
   removeFlexZone: (id: string) => void;
   setFlexZones: (zones: FlexZone[]) => void;
+  /** Attach a stop-group component to a zone (seeds an empty `stopIds`). */
+  addFlexZoneGroup: (id: string) => void;
+  /** Detach the stop-group component (clears `stopIds`). */
+  removeFlexZoneGroup: (id: string) => void;
+  /** Clear all polygon geometry from a zone (keeps any stop group). */
+  clearFlexZonePolygons: (id: string) => void;
 }
 
 export const createFlexSlice: StateCreator<FlexSlice, [['zustand/immer', never]], [], FlexSlice> = (set) => ({
@@ -119,4 +168,22 @@ export const createFlexSlice: StateCreator<FlexSlice, [['zustand/immer', never]]
     state.flexZones = state.flexZones.filter((z) => z.id !== id);
   }),
   setFlexZones: (zones) => set((state) => { state.flexZones = zones; }),
+  addFlexZoneGroup: (id) => set((state) => {
+    const idx = state.flexZones.findIndex((z) => z.id === id);
+    if (idx === -1) return;
+    if (!Array.isArray(state.flexZones[idx].stopIds)) {
+      state.flexZones[idx].stopIds = [];
+    }
+  }),
+  removeFlexZoneGroup: (id) => set((state) => {
+    const idx = state.flexZones.findIndex((z) => z.id === id);
+    if (idx === -1) return;
+    state.flexZones[idx].stopIds = undefined;
+  }),
+  clearFlexZonePolygons: (id) => set((state) => {
+    const idx = state.flexZones.findIndex((z) => z.id === id);
+    if (idx === -1) return;
+    state.flexZones[idx].geojson = { type: 'FeatureCollection', features: [] };
+    state.flexZones[idx].bufferMiles = 0;
+  }),
 });

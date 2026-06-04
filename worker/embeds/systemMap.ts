@@ -5,6 +5,9 @@ import { embedHeaders, renderLayout, embedFooter } from './layout';
 import { buildSystemMapData, renderMap } from './map';
 import { renderExpiryWarning } from './route';
 import { todayInTimezone } from './services';
+import { resolveLang } from './i18n';
+import { parseTheme, themeCacheKey, themeStyle } from './theme';
+import { renderImpressionBeacon } from './beacon';
 
 export async function renderSystemMapEmbed(
   request: Request,
@@ -14,21 +17,31 @@ export async function renderSystemMapEmbed(
   const feed = await loadEmbedFeed(env, slug);
   if (!feed) return new Response('Feed not found', { status: 404 });
 
+  const url = new URL(request.url);
+  const agency = feed.state.agencies[0];
+
+  // Theme + language fold into the ETag for cache safety (see route.ts).
+  const theme = parseTheme(url.searchParams);
+  const { lang, t } = resolveLang(
+    url.searchParams.get('lang'),
+    feed.state.feedInfo?.feed_lang,
+    agency?.agency_lang,
+  );
+  const variant = `${themeCacheKey(theme)}-${lang}`;
+
   const ifNoneMatch = request.headers.get('If-None-Match');
-  const etag = `"${feed.snapshotId}-system"`;
+  const etag = `"${feed.snapshotId}-system-${variant}"`;
   if (ifNoneMatch && ifNoneMatch.includes(etag)) {
     const headers = embedHeaders(feed.snapshotId, feed.publishedAt);
     headers.set('ETag', etag);
     return new Response(null, { status: 304, headers });
   }
 
-  const url = new URL(request.url);
-  const agency = feed.state.agencies[0];
   const data = buildSystemMapData(feed.state, slug);
   const map = renderMap(data, env.MAPBOX_TOKEN);
   const tz = agency?.agency_timezone;
   const today = todayInTimezone(tz);
-  const expiryWarning = renderExpiryWarning(feed.state.feedInfo?.feed_end_date, today);
+  const expiryWarning = renderExpiryWarning(feed.state.feedInfo?.feed_end_date, today, t);
 
   const routeLinks = feed.state.routes
     .slice()
@@ -61,14 +74,15 @@ export async function renderSystemMapEmbed(
         : ''}
       <div>
         <h1>${agencyName}</h1>
-        <div class="effective">System map · ${feed.state.routes.length} routes · ${feed.state.stops.length} stops</div>
+        <div class="effective">${t.systemMap} · ${t.routeCount(feed.state.routes.length)} · ${feed.state.stops.length} stops</div>
       </div>
     </header>
     ${expiryWarning}
     ${map}
-    <h3>Routes</h3>
+    <h3>${t.routes}</h3>
     <div class="route-list">${routeLinks}</div>
-    ${embedFooter(feed.ownerPlan)}
+    ${embedFooter(feed.ownerPlan, undefined, t.poweredBy)}
+    ${renderImpressionBeacon(slug, 'system-map')}
   `;
 
   const html5 = await renderLayout({
@@ -79,6 +93,8 @@ export async function renderSystemMapEmbed(
       url: url.toString(),
     },
     brandColor: feed.brandPrimaryColor,
+    themeStyle: themeStyle(theme),
+    lang,
     body: await body,
   });
 

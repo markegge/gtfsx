@@ -12,8 +12,9 @@ import {
   todayInTimezone,
   type ServiceProfile,
 } from './services';
-
-const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+import { resolveLang, type EmbedStrings } from './i18n';
+import { parseTheme, themeCacheKey, themeStyle } from './theme';
+import { renderImpressionBeacon } from './beacon';
 
 export async function renderRouteEmbed(
   request: Request,
@@ -36,15 +37,27 @@ export async function renderRouteEmbed(
   const viewParam = url.searchParams.get('view');
   const view: 'map' | 'schedule' | 'full' =
     viewParam === 'map' ? 'map' : viewParam === 'schedule' ? 'schedule' : 'full';
+
+  const agency0 = feed.state.agencies[0];
+  // Theme (accent/font/dark) + language are pure functions of the URL params,
+  // so fold them into the ETag to stay edge-cache-safe across variants.
+  const theme = parseTheme(url.searchParams);
+  const { lang, t } = resolveLang(
+    url.searchParams.get('lang'),
+    feed.state.feedInfo?.feed_lang,
+    agency0?.agency_lang,
+  );
+  const variant = `${themeCacheKey(theme)}-${lang}`;
+
   const ifNoneMatch = request.headers.get('If-None-Match');
-  const etagBase = `"${feed.snapshotId}-${routeId}-${requestedTab ?? 'auto'}-${view}"`;
+  const etagBase = `"${feed.snapshotId}-${routeId}-${requestedTab ?? 'auto'}-${view}-${variant}"`;
   if (ifNoneMatch && ifNoneMatch.includes(etagBase)) {
     const headers = embedHeaders(feed.snapshotId, feed.publishedAt);
     headers.set('ETag', etagBase);
     return new Response(null, { status: 304, headers });
   }
 
-  const agency = feed.state.agencies[0];
+  const agency = agency0;
   const tz = agency?.agency_timezone;
   const now = new Date();
   const today = todayInTimezone(tz, now);
@@ -70,13 +83,17 @@ export async function renderRouteEmbed(
 
   const schedule = selected
     ? renderScheduleTables(route, new Set(selected.serviceIds), feed.state)
-    : html`<p class="empty">No service patterns defined.</p>`;
+    : html`<p class="empty">${t.noServicePatterns}</p>`;
 
   // Today banner — always shown so the rider knows what schedule is in force.
-  const todayBanner = renderTodayBanner(dow, defaultProfile, activeToday.size === 0);
+  const todayBanner = renderTodayBanner(dow, defaultProfile, activeToday.size === 0, t);
 
   // Expiry warning — only when within 14d of feed_end_date or already past.
-  const expiryWarning = renderExpiryWarning(feed.state.feedInfo?.feed_end_date, today);
+  const expiryWarning = renderExpiryWarning(feed.state.feedInfo?.feed_end_date, today, t);
+
+  // Per-view impression beacon (kind depends on the section served).
+  const beaconKind = view === 'map' ? 'route' : view === 'schedule' ? 'schedule' : 'route';
+  const beacon = renderImpressionBeacon(slug, beaconKind, routeId);
 
   const routeColor = `#${route.route_color || 'cccccc'}`;
   const routeTextColor = `#${route.route_text_color || '000000'}`;
@@ -108,10 +125,12 @@ export async function renderRouteEmbed(
   `;
   const scheduleSection = html`
     ${profiles.length > 1
-      ? html`<nav class="service-tabs" aria-label="Service day">${tabs}</nav>`
+      ? html`<nav class="service-tabs" aria-label="${t.serviceDay}">${tabs}</nav>`
       : ''}
     ${schedule}
   `;
+
+  const footer = embedFooter(feed.ownerPlan, agency?.agency_name ?? feed.projectName, t.poweredBy);
 
   // Sectioned views (view=map / view=schedule) power the standalone
   // <gtfs-route-map> / <gtfs-schedule> web components. The full view stays
@@ -122,7 +141,8 @@ export async function renderRouteEmbed(
           ${header}
           ${expiryWarning}
           ${map}
-          ${embedFooter(feed.ownerPlan, agency?.agency_name ?? feed.projectName)}
+          ${footer}
+          ${beacon}
         `
       : view === 'schedule'
         ? html`
@@ -130,7 +150,8 @@ export async function renderRouteEmbed(
             ${expiryWarning}
             ${todayBanner}
             ${scheduleSection}
-            ${embedFooter(feed.ownerPlan, agency?.agency_name ?? feed.projectName)}
+            ${footer}
+            ${beacon}
           `
         : html`
             ${header}
@@ -138,7 +159,8 @@ export async function renderRouteEmbed(
             ${todayBanner}
             ${map}
             ${scheduleSection}
-            ${embedFooter(feed.ownerPlan, agency?.agency_name ?? feed.projectName)}
+            ${footer}
+            ${beacon}
           `;
 
   const html5 = await renderLayout({
@@ -149,6 +171,8 @@ export async function renderRouteEmbed(
       url: url.toString(),
     },
     brandColor: feed.brandPrimaryColor,
+    themeStyle: themeStyle(theme),
+    lang,
     body: await body,
   });
 
@@ -163,13 +187,14 @@ function renderTodayBanner(
   dayOfWeek: number,
   defaultProfile: ServiceProfile | null,
   noServiceToday: boolean,
+  t: EmbedStrings,
 ) {
-  const dayName = DAY_NAMES[dayOfWeek] ?? '';
+  const dayName = t.dayNames[dayOfWeek] ?? '';
   if (noServiceToday || !defaultProfile) {
     return html`
       <div class="today-banner muted" role="status">
         <span class="dot"></span>
-        <span><strong>Today is ${dayName}</strong> <span class="sep">·</span> No service today</span>
+        <span><strong>${t.todayIs(dayName)}</strong> <span class="sep">·</span> ${t.noServiceToday}</span>
       </div>
     `;
   }
@@ -177,31 +202,33 @@ function renderTodayBanner(
     <div class="today-banner" role="status">
       <span class="dot"></span>
       <span>
-        <strong>Today is ${dayName}</strong>
+        <strong>${t.todayIs(dayName)}</strong>
         <span class="sep">·</span>
-        ${defaultProfile.label} schedule in effect
+        ${t.scheduleInEffect(defaultProfile.label)}
       </span>
     </div>
   `;
 }
 
-export function renderExpiryWarning(feedEndDate: string | undefined, today: string) {
+export function renderExpiryWarning(feedEndDate: string | undefined, today: string, t?: EmbedStrings) {
   if (!feedEndDate) return '';
   const days = daysBetweenYmd(today, feedEndDate);
   if (days === null) return '';
   if (days < 0) {
+    const expired = Math.abs(days);
     return html`
       <div class="expiry-warning expired" role="alert">
         <span>⚠</span>
-        <span>Schedule expired ${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} ago.</span>
+        <span>${t ? t.scheduleExpired(expired) : `Schedule expired ${expired} day${expired === 1 ? '' : 's'} ago.`}</span>
       </div>
     `;
   }
   if (days <= 14) {
+    const formatted = formatYmd(feedEndDate);
     return html`
       <div class="expiry-warning warn" role="status">
         <span>⚠</span>
-        <span>Schedule expires in ${days} day${days === 1 ? '' : 's'} (${formatYmd(feedEndDate)}).</span>
+        <span>${t ? t.scheduleExpiresIn(days, formatted) : `Schedule expires in ${days} day${days === 1 ? '' : 's'} (${formatted}).`}</span>
       </div>
     `;
   }

@@ -8,10 +8,10 @@ import type { Plan } from '../projects/quotas';
  * empty for owners entitled to remove it (embed_remove_badge — Agency+), so
  * paid white-label feeds render no badge. Shared by all embed renderers.
  */
-export function embedFooter(ownerPlan: Plan, suffix?: string) {
+export function embedFooter(ownerPlan: Plan, suffix?: string, poweredBy = 'Powered by') {
   if (planHasFeature(ownerPlan, 'embed_remove_badge')) return '';
   return html`<footer class="embed-footer">
-      Powered by <a href="https://gtfsx.com" target="_blank" rel="noopener">GTFS·X</a>${suffix ? html` · ${suffix}` : ''}
+      ${poweredBy} <a href="https://gtfsx.com" target="_blank" rel="noopener">GTFS·X</a>${suffix ? html` · ${suffix}` : ''}
     </footer>`;
 }
 
@@ -21,9 +21,10 @@ const STYLES = `
   :root {
     --brand: #e8734a;        /* default coral; overridden inline by brand_primary_color */
     --brand-deep: #b04d2a;
+    --embed-font: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
   body {
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: var(--embed-font);
     color: #1a1a1a;
     background: #fff8f0;
     line-height: 1.5;
@@ -346,14 +347,20 @@ export function renderLayout(opts: {
   // 6-char hex without leading "#". When set, overrides the default
   // coral via inline CSS variables.
   brandColor?: string | null;
+  // Pre-rendered <style> block for per-embed theming (accent/font/dark mode),
+  // emitted AFTER brandColor so an explicit accent= param wins. See theme.ts.
+  themeStyle?: string;
+  // BCP-47 primary subtag for the <html lang> attribute (a11y + browser hints).
+  lang?: string;
 }) {
   const social = opts.social;
   const noindex = opts.noindex !== false;
+  const lang = /^[a-z]{2}$/.test(opts.lang ?? '') ? opts.lang : 'en';
   const brandStyle = opts.brandColor && /^[0-9a-fA-F]{6}$/.test(opts.brandColor)
     ? `<style>:root { --brand: #${opts.brandColor}; --brand-deep: #${darkenHex(opts.brandColor)}; }</style>`
     : '';
   return html`<!doctype html>
-<html lang="en">
+<html lang="${lang}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -380,6 +387,7 @@ export function renderLayout(opts: {
     : ''}
   <style>${raw(STYLES)}</style>
   ${raw(brandStyle)}
+  ${opts.themeStyle ? raw(opts.themeStyle) : ''}
   ${mapboxAssetTags()}
 </head>
 <body class="${opts.bodyClass ?? ''}">

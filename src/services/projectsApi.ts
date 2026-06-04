@@ -505,6 +505,29 @@ export function getPublicationHistory(
   );
 }
 
+export interface EmbedImpressions {
+  window_days: number;
+  since: string;
+  total: number;
+  by_kind: Record<string, number>;
+  by_day: Record<string, number>;
+  top_targets: { kind: string; target: string; views: number }[];
+}
+
+/**
+ * Aggregate, privacy-respecting embed view counts for a feed (EM-131/135).
+ * Read-only rollup of the public beacon counters; gated server-side by the
+ * owner's `embeds` entitlement + project access.
+ */
+export function getEmbedImpressions(
+  projectId: string,
+  days = 30,
+): Promise<EmbedImpressions> {
+  return requestJson<EmbedImpressions>(
+    `/api/projects/${encodeURIComponent(projectId)}/embed-impressions?days=${days}`,
+  );
+}
+
 export function schedulePublish(
   projectId: string,
   input: { snapshotId: string; scheduledFor: number; ignoreWarnings?: boolean; zip?: Blob },

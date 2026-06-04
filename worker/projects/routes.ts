@@ -1926,6 +1926,63 @@ projectsRouter.delete('/:id/rt-feeds/:rtId', async (c) => {
   return c.body(null, 204);
 });
 
+// ─── Embed impression counts (EM-131 / EM-135) ──────────────────────────────────
+//
+// Owner-facing rollup of the privacy-respecting embed view counters written by
+// the public beacon (worker/embeds/beacon.ts → embed_impression). No PII is
+// stored or returned — only aggregate counts per (day, kind, target). Gated by
+// project access (viewer is enough; it's read-only) plus the owner's `embeds`
+// entitlement, matching the rest of the embed surface.
+projectsRouter.get('/:id/embed-impressions', async (c) => {
+  const user = c.var.user!;
+  const id = c.req.param('id');
+  const { row: project } = await requireOwnedProject(c.env, user, id, 'viewer');
+  await requireOwnerFeature(c.env, project.owner_type as OwnerType, project.owner_id, 'embeds', user);
+
+  // Optional ?days=N window (default 30, max 365). Counts are bucketed by UTC day.
+  const daysParam = parseInt(c.req.query('days') ?? '30', 10);
+  const days = Number.isFinite(daysParam) ? Math.min(365, Math.max(1, daysParam)) : 30;
+  const sinceDay = new Date(Date.now() - (days - 1) * 86400000).toISOString().slice(0, 10);
+
+  const rows = await c.env.DB.prepare(
+    `SELECT day, kind, target, views
+       FROM embed_impression
+      WHERE project_id = ? AND day >= ?
+      ORDER BY day DESC, kind, target`,
+  )
+    .bind(project.id, sinceDay)
+    .all<{ day: string; kind: string; target: string; views: number }>();
+
+  const results = rows.results ?? [];
+  let total = 0;
+  const byKind: Record<string, number> = {};
+  const byDay: Record<string, number> = {};
+  // Per-target rollup keyed by `${kind}:${target}` so the UI can show the top
+  // routes/stops by views.
+  const byTarget: Record<string, { kind: string; target: string; views: number }> = {};
+  for (const r of results) {
+    total += r.views;
+    byKind[r.kind] = (byKind[r.kind] ?? 0) + r.views;
+    byDay[r.day] = (byDay[r.day] ?? 0) + r.views;
+    if (r.target) {
+      const key = `${r.kind}:${r.target}`;
+      const cur = byTarget[key] ?? { kind: r.kind, target: r.target, views: 0 };
+      cur.views += r.views;
+      byTarget[key] = cur;
+    }
+  }
+  const topTargets = Object.values(byTarget).sort((a, b) => b.views - a.views).slice(0, 25);
+
+  return c.json({
+    window_days: days,
+    since: sinceDay,
+    total,
+    by_kind: byKind,
+    by_day: byDay,
+    top_targets: topTargets,
+  });
+});
+
 // Keep snapshotZipKey imported — future Phase 2 work will begin writing ZIPs
 // into snapshot slots, at which point publish's JSON body path exercises it.
 void snapshotZipKey;

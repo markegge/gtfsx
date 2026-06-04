@@ -21,6 +21,10 @@ import type { Env } from '../env';
 //   height   iframe height in px (default per element)
 //   title    iframe title for a11y (sensible default per element)
 //   service  optional service-profile id (route/schedule) to preselect a tab
+//   accent   optional 6-char hex accent override (per-widget theming)
+//   theme    optional 'light' | 'dark' color scheme
+//   font     optional 'system' | 'serif' | 'mono' | 'rounded'
+//   lang     optional BCP-47 language for the embed chrome (e.g. 'es')
 //
 // The script reads its own <script src> to learn the origin, so the same
 // file works on prod, staging, and local dev without rebuilding.
@@ -39,10 +43,31 @@ const WIDGETS_SCRIPT = String.raw`(function () {
     return encodeURIComponent(String(v == null ? '' : v));
   }
 
+  function addParam(path, key, val) {
+    return path + (path.indexOf('?') >= 0 ? '&' : '?') + key + '=' + enc(val);
+  }
+
   // Append ?service=<id> when the host set it, so a widget can deep-link a tab.
   function withService(path, el) {
     var svc = el.getAttribute('service');
-    return svc ? path + (path.indexOf('?') >= 0 ? '&' : '?') + 'service=' + enc(svc) : path;
+    return svc ? addParam(path, 'service', svc) : path;
+  }
+
+  // Pass theming + language attributes straight through to the embed URL, so a
+  // host can theme/localize a single widget without changing the feed's saved
+  // brand. Mirrors the embed page params (accent / theme / font / lang). The
+  // embed folds these into its ETag, so each themed variant caches separately.
+  function withTheme(path, el) {
+    var out = path;
+    var accent = el.getAttribute('accent');
+    if (accent) out = addParam(out, 'accent', accent.replace(/^#/, ''));
+    var theme = el.getAttribute('theme');
+    if (theme) out = addParam(out, 'theme', theme);
+    var font = el.getAttribute('font');
+    if (font) out = addParam(out, 'font', font);
+    var lang = el.getAttribute('lang');
+    if (lang) out = addParam(out, 'lang', lang);
+    return out;
   }
 
   // Each element type maps its attributes to one embed URL path. Returns null
@@ -127,6 +152,9 @@ const WIDGETS_SCRIPT = String.raw`(function () {
         );
         return;
       }
+
+      // Layer per-widget theming + language onto the resolved embed path.
+      path = withTheme(path, this);
 
       var iframe = document.createElement('iframe');
       iframe.src = ORIGIN + path;

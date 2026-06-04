@@ -23,6 +23,8 @@ import { renderStopEmbed } from '../embeds/stop';
 import { renderLandingPage } from '../embeds/landing';
 import { renderWidgetsLoader } from '../embeds/widgets';
 import { isApiPath, handleApiRequest } from '../embeds/api';
+import { BEACON_RE, handleBeacon } from '../embeds/beacon';
+import { isRtPath, handleRtRequest } from '../embeds/rt';
 import { buildFeedMessage, encodeFeedMessage, feedMessageToJson } from '../alerts/render';
 import { loadActiveAlertRecords } from '../alerts/store';
 
@@ -198,8 +200,36 @@ export async function feedsHandler(
     return handleApiRequest(request, env);
   }
 
+  // GTFS-Realtime passthrough: feeds.*/<slug>/rt/<kind>.<pb|json>. Proxies the
+  // agency-registered upstream RT feed (live; short edge cache; CORS-open),
+  // gated behind `embeds`. See worker/embeds/rt.ts.
+  if (isRtPath(url.pathname)) {
+    if (method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          'Access-Control-Max-Age': '86400',
+        },
+      });
+    }
+    if (method !== 'GET' && method !== 'HEAD') {
+      return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD, OPTIONS' } });
+    }
+    return handleRtRequest(request, env);
+  }
+
   if (method !== 'GET' && method !== 'HEAD') {
     return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
+  }
+
+  // Impression beacon: feeds.*/<slug>/embed/beacon — a no-store 1x1 pixel the
+  // edge-cached embed HTML pings client-side to count views. Must match before
+  // the broader embed/landing patterns. See worker/embeds/beacon.ts.
+  const beacon = url.pathname.match(BEACON_RE);
+  if (beacon) {
+    return handleBeacon(request, env, beacon[1]);
   }
 
   const canonical = url.pathname.match(CANONICAL_RE);

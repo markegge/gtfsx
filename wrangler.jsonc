@@ -108,7 +108,7 @@
     // Cloud console (the one whose authorized redirect URIs include
     // https://www.gtfsx.com/auth/google/callback). Empty = the /auth/google/*
     // routes redirect to /login?error=google instead of running.
-    "GOOGLE_CLIENT_ID": ""
+    "GOOGLE_CLIENT_ID": "304043605957-q5okm9i8jvdm4f6boha8fktjvi49h8oq.apps.googleusercontent.com"
     // Secrets (set via `wrangler secret put`):
     //   RESEND_API_KEY
     //   MOBILITY_DATABASE_REFRESH_TOKEN  (already set)
@@ -191,7 +191,7 @@
         // Google OAuth client ID (public). Redirect URI for this env is
         // https://staging.gtfsx.com/auth/google/callback. Set to the OAuth
         // client ID; GOOGLE_CLIENT_SECRET is a wrangler secret on --env staging.
-        "GOOGLE_CLIENT_ID": ""
+        "GOOGLE_CLIENT_ID": "304043605957-q5okm9i8jvdm4f6boha8fktjvi49h8oq.apps.googleusercontent.com"
       },
       "routes": [
         { "pattern": "staging.gtfsx.com", "custom_domain": true },

@@ -635,6 +635,102 @@ projectsRouter.post('/:id/transfer', async (c) => {
   });
 });
 
+// ─── POST /api/projects/:id/duplicate — independent copy in the same workspace ──
+//
+// Creates a new feed_project owned by the SAME owner (user or org) as the
+// source, with name "<source> (copy)" (slug/name deduped like create) and a
+// copy of the source's working-state R2 blob. Only the editable working state
+// is copied — publications, snapshots, draft links, scheduled publishes, and RT
+// sources are intentionally NOT carried over. The copy is never born locked.
+projectsRouter.post('/:id/duplicate', async (c) => {
+  const user = c.var.user!;
+  const id = c.req.param('id');
+
+  // Creating a feed in an org needs editor+ (matches POST /). A personal owner
+  // always satisfies 'editor'. We gate on the SOURCE here; the destination is
+  // the same owner, so this is also the destination's create permission.
+  const { row: source } = await requireOwnedProject(c.env, user, id, 'editor');
+
+  const ownerType = source.owner_type as OwnerType;
+  const ownerId = source.owner_id;
+
+  // Quota check on the (shared) destination owner — same rule as POST /.
+  const ownerQuotas = await getOwnerQuotas(c.env, ownerType, ownerId);
+  const used = await countProjects(c.env, ownerType, ownerId);
+  const { warning } = enforceQuota(c.env, 'projects', used, ownerQuotas.projects);
+  setQuotaWarningHeader(c, warning);
+
+  // Name + slug dedupe. The name gets a " (copy)" suffix; the slug is derived
+  // from that name and uniquified in the destination workspace.
+  const newName = `${source.name} (copy)`;
+  const finalSlug = await uniqueSlug(c.env, ownerType, ownerId, slugify(newName));
+
+  const now = Date.now();
+  const newId = ulid();
+
+  // Copy the working state blob if the source has one. A source with no working
+  // state yet yields an empty copy (same as a fresh create).
+  let newKey: string | null = null;
+  let newSize: number | null = null;
+  let newVersion = 0;
+  if (source.working_state_r2_key) {
+    const sourceObj = await getFeedBlob(c.env, source.working_state_r2_key);
+    if (sourceObj) {
+      const buf = await sourceObj.arrayBuffer();
+      newKey = workingStateKey(newId);
+      await putFeedBlob(c.env, newKey, buf, {
+        contentType: 'application/json',
+        contentEncoding: 'gzip',
+      });
+      newSize = buf.byteLength;
+      newVersion = 1;
+    }
+  }
+
+  await c.env.DB.prepare(
+    `INSERT INTO feed_project
+       (id, slug, name, description, owner_type, owner_id,
+        working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
+        archived_at, deleted_at, created_at, updated_at, locked)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, 0)`,
+  )
+    .bind(
+      newId,
+      finalSlug,
+      newName,
+      source.description ?? null,
+      ownerType,
+      ownerId,
+      newKey,
+      newVersion,
+      newSize,
+      newKey ? now : null,
+      now,
+      now,
+    )
+    .run();
+
+  const row = await c.env.DB.prepare(
+    `SELECT id, slug, name, description, owner_type, owner_id,
+            working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked
+       FROM feed_project WHERE id = ?`,
+  )
+    .bind(newId)
+    .first<ProjectRow>();
+
+  await logAudit(c.env, {
+    actorUserId: user.id,
+    subjectType: 'project',
+    subjectId: newId,
+    action: 'project.duplicate',
+    metadata: { sourceId: source.id, slug: finalSlug, name: newName, ownerType, ownerId },
+    ip: clientIp(c.req.raw),
+  });
+
+  return c.json(shapeProject(row!), 201);
+});
+
 projectsRouter.get('/:id/working-state', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');

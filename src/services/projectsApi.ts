@@ -195,6 +195,19 @@ export function transferProject(
   });
 }
 
+/**
+ * Duplicate a server feed into the SAME workspace (user or org). Returns the
+ * new project, shaped like create. Only the editable working state is copied —
+ * publications, snapshots, draft links, scheduled publishes, and RT sources are
+ * not. Requires editor+ access on the source (server-enforced). Quota and
+ * permission failures surface as ApiError.
+ */
+export function duplicateProject(id: string): Promise<ProjectSummary> {
+  return requestJson<ProjectSummary>(`/api/projects/${encodeURIComponent(id)}/duplicate`, {
+    method: 'POST',
+  });
+}
+
 async function gzipString(input: string): Promise<Blob> {
   const stream = new Blob([input], { type: 'application/json' })
     .stream()

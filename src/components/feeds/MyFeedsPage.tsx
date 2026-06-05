@@ -11,6 +11,7 @@ import { UserMenu } from '../layout/UserMenu';
 import {
   createProject,
   deleteProject,
+  duplicateProject,
   listProjects,
   patchProject,
   saveWorkingState,
@@ -78,6 +79,10 @@ export function MyFeedsPage() {
     activeWorkspace.type === 'org'
       ? userOrgs.find((o) => o.id === activeWorkspace.orgId)?.name ?? 'Organization'
       : 'My personal feeds';
+  // Creating/duplicating a feed in an org needs editor+ (the server enforces
+  // this too). Personal feeds are always editable by their owner.
+  const canEdit =
+    activeWorkspace.type === 'org' ? roleAtLeast(activeWorkspace.role, 'editor') : true;
 
   useEffect(() => {
     if (!authChecked) hydrateAuth();
@@ -226,9 +231,24 @@ export function MyFeedsPage() {
               <FeedCard
                 key={p.id}
                 project={p}
+                canEdit={canEdit}
                 onOpen={() => navigate(`/feeds/${encodeURIComponent(p.slug)}`)}
                 onRename={() => setRenameTarget(p)}
                 onMove={() => setMoveTarget(p)}
+                onDuplicate={async () => {
+                  try {
+                    const copy = await duplicateProject(p.id);
+                    // Refresh the list so the new copy appears in the
+                    // server's canonical order (and picks up snapshot/quota
+                    // metadata). Optimistically insert first so it shows even
+                    // if the refetch is slow.
+                    upsertFeedProject(copy);
+                    await fetchList();
+                  } catch (err) {
+                    const msg = err instanceof ApiError ? err.message : 'Duplicate failed';
+                    alert(msg);
+                  }
+                }}
                 onLockToggle={async () => {
                   try {
                     const updated = await setProjectLocked(p.id, !p.locked);
@@ -387,17 +407,21 @@ export function MyFeedsPage() {
 
 function FeedCard({
   project,
+  canEdit,
   onOpen,
   onRename,
   onMove,
+  onDuplicate,
   onLockToggle,
   onArchiveToggle,
   onDelete,
 }: {
   project: ProjectSummary;
+  canEdit: boolean;
   onOpen: () => void;
   onRename: () => void;
   onMove: () => void;
+  onDuplicate: () => Promise<void>;
   onLockToggle: () => void;
   onArchiveToggle: () => void;
   onDelete: () => void;
@@ -405,6 +429,7 @@ function FeedCard({
   const archived = !!project.archivedAt;
   const locked = project.locked;
   const lastEdited = project.workingStateUpdatedAt ?? project.updatedAt;
+  const [duplicating, setDuplicating] = useState(false);
 
   return (
     <div
@@ -473,6 +498,23 @@ function FeedCard({
               Rename
             </PopoverItem>
             <PopoverItem onSelect={onMove}>Move to…</PopoverItem>
+            {canEdit && (
+              <PopoverItem
+                keepOpen
+                onSelect={() => {
+                  if (duplicating) return;
+                  // Keep the menu open while the request is in flight so the
+                  // busy label is visible; onDuplicate refreshes the list and
+                  // surfaces any quota/permission error on success/failure.
+                  setDuplicating(true);
+                  void onDuplicate().finally(() => setDuplicating(false));
+                }}
+                disabled={duplicating}
+                title={duplicating ? 'Duplicating…' : 'Make an independent copy of this feed'}
+              >
+                {duplicating ? 'Duplicating…' : 'Duplicate'}
+              </PopoverItem>
+            )}
             <PopoverItem onSelect={onLockToggle}>
               {locked ? 'Unlock' : 'Lock'}
             </PopoverItem>
@@ -499,12 +541,15 @@ function PopoverItem({
   children,
   danger = false,
   disabled = false,
+  keepOpen = false,
   title,
 }: {
   onSelect: () => void;
   children: React.ReactNode;
   danger?: boolean;
   disabled?: boolean;
+  /** When true, clicking does NOT close the popover (e.g. async busy actions). */
+  keepOpen?: boolean;
   title?: string;
 }) {
   const button = (
@@ -521,9 +566,9 @@ function PopoverItem({
       {children}
     </button>
   );
-  // A disabled item keeps the menu open (no Popover.Close wrapper) so the user
-  // sees the tooltip / can pick a different action.
-  return disabled ? button : <Popover.Close asChild>{button}</Popover.Close>;
+  // A disabled (or keepOpen) item keeps the menu open (no Popover.Close wrapper)
+  // so the user sees the tooltip / busy state / can pick a different action.
+  return disabled || keepOpen ? button : <Popover.Close asChild>{button}</Popover.Close>;
 }
 
 function CreateFeedDialog({

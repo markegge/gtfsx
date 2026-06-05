@@ -122,9 +122,6 @@ export function LoginPage() {
         </div>
       )}
 
-      <GoogleSignInButton next={searchParams.get('next')} />
-      <AuthDivider />
-
       <div className="flex gap-1 p-1 bg-cream rounded-lg mb-5">
         <button
           type="button"
@@ -241,6 +238,9 @@ export function LoginPage() {
           </p>
         </form>
       )}
+
+      <AuthDivider />
+      <GoogleSignInButton next={searchParams.get('next')} />
     </AuthLayout>
   );
 }

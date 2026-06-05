@@ -181,9 +181,6 @@ export function SignupPage() {
         </>
       }
     >
-      <GoogleSignInButton label="Sign up with Google" next={nextPath || null} />
-      <AuthDivider />
-
       <form onSubmit={handleSubmit}>
         <FormField
           label="Email"
@@ -240,6 +237,9 @@ export function SignupPage() {
           {loading ? 'Creating account…' : 'Create account'}
         </AuthButton>
       </form>
+
+      <AuthDivider />
+      <GoogleSignInButton label="Sign up with Google" next={nextPath || null} />
     </AuthLayout>
   );
 }

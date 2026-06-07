@@ -185,7 +185,11 @@ export function TimetableGrid() {
   // Ref map for Tab navigation between cells
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
-  // Get ordered stops for this route filtered by direction
+  // Get ordered stops for this route filtered by direction. Each column is a
+  // route_stop INSTANCE, not a stop_id — a pattern may list the same stop more
+  // than once (e.g. a loop returning to its start), so we carry the route_stop's
+  // _uid (React key) and stop_sequence (the per-instance alignment key for
+  // stop_times) alongside its resolved Stop.
   const orderedStops = useMemo(() => {
     if (!selectedRouteId) return [];
     // Columns are the selected shape's own stops (per-shape). Shapeless routes
@@ -195,15 +199,21 @@ export function TimetableGrid() {
       : routeStops.filter((rs) => rs.route_id === selectedRouteId && rs.direction_id === directionId);
     return [...list]
       .sort((a, b) => a.stop_sequence - b.stop_sequence)
-      .map((rs) => stops.find((s) => s.stop_id === rs.stop_id))
-      .filter(Boolean) as typeof stops;
+      .map((rs) => {
+        const stop = stops.find((s) => s.stop_id === rs.stop_id);
+        return stop
+          ? { uid: rs._uid ?? `${rs.stop_id}-${rs.stop_sequence}`, seq: rs.stop_sequence, stop }
+          : null;
+      })
+      .filter((x): x is { uid: string; seq: number; stop: typeof stops[number] } => x !== null);
   }, [selectedRouteId, effectiveShapeId, directionId, routeStops, stops]);
 
-  // Helper: find a specific stop_time by trip+stop using the byTrip index
-  const findStopTime = useCallback((tripId: string, stopId: string): StopTime | undefined => {
+  // Find a specific stop_time by trip + stop_sequence (the per-instance key)
+  // using the byTrip index — keying by stop_id would collapse a repeated stop.
+  const findStopTime = useCallback((tripId: string, seq: number): StopTime | undefined => {
     const tripStopTimes = stopTimesByTrip.get(tripId);
     if (!tripStopTimes) return undefined;
-    return tripStopTimes.find((st) => st.stop_id === stopId);
+    return tripStopTimes.find((st) => st.stop_sequence === seq);
   }, [stopTimesByTrip]);
 
   // Timepoint lookup: set of stop_ids that have timepoint=1 in any stop_time for current route
@@ -225,8 +235,8 @@ export function TimetableGrid() {
     }
     // If no timepoints are explicitly set, treat first and last as timepoints
     if (ids.size === 0 && orderedStops.length >= 2) {
-      ids.add(orderedStops[0].stop_id);
-      ids.add(orderedStops[orderedStops.length - 1].stop_id);
+      ids.add(orderedStops[0].stop.stop_id);
+      ids.add(orderedStops[orderedStops.length - 1].stop.stop_id);
     }
     return ids;
   }, [stopTimesByTrip, orderedStops, selectedRouteId, trips]);
@@ -360,8 +370,8 @@ export function TimetableGrid() {
 
   // Find the first displayed (non-blank) time for a trip using the timetable's stop order
   const getFirstDisplayedTime = useCallback((tripId: string) => {
-    for (const stop of orderedStops) {
-      const st = findStopTime(tripId, stop.stop_id);
+    for (const col of orderedStops) {
+      const st = findStopTime(tripId, col.seq);
       if (st?.arrival_time) return st.arrival_time;
     }
     return '';
@@ -442,7 +452,7 @@ export function TimetableGrid() {
     setEstimating(true);
     setEstError(null);
     try {
-      const stopCoords = orderedStops.map((s) => [s.stop_lon, s.stop_lat] as [number, number]);
+      const stopCoords = orderedStops.map((c) => [c.stop.stop_lon, c.stop.stop_lat] as [number, number]);
       const cum = await estimateStopTravelSeconds(shapeCoords, stopCoords);
       if (!cum) {
         setEstError("Couldn't match this route to the road network. Try again, or set times manually.");
@@ -454,7 +464,8 @@ export function TimetableGrid() {
         speedFactor: Math.max(0.1, estSpeed),
       });
       timings.forEach((t, i) => {
-        setStopTime(estimatePrompt, orderedStops[i].stop_id, i, {
+        const col = orderedStops[i];
+        setStopTime(estimatePrompt, col.stop.stop_id, col.seq, {
           arrival_time: secondsToGtfsTime(t.arrivalSec),
           departure_time: secondsToGtfsTime(t.departureSec),
         });
@@ -749,13 +760,13 @@ export function TimetableGrid() {
               <th className="sticky left-0 bg-cream px-3 py-2 text-left font-semibold text-warm-gray text-[11px] border-b border-sand z-10">
                 Trip
               </th>
-              {orderedStops.map((stop) => {
+              {orderedStops.map(({ uid, stop }) => {
                 const isTimepoint = timepointStopIds.has(stop.stop_id);
                 const ov = continuousOverrides.get(stop.stop_id);
                 const hasOverride = ov && (ov.pickup !== undefined || ov.dropOff !== undefined);
                 return (
                   <th
-                    key={stop.stop_id}
+                    key={uid}
                     className={`relative px-2 py-2 text-left font-semibold text-warm-gray text-[11px] border-b border-sand whitespace-nowrap ${
                       isTimepoint ? 'bg-coral/10' : ''
                     }`}
@@ -765,12 +776,12 @@ export function TimetableGrid() {
                       {showContinuous && (
                         <button
                           type="button"
-                          onClick={() => setFlexStopId((cur) => (cur === stop.stop_id ? null : stop.stop_id))}
+                          onClick={() => setFlexStopId((cur) => (cur === uid ? null : uid))}
                           title={hasOverride
                             ? 'Flag-stop override set for this stop \u2014 click to edit'
                             : 'Set per-stop flag-stop (continuous pickup/drop-off) override'}
                           aria-label="Flag-stop override"
-                          aria-expanded={flexStopId === stop.stop_id}
+                          aria-expanded={flexStopId === uid}
                           className={`shrink-0 leading-none text-[11px] rounded px-0.5 transition-opacity ${
                             hasOverride
                               ? 'text-coral opacity-100'
@@ -782,7 +793,7 @@ export function TimetableGrid() {
                         </button>
                       )}
                     </span>
-                    {showContinuous && flexStopId === stop.stop_id && (
+                    {showContinuous && flexStopId === uid && (
                       <ContinuousOverridePopover
                         pickup={ov?.pickup}
                         dropOff={ov?.dropOff}
@@ -809,8 +820,8 @@ export function TimetableGrid() {
 
                 {(() => {
                   // Compute time-order errors: a cell is invalid if its time is <= the previous non-blank time
-                  const times = orderedStops.map((stop) => {
-                    const st = findStopTime(trip.trip_id, stop.stop_id);
+                  const times = orderedStops.map((col) => {
+                    const st = findStopTime(trip.trip_id, col.seq);
                     return st?.arrival_time || '';
                   });
                   let prevSeconds = -1;
@@ -822,19 +833,22 @@ export function TimetableGrid() {
                     return false;
                   });
 
-                  return orderedStops.map((stop, stopIdx) => {
-                    const st = findStopTime(trip.trip_id, stop.stop_id);
+                  return orderedStops.map(({ uid, seq, stop }, stopIdx) => {
+                    const st = findStopTime(trip.trip_id, seq);
                     const isTimepoint = timepointStopIds.has(stop.stop_id);
                     // Shared commit callback factory. In single-time mode,
                     // both fields move together; in split mode the caller
                     // names which field to update and we preserve the other.
+                    // Writes are keyed by `seq` (the route_stop instance's
+                    // stop_sequence) so a repeated stop's two cells map to two
+                    // distinct stop_times.
                     const commit = (field: 'both' | 'arrival_time' | 'departure_time', normalized: string) => {
                       if (!normalized) {
                         // Blanking either side blanks both — partial timing
                         // (only arrival or only departure) is invalid for
                         // intermediate stops in practice and is a spec
                         // violation for first/last stops.
-                        setStopTime(trip.trip_id, stop.stop_id, stopIdx, { arrival_time: '', departure_time: '' });
+                        setStopTime(trip.trip_id, stop.stop_id, seq, { arrival_time: '', departure_time: '' });
                         return;
                       }
                       let updates: Partial<typeof st & { arrival_time: string; departure_time: string }>;
@@ -850,7 +864,7 @@ export function TimetableGrid() {
                         const arr = st?.arrival_time || normalized;
                         updates = { arrival_time: arr, departure_time: normalized };
                       }
-                      setStopTime(trip.trip_id, stop.stop_id, stopIdx, updates);
+                      setStopTime(trip.trip_id, stop.stop_id, seq, updates);
                       // Auto-rename trip if it's a new trip with placeholder name
                       if (trip.trip_id.includes('_new')) {
                         const rName = route?.route_short_name || route?.route_long_name || '';
@@ -863,7 +877,7 @@ export function TimetableGrid() {
 
                     return (
                       <td
-                        key={stop.stop_id}
+                        key={uid}
                         className={`px-1 py-0.5 border-b border-[#F5F0EB] ${isTimepoint ? 'bg-coral/10' : ''}`}
                       >
                         {splitArrDep ? (

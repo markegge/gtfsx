@@ -579,13 +579,17 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
     for (const dir of [0, 1] as const) {
       const dirTrips = routeTrips.filter((t) => t.direction_id === dir);
       if (dirTrips.length === 0) continue;
-      // Use the first trip's stop_times as the canonical order
+      // Use the first trip's stop_times as the canonical order. One route_stop
+      // per stop_time of that trip — including a stop the trip visits more than
+      // once (a loop returning to its start). The dedup key includes
+      // stop_sequence so a repeated stop_id at distinct sequences is preserved
+      // as two route_stops, not collapsed into one.
       const firstTrip = dirTrips[0];
       const tripStopTimes = stopTimes
         .filter((st) => st.trip_id === firstTrip.trip_id)
         .sort((a, b) => a.stop_sequence - b.stop_sequence);
       for (const st of tripStopTimes) {
-        const key = `${route.route_id}-${st.stop_id}-${dir}`;
+        const key = `${route.route_id}-${st.stop_id}-${dir}-${st.stop_sequence}`;
         if (!routeStopSet.has(key)) {
           routeStopSet.add(key);
           routeStops.push({

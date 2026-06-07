@@ -495,11 +495,18 @@ export function StopAnalysisPanel() {
           }
           onCancel={() => setRemoveTarget(null)}
           onConfirm={() => {
-            // No shape_id on the candidate, so scope by (route, direction):
-            // removeRouteStop drops every matching route_stop (across the
-            // direction's shapes) AND the stop_times for that stop on the
-            // direction's trips. It leaves the stop in stops.txt untouched.
-            removeRouteStop(removeTarget.routeId, removeTarget.removalStopId, removeTarget.directionId);
+            // Consolidation removes this stop_id wherever it appears on the
+            // candidate's (route, direction) — there's no single instance to
+            // target, so drop every matching route_stop by its _uid. Each
+            // removeRouteStop also clears that instance's stop_times; the stop
+            // stays in stops.txt.
+            const uids = routeStops
+              .filter((rs) => rs.route_id === removeTarget.routeId
+                && rs.direction_id === removeTarget.directionId
+                && rs.stop_id === removeTarget.removalStopId
+                && rs._uid)
+              .map((rs) => rs._uid!);
+            for (const uid of uids) removeRouteStop(removeTarget.routeId, uid);
             setRemoveTarget(null);
           }}
         />

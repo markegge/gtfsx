@@ -61,9 +61,14 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
   }),
   setTrips: (trips) => set((state) => { state.trips = trips; }),
   setStopTime: (trip_id, stop_id, stop_sequence, updates) => set((state) => {
-    // Match on trip_id + stop_id (stop_sequence may differ between visual index and stored value)
+    // Match on trip_id + stop_sequence — NOT stop_id. A pattern may list the
+    // same stop_id more than once (a loop returning to its start), so stop_id
+    // alone can't identify the row; stop_sequence is the per-instance key (it
+    // mirrors the route_stop's stop_sequence the timetable column was built
+    // from). Keying by stop_id here would collapse a repeated stop's two cells
+    // onto one stop_time.
     const idx = state.stopTimes.findIndex(
-      (st) => st.trip_id === trip_id && st.stop_id === stop_id
+      (st) => st.trip_id === trip_id && st.stop_sequence === stop_sequence
     );
     if (idx !== -1) {
       Object.assign(state.stopTimes[idx], updates);
@@ -142,15 +147,18 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
 
     if (orderedRouteStops.length < 2) return;
 
-    // Get stop times for this trip, indexed by stop_id
+    // Index this trip's stop_times by stop_sequence — NOT stop_id — so a
+    // pattern that repeats a stop_id (loop) interpolates each instance against
+    // its own row instead of collapsing them. route_stop.stop_sequence is the
+    // shared per-instance key the columns were built from.
     const tripStopTimes = state.stopTimes.filter((st) => st.trip_id === tripId);
-    const stByStopId = new Map(tripStopTimes.map((st) => [st.stop_id, st]));
+    const stBySeq = new Map(tripStopTimes.map((st) => [st.stop_sequence, st]));
 
     // Find the first and last stops that have times filled in
     let firstIdx = -1;
     let lastIdx = -1;
     for (let i = 0; i < orderedRouteStops.length; i++) {
-      const st = stByStopId.get(orderedRouteStops[i].stop_id);
+      const st = stBySeq.get(orderedRouteStops[i].stop_sequence);
       if (st && st.arrival_time) {
         if (firstIdx === -1) firstIdx = i;
         lastIdx = i;
@@ -158,8 +166,8 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
     }
     if (firstIdx === -1 || lastIdx === -1 || firstIdx === lastIdx) return;
 
-    const firstTime = gtfsTimeToSeconds(stByStopId.get(orderedRouteStops[firstIdx].stop_id)!.arrival_time);
-    const lastTime = gtfsTimeToSeconds(stByStopId.get(orderedRouteStops[lastIdx].stop_id)!.arrival_time);
+    const firstTime = gtfsTimeToSeconds(stBySeq.get(orderedRouteStops[firstIdx].stop_sequence)!.arrival_time);
+    const lastTime = gtfsTimeToSeconds(stBySeq.get(orderedRouteStops[lastIdx].stop_sequence)!.arrival_time);
     const totalTimeSec = lastTime - firstTime;
     if (totalTimeSec <= 0) return;
 
@@ -207,9 +215,10 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
       const ratio = (distances[i] - firstDist) / totalDist;
       const interpolatedSec = Math.round(firstTime + ratio * totalTimeSec);
       const timeStr = secondsToGtfsTime(interpolatedSec);
-      const stopId = orderedRouteStops[i].stop_id;
+      const seq = orderedRouteStops[i].stop_sequence;
+      // Key by stop_sequence so a repeated stop_id targets the right instance.
       const existing = state.stopTimes.findIndex(
-        (st) => st.trip_id === tripId && st.stop_id === stopId
+        (st) => st.trip_id === tripId && st.stop_sequence === seq
       );
       if (existing !== -1) {
         state.stopTimes[existing].arrival_time = timeStr;
@@ -217,8 +226,8 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
       } else {
         state.stopTimes.push({
           trip_id: tripId,
-          stop_id: stopId,
-          stop_sequence: orderedRouteStops[i].stop_sequence,
+          stop_id: orderedRouteStops[i].stop_id,
+          stop_sequence: seq,
           arrival_time: timeStr,
           departure_time: timeStr,
         });

@@ -205,7 +205,11 @@ export function RouteShapesTab() {
         .sort((a, b) => a.stop_sequence - b.stop_sequence);
       const n = ordered.length;
       ordered.forEach((rs, i) => {
-        addRouteStop({ ...rs, shape_id: newShapeId, stop_sequence: opts.reverse ? n - 1 - i : i });
+        // Drop _uid so each copied instance gets its own fresh handle
+        // (addRouteStop only stamps one when absent).
+        const { _uid: _drop, ...base } = rs;
+        void _drop;
+        addRouteStop({ ...base, shape_id: newShapeId, stop_sequence: opts.reverse ? n - 1 - i : i });
       });
     }
   };

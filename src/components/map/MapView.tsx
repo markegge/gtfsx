@@ -230,11 +230,9 @@ export function MapView() {
         if (currentMode === 'place_stop') {
           if (lastPlacedStopRef.current) {
             const sid = lastPlacedStopRef.current;
-            const sr = useStore.getState().selectedRouteId;
-            if (sr) {
-              useStore.getState().removeRouteStop(sr, sid, 0);
-              useStore.getState().removeRouteStop(sr, sid, 1);
-            }
+            // removeStop cascades: it drops the stop's route_stops and
+            // stop_times by stop_id, so undoing a just-placed stop needs no
+            // separate removeRouteStop call.
             useStore.getState().removeStop(sid);
             lastPlacedStopRef.current = null;
           }
@@ -1153,11 +1151,8 @@ export function MapView() {
     e.preventDefault?.();
     if (lastPlacedStopRef.current) {
       const sid = lastPlacedStopRef.current;
-      const sr = state.selectedRouteId;
-      if (sr) {
-        state.removeRouteStop(sr, sid, 0);
-        state.removeRouteStop(sr, sid, 1);
-      }
+      // removeStop cascades route_stops + stop_times by stop_id; no separate
+      // removeRouteStop needed to undo the just-placed (duplicate) stop.
       state.removeStop(sid);
       lastPlacedStopRef.current = null;
     }

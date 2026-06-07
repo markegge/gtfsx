@@ -700,7 +700,12 @@ async function main() {
     { trip_id: 'TY1', stop_id: 'RM3', stop_sequence: 1, arrival_time: '07:05:00', departure_time: '07:05:00' },
   ]);
 
-  s().removeRouteStop('RX', 'RM2', 0); // no shape_id → scope by (route, direction)
+  // Mirror the Stop Analysis panel: resolve the flagged stop's instance(s) on
+  // (route, direction) to their _uid and remove each (removeRouteStop is now
+  // per-instance, by _uid).
+  for (const rs of s().routeStops.filter(rs => rs.route_id === 'RX' && rs.direction_id === 0 && rs.stop_id === 'RM2')) {
+    s().removeRouteStop('RX', rs._uid!);
+  }
 
   assert('removal: route-stop dropped on RX',
     s().routeStops.filter(rs => rs.route_id === 'RX' && rs.stop_id === 'RM2').length === 0);
@@ -840,6 +845,107 @@ async function main() {
   s().updateFlexZone('zmixed', { stopIds: ['FS2', 'GHOST_STOP'] });
   const flexBadRefs = runValidation(s()).filter(m => m.severity === 'error' && m.message.includes('GHOST_STOP'));
   assert('validation: dangling group stop ref flagged', flexBadRefs.length === 1, `got ${flexBadRefs.length}`);
+
+  // ---- PHASE 21: same stop repeated in one pattern (loop: start == end) ----
+  // GTFS-legal: stop_times may list the same stop_id at different
+  // stop_sequence values. The editor keys route_stops by a synthetic per-
+  // instance _uid so duplicates are individually addressable.
+  console.log('\nPhase 21: same stop repeated in a pattern (round-trip loop)');
+  s().setStops([
+    { stop_id: 'L1', stop_name: 'Depot', stop_lat: 45.0, stop_lon: -111.0, location_type: 0, wheelchair_boarding: 0 },
+    { stop_id: 'L2', stop_name: 'Midtown', stop_lat: 45.1, stop_lon: -111.1, location_type: 0, wheelchair_boarding: 0 },
+  ]);
+  s().setRoutes([
+    { route_id: 'LOOP', agency_id: 'A', route_short_name: 'L', route_long_name: 'Loop', route_type: 3 },
+  ]);
+  s().setRouteStops([]);
+  s().setTrips([]);
+  s().setStopTimes([]);
+
+  // Add L1, then L2, then L1 AGAIN (the loop returns to the depot).
+  s().addRouteStop({ route_id: 'LOOP', stop_id: 'L1', direction_id: 0, stop_sequence: 0, _snapped: false, shape_id: 'SHL' });
+  s().addRouteStop({ route_id: 'LOOP', stop_id: 'L2', direction_id: 0, stop_sequence: 1, _snapped: false, shape_id: 'SHL' });
+  s().addRouteStop({ route_id: 'LOOP', stop_id: 'L1', direction_id: 0, stop_sequence: 2, _snapped: false, shape_id: 'SHL' });
+
+  const loopRs = () => s().routeStops.filter(rs => rs.route_id === 'LOOP').sort((a, b) => a.stop_sequence - b.stop_sequence);
+  assert('dup: same stop added twice → 3 route_stops', loopRs().length === 3, `got ${loopRs().length}`);
+  assert('dup: L1 appears twice', loopRs().filter(rs => rs.stop_id === 'L1').length === 2);
+  const loopUids = loopRs().map(rs => rs._uid);
+  assert('dup: every instance has a _uid', loopUids.every(Boolean));
+  assert('dup: the two L1 instances have DISTINCT _uids',
+    loopUids[0] !== loopUids[2] && new Set(loopUids).size === 3);
+
+  // A trip on the loop gets two stop_times for L1 at distinct stop_sequence.
+  s().addTrip({ trip_id: 'LT1', route_id: 'LOOP', service_id: 'SVC', direction_id: 0, shape_id: 'SHL' });
+  for (const rs of loopRs()) {
+    s().setStopTime('LT1', rs.stop_id, rs.stop_sequence, {
+      arrival_time: `08:0${rs.stop_sequence}:00`, departure_time: `08:0${rs.stop_sequence}:00`,
+    });
+  }
+  const lt1 = () => s().stopTimes.filter(st => st.trip_id === 'LT1').sort((a, b) => a.stop_sequence - b.stop_sequence);
+  assert('dup: trip has 3 stop_times (one per instance)', lt1().length === 3, `got ${lt1().length}`);
+  assert('dup: L1 has two stop_times at different stop_sequence',
+    lt1().filter(st => st.stop_id === 'L1').length === 2
+    && lt1().filter(st => st.stop_id === 'L1')[0].stop_sequence !== lt1().filter(st => st.stop_id === 'L1')[1].stop_sequence);
+  assert('dup: stop_id order is L1,L2,L1', lt1().map(st => st.stop_id).join(',') === 'L1,L2,L1');
+  // The two L1 cells hold their own (distinct) times — not collapsed onto one.
+  assert('dup: the two L1 stop_times keep distinct times',
+    lt1().filter(st => st.stop_id === 'L1')[0].arrival_time !== lt1().filter(st => st.stop_id === 'L1')[1].arrival_time);
+
+  // Reorder a list containing the duplicate: move the trailing L1 to the front
+  // (uids order [2,0,1]). Both L1 instances survive; times follow their column.
+  const beforeReorder = loopRs();
+  s().reorderRouteStops('LOOP', 0, [beforeReorder[2]._uid!, beforeReorder[0]._uid!, beforeReorder[1]._uid!], 'SHL');
+  const afterReorder = loopRs();
+  assert('dup: reorder keeps all 3 instances', afterReorder.length === 3);
+  assert('dup: reorder kept both L1 instances', afterReorder.filter(rs => rs.stop_id === 'L1').length === 2);
+  assert('dup: reorder produced contiguous 0..2 sequences',
+    afterReorder.map(rs => rs.stop_sequence).join(',') === '0,1,2');
+  // The instance that was last (had the 08:02 time) is now first; its time
+  // followed the reorder via stop_sequence remap.
+  const movedUid = beforeReorder[2]._uid;
+  const movedNow = afterReorder.find(rs => rs._uid === movedUid)!;
+  assert('dup: moved L1 instance now at sequence 0', movedNow.stop_sequence === 0);
+  assert('dup: moved instance\'s stop_time followed it',
+    s().stopTimes.find(st => st.trip_id === 'LT1' && st.stop_sequence === 0)?.arrival_time === '08:02:00');
+
+  // Remove ONE L1 instance (the one NOT moved, now at sequence 1) by _uid →
+  // the other L1 survives.
+  const toRemove = afterReorder.find(rs => rs.stop_id === 'L1' && rs._uid !== movedUid)!;
+  s().removeRouteStop('LOOP', toRemove._uid!);
+  assert('dup: removing one instance leaves 2 route_stops', loopRs().length === 2, `got ${loopRs().length}`);
+  assert('dup: the OTHER L1 instance still present', loopRs().some(rs => rs.stop_id === 'L1'));
+  assert('dup: surviving L1 stop_time kept', s().stopTimes.some(st => st.trip_id === 'LT1' && st.stop_id === 'L1'));
+  assert('dup: removed instance\'s stop_time gone (only one L1 left)',
+    s().stopTimes.filter(st => st.trip_id === 'LT1' && st.stop_id === 'L1').length === 1);
+
+  // Export → re-import a feed whose trip repeats a stop, and confirm the
+  // repeat round-trips (two stop_times rows for the same stop_id at different
+  // stop_sequence survive).
+  s().setStops([
+    { stop_id: 'L1', stop_name: 'Depot', stop_lat: 45.0, stop_lon: -111.0, location_type: 0, wheelchair_boarding: 0 },
+    { stop_id: 'L2', stop_name: 'Midtown', stop_lat: 45.1, stop_lon: -111.1, location_type: 0, wheelchair_boarding: 0 },
+  ]);
+  s().setStopTimes([
+    { trip_id: 'LT1', stop_id: 'L1', stop_sequence: 0, arrival_time: '08:00:00', departure_time: '08:00:00' },
+    { trip_id: 'LT1', stop_id: 'L2', stop_sequence: 1, arrival_time: '08:05:00', departure_time: '08:05:00' },
+    { trip_id: 'LT1', stop_id: 'L1', stop_sequence: 2, arrival_time: '08:10:00', departure_time: '08:10:00' },
+  ]);
+  const loopBlob = await exportGtfsZip();
+  const loopZip = await JSZip.loadAsync(Buffer.from(await loopBlob.arrayBuffer()));
+  const loopStTxt = await loopZip.file('stop_times.txt')?.async('string') ?? '';
+  const lt1ExportRows = loopStTxt.split('\n').filter(l => l.startsWith('LT1,'));
+  assert('dup-export: 3 stop_times rows for the loop trip', lt1ExportRows.length === 3, `got ${lt1ExportRows.length}`);
+  assert('dup-export: L1 written twice', lt1ExportRows.filter(r => r.includes(',L1,')).length === 2);
+  const loopRe = await importGtfsZip(Buffer.from(await loopBlob.arrayBuffer()) as unknown as File);
+  loadImportIntoStore(loopRe);
+  const reLt1 = s().stopTimes.filter(st => st.trip_id === 'LT1').sort((a, b) => a.stop_sequence - b.stop_sequence);
+  assert('dup-roundtrip: trip still has 3 stop_times', reLt1.length === 3, `got ${reLt1.length}`);
+  assert('dup-roundtrip: stop_id order preserved L1,L2,L1', reLt1.map(st => st.stop_id).join(',') === 'L1,L2,L1');
+  const reLoopRs = s().routeStops.filter(rs => rs.route_id === 'LOOP').sort((a, b) => a.stop_sequence - b.stop_sequence);
+  assert('dup-roundtrip: imported route_stops repeat L1', reLoopRs.filter(rs => rs.stop_id === 'L1').length === 2,
+    `got ${reLoopRs.map(rs => rs.stop_id).join(',')}`);
+  assert('dup-roundtrip: imported route_stops all carry _uid', reLoopRs.every(rs => !!rs._uid));
 
   // ---- SUMMARY ----
   console.log(`\n${'='.repeat(50)}`);

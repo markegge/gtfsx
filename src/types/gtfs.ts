@@ -155,6 +155,14 @@ export interface RouteStop {
   // keys a route's stop list by shape. Optional for back-compat: legacy/
   // imported route_stops without it fall back to direction_id filtering.
   shape_id?: string;
+  // Synthetic per-instance handle. A pattern may legally list the same
+  // stop_id more than once (e.g. a loop whose first and last stop are
+  // identical), so stop_id can't identify a route_stop. `_uid` does. Like
+  // `_snapped`, the underscore prefix keeps it out of exported GTFS
+  // (stripUIFields drops `_`-prefixed keys; route_stops aren't exported
+  // anyway). Assigned by addRouteStop / setRouteStops; stable for the
+  // lifetime of the instance.
+  _uid?: string;
 }
 
 export interface Transfer {

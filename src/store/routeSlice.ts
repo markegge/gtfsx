@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand';
 import type { Route, RouteStop } from '../types/gtfs';
+import { generateId } from '../services/idGenerator';
 import type { TripSlice } from './tripSlice';
 import type { ShapeSlice } from './shapeSlice';
 import type { FareSlice } from './fareSlice';
@@ -20,8 +21,12 @@ export interface RouteSlice {
   duplicateRoute: (route_id: string) => string | null;
   setRoutes: (routes: Route[]) => void;
   addRouteStop: (rs: RouteStop) => void;
-  removeRouteStop: (route_id: string, stop_id: string, direction_id: 0 | 1, shape_id?: string) => void;
-  reorderRouteStops: (route_id: string, direction_id: 0 | 1, stopIds: string[], shape_id?: string) => void;
+  /** Remove a single route_stop instance, identified by its `_uid`. A pattern
+   *  may list the same stop_id more than once, so removal is per-instance. */
+  removeRouteStop: (route_id: string, _uid: string) => void;
+  /** Reorder a route's stops by a list of route_stop `_uid`s (per-instance, so
+   *  a repeated stop's two entries reorder independently). */
+  reorderRouteStops: (route_id: string, direction_id: 0 | 1, uids: string[], shape_id?: string) => void;
   /** Flip a shape's direction: retag its trips + route stops to the new
    *  direction, optionally reversing the stop order. Powers the
    *  draw → add stops → duplicate → flip-to-inbound workflow. */
@@ -150,6 +155,9 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
         state.routeStops.push({
           ...rs,
           route_id: newRouteId,
+          // Fresh per-instance handle so the copy's stops are independent of
+          // the original's (otherwise remove/reorder would hit both).
+          _uid: generateId('rs'),
           shape_id: rs.shape_id && shapeIdMap.has(rs.shape_id) ? shapeIdMap.get(rs.shape_id) : rs.shape_id,
         });
       }
@@ -186,16 +194,23 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
     return newRouteId;
   },
   setRoutes: (routes) => set((state) => { state.routes = routes; }),
-  addRouteStop: (rs) => set((state) => { state.routeStops.push(rs); }),
-  removeRouteStop: (route_id, stop_id, direction_id, shape_id) => set((state) => {
-    // Scope removal to the shape when given (per-shape stops), else to the
-    // direction (legacy / shapeless feeds).
-    state.routeStops = state.routeStops.filter((rs) => {
-      if (rs.route_id !== route_id || rs.stop_id !== stop_id) return true;
-      return shape_id ? rs.shape_id !== shape_id : rs.direction_id !== direction_id;
-    });
-    // Also remove stop_times for this stop on the affected trips.
+  addRouteStop: (rs) => set((state) => {
+    // Stamp a per-instance handle so a stop listed twice in one pattern stays
+    // individually addressable (remove/reorder one without touching the other).
+    state.routeStops.push(rs._uid ? rs : { ...rs, _uid: generateId('rs') });
+  }),
+  removeRouteStop: (route_id, _uid) => set((state) => {
+    // Remove exactly one instance (by _uid). Capture it first so we know which
+    // stop / shape / direction / sequence to clean up in stop_times.
+    const target = state.routeStops.find((rs) => rs.route_id === route_id && rs._uid === _uid);
+    state.routeStops = state.routeStops.filter((rs) => !(rs.route_id === route_id && rs._uid === _uid));
+    if (!target) return;
+    // Drop the matching stop_time on each affected trip — the row at this
+    // instance's stop_sequence (per-instance, so a duplicate stop's other
+    // instance survives). Falls back to stop_id match for trips whose
+    // stop_times predate this sequence (defensive; normal feeds align).
     const fullState = get() as unknown as RouteSlice & TripSlice;
+    const { shape_id, direction_id, stop_id, stop_sequence } = target;
     const affectedTripIds = new Set(
       fullState.trips
         .filter((t) => t.route_id === route_id
@@ -203,23 +218,55 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
         .map((t) => t.trip_id),
     );
     if (affectedTripIds.size > 0) {
-      (state as CrossSliceState).stopTimes = fullState.stopTimes.filter(
-        (st) => !(affectedTripIds.has(st.trip_id) && st.stop_id === stop_id)
+      // If the stop_id still appears elsewhere in this pattern, scope removal to
+      // the specific sequence so we don't nuke the surviving instance's times.
+      const stopRepeats = state.routeStops.some(
+        (rs) => rs.route_id === route_id
+          && (shape_id ? rs.shape_id === shape_id : rs.direction_id === direction_id)
+          && rs.stop_id === stop_id,
       );
+      (state as CrossSliceState).stopTimes = fullState.stopTimes.filter((st) => {
+        if (!affectedTripIds.has(st.trip_id) || st.stop_id !== stop_id) return true;
+        return stopRepeats ? st.stop_sequence !== stop_sequence : false;
+      });
     }
   }),
-  reorderRouteStops: (route_id, direction_id, stopIds, shape_id) => set((state) => {
+  reorderRouteStops: (route_id, direction_id, uids, shape_id) => set((state) => {
     const inGroup = (rs: RouteStop) => rs.route_id === route_id
       && (shape_id ? rs.shape_id === shape_id : rs.direction_id === direction_id);
     const others = state.routeStops.filter((rs) => !inGroup(rs));
-    const reordered = stopIds.map((sid, i) => {
-      const existing = state.routeStops.find((rs) => inGroup(rs) && rs.stop_id === sid);
-      return {
-        ...(existing || { route_id, stop_id: sid, direction_id, _snapped: true, shape_id }),
-        stop_sequence: i,
-      };
-    });
+    // old stop_sequence → new stop_sequence, so we can keep each trip's
+    // stop_times aligned to the column they belong to (the timetable aligns
+    // route_stops ↔ stop_times by stop_sequence, the per-instance key).
+    const seqRemap = new Map<number, number>();
+    const reordered = uids
+      .map((uid, i) => {
+        const existing = state.routeStops.find((rs) => inGroup(rs) && rs._uid === uid);
+        if (!existing) return null;
+        if (existing.stop_sequence !== i) seqRemap.set(existing.stop_sequence, i);
+        return { ...existing, stop_sequence: i };
+      })
+      .filter((rs): rs is RouteStop => rs !== null);
     state.routeStops = [...others, ...reordered];
+
+    // Renumber the affected trips' stop_times to the new sequence so existing
+    // times follow their stop through the reorder (and export in the new order).
+    if (seqRemap.size > 0) {
+      const fullState = get() as unknown as RouteSlice & TripSlice;
+      const affectedTripIds = new Set(
+        fullState.trips
+          .filter((t) => t.route_id === route_id
+            && (shape_id ? t.shape_id === shape_id : t.direction_id === direction_id))
+          .map((t) => t.trip_id),
+      );
+      if (affectedTripIds.size > 0) {
+        for (const st of (state as CrossSliceState).stopTimes) {
+          if (!affectedTripIds.has(st.trip_id)) continue;
+          const next = seqRemap.get(st.stop_sequence);
+          if (next !== undefined) st.stop_sequence = next;
+        }
+      }
+    }
   }),
   setShapeDirection: (shape_id, direction_id, opts) => set((state) => {
     // Retag trips on this shape to the new direction.
@@ -236,5 +283,10 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
     }
     for (const rs of shapeStops) rs.direction_id = direction_id;
   }),
-  setRouteStops: (routeStops) => set((state) => { state.routeStops = routeStops; }),
+  setRouteStops: (routeStops) => set((state) => {
+    // Stamp a stable _uid on any route_stop that lacks one (imported feeds,
+    // older snapshots). An imported feed may already repeat a stop within one
+    // pattern, so each instance needs its own handle.
+    state.routeStops = routeStops.map((rs) => (rs._uid ? rs : { ...rs, _uid: generateId('rs') }));
+  }),
 });

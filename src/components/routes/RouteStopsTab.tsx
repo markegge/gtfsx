@@ -24,6 +24,7 @@ import { directionName } from '../../utils/constants';
 import type { Stop } from '../../types/gtfs';
 
 function SortableStopItem({
+  uid,
   stop,
   index,
   isSelected,
@@ -32,6 +33,7 @@ function SortableStopItem({
   onEdit,
   onRemove,
 }: {
+  uid: string;
   stop: Stop;
   index: number;
   isSelected: boolean;
@@ -46,7 +48,7 @@ function SortableStopItem({
     setNodeRef,
     transform,
     isDragging,
-  } = useSortable({ id: stop.stop_id });
+  } = useSortable({ id: uid });
 
   // No `transition` on the item — dnd-kit's default 200ms transform tween
   // leaves rows visually behind their DOM hit-areas during the drop
@@ -166,7 +168,7 @@ export function RouteStopsTab() {
 
 
   const [addExistingStopId, setAddExistingStopId] = useState<string>('');
-  const [confirmRemoveStop, setConfirmRemoveStop] = useState<{ stopId: string } | null>(null);
+  const [confirmRemoveStop, setConfirmRemoveStop] = useState<{ stopId: string; uid: string } | null>(null);
   // 'unassigned' (default) | 'all' | 'route:<id>'
   const [assignmentFilter, setAssignmentFilter] = useState<string>('unassigned');
   const sensors = useSensors(
@@ -184,10 +186,16 @@ export function RouteStopsTab() {
     return [...list].sort((a, b) => a.stop_sequence - b.stop_sequence);
   }, [routeId, routeStops, directionId, effectiveShapeId]);
 
+  // Carry each route_stop's _uid alongside its Stop so a stop listed twice in
+  // one pattern renders as two independently-addressable rows (the stop_id
+  // lookup is shared — that's fine, both instances point at the same Stop).
   const directionStops = useMemo(() => {
     return orderedRouteStops
-      .map((rs) => stops.find((s) => s.stop_id === rs.stop_id))
-      .filter(Boolean) as Stop[];
+      .map((rs) => {
+        const stop = stops.find((s) => s.stop_id === rs.stop_id);
+        return stop && rs._uid ? { uid: rs._uid, stop } : null;
+      })
+      .filter((x): x is { uid: string; stop: Stop } => x !== null);
   }, [orderedRouteStops, stops]);
 
   // Click on a stop row: select it, fly the map to it. Clicking the
@@ -205,7 +213,9 @@ export function RouteStopsTab() {
   if (!routeId || !route) return null;
 
   const routeColor = `#${route.route_color}`;
-  const stopIds = directionStops.map((s) => s.stop_id);
+  // dnd-kit sortable ids are per-instance (_uid), not stop_id, so duplicates
+  // don't collide.
+  const stopUids = directionStops.map((d) => d.uid);
 
   const handleDragEnd = (event: DragEndEvent) => {
     // Safari (and some other browsers) fire a synthetic `click` on the
@@ -228,10 +238,10 @@ export function RouteStopsTab() {
 
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = orderedRouteStops.findIndex((rs) => rs.stop_id === active.id);
-    const newIndex = orderedRouteStops.findIndex((rs) => rs.stop_id === over.id);
+    const oldIndex = orderedRouteStops.findIndex((rs) => rs._uid === active.id);
+    const newIndex = orderedRouteStops.findIndex((rs) => rs._uid === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
-    const newOrder = orderedRouteStops.map((rs) => rs.stop_id);
+    const newOrder = orderedRouteStops.map((rs) => rs._uid!).filter(Boolean);
     const [moved] = newOrder.splice(oldIndex, 1);
     newOrder.splice(newIndex, 0, moved);
     reorderRouteStops(routeId, directionId, newOrder, effectiveShapeId ?? undefined);
@@ -257,15 +267,6 @@ export function RouteStopsTab() {
     setDirectionId(invertPrompt.newDir);
     setInvertPrompt(null);
   };
-
-  // Stops already assigned to this route+direction — always exclude from the
-  // "Add existing" pool so the dropdown doesn't offer to add a duplicate.
-  const routeStopIdsThisDir = new Set(
-    routeStops
-      .filter((rs) => rs.route_id === routeId
-        && (effectiveShapeId ? rs.shape_id === effectiveShapeId : rs.direction_id === directionId))
-      .map((rs) => rs.stop_id),
-  );
 
   // Build the assignment-filtered candidate set for the "Add existing" dropdown.
   // 'unassigned'      → stops not assigned to ANY route via route_stops.
@@ -295,8 +296,11 @@ export function RouteStopsTab() {
     }
     return () => true;
   })();
+  // A stop already on this pattern is intentionally NOT excluded — a pattern
+  // may legally list the same stop more than once (e.g. a loop returning to its
+  // start), so "Add existing" keeps offering it.
   const availableStops = stops
-    .filter((s) => !routeStopIdsThisDir.has(s.stop_id) && filterSet(s.stop_id))
+    .filter((s) => filterSet(s.stop_id))
     .sort((a, b) => (a.stop_name || a.stop_id).localeCompare(b.stop_name || b.stop_id));
 
   return (
@@ -456,11 +460,12 @@ export function RouteStopsTab() {
             // scroll amount. Re-measure on every move to keep collisions exact.
             measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
           >
-            <SortableContext items={stopIds} strategy={verticalListSortingStrategy}>
+            <SortableContext items={stopUids} strategy={verticalListSortingStrategy}>
               <div className="flex flex-col gap-0.5">
-                {directionStops.map((stop, i) => (
+                {directionStops.map(({ uid, stop }, i) => (
                   <SortableStopItem
-                    key={stop.stop_id}
+                    key={uid}
+                    uid={uid}
                     stop={stop}
                     index={i}
                     isSelected={selectedStopId === stop.stop_id}
@@ -474,17 +479,18 @@ export function RouteStopsTab() {
                       setEditingStopId(stop.stop_id);
                     }}
                     onRemove={() => {
+                      // "Other uses" = any route_stop for this stop_id that ISN'T
+                      // the instance being removed (including a second instance
+                      // in this very pattern — a loop's repeated stop).
                       const otherUses = routeStops.filter(
-                        (rs) => rs.stop_id === stop.stop_id
-                          && !(rs.route_id === routeId
-                            && (effectiveShapeId ? rs.shape_id === effectiveShapeId : rs.direction_id === directionId)),
+                        (rs) => rs.stop_id === stop.stop_id && rs._uid !== uid,
                       );
                       const hasStopTimes = stopTimes.some((st) => st.stop_id === stop.stop_id);
                       const isOrphaned = otherUses.length === 0 && !hasStopTimes;
                       if (isOrphaned) {
-                        setConfirmRemoveStop({ stopId: stop.stop_id });
+                        setConfirmRemoveStop({ stopId: stop.stop_id, uid });
                       } else {
-                        removeRouteStop(routeId, stop.stop_id, directionId, effectiveShapeId ?? undefined);
+                        removeRouteStop(routeId, uid);
                       }
                     }}
                   />
@@ -512,7 +518,7 @@ export function RouteStopsTab() {
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => {
-                    removeRouteStop(routeId, confirmRemoveStop.stopId, directionId, effectiveShapeId ?? undefined);
+                    removeRouteStop(routeId, confirmRemoveStop.uid);
                     setConfirmRemoveStop(null);
                   }}
                   className="w-full px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"

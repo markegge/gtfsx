@@ -13,6 +13,8 @@ export interface CalendarSlice {
   setCalendars: (calendars: Calendar[]) => void;
   addCalendarDate: (cd: CalendarDate) => void;
   removeCalendarDate: (service_id: string, date: string) => void;
+  /** Remove every calendar_dates exception for a single service_id. */
+  clearCalendarDates: (service_id: string) => void;
   setCalendarDates: (dates: CalendarDate[]) => void;
 }
 
@@ -54,6 +56,11 @@ export const createCalendarSlice: StateCreator<CalendarSlice, [['zustand/immer',
   removeCalendarDate: (service_id, date) => set((state) => {
     state.calendarDates = state.calendarDates.filter(
       (cd) => !(cd.service_id === service_id && cd.date === date)
+    );
+  }),
+  clearCalendarDates: (service_id) => set((state) => {
+    state.calendarDates = state.calendarDates.filter(
+      (cd) => cd.service_id !== service_id
     );
   }),
   setCalendarDates: (dates) => set((state) => { state.calendarDates = dates; }),

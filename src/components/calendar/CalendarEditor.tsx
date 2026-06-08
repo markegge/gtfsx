@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import { DayToggle } from '../ui/DayToggle';
@@ -31,7 +31,7 @@ function isWeekdayService(cal: Calendar): boolean {
 export function CalendarEditor() {
   const {
     calendars, addCalendar, updateCalendar,
-    calendarDates, addCalendarDate, removeCalendarDate,
+    calendarDates, addCalendarDate, removeCalendarDate, clearCalendarDates,
     editingCalendarServiceId, setEditingCalendarServiceId,
     trips, routes, selectRoute, setBottomPanelOpen, setBottomPanelTab,
     setTimetableServiceId,
@@ -39,6 +39,16 @@ export function CalendarEditor() {
     selectedHolidayNames, setSelectedHolidayNames,
   } = useStore();
   const selectedHolidaySet = useMemo(() => new Set(selectedHolidayNames), [selectedHolidayNames]);
+  // Inline two-step confirm for the destructive "Delete all exceptions" action,
+  // mirroring the timetable's Remove-All-Trips confirm prompt. Tracking the
+  // service the prompt belongs to lets us reset it during render when the user
+  // switches calendars, so a pending "Delete all?" never carries over.
+  const [confirmClearExceptions, setConfirmClearExceptions] = useState(false);
+  const [confirmForServiceId, setConfirmForServiceId] = useState<string | null>(null);
+  if (confirmClearExceptions && confirmForServiceId !== editingCalendarServiceId) {
+    setConfirmClearExceptions(false);
+    setConfirmForServiceId(null);
+  }
 
   // If the editingCalendarServiceId points at a calendar that no longer
   // exists (deleted from elsewhere), drop the stale reference so we fall
@@ -266,9 +276,45 @@ export function CalendarEditor() {
 
         {/* Existing exception list */}
         <div>
-          <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-2">
-            Service exceptions
-          </label>
+          <div className="flex items-center justify-between mb-2 min-h-[20px]">
+            <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide">
+              Service exceptions
+            </label>
+            {selectedDates.length > 0 && (
+              confirmClearExceptions ? (
+                <div className="flex items-center gap-1.5 text-[11px]">
+                  <span className="text-warm-gray">Delete all {selectedDates.length}?</span>
+                  <button
+                    onClick={() => {
+                      clearCalendarDates(selected.service_id);
+                      setConfirmClearExceptions(false);
+                    }}
+                    className="font-bold text-red-600 hover:text-red-700 transition-colors"
+                  >
+                    Yes
+                  </button>
+                  <span className="text-warm-gray/50">·</span>
+                  <button
+                    onClick={() => setConfirmClearExceptions(false)}
+                    className="font-semibold text-warm-gray hover:text-coral transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    setConfirmForServiceId(selected.service_id);
+                    setConfirmClearExceptions(true);
+                  }}
+                  title="Remove every exception for this service pattern"
+                  className="text-[11px] font-semibold text-warm-gray hover:text-red-500 transition-colors"
+                >
+                  Delete all
+                </button>
+              )
+            )}
+          </div>
           {selectedDates.length === 0 ? (
             <p className="text-xs text-warm-gray italic">No exceptions set.</p>
           ) : (

@@ -9,7 +9,7 @@
  *   - `source` takes precedence over `ref`
  */
 import { describe, expect, it } from 'vitest';
-import { resolvePartnerLabel } from '../components/import-export/DeepLinkImportPage';
+import { resolvePartnerLabel } from '../components/import-export/partnerAttribution';
 
 describe('resolvePartnerLabel', () => {
   it('returns Mobility Database for source=mobilitydb (no ref)', () => {

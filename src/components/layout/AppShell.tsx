@@ -4,6 +4,7 @@ import { LeftRail } from './LeftRail';
 import { RightRail } from './RightRail';
 import { BottomPanel } from './BottomPanel';
 import { WelcomeBanner } from './WelcomeBanner';
+import { PartnerBanner } from './PartnerBanner';
 // Mapbox GL (~450 KB) is the single largest contributor to main-thread
 // script-eval on first load. Lazy-loading it lets the editor chrome paint and
 // become interactive before the map bundle is fetched and initialized.
@@ -44,6 +45,7 @@ export function AppShell() {
     <div className="h-full flex flex-col">
       <TopBar />
       <WelcomeBanner />
+      <PartnerBanner />
       <div className="flex-1 flex overflow-hidden">
         <LeftRail />
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">

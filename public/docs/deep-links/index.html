@@ -168,7 +168,7 @@
           <tr>
             <td><code>ref</code></td>
             <td>Optional</td>
-            <td>Attribution tag. Recorded in our analytics; known partner refs (<code>mobilitydb</code>, <code>transitland</code>, <code>gtfs_validator</code>) render a "Loaded from …" badge.</td>
+            <td>Attribution tag. Recorded in our analytics. Known partner refs (<code>mobilitydb</code>, <code>transitland</code>, <code>gtfs_validator</code>) also render a "Loaded from ..." badge on url-based imports. Not needed for catalog-source imports -- the badge appears automatically based on <code>source</code>.</td>
           </tr>
         </tbody>
       </table>
@@ -217,7 +217,9 @@
       </ul>
 
       <h2>Partner attribution</h2>
-      <p>Pass <code>ref=&lt;your-name&gt;</code> on the import URL to (a) show up in our analytics dashboard so we can track which integrations send traffic, and (b) render a small "Loaded from &lt;partner&gt;" badge in the editor — visible only for known partner refs. Currently recognised: <code>mobilitydb</code>, <code>transitland</code>, <code>gtfs_validator</code>. Get in touch to add yours.</p>
+      <p>A "Loaded from &lt;partner&gt;" banner appears in the editor after the import completes. It shows automatically for catalog-source imports: any link using <code>source=mobilitydb</code> renders "Loaded from Mobility Database" with no extra parameters needed.</p>
+      <p>For url-based imports (<code>?url=...</code>), pass <code>ref=&lt;your-name&gt;</code> to trigger the banner and to show up in our analytics dashboard. Currently recognised ref values: <code>mobilitydb</code>, <code>transitland</code>, <code>gtfs_validator</code>. Get in touch to add yours.</p>
+      <p>The banner is dismissible and session-scoped -- it disappears after the user closes it or ends the browser tab.</p>
 
       <h2>See also</h2>
       <p>Once an edited feed is ready to publish, see <a href="/learn/publish-gtfs-feed/">How to publish a GTFS feed</a> for the end-to-end workflow — Mobility Database registration, hosted-URL options, validation, and what tends to break.</p>

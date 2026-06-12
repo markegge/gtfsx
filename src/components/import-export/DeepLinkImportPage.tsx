@@ -4,14 +4,38 @@ import { importGtfsZip, loadImportIntoStore } from '../../services/gtfsImport';
 import { useStore } from '../../store';
 import { AppBrand } from '../layout/AppBrand';
 
-// Partner labels for the small "Loaded from …" badge. Only `ref` values
-// listed here render a badge — keeps arbitrary tags off the UI.
+// Known catalog source values that automatically render an attribution badge,
+// even when no `ref` param is present. Keyed by the `source` query param value.
+const SOURCE_LABELS: Record<string, string> = {
+  mobilitydb: 'Mobility Database',
+  transitland: 'Transitland',
+};
+
+// Known partner ref values that render an attribution badge when used on
+// url-based imports (or when source is unknown). Keyed by the `ref` param value.
 const PARTNER_LABELS: Record<string, string> = {
   mobilitydb: 'Mobility Database',
   mobilitydata: 'Mobility Database',
-  transitland: 'transit.land',
+  transitland: 'Transitland',
   gtfs_validator: 'Canonical GTFS Validator',
 };
+
+/**
+ * Resolve a human-readable partner label for the "Loaded from …" banner.
+ * `source` takes precedence over `ref` — catalog-source imports are always
+ * attributed to the catalog even when no `ref` is passed.
+ *
+ * Returns null when neither maps to a known partner (keeps arbitrary values off
+ * the UI).
+ */
+export function resolvePartnerLabel(
+  source: string | null | undefined,
+  ref: string | null | undefined,
+): string | null {
+  if (source && SOURCE_LABELS[source]) return SOURCE_LABELS[source];
+  if (ref && PARTNER_LABELS[ref]) return PARTNER_LABELS[ref];
+  return null;
+}
 
 interface ImportErrorPayload {
   code: string;
@@ -117,11 +141,13 @@ export function DeepLinkImportPage() {
         useStore.getState().setProjectName(filename.replace(/\.zip$/i, ''));
         useStore.getState().markSaved();
 
-        // Stash attribution for the editor banner — only honoured for known
-        // partner refs.
-        if (ref && PARTNER_LABELS[ref]) {
+        // Stash attribution for the editor banner. Source wins over ref — a
+        // mobilitydb catalog import always shows the Mobility Database badge
+        // even when the caller omits ?ref.
+        const partnerLabel = resolvePartnerLabel(source, ref);
+        if (partnerLabel) {
           try {
-            sessionStorage.setItem('gb_import_partner', PARTNER_LABELS[ref]);
+            sessionStorage.setItem('gb_import_partner', partnerLabel);
           } catch {
             // sessionStorage blocked — proceed without the badge.
           }
@@ -167,7 +193,7 @@ export function DeepLinkImportPage() {
             <LoadingPanel
               status={status}
               sourceDescription={sourceDescription}
-              partner={ref && PARTNER_LABELS[ref] ? PARTNER_LABELS[ref] : null}
+              partner={resolvePartnerLabel(source, ref)}
             />
           ) : (
             <ErrorPanel error={error!} onUploadFallback={() => navigate('/')} />

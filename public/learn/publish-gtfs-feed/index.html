@@ -93,17 +93,17 @@
     </header>
     <main>
       <h1>How to Publish a GTFS Feed (And What Could Break)</h1>
-      <p>Publishing a GTFS feed is not the same as creating one. You can build a perfectly valid feed and still have it not appear in Google Maps a month later. The gap is &quot;publishing&quot; — the operational steps between &quot;the zip exists on my laptop&quot; and &quot;Apple Maps shows my bus running on time.&quot;</p>
+      <p>Publishing a GTFS feed is not the same as creating one. You can build a perfectly valid feed and still have it not appear in Google Maps a month later. The gap is &quot;publishing&quot;: the operational steps between &quot;the zip exists on my laptop&quot; and &quot;Apple Maps shows my bus running on time.&quot;</p>
       <p>This guide walks the five things that have to happen, in order, and the four ways each one breaks in production. It&#39;s written for a small-agency staffer or consultant publishing for the first time, or troubleshooting a feed that stopped working.</p>
       <h2>What &quot;publishing a GTFS feed&quot; actually means</h2>
-      <p>There&#39;s no central GTFS registry that you submit to and get a checkmark. Publishing a GTFS feed means making the zip file available at a permanent public URL, then telling each downstream consumer where to find it. Each consumer fetches the file on its own schedule — daily, weekly, or whenever they feel like it.</p>
+      <p>There&#39;s no central GTFS registry that you submit to and get a checkmark. Publishing a GTFS feed means making the zip file available at a permanent public URL, then telling each downstream consumer where to find it. Each consumer fetches the file on its own schedule: daily, weekly, or whenever they feel like it.</p>
       <p>The downstream consumers that matter:</p>
       <ul>
-      <li><strong>Mobility Database</strong> — the canonical open registry, maintained by MobilityData. Trip planners, researchers, and AI tools poll it. If your feed isn&#39;t in the Mobility Database, you&#39;re invisible to most of the ecosystem.</li>
-      <li><strong>Google Maps Transit</strong> — separate registration through Google&#39;s Transit Partners program. Approval can take weeks; once approved, Google fetches your feed on a schedule they set.</li>
-      <li><strong>Apple Maps Transit</strong> — separate registration with Apple, similar process.</li>
-      <li><strong>Transit App</strong> — picks up most feeds from the Mobility Database automatically; some agencies are added through direct outreach.</li>
-      <li><strong>OpenTripPlanner / regional trip planners</strong> — most operators of OTP-based regional planners watch the Mobility Database, but the larger ones have direct lists.</li>
+      <li><strong>Mobility Database:</strong> the canonical open registry, maintained by MobilityData. Trip planners, researchers, and AI tools poll it. If your feed isn&#39;t in the Mobility Database, you&#39;re invisible to most of the ecosystem.</li>
+      <li><strong>Google Maps Transit:</strong> requires separate registration through Google&#39;s Transit Partners program. Approval can take weeks; once approved, Google fetches your feed on a schedule they set.</li>
+      <li><strong>Apple Maps Transit:</strong> requires separate registration with Apple, similar process.</li>
+      <li><strong>Transit App:</strong> picks up most feeds from the Mobility Database automatically; some agencies are added through direct outreach.</li>
+      <li><strong>OpenTripPlanner / regional trip planners:</strong> most operators of OTP-based regional planners watch the Mobility Database, but the larger ones have direct lists.</li>
       </ul>
       <p>So &quot;publishing&quot; is really &quot;host the file + register it in the Mobility Database + (optionally) directly register with Google and Apple.&quot;</p>
       <h2>The five things that have to happen</h2>
@@ -116,7 +116,7 @@
       <li>Timezone mismatch between <code>agency.txt</code> and <code>stop_times.txt</code> (arrival times in local time but agency declared a different timezone)</li>
       <li>Missing <code>feed_info.txt</code> with publisher name and version (Mobility Database requires this)</li>
       </ul>
-      <p>If you&#39;re using GTFS·X, validation is continuous — errors block export and surface inline, so you can&#39;t export a feed that won&#39;t pass the canonical validator. If you&#39;re building with Excel or a Python script, run the validator against your zip before doing anything else.</p>
+      <p>If you&#39;re using GTFS·X, validation is continuous: errors block export and surface inline, so you can&#39;t export a feed that won&#39;t pass the canonical validator. If you&#39;re building with Excel or a Python script, run the validator against your zip before doing anything else.</p>
       <h3>2. The zip lives at a permanent URL</h3>
       <p>Trip planners poll feeds at a URL on their own schedule. The URL has to:</p>
       <ul>
@@ -186,7 +186,7 @@
       <p><strong>Can I publish a feed without a website?</strong>
       Yes. The feed needs a public URL, but it doesn&#39;t need to live on your agency&#39;s marketing site. A bucket-and-CDN setup works, as does any of the managed publishing services.</p>
       <hr>
-      <p><em>Build and publish your GTFS feed at <a href="/">gtfsx.com</a> — no signup required to start.</em></p>
+      <p><em>Build and publish your GTFS feed at <a href="/">gtfsx.com</a>. No signup required to start.</em></p>
     </main>
     <footer>
       <a href="/">Editor</a>

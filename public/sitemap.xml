@@ -190,4 +190,9 @@
     <priority>0.4</priority>
     <changefreq>yearly</changefreq>
   </url>
+  <url>
+    <loc>https://www.gtfsx.com/feed-health/</loc>
+    <priority>0.9</priority>
+    <changefreq>monthly</changefreq>
+  </url>
 </urlset>

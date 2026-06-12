@@ -1,0 +1,134 @@
+# Feed Health Dashboard — monthly data refresh.
+#
+# Runs on the 5th of each month at 06:00 UTC (NTD data is typically stable by then).
+# Also triggerable manually via workflow_dispatch.
+#
+# Steps:
+#   1. Install Python dependencies (requests; rapidfuzz optional — difflib fallback used if absent)
+#   2. Phase A-C: pull NTD spine + FTA Weblinks + URL reachability (cached)
+#   3. Phase D:   cross-reference Mobility Database (requires MOBILITY_DATABASE_REFRESH_TOKEN secret)
+#   4. Publish:   write per-state agency JSONs + regenerate fh-data.js
+#   5. Commit + push ONLY the public output files → Cloudflare Workers Builds auto-deploys
+#
+# Working files (ntd_feed_health.csv, caches, stats) live in /tmp/fh-work/ and
+# are NOT committed — the internal per-agency CSV stays out of the public repo.
+#
+# GitHub Actions secret required:
+#   MOBILITY_DATABASE_REFRESH_TOKEN — MDB API refresh token (same value used by the
+#   GTFS·X Worker; already set via `gh secret set MOBILITY_DATABASE_REFRESH_TOKEN`)
+#
+# Reachability cache strategy:
+#   The cache is seeded from scripts/feed-health/reachability_cache.json (committed).
+#   On each run it's copied into the workdir, updated with any new/changed URLs,
+#   then written back and committed alongside the output files.
+#   Tradeoff: ~200 KB of committed JSON vs re-checking 1,100+ URLs every month
+#   (~10 extra minutes, plus timeout/flakiness risk). Seeded cache is strongly preferred.
+
+name: Feed Health Refresh
+
+on:
+  schedule:
+    - cron: '0 6 5 * *'   # 5th of every month at 06:00 UTC
+  workflow_dispatch:        # manual trigger
+
+# Prevent overlapping monthly runs
+concurrency:
+  group: feed-health-refresh
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.12'
+  WORKDIR: /tmp/fh-work
+
+jobs:
+  refresh:
+    name: Refresh Feed Health data
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to push the updated output files
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # fetch full history so the push step can fast-forward
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Python dependencies
+        run: |
+          pip install requests rapidfuzz
+
+      - name: Create workdir + seed reachability cache
+        run: |
+          mkdir -p ${{ env.WORKDIR }}
+          CACHE=scripts/feed-health/reachability_cache.json
+          if [ -f "$CACHE" ]; then
+            echo "Seeding reachability cache from $CACHE"
+            cp "$CACHE" ${{ env.WORKDIR }}/reachability_cache.json
+          else
+            echo "No seed cache found — Phase C will check all URLs from scratch"
+          fi
+
+      - name: Phase A-C — NTD spine + FTA Weblinks + URL reachability
+        run: |
+          python3 scripts/feed-health/pipeline.py --workdir ${{ env.WORKDIR }}
+
+      - name: Phase D — Mobility Database cross-reference
+        env:
+          MOBILITY_DATABASE_REFRESH_TOKEN: ${{ secrets.MOBILITY_DATABASE_REFRESH_TOKEN }}
+        run: |
+          python3 scripts/feed-health/phase_d_mdb.py --workdir ${{ env.WORKDIR }}
+
+      - name: Publish — write agency JSONs + regenerate fh-data.js
+        run: |
+          # --data-date is omitted intentionally: publish.py reads the "generated" field
+          # from stats_phaseD.json in the workdir, which records the Phase D run date.
+          # In this monthly workflow the pipeline and publish run on the same day, so
+          # the auto-detected date equals today; the explicit field survives any future
+          # pipeline/publish split (e.g. publish re-run after a bug fix on a later date).
+          python3 scripts/feed-health-publish.py ${{ env.WORKDIR }}/ntd_feed_health.csv
+
+      - name: Upload fuzzy review queue artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzzy-review-queue
+          path: ${{ env.WORKDIR }}/fuzzy_review_queue.csv
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Update seeded reachability cache in repo
+        run: |
+          CACHE=scripts/feed-health/reachability_cache.json
+          if [ -f "${{ env.WORKDIR }}/reachability_cache.json" ]; then
+            cp ${{ env.WORKDIR }}/reachability_cache.json "$CACHE"
+            echo "Reachability cache updated"
+          fi
+
+      - name: Commit and push output files
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Stage only the output files (not the internal workdir CSV)
+          git add public/feed-health/data/agencies/
+          git add public/feed-health/fh-data.js
+          git add scripts/feed-health/reachability_cache.json
+
+          # Only commit if something changed
+          if git diff --cached --quiet; then
+            echo "No changes to commit — feed health data is up to date"
+          else
+            MONTH=$(date +'%B %Y')
+            git commit -m "chore: refresh Feed Health data for ${MONTH}
+
+Auto-generated by .github/workflows/feed-health-refresh.yml.
+Sources: NTD FY2024 roster, FTA GTFS Weblinks, Mobility Database.
+"
+            git push origin HEAD:main
+            echo "Feed Health data committed and pushed — Cloudflare Workers Builds will deploy"
+          fi

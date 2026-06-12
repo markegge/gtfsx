@@ -4,11 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
-    <title>Flex zones &amp; booking rules — GTFS·X</title>
-    <meta name="description" content="Author GTFS-Flex zones in GTFS·X: polygon zones, stop groups, auto-generate from fixed routes; pickup/drop-off windows, booking rules, fare assignment." />
+    <title>Authoring GTFS-Flex with GTFS·X — Flex zones &amp; booking rules</title>
+    <meta name="description" content="Author GTFS-Flex in GTFS·X: draw polygon zones, group stops, or auto-generate from fixed routes; configure pickup/drop-off windows, booking rules, and fares; validate before export." />
     <link rel="canonical" href="https://www.gtfsx.com/docs/flex-zones-and-booking-rules/" />
-    <meta property="og:title" content="Flex zones & booking rules — GTFS·X" />
-    <meta property="og:description" content="GTFS-Flex authoring: zones, booking rules, pickup/drop-off windows." />
+    <meta property="og:title" content="Authoring GTFS-Flex with GTFS·X — Flex zones & booking rules" />
+    <meta property="og:description" content="The GTFS·X authoring guide for GTFS-Flex: zones, booking rules, pickup/drop-off windows, and export." />
     <meta property="og:type" content="article" />
     <meta property="og:url" content="https://www.gtfsx.com/docs/flex-zones-and-booking-rules/" />
     <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
@@ -22,8 +22,8 @@
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "Flex zones &amp; booking rules — GTFS·X",
-  "description": "Author GTFS-Flex zones in GTFS·X: polygon zones, stop groups, auto-generate from fixed routes; pickup/drop-off windows, booking rules, fare assignment.",
+  "headline": "Authoring GTFS-Flex with GTFS·X — Flex zones &amp; booking rules",
+  "description": "Author GTFS-Flex in GTFS·X: draw polygon zones, group stops, or auto-generate from fixed routes; configure pickup/drop-off windows, booking rules, and fares; validate before export.",
   "image": "https://www.gtfsx.com/og-default.png",
   "author": {
     "@type": "Organization",
@@ -39,7 +39,7 @@
     }
   },
   "datePublished": "2026-05-01",
-  "dateModified": "2026-05-22",
+  "dateModified": "2026-06-12",
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": "https://www.gtfsx.com/docs/flex-zones-and-booking-rules/"
@@ -65,8 +65,8 @@
     </header>
     <main>
       <div class="crumbs"><a href="/docs/">Docs</a> · Editor panels · Flex zones &amp; booking rules</div>
-      <h1>Flex zones &amp; booking rules</h1>
-      <p class="lede">GTFS-Flex describes demand-responsive service — microtransit, dial-a-ride, deviated fixed-route, on-demand zones. Authoring it correctly is hard, and most agencies running flex service today don't publish it. The Flex Zones panel makes the authoring tractable: draw polygon zones, configure booking rules in a form, and validate before export. If you've never published flex before, read the <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a> primer first.</p>
+      <h1>Authoring GTFS-Flex with GTFS·X</h1>
+      <p class="lede">GTFS-Flex is an optional extension to the baseline GTFS specification that makes demand-responsive service — dial-a-ride, microtransit, deviated fixed-route — discoverable in trip planners. If you're new to the extension, start with the <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a> primer. This page is the authoring guide: the Flex Zones panel lets you draw polygon zones, configure booking rules in a form, and validate before export.</p>
 
       <figure>
         <img src="/assets/docs/flex-zones-and-booking-rules-hero.png" alt="GTFS·X editor with the Flex Zones panel selected." loading="lazy" />
@@ -132,7 +132,7 @@
       <div class="see-also">
         <h2>See also</h2>
         <ul>
-          <li><a href="/learn/gtfs-flex/">What is GTFS-Flex?</a> — primer on the spec extension.</li>
+          <li><a href="/learn/gtfs-flex/">What is GTFS-Flex?</a> — full primer on the spec extension: why publish, who needs it, tooling, and further reading.</li>
           <li><a href="/docs/routes-and-shapes/">Routes &amp; shapes</a> — every flex zone has a paired route.</li>
           <li><a href="/docs/fares/">Fares</a> — zone-fare assignment.</li>
           <li><a href="/docs/validation/">Validation</a> — surfaces flex-specific errors.</li>

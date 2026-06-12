@@ -1,0 +1,59 @@
+{
+  "asOf": "2026-06-12",
+  "agencies": [
+    {
+      "name": "Example Metro Transit",
+      "ntdId": "90001",
+      "city": "Exampleville",
+      "reporterType": "full",
+      "status": "ok",
+      "feedUrl": "https://example.com/gtfs.zip",
+      "lastValidated": "2026-05-28"
+    },
+    {
+      "name": "Placeholder Area Rapid Transit",
+      "ntdId": "90002",
+      "city": "Sampleburg",
+      "reporterType": "reduced",
+      "status": "expired",
+      "feedUrl": "https://example.com/gtfs2.zip",
+      "lastValidated": "2025-11-15"
+    },
+    {
+      "name": "Demo Rural Connect",
+      "ntdId": "90003",
+      "city": null,
+      "reporterType": "rural",
+      "status": "none",
+      "feedUrl": null,
+      "lastValidated": null
+    },
+    {
+      "name": "Test County Paratransit",
+      "ntdId": "90004",
+      "city": "Test City",
+      "reporterType": "reduced",
+      "status": "invalid",
+      "feedUrl": "https://example.com/gtfs4.zip",
+      "lastValidated": "2026-02-20"
+    },
+    {
+      "name": "Sample Community Shuttle",
+      "ntdId": "90005",
+      "city": "Mocktown",
+      "reporterType": "rural",
+      "status": "none",
+      "feedUrl": null,
+      "lastValidated": null
+    },
+    {
+      "name": "Fictitious Regional Rail",
+      "ntdId": "90006",
+      "city": "Pretendopolis",
+      "reporterType": "full",
+      "status": "ok",
+      "feedUrl": "https://example.com/gtfs6.zip",
+      "lastValidated": "2026-06-01"
+    }
+  ]
+}

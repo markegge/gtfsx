@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+  <title>Feed Health Dashboard | State of US Transit GTFS Publishing | GTFS·X</title>
+  <meta name="description" content="45% of US federally funded transit agencies have no GTFS feed any trip planner can find. The national state of US transit data publishing, drawn from the FY2024 NTD roster, FTA GTFS Weblinks, and the Mobility Database." />
+  <link rel="canonical" href="https://gtfsx.com/feed-health/" />
+
+  <!-- OpenGraph -->
+  <meta property="og:title" content="Feed Health Dashboard | State of US Transit GTFS Publishing" />
+  <meta property="og:description" content="45% of US federally funded transit agencies have no GTFS feed any trip planner can find. Explore the national state of transit data publishing by state." />
+  <meta property="og:type" content="dataset" />
+  <meta property="og:url" content="https://gtfsx.com/feed-health/" />
+  <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:site_name" content="GTFS·X" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@gtfsxapp" />
+  <meta name="twitter:title" content="Feed Health Dashboard | State of US Transit GTFS Publishing" />
+  <meta name="twitter:description" content="45% of US federally funded transit agencies have no GTFS feed any trip planner can find." />
+  <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
+
+  <!-- JSON-LD: Dataset schema — appropriate for a citable data artifact -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Dataset",
+    "name": "GTFS·X Feed Health Dashboard | State of US Transit GTFS Publishing",
+    "description": "45% of US federally funded transit agencies (FY2024 NTD roster) have no GTFS feed any trip planner can find. This dataset joins the NTD agency roster against the FTA GTFS Weblinks crosswalk and the Mobility Database, with feed validation status from the canonical MDB validator.",
+    "url": "https://gtfsx.com/feed-health/",
+    "creator": {
+      "@type": "Organization",
+      "name": "GTFS·X",
+      "url": "https://gtfsx.com/"
+    },
+    "temporalCoverage": "2024/2026",
+    "datePublished": "2026-06-07",
+    "license": "https://creativecommons.org/licenses/by/4.0/",
+    "keywords": ["GTFS", "transit data", "feed health", "NTD", "public transit", "GTFS-Flex"],
+    "spatialCoverage": "United States",
+    "citation": "GTFS·X Feed Health Dashboard (2026). State of US Transit GTFS Publishing. Retrieved from gtfsx.com/feed-health."
+  }
+  </script>
+
+  <link rel="stylesheet" href="fh-styles.css" />
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Vendor (self-hosted, no runtime CDN for a citable artifact) -->
+  <script src="vendor/d3.v7.min.js"></script>
+  <script src="vendor/topojson-client.v3.min.js"></script>
+
+  <!-- Dataset -->
+  <script src="fh-data.js"></script>
+
+  <!-- Application -->
+  <script src="fh.js"></script>
+</body>
+</html>

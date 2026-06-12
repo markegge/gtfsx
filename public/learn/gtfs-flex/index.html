@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
     <title>What is GTFS-Flex? Demand-Responsive Transit in the GTFS Spec</title>
-    <meta name="description" content="GTFS-Flex extends GTFS to cover demand-responsive transit: microtransit, dial-a-ride, deviated fixed-route, and on-demand zones. What it adds and why." />
+    <meta name="description" content="GTFS-Flex is an optional extension to the GTFS spec (adopted March 2024) that makes demand-responsive transit (dial-a-ride, microtransit, deviated fixed-route) discoverable in trip planners. What it adds, why agencies publish it, and what tooling it requires." />
     <link rel="canonical" href="https://www.gtfsx.com/learn/gtfs-flex/" />
     <meta property="og:title" content="What is GTFS-Flex?" />
-    <meta property="og:description" content="GTFS-Flex covers demand-responsive transit — microtransit, dial-a-ride, deviated fixed-route, and on-demand zones. Here's what it adds and when you need it." />
+    <meta property="og:description" content="GTFS-Flex covers demand-responsive transit: microtransit, dial-a-ride, deviated fixed-route, and on-demand zones. Here's what it adds and when you need it." />
     <meta property="og:type" content="article" />
     <meta property="og:url" content="https://www.gtfsx.com/learn/gtfs-flex/" />
     <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
@@ -58,6 +58,10 @@
       ul { padding-left: 1.2rem; }
       li { margin: 0.3rem 0; }
       code { background:#fff; border:1px solid var(--rule); padding:1px 6px; border-radius:4px; font-size:0.9em; }
+      figure { margin: 1.8rem 0; }
+      figure img { max-width:100%; border:1px solid var(--rule); border-radius:10px; display:block; }
+      figure .img-placeholder { border:1px dashed var(--rule); border-radius:10px; background:#fff; min-height:280px; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:0.95rem; text-align:center; padding:24px; }
+      figcaption { color:var(--muted); font-size:0.9rem; margin-top:8px; }
       footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; }
       footer a { color: var(--muted); }
     </style>
@@ -67,7 +71,7 @@
       "@type": "Article",
       "headline": "What is GTFS-Flex?",
       "url": "https://www.gtfsx.com/learn/gtfs-flex/",
-      "description": "GTFS-Flex extends GTFS to cover demand-responsive transit — microtransit, dial-a-ride, deviated fixed-route, and on-demand zones."
+      "description": "GTFS-Flex is an optional extension to the GTFS spec (adopted March 2024) that makes demand-responsive transit (dial-a-ride, microtransit, deviated fixed-route) discoverable in trip planners."
     }
     </script>
   </head>
@@ -93,10 +97,15 @@
     </header>
     <main>
       <h1>What is GTFS-Flex?</h1>
-      <p class="lede">GTFS-Flex is an extension to the standard <a href="/learn/gtfs/">GTFS spec</a> that adds support for demand-responsive transit — microtransit, dial-a-ride, deviated fixed-route, and any other service where vehicles don't follow a strictly fixed route or strictly fixed schedule. Without GTFS-Flex, this kind of service is invisible to trip planners.</p>
+      <p class="lede">GTFS-Flex is an optional extension to the baseline <a href="/learn/gtfs/">GTFS specification</a> that adds support for demand-responsive transit (microtransit, dial-a-ride, deviated fixed-route, and any other service where vehicles don't follow a strictly fixed route or strictly fixed schedule). It was formally adopted into the GTFS spec in March 2024. It is not required: fixed-route-only agencies don't need it. But without GTFS-Flex, demand-responsive service is invisible to trip planners, even if you're already running it.</p>
+
+      <figure>
+        <img src="/assets/learn/gtfs-flex-transit-app-rolling-hills.png" alt="Rolling Hills Transit's demand-responsive service shown in the Transit app, with the flex route appearing as a bookable option alongside fixed-route results." />
+        <figcaption>Rolling Hills Transit's GTFS-Flex service surfaced in the Transit app as part of MnDOT's statewide rural flex program. The Transit app and OpenTripPlanner-based planners can surface demand-responsive service alongside fixed-route options once an agency publishes a GTFS-Flex feed. Source: Transit app blog, <a href="https://blog.transitapp.com/mndot-gtfs-flex-bringing-rural-riders-into-the-fold/" rel="noopener">&ldquo;MnDOT + GTFS-Flex: bringing rural riders into the fold&rdquo;</a>.</figcaption>
+      </figure>
 
       <h2>Why the base spec isn't enough</h2>
-      <p>The original GTFS spec assumes a vehicle leaves stop A at 8:00, arrives at stop B at 8:07, and so on — a deterministic sequence of fixed stops at fixed times. That model breaks down for any service where:</p>
+      <p>The original GTFS spec assumes a vehicle leaves stop A at 8:00, arrives at stop B at 8:07, and so on: a deterministic sequence of fixed stops at fixed times. That model breaks down for any service where:</p>
       <ul>
         <li>The vehicle goes wherever riders book it within a defined zone (microtransit, dial-a-ride).</li>
         <li>Pickups and drop-offs can happen anywhere along a corridor, not just at marked stops.</li>
@@ -110,24 +119,24 @@
       <p>Instead of (or in addition to) point stops, you define polygon zones using GeoJSON. Riders can request pickup and drop-off anywhere within the zone. This is how microtransit and dial-a-ride service areas are represented.</p>
 
       <h3 style="font-size:1.1rem; margin-top:1.6rem;">Pickup/drop-off windows</h3>
-      <p>Instead of a fixed arrival time, a flex stop or zone has a pickup window and a drop-off window — for example, "pickups available between 8:00 and 9:00 AM, drop-off within 30 minutes." Trip planners can then surface this as a time range rather than a single departure time.</p>
+      <p>Instead of a fixed arrival time, a flex stop or zone has a pickup window and a drop-off window (for example, "pickups available between 8:00 and 9:00 AM, drop-off within 30 minutes"). Trip planners can then surface this as a time range rather than a single departure time.</p>
 
       <h3 style="font-size:1.1rem; margin-top:1.6rem;">Continuous pickup and drop-off</h3>
-      <p>For corridor-style flex service, you can mark a route segment as supporting continuous pickup or drop-off — meaning the vehicle will stop anywhere along that segment, not just at scheduled stops.</p>
+      <p>For corridor-style flex service, you can mark a route segment as supporting continuous pickup or drop-off, meaning the vehicle will stop anywhere along that segment, not just at scheduled stops.</p>
 
       <h3 style="font-size:1.1rem; margin-top:1.6rem;">Booking rules (<code>booking_rules.txt</code>)</h3>
       <p>This is often the most important file in a flex feed. Booking rules tell riders (and trip planners) how to actually request a trip:</p>
       <ul>
-        <li><strong>Booking type</strong> — real-time, same-day, or prior-day.</li>
-        <li><strong>Advance notice</strong> — the minimum lead time required, e.g. "book at least 60 minutes in advance" or "book by 5 PM the day before."</li>
-        <li><strong>Maximum advance window</strong> — how far in the future bookings are accepted.</li>
-        <li><strong>Booking contact</strong> — phone number, URL, or app deep link.</li>
-        <li><strong>Message text</strong> — human-readable instructions shown to riders ("Call (555) 555-1234 at least one hour before your desired pickup").</li>
+        <li><strong>Booking type:</strong> real-time, same-day, or prior-day.</li>
+        <li><strong>Advance notice:</strong> the minimum lead time required, e.g. "book at least 60 minutes in advance" or "book by 5 PM the day before."</li>
+        <li><strong>Maximum advance window:</strong> how far in the future bookings are accepted.</li>
+        <li><strong>Booking contact:</strong> phone number, URL, or app deep link.</li>
+        <li><strong>Message text:</strong> human-readable instructions shown to riders ("Call (555) 555-1234 at least one hour before your desired pickup").</li>
       </ul>
 
       <h2>Who needs GTFS-Flex?</h2>
       <ul>
-        <li><strong>Microtransit operators</strong> — Via, Spare, RideCo, and similar on-demand zone services.</li>
+        <li><strong>Microtransit operators:</strong> Via, Spare, RideCo, and similar on-demand zone services.</li>
         <li><strong>Rural transit agencies</strong> running dial-a-ride or deviated fixed-route service in low-density areas.</li>
         <li><strong>Paratransit</strong> services that want to be visible in mainstream trip planners.</li>
         <li><strong>Senior and ADA service</strong> with advance-booking requirements.</li>
@@ -135,21 +144,30 @@
       </ul>
 
       <h2>Why publish a flex feed?</h2>
-      <p>Demand-responsive service is often the most underutilized part of an agency's network — riders simply don't know it exists. Publishing it as GTFS-Flex makes it discoverable in Google Maps, Transit, and other mainstream apps, alongside fixed-route options. For rural and microtransit agencies in particular, this is often the single highest-leverage thing you can do for ridership.</p>
+      <p>The core problem GTFS-Flex solves is a discovery gap. Demand-responsive services (rural dial-a-ride, microtransit zones, call-ahead connectors) are often the hardest services for riders to find out about. They're buried in PDFs, agency websites, or word of mouth. A rider planning a trip on Google Maps or the Transit app simply won't see them.</p>
+      <p>Publishing GTFS-Flex means riders find your service through the same channels they use to plan any trip. The Transit app and OpenTripPlanner-based planners both support GTFS-Flex natively. Once you publish a flex feed, your service surfaces in real consumer apps alongside fixed-route results. For rural agencies in particular, this is often the single highest-leverage thing you can do for ridership: the service already exists and is already funded; GTFS-Flex just makes it visible. As Arizona DOT's guidance on GTFS-Flex puts it, <q>riders can now see services publishing GTFS Flex in the Transit app and OpenTripPlanner … this allows riders to find and utilize transit services that they may not have known were available.</q> (<a href="https://azdot.gov/sites/default/files/2025-09/GTFS-Flex.pdf" rel="noopener">ADOT GTFS-Flex guide</a>, September 2025)</p>
+      <p>From an agency perspective, GTFS-Flex also means getting credit (in NTD reporting, grant applications, and Title VI analysis) for service you already operate. A flex feed turns a service that looks invisible in automated tools into a service with a documented coverage area and booking workflow.</p>
+
+      <h2>What tooling do you need?</h2>
+      <p>Because GTFS-Flex is an extension (GeoJSON service areas, <code>booking_rules.txt</code>, extended <code>stop_times.txt</code> columns), authoring it requires an editing tool that supports the extension. <strong>National RTAP's free GTFS Builder does not support GTFS-Flex.</strong> If your agency uses it for fixed-route and needs to add flex, you'll need a tool that can author Flex zones, stop groups, and booking rules. See our <a href="/compare/gtfs-builder-rtap/">GTFS·X vs. National RTAP GTFS Builder comparison</a> for a full breakdown of where each tool fits.</p>
 
       <h2>Building a flex feed in GTFS·X</h2>
-      <p>GTFS·X has first-class support for GTFS-Flex. You can draw polygon zones directly on the map, configure pickup and drop-off windows, mark route segments as continuous pickup, and define a full set of booking rules per zone or per trip. Mixed feeds (fixed-route plus flex) are fully supported. See the <a href="/docs/#flex">flex section of the docs</a> for the step-by-step workflow.</p>
+      <p>GTFS·X has first-class support for GTFS-Flex. You can draw polygon zones directly on the map, configure pickup and drop-off windows, mark route segments as continuous pickup, and define a full set of booking rules per zone or per trip. Mixed feeds (fixed-route plus flex) are fully supported. See <a href="/docs/flex-zones-and-booking-rules/">Authoring GTFS-Flex with GTFS·X</a> for the step-by-step workflow.</p>
 
-      <h2>Spec references</h2>
+      <h2>Spec references &amp; further reading</h2>
       <ul>
         <li>The official GTFS-Flex specification is maintained at <a href="https://gtfs.org/community/extensions/flex/" rel="noopener">gtfs.org/community/extensions/flex</a>.</li>
-        <li>The base GTFS spec is at <a href="https://gtfs.org/" rel="noopener">gtfs.org</a> — see <a href="/learn/gtfs/">our plain-English overview</a>.</li>
+        <li>The base GTFS spec is at <a href="https://gtfs.org/" rel="noopener">gtfs.org</a>; see <a href="/learn/gtfs/">our plain-English overview</a>.</li>
+        <li><a href="https://azdot.gov/sites/default/files/2025-09/GTFS-Flex.pdf" rel="noopener">Arizona DOT GTFS-Flex guide</a> (PDF): a concise state-DOT overview of GTFS-Flex, including required files and getting-started steps.</li>
       </ul>
 
       <h2>See also</h2>
       <ul>
-        <li><a href="/learn/publish-gtfs-feed/">How to publish a GTFS feed</a> — Mobility Database registration, hosted-URL options, and what tends to break.</li>
-        <li><a href="/compare/spare-flex-builder/">GTFS·X vs. Spare GTFS-Flex Builder</a> — when a microtransit-only builder is the right fit and when it isn't.</li>
+        <li><a href="https://blog.transitapp.com/mndot-gtfs-flex-bringing-rural-riders-into-the-fold/" rel="noopener">MnDOT + GTFS-Flex: bringing rural riders into the fold</a> (Transit app blog): a real-world case study of statewide GTFS-Flex rollout for rural Minnesota agencies, including how Rolling Hills Transit's service was made discoverable in the Transit app.</li>
+        <li><a href="/docs/flex-zones-and-booking-rules/">Authoring GTFS-Flex with GTFS·X</a>: zones, booking rules, and export mechanics in the editor.</li>
+        <li><a href="/learn/publish-gtfs-feed/">How to publish a GTFS feed</a>: Mobility Database registration, hosted-URL options, and what tends to break.</li>
+        <li><a href="/compare/gtfs-builder-rtap/">GTFS·X vs. National RTAP GTFS Builder</a>: Flex support, map editing, and which tool fits which agency.</li>
+        <li><a href="/compare/spare-flex-builder/">GTFS·X vs. Spare GTFS-Flex Builder</a>: when a microtransit-only builder is the right fit and when it isn't.</li>
       </ul>
     </main>
     <footer>

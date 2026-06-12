@@ -8,7 +8,7 @@
     <meta name="description" content="GTFS (General Transit Feed Specification) is the standard format for public transit schedules. Learn what it is, what files it has, who consumes it." />
     <link rel="canonical" href="https://www.gtfsx.com/learn/gtfs/" />
     <meta property="og:title" content="What is GTFS? A Plain-English Guide" />
-    <meta property="og:description" content="A clear introduction to the General Transit Feed Specification — what it is, what the files mean, and how to publish your own feed." />
+    <meta property="og:description" content="A clear introduction to the General Transit Feed Specification: what it is, what the files mean, and how to publish your own feed." />
     <meta property="og:type" content="article" />
     <meta property="og:url" content="https://www.gtfsx.com/learn/gtfs/" />
     <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
@@ -90,7 +90,7 @@
     </header>
     <main>
       <h1>What is GTFS?</h1>
-      <p class="lede">GTFS — the General Transit Feed Specification — is the standard, open format that transit agencies use to publish their schedules and route information so that trip planners, mapping apps, and researchers can consume them. If you've ever gotten transit directions in Google Maps, Apple Maps, Transit, Citymapper, or Moovit, those apps were reading GTFS feeds.</p>
+      <p class="lede">GTFS (the General Transit Feed Specification) is the standard, open format that transit agencies use to publish their schedules and route information so that trip planners, mapping apps, and researchers can consume them. If you've ever gotten transit directions in Google Maps, Apple Maps, Transit, Citymapper, or Moovit, those apps were reading GTFS feeds.</p>
 
       <h2>The short version</h2>
       <p>A GTFS feed is just a ZIP file containing a handful of CSV-style text files. Each file describes one part of a transit system: agencies, routes, stops, the schedule of trips, the calendar of service days, and so on. Together they describe everything an outside app needs to plan a trip on your service.</p>
@@ -102,7 +102,7 @@
         <thead><tr><th>File</th><th>What it describes</th></tr></thead>
         <tbody>
           <tr><td><code>agency.txt</code></td><td>The transit agency operating the service.</td></tr>
-          <tr><td><code>routes.txt</code></td><td>Each named route — the "1 Main St", the "Red Line", the "Crosstown Express".</td></tr>
+          <tr><td><code>routes.txt</code></td><td>Each named route, such as the "1 Main St", the "Red Line", or the "Crosstown Express".</td></tr>
           <tr><td><code>stops.txt</code></td><td>Every stop or station, with latitude and longitude.</td></tr>
           <tr><td><code>trips.txt</code></td><td>Each individual run of a route on a given service day.</td></tr>
           <tr><td><code>stop_times.txt</code></td><td>The arrival and departure time of each trip at each stop.</td></tr>
@@ -112,7 +112,7 @@
       <p>Optional but commonly included:</p>
       <table>
         <tbody>
-          <tr><td><code>shapes.txt</code></td><td>The actual geometry of each route — the polyline drawn on the map.</td></tr>
+          <tr><td><code>shapes.txt</code></td><td>The actual geometry of each route: the polyline drawn on the map.</td></tr>
           <tr><td><code>calendar_dates.txt</code></td><td>Holiday exceptions and special service dates.</td></tr>
           <tr><td><code>fare_attributes.txt</code> &amp; <code>fare_rules.txt</code></td><td>How much it costs to ride.</td></tr>
           <tr><td><code>frequencies.txt</code></td><td>Headway-based service ("every 10 minutes from 6am to 9pm").</td></tr>
@@ -123,14 +123,14 @@
 
       <h2>Who consumes GTFS?</h2>
       <ul>
-        <li><strong>Trip planners and mapping apps</strong> — Google Maps, Apple Maps, Transit, Citymapper, Moovit, and dozens of regional apps all consume GTFS to provide transit directions.</li>
-        <li><strong>Open-data and analytics platforms</strong> — researchers and planners use GTFS for accessibility analysis, frequency studies, and equity reporting.</li>
-        <li><strong>Onboard and station signage</strong> — many digital sign systems pull from the same GTFS feed used by riders' apps, ensuring consistency.</li>
-        <li><strong>Federal reporting</strong> — the FTA's National Transit Map is built from agency-published GTFS.</li>
+        <li><strong>Trip planners and mapping apps:</strong> Google Maps, Apple Maps, Transit, Citymapper, Moovit, and dozens of regional apps all consume GTFS to provide transit directions.</li>
+        <li><strong>Open-data and analytics platforms:</strong> researchers and planners use GTFS for accessibility analysis, frequency studies, and equity reporting.</li>
+        <li><strong>Onboard and station signage:</strong> many digital sign systems pull from the same GTFS feed used by riders' apps, ensuring consistency.</li>
+        <li><strong>Federal reporting:</strong> the FTA's National Transit Map is built from agency-published GTFS.</li>
       </ul>
 
       <h2>GTFS Schedule vs. GTFS Realtime</h2>
-      <p>"GTFS" by itself usually means <strong>GTFS Schedule</strong> — the static, planned schedule. There's a separate companion specification, <strong>GTFS Realtime</strong>, that publishes live data: actual vehicle positions, trip updates (delays, cancellations), and service alerts. Realtime feeds reference the static feed by ID — so you need a clean, accurate schedule feed before realtime makes sense. GTFS·X is focused on the schedule side.</p>
+      <p>"GTFS" by itself usually means <strong>GTFS Schedule</strong> (the static, planned schedule). There's a separate companion specification, <strong>GTFS Realtime</strong>, that publishes live data: actual vehicle positions, trip updates (delays, cancellations), and service alerts. Realtime feeds reference the static feed by ID, so you need a clean, accurate schedule feed before realtime makes sense. GTFS·X is focused on the schedule side.</p>
 
       <h2>What about demand-responsive transit?</h2>
       <p>The base GTFS spec assumes fixed routes and fixed schedules. For microtransit, dial-a-ride, and other demand-responsive service, there's an extension called <strong>GTFS-Flex</strong> that adds polygon service zones, pickup/drop-off windows, and booking rules. See <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a> for the details.</p>
@@ -138,9 +138,9 @@
       <h2>How do I publish a feed?</h2>
       <p>Three steps:</p>
       <ol>
-        <li><strong>Build the feed</strong> — describe your routes, stops, trips, and schedule in the GTFS format. You can do this by hand in a spreadsheet, with scripts, or with an editor like <a href="/">GTFS·X</a>.</li>
-        <li><strong>Validate it</strong> — run the feed through the <a href="https://github.com/MobilityData/gtfs-validator" rel="noopener">canonical GTFS validator</a> to catch errors before consumers do. GTFS·X validates as you go.</li>
-        <li><strong>Host it at a stable URL</strong> — put the ZIP file at a permanent URL on your agency's website and submit it to consumers. The <a href="https://mobilitydatabase.org/" rel="noopener">Mobility Database</a> is the canonical registry; once you're listed there, most major trip planners will pick up your feed automatically.</li>
+        <li><strong>Build the feed:</strong> describe your routes, stops, trips, and schedule in the GTFS format. You can do this by hand in a spreadsheet, with scripts, or with an editor like <a href="/">GTFS·X</a>.</li>
+        <li><strong>Validate it:</strong> run the feed through the <a href="https://github.com/MobilityData/gtfs-validator" rel="noopener">canonical GTFS validator</a> to catch errors before consumers do. GTFS·X validates as you go.</li>
+        <li><strong>Host it at a stable URL:</strong> put the ZIP file at a permanent URL on your agency's website and submit it to consumers. The <a href="https://mobilitydatabase.org/" rel="noopener">Mobility Database</a> is the canonical registry; once you're listed there, most major trip planners will pick up your feed automatically.</li>
       </ol>
 
       <h2>Where to go from here</h2>
@@ -153,8 +153,8 @@
 
       <h2>See also</h2>
       <ul>
-        <li><a href="/learn/publish-gtfs-feed/">How to publish a GTFS feed</a> — getting your feed into the Mobility Database, Google Maps, Apple Maps, and other consumers.</li>
-        <li><a href="/compare/gtfs-builder-rtap/">GTFS·X vs. National RTAP GTFS Builder</a> — when each tool is the right fit.</li>
+        <li><a href="/learn/publish-gtfs-feed/">How to publish a GTFS feed</a>: getting your feed into the Mobility Database, Google Maps, Apple Maps, and other consumers.</li>
+        <li><a href="/compare/gtfs-builder-rtap/">GTFS·X vs. National RTAP GTFS Builder</a>: when each tool is the right fit.</li>
       </ul>
     </main>
     <footer>

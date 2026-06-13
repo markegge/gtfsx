@@ -179,11 +179,11 @@ export function AdminDashboardPage() {
         <div className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <CounterCard
-              label="Total users"
-              value={stats.users.total}
+              label="Active accounts"
+              value={stats.users.active}
               accent="coral"
               sub={[
-                { label: 'Active', value: stats.users.active },
+                { label: 'Total', value: stats.users.total },
                 { label: 'Pending verification', value: stats.users.pending_verification },
                 { label: 'Disabled', value: stats.users.disabled },
                 { label: 'Deleted (soft)', value: stats.users.deleted_soft },

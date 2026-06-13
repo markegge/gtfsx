@@ -163,9 +163,9 @@ describe('agency LP — Remix-compare secondary CTA', () => {
 });
 
 describe('agency LP — pricing comparison renders both desktop table and mobile cards', () => {
-  it('has the GTFS·X $2,499 price prominently in both layouts', async () => {
+  it('has the GTFS·X $2,988 price prominently in both layouts', async () => {
     const html = await loadPage('public/lp/agency-planning/index.html');
-    expect(html).toMatch(/\$2,499/);
+    expect(html).toMatch(/\$2,988/);
     // Cards stack to single column < 640px — markup must contain a .compare-cards
     // container alongside the .compare-table.
     expect(html).toContain('compare-table');

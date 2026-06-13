@@ -98,9 +98,9 @@
     // in Stripe so existing $199 subscribers keep their original billing. The
     // STRIPE_PRICE_TEAM_* var names below intentionally keep the old word.
     "STRIPE_PRICE_PRO_MONTHLY": "price_1TXTFcJHDvzBbFH9B1BaGXCH",
-    "STRIPE_PRICE_PRO_ANNUAL": "price_1TXTFcJHDvzBbFH9YOIUkooo",
+    "STRIPE_PRICE_PRO_ANNUAL": "price_1Thu0FJHDvzBbFH9qCxCnS2f",
     "STRIPE_PRICE_TEAM_MONTHLY": "price_1TbRauJHDvzBbFH9a7IfPEfq",
-    "STRIPE_PRICE_TEAM_ANNUAL": "price_1TbRauJHDvzBbFH9M4hZs9Bn",
+    "STRIPE_PRICE_TEAM_ANNUAL": "price_1Thu0FJHDvzBbFH9nngOQDOe",
     "STRIPE_PORTAL_CONFIG_ID": "bpc_1TXTFdJHDvzBbFH9qciNWCsV",
     // Google OAuth ("Continue with Google"), issue #20. The client ID is
     // PUBLIC (it's embedded in the redirect to Google), so it lives here in

@@ -6,12 +6,12 @@ import { describe, expect, it } from 'vitest';
 import { annualToMonthlyEquivalent, annualSavings } from '../components/billing/pricingUtils';
 
 describe('annualToMonthlyEquivalent', () => {
-  it('Pro: $499/yr → $42/month', () => {
-    expect(annualToMonthlyEquivalent(499)).toBe(42);
+  it('Pro: $468/yr → $39/month', () => {
+    expect(annualToMonthlyEquivalent(468)).toBe(39);
   });
 
-  it('Agency: $2499/yr → $208/month', () => {
-    expect(annualToMonthlyEquivalent(2499)).toBe(208);
+  it('Agency: $2988/yr → $249/month', () => {
+    expect(annualToMonthlyEquivalent(2988)).toBe(249);
   });
 
   it('Free: $0/yr → $0/month', () => {
@@ -30,12 +30,12 @@ describe('annualToMonthlyEquivalent', () => {
 });
 
 describe('annualSavings', () => {
-  it('Pro: 49*12=588, 588-499=89 saved', () => {
-    expect(annualSavings(49, 499)).toBe(89);
+  it('Pro: 49*12=588, 588-468=120 saved', () => {
+    expect(annualSavings(49, 468)).toBe(120);
   });
 
-  it('Agency: 299*12=3588, 3588-2499=1089 saved', () => {
-    expect(annualSavings(299, 2499)).toBe(1089);
+  it('Agency: 299*12=3588, 3588-2988=600 saved', () => {
+    expect(annualSavings(299, 2988)).toBe(600);
   });
 
   it('Free: $0 saved', () => {

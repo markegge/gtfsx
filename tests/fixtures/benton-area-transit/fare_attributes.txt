@@ -1,0 +1,9 @@
+agency_id,fare_id,price,currency_type,payment_method,transfers,transfer_duration
+148,603,0.75,USD,0,0,0
+148,4420,1.00,USD,0,0,0
+148,4421,2.00,USD,0,0,0
+148,4422,3.00,USD,0,0,0
+148,4423,4.00,USD,0,0,0
+148,4424,5.00,USD,0,0,0
+148,4425,6.00,USD,0,0,0
+148,5298,0.00,USD,0,0,0

@@ -8,7 +8,7 @@
 - **Product requirements & build status:** `docs/REQUIREMENTS.md` — the feature map (what's shipped / planned). Read before adding features.
 - **Engineering reference:** `docs/ARCHITECTURE.md` — system architecture, data model, full API surface, security/privacy NFRs (`BE-*`/`NF-*` anchors), **live environment state** (read §5 first when picking work back up), git + deploy workflow, provisioning + operator runbooks. **Update §5 when you change deployed state.**
 - The planned-feature backlog lives in **GitHub issues** (`markegge/gtfs-studio`). Superseded/historical docs are under `docs/archive/` (gitignored, local-only).
-- Example GTFS feed: `streamline_gtfs_march_2026/`. Brand assets: `docs/brand-kit/`.
+- Integration-test fixture feed: `tests/fixtures/benton-area-transit/` (Benton Area Transit, mdb-3109). Brand assets: `docs/brand-kit/`.
 
 ## Demo feed (svt-demo) — keep it exercising the spec
 - `/demo` loads the **published `svt-demo`** feed from `https://feeds.gtfsx.com/svt-demo/gtfs.zip` (not a bundled zip). Updating the demo means editing the `svt-demo` server project and republishing.

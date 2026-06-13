@@ -74,38 +74,40 @@ interface FeedDef {
   build: () => Promise<Buffer>;
 }
 
-const STREAMLINE_DIR = path.join(REPO_ROOT, 'streamline_gtfs_march_2026');
+const FIXTURE_DIR = path.join(REPO_ROOT, 'tests', 'fixtures', 'benton-area-transit');
 
-/** Zip the bundled streamline (Bozeman) feed exactly as it sits on disk. */
-async function buildStreamlineZip(): Promise<Buffer> {
+/** Zip the bundled Benton Area Transit feed exactly as it sits on disk. */
+async function buildFixtureZip(): Promise<Buffer> {
   const zip = new JSZip();
-  for (const name of readdirSync(STREAMLINE_DIR)) {
-    const full = path.join(STREAMLINE_DIR, name);
-    if (!statSync(full).isFile() || !name.endsWith('.txt')) continue;
+  for (const name of readdirSync(FIXTURE_DIR)) {
+    const full = path.join(FIXTURE_DIR, name);
+    if (!statSync(full).isFile()) continue;
+    if (!name.endsWith('.txt') && !name.endsWith('.geojson')) continue;
     zip.file(name, readFileSync(full));
   }
   return zip.generateAsync({ type: 'nodebuffer' });
 }
 
 /**
- * The streamline feed with DELIBERATE errors injected so BOTH validators have
- * something to catch — proving the harness actually surfaces parity, not just an
+ * The fixture feed with DELIBERATE errors injected so BOTH validators have
+ * something to catch -- proving the harness actually surfaces parity, not just an
  * all-clean feed:
- *   - DROP calendar.txt + calendar_dates.txt → every trip's service_id dangles
+ *   - DROP calendar.txt + calendar_dates.txt so every trip's service_id dangles
  *     (foreign_key_violation in MobilityData; trip_unknown_service for us) and
  *     the feed has no service at all (missing_calendar_and_calendar_date).
  *   - INJECT a stop_times row pointing at a non-existent stop_id
  *     (foreign_key_violation / stop_time_unknown_stop).
  */
-async function buildStreamlineBrokenZip(): Promise<Buffer> {
+async function buildFixtureBrokenZip(): Promise<Buffer> {
   const zip = new JSZip();
-  for (const name of readdirSync(STREAMLINE_DIR)) {
-    const full = path.join(STREAMLINE_DIR, name);
-    if (!statSync(full).isFile() || !name.endsWith('.txt')) continue;
+  for (const name of readdirSync(FIXTURE_DIR)) {
+    const full = path.join(FIXTURE_DIR, name);
+    if (!statSync(full).isFile()) continue;
+    if (!name.endsWith('.txt') && !name.endsWith('.geojson')) continue;
     // Drop the calendar files entirely.
     if (name === 'calendar.txt' || name === 'calendar_dates.txt') continue;
     if (name === 'stop_times.txt') {
-      // Append a dangling-stop row to the first trip in the file.
+      // Append a dangling-stop row to the first fixed-route trip in the file.
       const text = readFileSync(full, 'utf8');
       const lines = text.split(/\r?\n/);
       const header = lines[0].split(',');
@@ -129,16 +131,16 @@ async function buildStreamlineBrokenZip(): Promise<Buffer> {
 
 const FEEDS: FeedDef[] = [
   {
-    id: 'streamline',
-    label: 'Streamline (Bozeman) — pristine bundled feed',
+    id: 'benton-area-transit',
+    label: 'Benton Area Transit (mdb-3109) -- pristine bundled feed',
     countryCode: 'US',
-    build: buildStreamlineZip,
+    build: buildFixtureZip,
   },
   {
-    id: 'streamline-broken',
-    label: 'Streamline + injected errors (dropped calendar, dangling stop_id)',
+    id: 'benton-area-transit-broken',
+    label: 'Benton Area Transit + injected errors (dropped calendar, dangling stop_id)',
     countryCode: 'US',
-    build: buildStreamlineBrokenZip,
+    build: buildFixtureBrokenZip,
   },
 ];
 

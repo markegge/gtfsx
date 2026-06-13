@@ -1,9 +1,0 @@
-route_id,agency_id,route_short_name,route_long_name,route_desc,route_type,route_url,route_color,route_text_color
-6850,260,"Blueline","Blueline",MSU SUB to and from Gallatin Center,3,https://streamlinebus.com/routes/blueline-weekday/,274BAC,FFFFFF
-6851,260,"Livingston","Livingston Seasonal","Walmart, Ace Hardware, MSU Loop",3,https://streamlinebus.com/routes/livingston-service/,00AEEF,FFFFFF
-6852,260,"Purpleline","Purpleline",Bozeman Health ER to and from Fallon & Cottonwood,3,https://streamlinebus.com/routes/purpleline-weekday/,BB29BB,FFFFFF
-6853,260,"Gold","Goldline",MSU Sub Loop,3,https://streamlinebus.com/routes/goldline-weekday/,DFBC00,000000
-6854,260,"Brownline","Brownline",Mendenhall & Black to and from Oak @ Gallatin High School,3,https://streamlinebus.com/routes/brownline-weekday/,5F3B00,FFFFFF
-6855,260,"Pinkline","Pinkline",Bozeman to and from Belgrade,3,https://streamlinebus.com/routes/pinkline-weekday/,F289BD,000000
-6856,260,"Shuttle","Northeast Bozeman Shuttle",Northeast Bozeman Shuttle,3,https://streamlinebus.com/communitycommons/,1DD719,FFFFFF
-6969,260,"BBNorth","Bridger Bowl North",Bridger Bowl Shuttle North to Bridger,3,,D4FBFF,FFFFFF

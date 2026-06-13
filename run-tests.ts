@@ -2,8 +2,14 @@
  * Run GTFS·X integration tests headlessly via tsx.
  * Usage: npx tsx run-tests.ts
  *
- * Fixture is built in-memory from `streamline_gtfs_march_2026/` so the test
- * is self-contained on a fresh checkout (and in CI). No external zips required.
+ * Fixture is built in-memory from `tests/fixtures/benton-area-transit/` so the
+ * test is self-contained on a fresh checkout (and in CI). No external zips required.
+ *
+ * Fixture feed: Benton Area Transit (mdb-3109), Corvallis OR.
+ * Source: https://mobilitydatabase.org/feeds/gtfs/mdb-3109
+ * Validation: 0 errors, 2 warnings (MobilityData canonical validator).
+ * The feed includes GTFS-Flex v2 demand-response routes (BAT Lift + Paratransit)
+ * alongside fixed-route service (99 Express, Coast to Valley Express).
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -22,13 +28,15 @@ import { stopsInsidePolygon } from './src/components/fares/fareZoneHelpers';
 import { computeShapePatterns } from './src/components/ui/shapePatterns';
 import type { RouteStop, Stop, Trip } from './src/types/gtfs';
 
-const FIXTURE_DIR = 'streamline_gtfs_march_2026';
+const FIXTURE_DIR = 'tests/fixtures/benton-area-transit';
 
 async function buildFixtureZip(): Promise<Buffer> {
   const zip = new JSZip();
   for (const name of readdirSync(FIXTURE_DIR)) {
     const full = path.join(FIXTURE_DIR, name);
-    if (!statSync(full).isFile() || !name.endsWith('.txt')) continue;
+    if (!statSync(full).isFile()) continue;
+    // Include standard GTFS text files and the GTFS-Flex GeoJSON zone file.
+    if (!name.endsWith('.txt') && !name.endsWith('.geojson')) continue;
     zip.file(name, readFileSync(full));
   }
   return zip.generateAsync({ type: 'nodebuffer' });
@@ -120,21 +128,29 @@ function s() { return useStore.getState(); }
 async function main() {
   console.log('=== GTFS·X Integration Tests ===\n');
 
-  // Build fixture zip from the in-repo streamline (BOZEMAN) feed.
+  // Build fixture zip from the in-repo Benton Area Transit feed.
   const zipBuffer = await buildFixtureZip();
   const zipFile = zipBuffer as unknown as File;
 
   // ---- PHASE 1: IMPORT ----
-  console.log('Phase 1: Import Streamline (BOZEMAN) GTFS');
+  // Feed: Benton Area Transit (mdb-3109). The zip contains both fixed-route
+  // service (routes 844/845) and GTFS-Flex demand-response routes (13401,
+  // 77756, 77757). The importer splits Flex stop_times out and, once it
+  // resolves the polygon zones from locations.geojson, drops the Flex-only
+  // routes/trips from the regular tables. Result: 2 fixed routes, 15 trips.
+  console.log('Phase 1: Import Benton Area Transit (mdb-3109) GTFS');
   const data = await importGtfsZip(zipFile);
   loadImportIntoStore(data);
 
   assert('agencies loaded', s().agencies.length === 1, `got ${s().agencies.length}`);
-  assert('agency name correct', s().agencies[0]?.agency_name === 'BOZEMAN');
-  assert('routes loaded (8)', s().routes.length === 8, `got ${s().routes.length}`);
-  assert('stops loaded (166)', s().stops.length === 166, `got ${s().stops.length}`);
-  assert('trips loaded (214)', s().trips.length === 214, `got ${s().trips.length}`);
-  assert('calendars loaded (2)', s().calendars.length === 2, `got ${s().calendars.length}`);
+  assert('agency name correct', s().agencies[0]?.agency_name === 'Benton Area Transit');
+  // 3 of the 5 routes are Flex-only (no fixed stop_times); the importer
+  // drops them once it resolves their polygon zones from locations.geojson.
+  assert('routes loaded (2 fixed)', s().routes.length === 2, `got ${s().routes.length}`);
+  assert('stops loaded (50)', s().stops.length === 50, `got ${s().stops.length}`);
+  // 22 total trips; 7 are Flex-only and are stripped from the regular table.
+  assert('trips loaded (15)', s().trips.length === 15, `got ${s().trips.length}`);
+  assert('calendars loaded (7)', s().calendars.length === 7, `got ${s().calendars.length}`);
   assert('shapes loaded', s().shapes.length > 0, `got ${s().shapes.length}`);
   assert('stop_times loaded', s().stopTimes.length > 0, `got ${s().stopTimes.length}`);
   // streamline has no fare_attributes.txt — fare round-trip is exercised separately in phase 12
@@ -143,9 +159,11 @@ async function main() {
 
   // ---- PHASE 2: DATA INTEGRITY ----
   console.log('\nPhase 2: Data Integrity');
-  const blueline = s().routes.find(r => r.route_short_name === 'Blueline');
-  assert('Blueline route exists', !!blueline);
-  assert('Blueline long name = Blueline', blueline?.route_long_name === 'Blueline');
+  // Use the 99 Express (route_id 844) as the primary test route throughout.
+  // It has 8 weekday trips and stop_times with real stop_ids (fixed-route).
+  const blueline = s().routes.find(r => r.route_id === '844');
+  assert('99 Express route exists', !!blueline);
+  assert('99 Express long name', blueline?.route_long_name === '99 Express');
 
   const routeIds = new Set(s().routes.map(r => r.route_id));
   const orphanTrips = s().trips.filter(t => !routeIds.has(t.route_id));
@@ -232,7 +250,7 @@ async function main() {
     assert('route color updated', s().routes.find(r => r.route_id === blueline.route_id)?.route_color === 'FF0000');
   }
   s().addRoute({
-    route_id: 'test-route', agency_id: '260', route_short_name: 'T99',
+    route_id: 'test-route', agency_id: '148', route_short_name: 'T99',
     route_long_name: 'TEST EXPRESS', route_type: 3, route_color: '00FF00', route_text_color: '000000',
   });
   assert('add route', s().routes.length === origRouteCount + 1);

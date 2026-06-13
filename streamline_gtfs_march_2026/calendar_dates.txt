@@ -1,4 +1,0 @@
-service_id,date,exception_type
-1,20251127,2
-1,20251225,2
-1,20260101,2

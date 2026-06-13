@@ -1,0 +1,11 @@
+Source:  Benton Area Transit (Corvallis, Oregon)
+MDB ID:  mdb-3109
+Fetched: 2026-04-14 (latest hosted snapshot via MobilityData catalog)
+URL:     https://mobilitydatabase.org/feeds/gtfs/mdb-3109
+Feed ID: benton-or-us (Trillium Solutions, Inc.)
+
+This feed is used as the integration-test fixture for the GTFS-X editor test suite.
+Attribution: Benton Area Transit / Trillium Solutions, Inc.
+Data is publicly hosted in the MobilityData catalog for redistribution.
+
+Validation (MobilityData canonical validator): 0 errors, 2 warnings, 3 info notices.

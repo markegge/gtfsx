@@ -1,0 +1,6 @@
+agency_id,route_id,route_short_name,route_long_name,route_desc,route_type,route_url,route_color,route_text_color,route_sort_order,min_headway_minutes,eligibility_restricted,continuous_pickup,continuous_drop_off,tts_route_short_name,tts_route_long_name
+148,845,,Coast to Valley Express,The Coast to Valley Express is your connection from the central valley to Newport and back. 4 trips daily.,3,https://nwconnector.org/routes/coast-to-valley-express/,24aeed,000000,0,,0,1,1,,
+148,844,,99 Express,"Connects Adair Village with Corvallis on weekdays, with four runs per day.",3,https://nwconnector.org/routes/99-express/,24aeed,000000,1,180,0,1,1,,
+148,13401,,BAT Lift,,3,,,,2,,1,1,1,,
+148,77756,,Corvallis Paratransit,,3,,,,3,,1,1,1,,
+148,77757,,Philomath Paratransit,,3,,,,4,,1,1,1,,

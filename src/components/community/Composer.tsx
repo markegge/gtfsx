@@ -157,10 +157,10 @@ export function Composer({
           }}
           placeholder={placeholder}
           disabled={disabled}
-          className="w-full min-h-[120px] p-3 text-sm bg-white outline-none resize-y focus:bg-cream/20 disabled:opacity-60 font-mono"
+          className="w-full min-h-[240px] p-3 text-sm bg-white outline-none resize-y focus:bg-cream/20 disabled:opacity-60 font-mono"
         />
       ) : (
-        <div className="p-3 min-h-[120px] text-sm text-dark-brown">
+        <div className="p-3 min-h-[240px] text-sm text-dark-brown">
           {text.trim() ? <Markdown>{text}</Markdown> : <p className="text-warm-gray italic">Nothing to preview yet.</p>}
         </div>
       )}

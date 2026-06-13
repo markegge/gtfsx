@@ -8,6 +8,7 @@ import { MarkSolvedButton } from './MarkSolvedButton';
 import { Composer } from './Composer';
 import { relativeTime } from './time';
 import { editPost, deletePost, type ForumPost, type ForumThread } from '../../services/forumApi';
+import { postPermalink } from './permalinks';
 
 interface PostCardProps {
   post: ForumPost;
@@ -16,13 +17,35 @@ interface PostCardProps {
   onUpdate: (p: ForumPost) => void;
   onDelete: (postId: string) => void;
   onMarkSolved: (postId: string | null) => void;
+  /** When true the card renders with a brief coral highlight ring (anchor target). */
+  isHighlighted?: boolean;
 }
 
-export function PostCard({ post, thread, isOp, onUpdate, onDelete, onMarkSolved }: PostCardProps) {
+export function PostCard({ post, thread, isOp, onUpdate, onDelete, onMarkSolved, isHighlighted = false }: PostCardProps) {
   const currentUser = useStore((s) => s.currentUser);
   const [editing, setEditing] = useState(false);
   const [pending, setPending] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyLink = async () => {
+    const url = postPermalink(thread, post.id);
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // Fallback: create a temporary input (execCommand is deprecated but broadly supported)
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   const isAuthor = currentUser?.id === post.author.id;
   const isAdmin = !!currentUser?.staff;
@@ -64,7 +87,13 @@ export function PostCard({ post, thread, isOp, onUpdate, onDelete, onMarkSolved 
   return (
     <article
       id={`post-${post.id}`}
-      className={`bg-white border rounded-lg p-4 ${post.isSolved ? 'border-teal/40 ring-1 ring-teal/30' : 'border-sand'}`}
+      className={`bg-white border rounded-lg p-4 scroll-mt-20 transition-shadow ${
+        isHighlighted
+          ? 'border-coral/40 ring-2 ring-coral/30'
+          : post.isSolved
+            ? 'border-teal/40 ring-1 ring-teal/30'
+            : 'border-sand'
+      }`}
     >
       {post.isSolved && (
         <div className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold text-teal">
@@ -94,10 +123,32 @@ export function PostCard({ post, thread, isOp, onUpdate, onDelete, onMarkSolved 
             {post.editedAt && (
               <span title={`Edited ${new Date(post.editedAt).toLocaleString()}`} className="italic">edited</span>
             )}
+            <button
+              onClick={handleCopyLink}
+              title="Copy link to this post"
+              aria-label="Copy link to this post"
+              className={`ml-1 flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${
+                copied ? 'text-teal' : 'hover:text-coral'
+              }`}
+            >
+              {copied ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+                  <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+              <span className="sr-only">{copied ? 'Copied' : 'Copy link'}</span>
+              {copied && <span aria-live="polite" className="text-[10px] font-semibold">Copied</span>}
+            </button>
           </div>
 
           {editing ? (
             <Composer
+              key={`edit-${post.id}`}
               initial={post.bodyMd}
               submitLabel={pending ? 'Saving…' : 'Save changes'}
               onSubmit={handleSaveEdit}

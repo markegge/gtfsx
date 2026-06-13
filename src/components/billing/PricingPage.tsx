@@ -30,6 +30,7 @@ import { createOrg, roleAtLeast, type OrgSummary } from '../../services/orgsApi'
 import { ApiError } from '../../services/authApi';
 import { trackCtaClick } from '../../services/trackBeacon';
 import { planDisplayName, cheapestPlanFor, FEATURE_COPY, type FeatureKey } from './planConfig';
+import { annualToMonthlyEquivalent, annualSavings } from './pricingUtils';
 import { TestModeBanner } from './TestModeBanner';
 import { TalkToSalesModal } from './TalkToSalesModal';
 
@@ -242,12 +243,33 @@ export function PricingPage() {
   const enterprise = plans.find((p) => p.plan === 'enterprise') ?? FALLBACK_PLANS.at(-1)!;
   const orderedCards = [free, ...selfServePlans, enterprise];
 
-  function priceLabel(p: PlanCatalogEntry, interval: 'month' | 'year'): { amount: string; per: string } {
+  function priceLabel(
+    p: PlanCatalogEntry,
+    interval: 'month' | 'year',
+  ): { amount: string; per: string; sub: string | null } {
     const monthly = p.monthlyPriceUsd;
     const annual = p.annualPriceUsd;
-    if (monthly === null || annual === null) return { amount: 'Custom', per: '' };
-    if (interval === 'month') return { amount: `$${monthly}`, per: p.perSeat ? '/seat/mo' : '/mo' };
-    return { amount: `$${annual.toLocaleString()}`, per: p.perSeat ? '/seat/yr' : '/yr' };
+    if (monthly === null || annual === null) return { amount: 'Custom', per: '', sub: null };
+    if (interval === 'month') {
+      return {
+        amount: `$${monthly}`,
+        per: p.perSeat ? '/seat/month' : '/month',
+        sub: null,
+      };
+    }
+    // Annual selected: show per-month-equivalent so the headline always reads
+    // as a monthly cost — never the lump-sum annual total.
+    const perMonth = annualToMonthlyEquivalent(annual);
+    const saved = annualSavings(monthly, annual);
+    const annualFormatted = `$${annual.toLocaleString()}`;
+    const sub = saved > 0
+      ? `${annualFormatted} billed annually · save $${saved.toLocaleString()}`
+      : `${annualFormatted} billed annually`;
+    return {
+      amount: `$${perMonth}`,
+      per: p.perSeat ? '/seat/month' : '/month',
+      sub,
+    };
   }
 
   // Kick off Stripe Checkout. Owner mapping is enforced server-side too, but we
@@ -539,6 +561,9 @@ export function PricingPage() {
                     <span className="font-heading text-3xl font-extrabold text-brown">{label.amount}</span>
                     {label.per && <span className="text-xs text-warm-gray">{label.per}</span>}
                   </div>
+                  {label.sub && (
+                    <p className="mt-0.5 text-xs text-warm-gray">{label.sub}</p>
+                  )}
                   {/* Agency tier ships with a 14-day trial; show it inline so
                       the price doesn't look like a hard commitment. */}
                   {popular && (

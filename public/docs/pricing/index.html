@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Plans and features — GTFS·X</title>
+    <meta name="description" content="Full feature and limit comparison across GTFS·X Free, Pro, Agency, and Enterprise plans. Feed limits, analysis tools, publishing quotas, and collaboration features explained." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/pricing/" />
+    <meta property="og:title" content="Plans and features — GTFS·X" />
+    <meta property="og:description" content="Full feature and limit comparison across GTFS·X Free, Pro, Agency, and Enterprise plans." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/pricing/" />
+    <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@gtfsxapp" />
+    <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+    <style>
+      /* Wider main so the comparison table has room */
+      main { max-width: 960px; }
+
+      /* Tier comparison table */
+      .tier-table { width: 100%; border-collapse: collapse; font-size: 0.9em; margin: 16px 0 24px; table-layout: fixed; }
+      .tier-table th, .tier-table td { border: 1px solid var(--rule); padding: 8px 12px; text-align: left; vertical-align: top; }
+      .tier-table th { background: var(--sand); font-weight: 700; }
+      .tier-table th.col-free  { background: #f5f5f0; color: var(--ink); }
+      .tier-table th.col-pro   { background: #FBEEDF; color: #9A4F00; }
+      .tier-table th.col-agency { background: #EADFFD; color: #5B2E91; }
+      .tier-table th.col-enterprise { background: #DCE9FA; color: #1F4D88; }
+      .tier-table td.col-free  { background: #fdfdfb; }
+      .tier-table td.col-pro   { background: #fffcf8; }
+      .tier-table td.col-agency { background: #fdfbff; }
+      .tier-table td.col-enterprise { background: #fafcff; }
+      .tier-table .row-group th { background: var(--ink); color: #fff; font-size: 0.8rem; letter-spacing: 0.04em; text-transform: uppercase; padding: 6px 12px; }
+      .tier-table .yes { color: #1a7a5e; font-weight: 600; }
+      .tier-table .no  { color: #bbb; }
+      .tier-table .val { font-weight: 600; }
+      @media (max-width: 720px) {
+        .tier-table { font-size: 0.8em; }
+        .tier-table th, .tier-table td { padding: 6px 8px; }
+      }
+
+      /* Plan overview cards */
+      .plan-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 24px 0; }
+      @media (max-width: 860px) { .plan-cards { grid-template-columns: repeat(2, 1fr); } }
+      @media (max-width: 480px) { .plan-cards { grid-template-columns: 1fr; } }
+      .plan-card { background: #fff; border: 1px solid var(--rule); border-radius: 10px; padding: 18px 16px; }
+      .plan-card h3 { margin: 0 0 4px; font-size: 1.05rem; }
+      .plan-card .price { font-size: 1.5rem; font-weight: 800; color: var(--ink); }
+      .plan-card .price-sub { font-size: 0.8rem; color: var(--muted); }
+      .plan-card .tagline { font-size: 0.88rem; color: var(--muted); margin: 8px 0 0; }
+      .plan-card.free-card  { border-color: #ddd; }
+      .plan-card.pro-card   { border-color: #F0D1A0; }
+      .plan-card.agency-card { border-color: #C9B1F0; }
+      .plan-card.enterprise-card { border-color: #A8C0E2; }
+
+      /* CTA block at the bottom */
+      .cta-block { background: #fff; border: 1px solid var(--rule); border-radius: 10px; padding: 22px 24px; margin: 32px 0; text-align: center; }
+      .cta-block p { margin: 0 0 14px; color: var(--muted); font-size: 0.95rem; }
+      .cta-block a.btn { display: inline-block; background: var(--accent); color: #fff; font-weight: 700; padding: 10px 22px; border-radius: 8px; text-decoration: none; font-size: 0.95rem; }
+      .cta-block a.btn:hover { filter: brightness(0.93); }
+
+    </style>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Plans and features — GTFS·X",
+  "description": "Full feature and limit comparison across GTFS·X Free, Pro, Agency, and Enterprise plans. Feed limits, analysis tools, publishing quotas, and collaboration features explained.",
+  "image": "https://www.gtfsx.com/og-default.png",
+  "author": {
+    "@type": "Organization",
+    "name": "GTFS·X",
+    "url": "https://www.gtfsx.com/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "GTFS·X",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://www.gtfsx.com/gtfsx-lockup.svg"
+    }
+  },
+  "datePublished": "2026-06-13",
+  "dateModified": "2026-06-13",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://www.gtfsx.com/docs/pricing/"
+  }
+}
+  </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/docs/deep-links/">Integrations</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Plans and features</div>
+      <h1>Plans and features</h1>
+      <p class="lede">The full breakdown of what each GTFS·X plan includes: feed limits, analysis tools, publishing, collaboration, and support. Use the <a href="#comparison-table">comparison table</a> below or jump to a plan summary.</p>
+
+      <h2 id="plans-at-a-glance">Plans at a glance</h2>
+      <div class="plan-cards">
+        <div class="plan-card free-card">
+          <h3><span class="tier-badge" style="background:#f0f0eb;color:#444;border:1px solid #ddd;">Free</span></h3>
+          <div class="price">$0</div>
+          <p class="tagline">Create, edit, validate, and export GTFS feeds in your browser. No signup required to start.</p>
+        </div>
+        <div class="plan-card pro-card">
+          <h3><span class="tier-badge pro">Pro</span></h3>
+          <div class="price">$49 <span class="price-sub">/mo</span></div>
+          <div style="font-size:0.82rem;color:var(--muted);">or $499/yr (save 15%)</div>
+          <p class="tagline">Host and publish feeds. Stable URL, rider-facing mini-site, and embed widgets.</p>
+        </div>
+        <div class="plan-card agency-card">
+          <h3><span class="tier-badge agency">Agency</span></h3>
+          <div class="price">$299 <span class="price-sub">/mo</span></div>
+          <div style="font-size:0.82rem;color:var(--muted);">or $2,499/yr (save 30%)</div>
+          <p class="tagline">Plan routes and service as a team. Full analysis suite plus org workspaces.</p>
+        </div>
+        <div class="plan-card enterprise-card">
+          <h3><span class="tier-badge enterprise">Enterprise</span></h3>
+          <div class="price" style="font-size:1.2rem;">Custom</div>
+          <div style="font-size:0.82rem;color:var(--muted);">Contact us</div>
+          <p class="tagline">For state DOTs, RTAP networks, and large consortiums. Custom limits and SLA.</p>
+        </div>
+      </div>
+
+      <h2 id="who-each-plan-is-for">Who each plan is for</h2>
+
+      <h3>Free</h3>
+      <p>The Free plan gives you the full browser-based editor indefinitely. You can draw routes, place stops, build timetables, author GTFS-Flex zones, validate against the spec, and export a spec-clean GTFS .zip to host anywhere yourself. No account is required to use the editor; create a free account to save up to three feeds in the cloud and sync them across devices. Demand Dots (a nationwide transit-propensity heatmap) and system-level service summaries are available to all users at no charge.</p>
+      <p>The Free plan is the right fit for: individuals learning GTFS, small agencies that self-host their feed, state DOT staff who need to review a feed without a subscription, and anyone evaluating GTFS·X before committing.</p>
+
+      <h3>Pro <span class="tier-badge pro">$49/mo</span></h3>
+      <p>Pro adds Premium Feed Management: your feed gets a stable public URL at <code>feeds.gtfsx.com/&lt;slug&gt;/gtfs.zip</code> that you hand to Google Transit, the Mobility Database, trip planners, and regulators. Re-publishing atomically updates that URL. Pro also unlocks a rider-facing mini-site, iframe embed widgets (route map, system map, stop departures), draft/review links for stakeholder sharing before you publish, one-click Mobility Database registration, and named snapshot history for version management. Custom brand color applies to your published embeds. Embeds at this tier display a "Powered by GTFS·X" badge.</p>
+      <p>Pro is the right fit for: small agencies that need a stable hosted feed and a rider-facing embed for their website but don't need route-level analysis or team collaboration.</p>
+
+      <h3>Agency <span class="tier-badge agency">$299/mo</span></h3>
+      <p>Agency adds the full route-planning suite on top of everything in Pro. Per-route demographic coverage analysis pulls population, households, and workers from ACS block-group data. Route operating cost estimation computes revenue hours, peak vehicles, and weekly and annual operating cost from your timetable. Title VI equity analysis implements the FTA Circular 4702.1B methodology to compare service levels across minority and low-income populations. Stop analysis flags over-spaced and under-spaced stops, consolidation candidates, service intensity, and accessibility gaps. Street-network walksheds replace straight-line buffers with real walking-time isochrones (Mapbox), so coverage numbers respect rivers, freeways, and the actual street grid. Scenario analysis lets you save named route-visibility sets and instantly re-scope every analysis panel to a subset of routes. GTFS-Realtime Service Alerts authoring lets you publish detours, delays, and stop closures to a live feed without republishing the schedule.</p>
+      <p>Agency also unlocks organization workspaces: create a shared org, invite unlimited team members with per-person roles (Owner, Admin, Editor, Viewer), move feeds between personal and org workspaces, and upload a custom org logo. Embeds and mini-sites are fully white-labeled (no GTFS·X badge). Consultants can belong to multiple client orgs simultaneously from a single Agency subscription. A 14-day free trial applies (card required).</p>
+      <p>Agency is the right fit for: transit agencies with planning staff, regional planning organizations, consulting firms working across multiple client agencies, and state DOTs coordinating local networks.</p>
+
+      <h3>Enterprise <span class="tier-badge enterprise">Custom</span></h3>
+      <p>Enterprise is a negotiated arrangement for state DOTs, RTAP networks, and large consortiums that need custom feed and seat limits, a service-level agreement, and contract terms via purchase order or invoice. All Agency features are included. Snapshot limits are higher (200 per project vs. 50) and the maximum feed state size is larger (200 MB vs. 100 MB).</p>
+      <p><a href="/pricing/">Contact us</a> to discuss Enterprise pricing.</p>
+
+      <h2 id="comparison-table">Full comparison table</h2>
+      <p>All limits and feature gates are derived from the live codebase.</p>
+
+      <div style="overflow-x:auto;">
+        <table class="tier-table">
+          <thead>
+            <tr>
+              <th style="width:36%;">Feature</th>
+              <th class="col-free"  style="width:16%;">Free</th>
+              <th class="col-pro"   style="width:16%;">Pro</th>
+              <th class="col-agency" style="width:16%;">Agency</th>
+              <th class="col-enterprise" style="width:16%;">Enterprise</th>
+            </tr>
+          </thead>
+          <tbody>
+
+            <tr class="row-group"><th colspan="5">Pricing</th></tr>
+            <tr>
+              <td>Monthly price</td>
+              <td class="col-free val">$0</td>
+              <td class="col-pro val">$49/mo</td>
+              <td class="col-agency val">$299/mo</td>
+              <td class="col-enterprise val">Custom</td>
+            </tr>
+            <tr>
+              <td>Annual price</td>
+              <td class="col-free val">$0</td>
+              <td class="col-pro val">$499/yr</td>
+              <td class="col-agency val">$2,499/yr</td>
+              <td class="col-enterprise val">Custom</td>
+            </tr>
+            <tr>
+              <td>14-day free trial</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise no">N/A</td>
+            </tr>
+            <tr>
+              <td>Contract via PO or invoice</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency no">No</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+
+            <tr class="row-group"><th colspan="5">Editing and authoring</th></tr>
+            <tr>
+              <td>Map-based route, stop, trip, and schedule editor</td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/flex-zones-and-booking-rules/">GTFS-Flex zones and booking rules</a></td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Real-time <a href="/docs/validation/">GTFS validation</a></td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/import-and-export/">Import existing GTFS feed</a></td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Export spec-clean GTFS .zip</td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/fares/">GTFS-Fares v1</a> (fare_attributes, fare_rules)</td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/fares/">GTFS-Fares v2 round-trip</a> (import and export)</td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/stations/">Stations, levels, and pathways</a></td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/timetables-and-trips/">Frequency-based service</a> (frequencies.txt)</td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/transfers/">Transfers</a> (transfers.txt)</td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td>No signup required to edit (anonymous, browser-local)</td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+
+            <tr class="row-group"><th colspan="5">Cloud storage limits</th></tr>
+            <tr>
+              <td>Saved feeds (cloud projects)</td>
+              <td class="col-free val">3</td>
+              <td class="col-pro val">10</td>
+              <td class="col-agency val">Unlimited</td>
+              <td class="col-enterprise val">Unlimited</td>
+            </tr>
+            <tr>
+              <td>Snapshots per feed</td>
+              <td class="col-free val">5</td>
+              <td class="col-pro val">25</td>
+              <td class="col-agency val">50</td>
+              <td class="col-enterprise val">200</td>
+            </tr>
+            <tr>
+              <td>Max feed state size</td>
+              <td class="col-free val">20 MB</td>
+              <td class="col-pro val">50 MB</td>
+              <td class="col-agency val">100 MB</td>
+              <td class="col-enterprise val">200 MB</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/account-and-cloud-sync/">Named snapshot history</a> (browse, restore, delete)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Custom brand color (on published embeds)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+
+            <tr class="row-group"><th colspan="5">Analysis tools</th></tr>
+            <tr>
+              <td><a href="/docs/rider-propensity/">Demand Dots</a> (nationwide transit-propensity heatmap)</td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/service-summary/">System-level service summary</a> (revenue hours, peak vehicles)</td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td>System-level cost and coverage summary</td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/demographic-coverage/">Per-route demographic coverage analysis</a> (ACS population, households, workers, equity shares)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/cost-estimation/">Per-route operating cost estimation</a> (revenue hours, peak vehicles, weekly and annual cost)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/stop-analysis/">Stop analysis</a> (spacing, consolidation candidates, service intensity, accessibility)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/title-vi-analysis/">Title VI equity analysis</a> (FTA Circular 4702.1B)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Street-network walksheds (Mapbox isochrones replace straight-line buffers)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/scenario-analysis/">Scenario analysis</a> (save named route-visibility sets; re-scope map and all analysis panels)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+
+            <tr class="row-group"><th colspan="5">Publishing and distribution</th></tr>
+            <tr>
+              <td>Published feeds (stable URL at <code>feeds.gtfsx.com/&lt;slug&gt;/gtfs.zip</code>)</td>
+              <td class="col-free val">0 (export and self-host)</td>
+              <td class="col-pro val">1</td>
+              <td class="col-agency val">Unlimited</td>
+              <td class="col-enterprise val">Unlimited</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/rider-mini-site/">Rider-facing mini-site</a></td>
+              <td class="col-free no">No</td>
+              <td class="col-pro yes">Yes (GTFS·X badge)</td>
+              <td class="col-agency yes">Yes (white-label)</td>
+              <td class="col-enterprise yes">Yes (white-label)</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/embed-widgets/">Embed widgets</a> (system map, per-route, per-stop)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro yes">Yes (GTFS·X badge)</td>
+              <td class="col-agency yes">Yes (white-label)</td>
+              <td class="col-enterprise yes">Yes (white-label)</td>
+            </tr>
+            <tr>
+              <td>Remove "Powered by GTFS·X" badge from embeds and mini-site</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/draft-links/">Draft and review links</a> (expiring share URLs before publishing)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Mobility Database registration (one-click at publish)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Scheduled publish (publish a snapshot at a future date/time)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/service-alerts/">Service Alerts authoring</a> (GTFS-Realtime: detours, delays, stop closures)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Custom org logo on mini-site and embeds</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+
+            <tr class="row-group"><th colspan="5">Collaboration and organizations</th></tr>
+            <tr>
+              <td>Personal workspace (your own feeds)</td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td><a href="/docs/organizations/">Team organization workspace</a></td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Team members per organization</td>
+              <td class="col-free no">N/A</td>
+              <td class="col-pro no">N/A</td>
+              <td class="col-agency val">Unlimited</td>
+              <td class="col-enterprise val">Unlimited</td>
+            </tr>
+            <tr>
+              <td>Member roles (Owner, Admin, Editor, Viewer)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Cross-org membership (consultants in multiple client orgs)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+
+            <tr class="row-group"><th colspan="5">Support</th></tr>
+            <tr>
+              <td>Community support (forum and docs)</td>
+              <td class="col-free yes">Yes</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Email support</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro yes">Yes</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Phone support</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency yes">Yes</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td>SLA</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency no">No</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Contract terms (PO or invoice)</td>
+              <td class="col-free no">No</td>
+              <td class="col-pro no">No</td>
+              <td class="col-agency no">No</td>
+              <td class="col-enterprise yes">Yes</td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+
+      <div class="cta-block">
+        <p>Ready to upgrade, or want to compare tiers side by side before you start?</p>
+        <a class="btn" href="/pricing/">View pricing and start a plan</a>
+      </div>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/hosted-publishing/">Hosted publishing</a> — stable feed URLs, update workflow, tier limits.</li>
+          <li><a href="/docs/demographic-coverage/">Demographic coverage</a> — ACS-based population and equity analysis.</li>
+          <li><a href="/docs/title-vi-analysis/">Title VI analysis</a> — FTA equity methodology.</li>
+          <li><a href="/docs/scenario-analysis/">Scenario analysis</a> — save and compare route-visibility sets.</li>
+          <li><a href="/docs/embed-widgets/">Embed widgets</a> — route maps, system maps, and stop departures for your website.</li>
+          <li><a href="/docs/organizations/">Organizations and team workspaces</a> — shared orgs, member roles, and invitations.</li>
+          <li><a href="/docs/account-and-cloud-sync/">Accounts and cloud sync</a> — saving, feed limits, and account management.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+  </body>
+</html>

@@ -36,6 +36,11 @@
     <changefreq>monthly</changefreq>
   </url>
   <url>
+    <loc>https://www.gtfsx.com/docs/pricing/</loc>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
     <loc>https://www.gtfsx.com/docs/hosted-publishing/</loc>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>

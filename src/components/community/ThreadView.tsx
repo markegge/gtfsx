@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   deleteThread,
   getMySubscription,
@@ -17,16 +17,24 @@ import { Avatar } from './Avatar';
 import { Composer } from './Composer';
 import { PostCard } from './PostCard';
 import { relativeTime } from './time';
+import { threadPermalink } from './permalinks';
 
 export function ThreadView() {
   const { threadKey } = useParams<{ catId: string; threadKey: string }>();
   const navigate = useNavigate();
+  const { hash } = useLocation();
   const currentUser = useStore((s) => s.currentUser);
-  // threadKey is "<id>-<slug>"; pull the id off the front
+  // threadKey is "<id>-<slug>"; pull the id off the front (ULIDs have no hyphens)
   const threadId = useMemo(() => {
     if (!threadKey) return null;
     return threadKey.split('-')[0] ?? null;
   }, [threadKey]);
+
+  // Parse a post anchor out of the URL hash, e.g. "#post-01HN..." -> "01HN..."
+  const anchorPostId = useMemo(() => {
+    const m = hash.match(/^#post-(.+)$/);
+    return m ? m[1] : null;
+  }, [hash]);
 
   const [thread, setThread] = useState<ForumThread | null>(null);
   const [posts, setPosts] = useState<ForumPost[]>([]);
@@ -34,6 +42,13 @@ export function ThreadView() {
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
   const [replyPending, setReplyPending] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
+
+  // Thread-level copy-link state
+  const [threadLinkCopied, setThreadLinkCopied] = useState(false);
+  // Which post (if any) is currently highlighted as the anchor target
+  const [highlightedPostId, setHighlightedPostId] = useState<string | null>(null);
+  // Guard: only auto-scroll once per mount even if posts re-renders
+  const scrolledRef = useRef(false);
 
   useEffect(() => {
     if (!threadId) return;
@@ -71,6 +86,37 @@ export function ThreadView() {
       cancelled = true;
     };
   }, [threadId, currentUser]);
+
+  // Scroll to + briefly highlight the anchor post once posts have loaded.
+  useEffect(() => {
+    if (!anchorPostId || posts.length === 0 || scrolledRef.current) return;
+    const el = document.getElementById(`post-${anchorPostId}`);
+    if (!el) return;
+    scrolledRef.current = true;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setHighlightedPostId(anchorPostId);
+    const t = setTimeout(() => setHighlightedPostId(null), 2200);
+    return () => clearTimeout(t);
+  }, [anchorPostId, posts]);
+
+  const handleCopyThreadLink = async () => {
+    if (!thread) return;
+    const url = threadPermalink(thread);
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setThreadLinkCopied(true);
+    setTimeout(() => setThreadLinkCopied(false), 1500);
+  };
 
   if (error) {
     return (
@@ -185,35 +231,64 @@ export function ThreadView() {
             {thread.pinned && <span className="text-coral">· Pinned</span>}
           </div>
         </div>
-        {currentUser && (
-          <div className="flex flex-col items-end gap-1 shrink-0">
-            <button
-              onClick={handleSubscribeToggle}
-              className="px-2 py-1 rounded-md text-xs border border-sand hover:border-coral hover:text-coral transition-colors"
-            >
-              {subscribed ? '🔔 Unsubscribe' : '🔕 Subscribe'}
-            </button>
-            {(isAdmin || isAuthor) && (
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <button
+            onClick={handleCopyThreadLink}
+            title="Copy link to this thread"
+            aria-label="Copy link to this thread"
+            className={`px-2 py-1 rounded-md text-xs border transition-colors flex items-center gap-1.5 ${
+              threadLinkCopied
+                ? 'border-teal text-teal'
+                : 'border-sand hover:border-coral hover:text-coral'
+            }`}
+          >
+            {threadLinkCopied ? (
+              <>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+                  <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Copied
+              </>
+            ) : (
+              <>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Copy link
+              </>
+            )}
+          </button>
+          {currentUser && (
+            <>
               <button
-                onClick={handleDeleteThread}
-                className="text-xs text-warm-gray hover:text-red-700"
+                onClick={handleSubscribeToggle}
+                className="px-2 py-1 rounded-md text-xs border border-sand hover:border-coral hover:text-coral transition-colors"
               >
-                Delete thread
+                {subscribed ? '🔔 Unsubscribe' : '🔕 Subscribe'}
               </button>
-            )}
-            {isAdmin && (
-              <div className="flex gap-1 text-[11px]">
-                <button onClick={() => handleAdminToggle('pinned')} className="hover:text-coral">
-                  {thread.pinned ? 'Unpin' : 'Pin'}
+              {(isAdmin || isAuthor) && (
+                <button
+                  onClick={handleDeleteThread}
+                  className="text-xs text-warm-gray hover:text-red-700"
+                >
+                  Delete thread
                 </button>
-                <span>·</span>
-                <button onClick={() => handleAdminToggle('locked')} className="hover:text-coral">
-                  {thread.locked ? 'Unlock' : 'Lock'}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+              {isAdmin && (
+                <div className="flex gap-1 text-[11px]">
+                  <button onClick={() => handleAdminToggle('pinned')} className="hover:text-coral">
+                    {thread.pinned ? 'Unpin' : 'Pin'}
+                  </button>
+                  <span>·</span>
+                  <button onClick={() => handleAdminToggle('locked')} className="hover:text-coral">
+                    {thread.locked ? 'Unlock' : 'Lock'}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {op && (
@@ -224,6 +299,7 @@ export function ThreadView() {
           onUpdate={handlePostUpdate}
           onDelete={handlePostDelete}
           onMarkSolved={handleMarkSolved}
+          isHighlighted={highlightedPostId === op.id}
         />
       )}
 
@@ -239,6 +315,7 @@ export function ThreadView() {
             onUpdate={handlePostUpdate}
             onDelete={handlePostDelete}
             onMarkSolved={handleMarkSolved}
+            isHighlighted={highlightedPostId === p.id}
           />
         ));
       })()}
@@ -256,6 +333,7 @@ export function ThreadView() {
               </div>
             )}
             <Composer
+              key="reply"
               submitLabel={replyPending ? 'Posting…' : 'Post reply'}
               onSubmit={handleReply}
               disabled={replyPending}

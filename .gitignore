@@ -60,3 +60,4 @@ test/
 *.sln
 *.sw?
 .claude/
+CLAUDE.md

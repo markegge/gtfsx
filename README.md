@@ -4,8 +4,6 @@ A web-based editor for creating, editing, analyzing, and publishing [GTFS](https
 
 **Live site:** [www.gtfsx.com](https://www.gtfsx.com)
 
-![GTFS·X screenshot](docs/screenshot.png)
-
 ## Features
 
 ### Editor (anonymous, browser-only)
@@ -76,8 +74,8 @@ A web-based editor for creating, editing, analyzing, and publishing [GTFS](https
 ### Local development
 
 ```bash
-git clone https://github.com/markegge/gtfs-studio.git
-cd gtfs-studio
+git clone https://github.com/markegge/gtfsx.git
+cd gtfsx
 npm install
 cp .env.example .env
 # Edit .env: add VITE_MAPBOX_TOKEN
@@ -183,4 +181,6 @@ worker/migrations/       # D1 SQL migrations
 
 ## License
 
-MIT
+[GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+
+Copyright (C) 2026 Mark Egge.

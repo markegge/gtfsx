@@ -265,8 +265,8 @@ Design rationale is preserved in the decisions appendix of the archived
 - Stripe: live-mode Price IDs (`STRIPE_PRICE_PRO_*`, `STRIPE_PRICE_AGENCY/TEAM_*`),
   portal config, webhook `→ /api/billing/webhooks/stripe`. Pricing v2 (Agency
   $299/mo · $2,499/yr) is live.
-- `mark@eateggs.com` is staff + enterprise. Pre-launch D1 backup under
-  `backups/` (gitignored).
+- The project owner's account (`mark@gtfsx.com`) is staff + enterprise.
+  Pre-launch D1 backup under `backups/` (gitignored).
 - **Rollback:** `BILLING_ENABLED=false` disables paid checkout/portal but leaves
   auth + editor up; `BACKEND_ENABLED=false` (with SPA rebuild) hides the whole
   backend. Both are `wrangler.jsonc` edits + redeploy. The two `*_ENABLED` flags

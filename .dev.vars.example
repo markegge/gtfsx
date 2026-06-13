@@ -10,7 +10,7 @@
 # and cookies on 127.0.0.1 don't share with cookies on localhost.
 APP_ORIGIN=http://localhost:5173
 FEEDS_ORIGIN=http://localhost:5173
-AUTH_EMAIL_FROM=GTFS Studio Dev <dev@example.com>
+AUTH_EMAIL_FROM=GTFS·X Dev <dev@example.com>
 
 # Real Resend API key — reuse the one from bozeman-pod/.env if you have one,
 # or create a test key at resend.com. Without a working key, signup/

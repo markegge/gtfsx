@@ -109,7 +109,7 @@ wrangler secret put GOOGLE_ADS_DEVELOPER_TOKEN
 wrangler secret put GOOGLE_ADS_CLIENT_ID
 wrangler secret put GOOGLE_ADS_CLIENT_SECRET
 wrangler secret put GOOGLE_ADS_REFRESH_TOKEN
-wrangler secret put GOOGLE_ADS_CUSTOMER_ID            # 1001841562 (no hyphens)
+wrangler secret put GOOGLE_ADS_CUSTOMER_ID            # <your-customer-id> (no hyphens)
 wrangler secret put GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED   # numeric ID
 wrangler secret put GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW    # numeric ID
 ```

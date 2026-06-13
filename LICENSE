@@ -1,6 +1,3 @@
-GTFS·X, a browser-based GTFS feed editor.
-Copyright (C) 2026 Mark Egge
-
                     GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
 
@@ -662,3 +659,6 @@ specific requirements.
 if any, to sign a "copyright disclaimer" for the program, if necessary.
 For more information on this, and how to apply and follow the GNU AGPL, see
 <https://www.gnu.org/licenses/>.
+
+
+Copyright (C) 2026 Mark Egge

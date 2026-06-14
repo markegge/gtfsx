@@ -10,6 +10,9 @@
   // (used to preview the agency table UI before real per-state data ships)
   const DEMO_AGENCIES = new URLSearchParams(location.search).has("demo-agencies");
 
+  // Statewide-program consult link (same Fantastical link used elsewhere on the site).
+  const CONSULT_URL = "https://fantastical.app/markegge/gtfsx-feed-consult";
+
   // ---- Colour scale (matches FHMap.jsx) ----
   const GAP_STOPS = ["#FBE4D8", "#F4B393", "#E8734A", "#C9491F"];
 
@@ -986,12 +989,269 @@
   }
 
   // ===========================================================
-  // APP INIT
+  // STATE-SCOPED VIEW (?state=XX direct entry — Campaign B)
   // ===========================================================
-  document.addEventListener("DOMContentLoaded", function () {
-    const root = document.getElementById("root");
-    if (!root) return;
+  // A clean, shareable, policymaker-framed page for a single state DOT:
+  // state hero + that state's agency table + condensed methodology + footer.
+  // The national hero / US choropleth / leaderboard are not rendered in this mode.
+  // The in-page #state-XX drill-down on the national page is untouched.
 
+  // Sanitize the optional ?for= value before it is shown in the hero eyebrow.
+  // URLSearchParams already percent-decodes; we strip tag delimiters + control
+  // chars and cap the length. (Values are also added as DOM text nodes via h(),
+  // which is injection-safe on its own — this is belt-and-suspenders.)
+  function sanitizeForLabel(raw) {
+    if (!raw) return "";
+    return String(raw)
+      .replace(/[<>]/g, "")
+      .replace(/[\u0000-\u001F\u007F]/g, "")
+      .trim()
+      .slice(0, 80);
+  }
+
+  // Coverage computed from the state's agency JSON (not the national STATES table,
+  // whose "cov" column is the looser findable share). Headline coverage = status "ok".
+  function computeStateCoverage(data) {
+    const ags = (data && data.agencies) || [];
+    const total = ags.length;
+    const TYPES = ["full", "reduced", "rural"];
+    const byType = {};
+    TYPES.forEach(function (t) { byType[t] = { total: 0, ok: 0 }; });
+    let ok = 0, none = 0;
+    ags.forEach(function (a) {
+      if (a.status === "ok") ok++;
+      if (a.status === "none") none++;
+      const t = byType[a.reporterType];
+      if (t) { t.total++; if (a.status === "ok") t.ok++; }
+    });
+    const pct = function (n, d) { return d > 0 ? Math.round(n / d * 100) : 0; };
+    const labels = { full: "Full reporters", reduced: "Reduced reporters", rural: "Rural (5311)" };
+    return {
+      total: total,
+      coveragePct: pct(ok, total),   // share with a current, findable feed (status "ok")
+      noFeedPct: pct(none, total),   // inverse "no findable feed" share (status "none")
+      byType: TYPES
+        .map(function (t) {
+          return {
+            label: labels[t],
+            total: byType[t].total,
+            // Coverage gap = share without a current, findable feed (path to 100%).
+            gapPct: byType[t].total > 0
+              ? Math.round((byType[t].total - byType[t].ok) / byType[t].total * 100)
+              : 0,
+          };
+        })
+        .filter(function (r) { return r.total > 0; }),
+    };
+  }
+
+  function renderStateTopBar(stateName, nationalHref) {
+    return h("header", { className: "fh-topbar" },
+      h("div", { className: "wrap" },
+        h("a", { className: "brand-mark", href: "/" },
+          h("img", { src: "/gtfsx-mark.svg", width: "28", height: "28", alt: "" }),
+          "GTFS·X"
+        ),
+        h("span", { className: "brand-crumb" }, "Feed Health · " + stateName),
+        h("nav", { className: "top-nav" },
+          h("a", { href: nationalHref }, "← National view")
+        )
+      )
+    );
+  }
+
+  function renderStateHero(stateMeta, data, cov, forValue) {
+    const name = stateMeta.name;
+
+    // Reporter-type breakdown reuses the national hero's minigrad styling.
+    const miniRows = cov.byType.map(function (r) {
+      return h("div", { className: "minigrad-row" },
+        h("div", { className: "top" },
+          h("span", { className: "nm" }, r.label),
+          h("span", { className: "pc" }, r.gapPct + "%")
+        ),
+        h("div", { className: "track" },
+          h("div", { className: "fill", "data-fill-width": r.gapPct + "%", style: { width: "0%" } })
+        )
+      );
+    });
+
+    return h("section", { className: "hero", id: "top" },
+      h("div", { className: "wrap" },
+        forValue
+          ? h("span", { className: "eyebrow", style: { color: "var(--gtfs-coral)", display: "block", marginBottom: "10px" } },
+              "Prepared for " + forValue)
+          : null,
+        h("span", { className: "eyebrow" }, "State of US Transit Data · " + name),
+        h("div", { className: "hero-grid" },
+          h("div", null,
+            h("h1", null,
+              h("span", { className: "big" }, cov.coveragePct + "%"),
+              "of " + name + "’s transit agencies publish a GTFS feed riders can find."
+            ),
+            h("p", { className: "lede" },
+              "Here’s the path from " + cov.coveragePct + "% to 100% — and why it matters for the services your agencies are working to fund."
+            ),
+            h("div", { className: "hero-meta" },
+              h("span", { className: "chip" }, "Data as of " + data.asOf),
+              h("span", { className: "chip" }, cov.total + " NTD-listed agencies")
+            ),
+            h("div", { className: "hero-actions" },
+              h("a", { className: "btn-primary", href: CONSULT_URL, target: "_blank", rel: "noopener" },
+                "Talk to us about a statewide program →"),
+              h("a", { className: "btn-secondary", href: "#agencies" }, "See every agency ↓")
+            )
+          ),
+          h("div", { className: "hero-side" },
+            h("h3", null, "Where the coverage gap is, by reporter type"),
+            h("div", { className: "minigrad" }, ...miniRows),
+            h("p", { className: "minigrad-foot" },
+              "Share of " + name + "’s NTD-listed agencies without a current, findable feed, by reporting class. Rural Section 5311 service is typically the biggest opportunity, and the hardest for riders to find today."
+            )
+          )
+        )
+      )
+    );
+  }
+
+  function renderStateAgencySection(stateMeta, data) {
+    return h("section", { className: "section", id: "agencies" },
+      h("div", { className: "wrap" },
+        h("div", { className: "section-head" },
+          h("span", { className: "eyebrow" }, "Agency detail"),
+          h("h2", null, "Every NTD-listed transit agency in " + stateMeta.name),
+          h("p", null,
+            "Each agency’s current feed status, with a direct path to publish or repair its GTFS in the free GTFS·X editor. This is an opportunity list, not a scorecard: most agencies without a findable feed are rural and demand-response operators that have never had a reason to publish one."
+          )
+        ),
+        renderAgencyTable(data)
+      )
+    );
+  }
+
+  function renderStateMethodology(stateMeta, nationalHref) {
+    const { HEADLINE } = window.FH_DATA;
+    return h("section", { className: "method", id: "methodology" },
+      h("div", { className: "wrap section" },
+        h("div", { className: "section-head" },
+          h("span", { className: "eyebrow" }, "Methodology"),
+          h("h2", null, "How this is measured"),
+          h("p", null,
+            "We join the FY2024 NTD agency roster against the FTA GTFS Weblinks crosswalk and the Mobility Database, then read validation status from MobilityData’s canonical validator."
+          )
+        ),
+        h("div", { className: "method-grid" },
+          h("div", null,
+            h("dl", null,
+              h("div", null,
+                h("dt", null, "Feed status"),
+                h("dd", null,
+                  h("em", null, "Current"),
+                  " means a findable feed that passes the canonical validator and describes current service. ",
+                  h("em", null, "Expired"),
+                  " and ",
+                  h("em", null, "Fails validator"),
+                  " feeds are findable but out of date or invalid. ",
+                  h("em", null, "No feed"),
+                  " means no GTFS appears in the FTA weblinks crosswalk or the Mobility Database."
+                )
+              ),
+              h("div", null,
+                h("dt", null, "Coverage"),
+                h("dd", null,
+                  "The headline figure is the share of " + stateMeta.name + "’s NTD-listed agencies with a current, findable feed."
+                )
+              ),
+              h("div", null,
+                h("dt", null, "Scope & caveats"),
+                h("dd", null,
+                  "Only the " + HEADLINE.agencies.toLocaleString() + " agencies in the FY2024 NTD roster are included. Agency-to-feed joins use name and locality matching where no canonical ID exists; matches are reviewed but not infallible."
+                )
+              ),
+              h("div", null,
+                h("dt", null, "Refresh"),
+                h("dd", null, "Monthly. Last refreshed " + HEADLINE.draftDate + ". Owner: " + HEADLINE.owner + ".")
+              )
+            )
+          ),
+          h("div", null,
+            h("dt", { style: { fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--gtfs-coral)", marginBottom: "8px", display: "block" } },
+              "The national picture"
+            ),
+            h("div", { className: "cite-box" },
+              h("div", { className: "txt" },
+                "Nationally, " + HEADLINE.noFeedPct + "% of US federally funded transit agencies have no GTFS feed any trip planner can find."
+              ),
+              h("div", { style: { marginTop: "14px" } },
+                h("a", { className: "btn-secondary", href: nationalHref }, "View the national dashboard →")
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+
+  // Update the document title + social/canonical meta for the scoped state.
+  // NOTE: social/search scrapers do not run this JS, so link-preview cards stay
+  // national until a pre-render/SSG pass ships (Phase 2). This only fixes the
+  // browser tab + canonical for users who actually load the page.
+  function setMetaTag(kind, key, value) {
+    let el = document.head.querySelector("meta[" + kind + "=\"" + key + "\"]");
+    if (!el) {
+      el = document.createElement("meta");
+      el.setAttribute(kind, key);
+      document.head.appendChild(el);
+    }
+    el.setAttribute("content", value);
+  }
+
+  function applyStateMeta(stateMeta, cov) {
+    const name = stateMeta.name;
+    const title = name + " Transit Feed Health — GTFS·X";
+    const desc = name + ": " + cov.coveragePct + "% of transit agencies publish a GTFS feed riders can find. " +
+      "The state of transit data publishing across " + name + "’s NTD-listed agencies, and the path to full coverage.";
+    const url = "https://gtfsx.com/feed-health/?state=" + stateMeta.abbr;
+
+    document.title = title;
+    setMetaTag("name", "description", desc);
+    setMetaTag("property", "og:title", title);
+    setMetaTag("property", "og:description", desc);
+    setMetaTag("property", "og:url", url);
+    setMetaTag("name", "twitter:title", title);
+    setMetaTag("name", "twitter:description", desc);
+
+    let link = document.head.querySelector("link[rel=\"canonical\"]");
+    if (!link) {
+      link = document.createElement("link");
+      link.setAttribute("rel", "canonical");
+      document.head.appendChild(link);
+    }
+    link.setAttribute("href", url);
+  }
+
+  function renderStateScoped(root, stateMeta, data, forValue) {
+    const cov = computeStateCoverage(data);
+    applyStateMeta(stateMeta, cov);
+    const nationalHref = location.pathname;
+
+    const main = document.createElement("main");
+    main.appendChild(renderStateHero(stateMeta, data, cov, forValue));
+    main.appendChild(renderStateAgencySection(stateMeta, data));
+    main.appendChild(renderStateMethodology(stateMeta, nationalHref));
+
+    root.appendChild(renderStateTopBar(stateMeta.name, nationalHref));
+    root.appendChild(main);
+    root.appendChild(renderSiteFooter());
+
+    // Trigger minigrad bar animations after paint
+    animateFills();
+  }
+
+  // ===========================================================
+  // NATIONAL VIEW (default)
+  // ===========================================================
+  function renderNational(root) {
     const divider = document.createElement("hr");
     divider.className = "rule wrap";
     divider.style.cssText = "margin:8px auto 0;max-width:1120px;width:calc(100% - 56px)";
@@ -1013,5 +1273,42 @@
 
     // Trigger bar animations after paint
     animateFills();
+  }
+
+  // ===========================================================
+  // APP INIT
+  // ===========================================================
+  document.addEventListener("DOMContentLoaded", function () {
+    const root = document.getElementById("root");
+    if (!root) return;
+
+    const params = new URLSearchParams(location.search);
+    const stateParam = (params.get("state") || "").trim().toUpperCase();
+    // Validate against the known state list before switching to the scoped layout.
+    const stateMeta = stateParam
+      ? window.FH_DATA.STATES.find(function (s) { return s.abbr === stateParam; })
+      : null;
+
+    if (stateMeta) {
+      const forValue = sanitizeForLabel(params.get("for"));
+      const dataUrl = DEMO_AGENCIES
+        ? "data/agencies/_SAMPLE.json"
+        : "data/agencies/" + stateMeta.abbr + ".json";
+      fetch(dataUrl)
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (data && data.agencies && data.agencies.length) {
+            renderStateScoped(root, stateMeta, data, forValue);
+          } else {
+            // Missing/empty state file — fall back cleanly to the national page.
+            renderNational(root);
+          }
+        })
+        .catch(function () { renderNational(root); });
+      return;
+    }
+
+    // No / invalid ?state= → national page (unchanged).
+    renderNational(root);
   });
 })();

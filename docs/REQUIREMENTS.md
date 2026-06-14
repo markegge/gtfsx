@@ -8,7 +8,7 @@ GTFS·X is a web application for creating, editing, analysing, and publishing GT
 
 | | |
 |---|---|
-| **Editor (anonymous, IndexedDB-only)** | Live in production at https://www.gtfsx.com. Two-rail layout (responsive left nav + configuration right rail). |
+| **Editor (anonymous, IndexedDB-only)** | Live in production at https://www.gtfsx.com. Two-rail layout (responsive left nav + configuration right rail). Mobile-responsive editor layout shipped (Phase 1 + Phase 2): all editing and analysis panels reachable at phone width; panel opens full-screen; bottom bar surfaces Timetable/Visualization/Validation. Map drawing and vertex drag remain mouse-optimized (touch-draw on roadmap). |
 | **Backend (auth, projects, orgs, publication, embeds, billing, forum)** | **Live in production since 2026-05-15** with live-mode Stripe billing — `BACKEND_ENABLED=true`, `BILLING_ENABLED=true`. (Originally disabled 2026-05-08 after a premature launch; re-enabled 2026-05-15.) Staging is parked — manual rehearsal only. |
 | **Plans** | Free / Pro / Agency / Enterprise, self-serve via Stripe Checkout. See [§3.7](#37-billing-and-subscription-plans). |
 | **Source of truth** | `main` — every push auto-deploys to production via Cloudflare Workers Builds. |

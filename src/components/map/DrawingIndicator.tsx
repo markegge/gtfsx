@@ -52,10 +52,11 @@ export function DrawingIndicator() {
   // or an existing route the shape attaches to), anchored under the banner.
   if (mapMode === 'draw_route') {
     return (
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2">
-        <div className="bg-coral text-white px-5 py-2 rounded-full text-[13px] font-heading font-semibold shadow-md flex items-center gap-2">
-          <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-          Drawing Route Shape — Click to add points, double-click to finish
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2 w-[min(92vw,480px)]">
+        <div className="bg-coral text-white px-4 py-2 rounded-full text-[13px] font-heading font-semibold shadow-md flex items-center gap-2 text-center">
+          <div className="w-2 h-2 bg-white rounded-full animate-pulse shrink-0" />
+          <span className="max-[600px]:hidden">Drawing Route Shape — Click to add points, double-click to finish</span>
+          <span className="min-[601px]:hidden">Drawing route — double-click to finish</span>
         </div>
         <DrawRouteTargetDialog />
       </div>
@@ -63,6 +64,15 @@ export function DrawingIndicator() {
   }
 
   const messages: Record<string, string> = {
+    edit_vertices: `${editingPrefix} — Drag vertices to adjust`,
+    move_stop: 'Moving Stop — Click map to reposition',
+    edit_shape: `${editingPrefix} — Drag vertices, click midpoints to add, Delete to remove`,
+    trim_shape: 'Trimming Shape — Click a point to cut',
+    draw_flex_zone: 'Drawing Flex Zone — Click to add vertices, double-click to close',
+    edit_flex_zone: 'Editing Flex Zone — Drag vertices to adjust',
+  };
+
+  const messagesFull: Record<string, string> = {
     edit_vertices: `${editingPrefix} — Drag vertices to adjust`,
     move_stop: 'Moving Stop — Click the map or drag the stop to reposition. Press Esc to cancel.',
     edit_shape: `${editingPrefix} — Drag vertices, click midpoints to add, Delete key to remove. Click Save when done.`,
@@ -72,9 +82,10 @@ export function DrawingIndicator() {
   };
 
   return (
-    <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-coral text-white px-5 py-2 rounded-full text-[13px] font-heading font-semibold shadow-md flex items-center gap-2 z-10">
-      <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-      {messages[mapMode]}
+    <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-coral text-white px-4 py-2 rounded-full text-[13px] font-heading font-semibold shadow-md flex items-center gap-2 z-10 max-w-[min(92vw,480px)] text-center">
+      <div className="w-2 h-2 bg-white rounded-full animate-pulse shrink-0" />
+      <span className="max-[600px]:hidden">{messagesFull[mapMode]}</span>
+      <span className="min-[601px]:hidden">{messages[mapMode]}</span>
     </div>
   );
 }

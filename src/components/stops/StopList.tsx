@@ -197,13 +197,6 @@ export function StopList() {
 
   return (
     <div>
-      <button
-        onClick={() => setCreatingStop(true)}
-        className="w-full mb-3 flex items-center justify-center gap-1.5 px-3 py-2 border-2 border-dashed border-sand rounded-lg text-sm font-semibold text-warm-gray hover:border-coral hover:text-coral hover:bg-coral-light transition-colors"
-      >
-        + Create new stop
-      </button>
-
       <div className="mb-3 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide">
@@ -418,6 +411,14 @@ export function StopList() {
           </div>
         </div>
       )}
+
+      {/* Add stop — at the bottom, matching the Routes / Fares / Calendars pattern */}
+      <button
+        onClick={() => setCreatingStop(true)}
+        className="w-full mt-3 flex items-center gap-1.5 px-3 py-2 border-2 border-dashed border-sand rounded-lg text-sm font-semibold text-warm-gray hover:border-coral hover:text-coral hover:bg-coral-light transition-colors"
+      >
+        + Add stop
+      </button>
     </div>
   );
 }

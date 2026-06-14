@@ -220,26 +220,29 @@ function SummaryView() {
 
   return (
     <div className="p-3 flex flex-col min-h-0 flex-1">
-      <div className="flex items-center gap-3 mb-3 shrink-0">
-        <h3 className="text-xs font-heading font-bold text-dark-brown whitespace-nowrap">
-          Trip Start Times by Route (Outbound)
-        </h3>
-        {calendars.length > 0 && (
-          <select
-            value={activeServiceId || ''}
-            onChange={(e) => setSelectedServiceId(e.target.value)}
-            className="px-2 py-1 border border-sand rounded-md text-xs bg-cream focus:outline-none focus:border-coral"
-          >
-            {calendars.map((cal) => (
-              <option key={cal.service_id} value={cal.service_id}>
-                {cal._description || cal.service_id}
-              </option>
-            ))}
-          </select>
-        )}
-        <span className="text-[11px] text-warm-gray">
-          {routeRows.reduce((sum, r) => sum + r.dots.length, 0)} trips
-        </span>
+      {/* Toolbar — scrollable on narrow viewports */}
+      <div className="shrink-0 mb-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex items-center gap-3 min-w-max">
+          <h3 className="text-xs font-heading font-bold text-dark-brown whitespace-nowrap">
+            Trip Start Times by Route (Outbound)
+          </h3>
+          {calendars.length > 0 && (
+            <select
+              value={activeServiceId || ''}
+              onChange={(e) => setSelectedServiceId(e.target.value)}
+              className="px-2 py-1 border border-sand rounded-md text-xs bg-cream focus:outline-none focus:border-coral"
+            >
+              {calendars.map((cal) => (
+                <option key={cal.service_id} value={cal.service_id}>
+                  {cal._description || cal.service_id}
+                </option>
+              ))}
+            </select>
+          )}
+          <span className="text-[11px] text-warm-gray whitespace-nowrap">
+            {routeRows.reduce((sum, r) => sum + r.dots.length, 0)} trips
+          </span>
+        </div>
       </div>
 
       <div className="overflow-auto flex-1 min-h-0 pr-3">

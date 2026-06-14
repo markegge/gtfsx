@@ -401,7 +401,8 @@ export function StopAnalysisPanel() {
                 headway_offpeak_min: s.headwayOffpeakMin == null ? '' : Math.round(s.headwayOffpeakMin),
               })))} />
             </div>
-            <div className="border border-sand rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+            <div className="border border-sand rounded-lg overflow-hidden min-w-[300px]">
               <table className="w-full text-[11px] border-collapse">
                 <thead>
                   <tr className="bg-cream text-warm-gray uppercase tracking-wide">
@@ -424,6 +425,7 @@ export function StopAnalysisPanel() {
                   ))}
                 </tbody>
               </table>
+            </div>
             </div>
             {intensity.length > 12 && (
               <p className="text-[10px] text-warm-gray">Top 12 by trips/day shown · full table in the CSV</p>

@@ -224,82 +224,6 @@ export function FlexEditor() {
         </div>
       )}
 
-      {/* Actions (not shown while editing) */}
-      {!isEditing && !isDrawing && (
-        !showCreatePanel ? (
-          <button
-            onClick={() => setShowCreatePanel(true)}
-            className="w-full px-3 py-2 bg-purple text-white rounded-lg text-xs font-heading font-bold hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
-          >
-            <span>+</span> Create New Flex Zone
-          </button>
-        ) : (
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 space-y-2">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-xs font-semibold text-purple-800">Create new flex zone</p>
-              <button
-                onClick={() => setShowCreatePanel(false)}
-                className="text-[11px] text-warm-gray hover:text-dark-brown"
-              >
-                Cancel
-              </button>
-            </div>
-
-            {/* Draw zone manually */}
-            <button
-              onClick={() => { handleDrawZone(); setShowCreatePanel(false); }}
-              className="w-full px-3 py-2 bg-purple text-white rounded-lg text-xs font-heading font-bold hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
-            >
-              <span>✏</span> Draw Zone on Map
-            </button>
-
-            {/* Create stop group */}
-            <button
-              onClick={() => { handleCreateGroup(); setShowCreatePanel(false); }}
-              className="w-full px-3 py-2 bg-white border border-purple text-purple rounded-lg text-xs font-heading font-bold hover:bg-purple-50 transition-colors flex items-center justify-center gap-2"
-            >
-              <span>•••</span> Create Stop Group
-            </button>
-
-            {/* Auto-generate from fixed routes */}
-            <div className="bg-white border border-sand rounded-lg p-3 space-y-2">
-              <p className="text-xs font-semibold text-dark-brown">Auto-generate from fixed routes</p>
-              <p className="text-[11px] text-warm-gray">
-                Buffer around all visible bus routes
-                ({busRoutes.length} route{busRoutes.length !== 1 ? 's' : ''}).
-                Light rail / tram excluded.
-              </p>
-              <div className="flex items-center gap-2">
-                <label className="text-[11px] text-dark-brown font-semibold whitespace-nowrap">
-                  Buffer:
-                </label>
-                <input
-                  type="number"
-                  min="0.1"
-                  max="25"
-                  step="0.25"
-                  value={bufferInput}
-                  onChange={(e) => setBufferInput(e.target.value)}
-                  className="w-20 px-2 py-1 border border-sand rounded text-xs text-dark-brown bg-white focus:outline-none focus:border-teal"
-                />
-                <span className="text-[11px] text-warm-gray">miles</span>
-              </div>
-              {error && <p className="text-[11px] text-red-600">{error}</p>}
-              <button
-                onClick={() => { handleGenerate(); setShowCreatePanel(false); }}
-                disabled={generating || !hasShapes || !bufferValid}
-                className="w-full px-3 py-2 bg-teal text-white rounded-lg text-xs font-heading font-bold hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {generating ? 'Generating…' : `Generate ${bufferValid ? bufferMiles : '?'} mi Buffer`}
-              </button>
-              {!hasShapes && (
-                <p className="text-[11px] text-warm-gray">Draw route shapes on the map to enable.</p>
-              )}
-            </div>
-          </div>
-        )
-      )}
-
       {/* Zone list */}
       {flexZones.length > 0 ? (
         <div className="space-y-1.5">
@@ -408,6 +332,84 @@ export function FlexEditor() {
             title="No service areas yet"
             description="Draw a zone on the map or generate one from your fixed routes."
           />
+        )
+      )}
+
+      {/* Add flex zone — dashed ghost trigger at the bottom, matching the other
+          entity panels. The create sub-panel (and its drawing flow) keep the
+          flex feature's purple accent. */}
+      {!isEditing && !isDrawing && (
+        !showCreatePanel ? (
+          <button
+            onClick={() => setShowCreatePanel(true)}
+            className="w-full py-2 rounded-lg border-2 border-dashed border-sand text-warm-gray text-sm font-medium hover:border-coral hover:text-coral transition-colors"
+          >
+            + Add flex zone
+          </button>
+        ) : (
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 space-y-2">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs font-semibold text-purple-800">Create new flex zone</p>
+              <button
+                onClick={() => setShowCreatePanel(false)}
+                className="text-[11px] text-warm-gray hover:text-dark-brown"
+              >
+                Cancel
+              </button>
+            </div>
+
+            {/* Draw zone manually */}
+            <button
+              onClick={() => { handleDrawZone(); setShowCreatePanel(false); }}
+              className="w-full px-3 py-2 bg-purple text-white rounded-lg text-xs font-heading font-bold hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+            >
+              <span>✏</span> Draw Zone on Map
+            </button>
+
+            {/* Create stop group */}
+            <button
+              onClick={() => { handleCreateGroup(); setShowCreatePanel(false); }}
+              className="w-full px-3 py-2 bg-white border border-purple text-purple rounded-lg text-xs font-heading font-bold hover:bg-purple-50 transition-colors flex items-center justify-center gap-2"
+            >
+              <span>•••</span> Create Stop Group
+            </button>
+
+            {/* Auto-generate from fixed routes */}
+            <div className="bg-white border border-sand rounded-lg p-3 space-y-2">
+              <p className="text-xs font-semibold text-dark-brown">Auto-generate from fixed routes</p>
+              <p className="text-[11px] text-warm-gray">
+                Buffer around all visible bus routes
+                ({busRoutes.length} route{busRoutes.length !== 1 ? 's' : ''}).
+                Light rail / tram excluded.
+              </p>
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] text-dark-brown font-semibold whitespace-nowrap">
+                  Buffer:
+                </label>
+                <input
+                  type="number"
+                  min="0.1"
+                  max="25"
+                  step="0.25"
+                  value={bufferInput}
+                  onChange={(e) => setBufferInput(e.target.value)}
+                  className="w-20 px-2 py-1 border border-sand rounded text-xs text-dark-brown bg-white focus:outline-none focus:border-teal"
+                />
+                <span className="text-[11px] text-warm-gray">miles</span>
+              </div>
+              {error && <p className="text-[11px] text-red-600">{error}</p>}
+              <button
+                onClick={() => { handleGenerate(); setShowCreatePanel(false); }}
+                disabled={generating || !hasShapes || !bufferValid}
+                className="w-full px-3 py-2 bg-teal text-white rounded-lg text-xs font-heading font-bold hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {generating ? 'Generating…' : `Generate ${bufferValid ? bufferMiles : '?'} mi Buffer`}
+              </button>
+              {!hasShapes && (
+                <p className="text-[11px] text-warm-gray">Draw route shapes on the map to enable.</p>
+              )}
+            </div>
+          </div>
         )
       )}
 

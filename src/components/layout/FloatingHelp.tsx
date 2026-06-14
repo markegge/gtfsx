@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { useStore } from '../../store';
 import { isPlanAtLeastPro } from '../../utils/planRank';
@@ -30,11 +30,30 @@ export function FloatingHelp() {
   const currentUser = useStore((s) => s.currentUser);
   const userOrgs = useStore((s) => s.userOrgs);
 
+  // Hide on narrow viewports when the right-rail panel overlays the screen
+  // (z-20), because the help button (z-30, absolute) would appear on top of
+  // and obscure the panel's last content row.
+  const sidebarSection = useStore((s) => s.sidebarSection);
+  const rightRailOpen = useStore((s) => s.rightRailOpen);
+  const [isNarrow, setIsNarrow] = useState(
+    typeof window !== 'undefined' && window.innerWidth < 600,
+  );
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 600);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   // Show support email for Pro+ personal plan OR any agency / enterprise org.
   const showSupportEmail = useMemo(() => {
     if (isPlanAtLeastPro(currentUser?.plan)) return true;
     return userOrgs.some((o) => o.plan === 'agency' || o.plan === 'enterprise');
   }, [currentUser, userOrgs]);
+
+  // ── Narrow-viewport guard ──────────────────────────────────────
+  // When the right-rail panel fills the screen on mobile, this button sits
+  // at z-30 (above the z-20 panel) and covers the last content row. Hide it.
+  if (isNarrow && sidebarSection && rightRailOpen) return null;
 
   // ── Hover management ───────────────────────────────────────────
   const cancelClose = () => {

@@ -212,6 +212,16 @@ export function TopBar() {
                     {saving ? 'Saving…' : 'Save'}
                   </button>
                 )}
+                {/* Scenario switcher — Agency+ only, self-hides when no scenarios */}
+                {hasScenarios && (
+                  <>
+                    <div className="border-t border-sand my-1" />
+                    <div className="px-1 py-0.5">
+                      <ScenarioSwitcher />
+                    </div>
+                    <div className="border-t border-sand my-1" />
+                  </>
+                )}
                 <button
                   onClick={() => { setMobileMenuOpen(false); setShowImport(true); }}
                   className="text-left px-3 py-2 rounded-md text-sm font-heading font-semibold text-dark-brown hover:bg-cream"

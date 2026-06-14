@@ -50,9 +50,9 @@ const SECTION_TITLES: Record<SidebarSection, string> = {
 };
 
 const SECTION_GROUP: Record<SidebarSection, string | null> = {
-  agency: null,
-  fares: null,
-  calendar: null,
+  agency: 'Setup',
+  fares: 'Setup',
+  calendar: 'Setup',
   routes: 'Fixed Route Service',
   stops: 'Fixed Route Service',
   stations: 'Fixed Route Service',
@@ -229,34 +229,36 @@ function RouteDetailHeader() {
           confirmDelete={false}
         />
       </div>
-      {/* Tabs strip */}
-      <div className="px-3 flex items-end gap-1 -mb-px">
-        {ROUTE_TABS.map((t) => {
-          const active = tab === t.id;
-          const count = counts[t.id];
-          return (
-            <button
-              key={t.id}
-              onClick={() => setRouteDetailTab(t.id)}
-              className={`relative px-3 py-2 font-heading font-bold text-[13px] flex items-center gap-1.5 border-b-2 transition-colors ${
-                active
-                  ? 'text-coral border-coral'
-                  : 'text-warm-gray border-transparent hover:text-dark-brown'
-              }`}
-            >
-              <span>{t.label}</span>
-              {count != null && count > 0 && (
-                <span
-                  className={`text-[11px] font-bold tabular-nums ${
-                    active ? 'text-coral' : 'text-warm-gray'
-                  }`}
-                >
-                  {count.toLocaleString()}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      {/* Tabs strip — scrollable on narrow viewports so all 5 tabs are reachable */}
+      <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="px-3 flex items-end gap-1 -mb-px min-w-max">
+          {ROUTE_TABS.map((t) => {
+            const active = tab === t.id;
+            const count = counts[t.id];
+            return (
+              <button
+                key={t.id}
+                onClick={() => setRouteDetailTab(t.id)}
+                className={`relative px-3 py-2 font-heading font-bold text-[13px] flex items-center gap-1.5 border-b-2 transition-colors ${
+                  active
+                    ? 'text-coral border-coral'
+                    : 'text-warm-gray border-transparent hover:text-dark-brown'
+                }`}
+              >
+                <span>{t.label}</span>
+                {count != null && count > 0 && (
+                  <span
+                    className={`text-[11px] font-bold tabular-nums ${
+                      active ? 'text-coral' : 'text-warm-gray'
+                    }`}
+                  >
+                    {count.toLocaleString()}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -501,21 +503,23 @@ function CalendarDetailHeader() {
           deleteTitle="Delete this calendar"
         />
       </div>
-      {/* Details / Routes / Exceptions tabs (mirrors the route + stop editors' tab strips). */}
-      <div className="flex gap-1 px-3 -mb-px">
-        {(['details', 'routes', 'exceptions'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setCalendarDetailTab(t)}
-            className={`px-3 py-2 font-heading font-bold text-[13px] border-b-2 transition-colors ${
-              calendarDetailTab === t
-                ? 'text-coral border-coral'
-                : 'text-warm-gray border-transparent hover:text-dark-brown'
-            }`}
-          >
-            {t === 'details' ? 'Details' : t === 'routes' ? 'Routes' : 'Exceptions'}
-          </button>
-        ))}
+      {/* Details / Routes / Exceptions tabs — scrollable on narrow viewports */}
+      <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex gap-1 px-3 -mb-px min-w-max">
+          {(['details', 'routes', 'exceptions'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setCalendarDetailTab(t)}
+              className={`px-3 py-2 font-heading font-bold text-[13px] border-b-2 transition-colors ${
+                calendarDetailTab === t
+                  ? 'text-coral border-coral'
+                  : 'text-warm-gray border-transparent hover:text-dark-brown'
+              }`}
+            >
+              {t === 'details' ? 'Details' : t === 'routes' ? 'Routes' : 'Exceptions'}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -607,6 +611,23 @@ export function RightRail() {
   };
 
   if (isShapeEditing) {
+    // On narrow viewports the 36px sliver is invisible/unusable — render a
+    // clearly tappable floating "Done" button at the bottom-right of the map
+    // instead so the user is never stuck in a drawing mode on mobile.
+    if (isNarrow) {
+      return (
+        <div className="fixed bottom-16 right-4 z-40 pointer-events-none">
+          <button
+            onClick={() => useStore.getState().setMapMode('select')}
+            className="pointer-events-auto bg-white border-2 border-coral shadow-lg rounded-full px-5 py-3 flex items-center gap-2 text-sm font-heading font-bold text-coral hover:bg-coral hover:text-white active:scale-95 transition-all"
+            title="Exit drawing"
+          >
+            <span>↩</span>
+            <span>Done</span>
+          </button>
+        </div>
+      );
+    }
     return (
       <button
         onClick={() => useStore.getState().setMapMode('select')}
@@ -658,8 +679,9 @@ export function RightRail() {
       className={
         isNarrow
           // On phones, take the whole space under the top bar so the panel is
-          // actually usable. Higher z so it sits over the map + bottom panel.
-          ? 'fixed top-14 inset-x-0 bottom-0 z-30 bg-white border-l border-sand flex flex-col overflow-hidden'
+          // actually usable. z-20 so the always-visible BottomPanel header
+          // (fixed z-30) stays reachable above this overlay — no dead-end.
+          ? 'fixed top-14 inset-x-0 bottom-0 z-20 bg-white border-l border-sand flex flex-col overflow-hidden'
           : `relative shrink-0 bg-white border-l border-sand flex flex-col overflow-hidden ${
               isDragging ? '' : 'transition-[width] duration-150'
             }`

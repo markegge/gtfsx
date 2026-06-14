@@ -446,7 +446,8 @@ function DemographicProfile({ coverage, baseline }: { coverage: DemographicShare
   return (
     <div className="space-y-2">
       <h3 className="font-heading font-bold text-sm text-dark-brown">Demographic profile</h3>
-      <div className="border border-sand rounded-lg overflow-hidden">
+      <div className="overflow-x-auto">
+      <div className="border border-sand rounded-lg overflow-hidden min-w-[280px]">
         <table className="w-full text-[11px] border-collapse">
           <thead>
             <tr className="bg-cream text-warm-gray uppercase tracking-wide">
@@ -478,6 +479,7 @@ function DemographicProfile({ coverage, baseline }: { coverage: DemographicShare
             })}
           </tbody>
         </table>
+      </div>
       </div>
       <p className="text-[10px] text-warm-gray">
         Ratio = coverage share ÷ county share. Above 1.0 means the served area over-represents that

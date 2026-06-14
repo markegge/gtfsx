@@ -550,107 +550,109 @@ export function TimetableGrid() {
 
   return (
     <div className="p-2 flex flex-col min-h-0 flex-1">
-      <div className="flex items-center gap-2 mb-2 px-2 shrink-0">
-        {/* Route selector */}
-        <select
-          value={selectedRouteId || ''}
-          onChange={(e) => selectRoute(e.target.value || null)}
-          className="px-2 py-1 border border-sand rounded-md text-xs font-semibold bg-cream focus:outline-none focus:border-coral"
-        >
-          {routes.map((r) => (
-            <option key={r.route_id} value={r.route_id}>
-              {r.route_short_name || r.route_long_name || r.route_id}
-            </option>
-          ))}
-        </select>
-        {/* Service pattern */}
-        {calendars.length > 0 && (
+      {/* Toolbar — horizontally scrollable on narrow viewports so every control is reachable */}
+      <div className="shrink-0 mb-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex items-center gap-2 px-2 min-w-max">
+          {/* Route selector */}
           <select
-            value={activeServiceId || ''}
-            onChange={(e) => setSelectedServiceId(e.target.value)}
-            className="px-2 py-1 border border-sand rounded-md text-xs bg-cream focus:outline-none focus:border-coral"
+            value={selectedRouteId || ''}
+            onChange={(e) => selectRoute(e.target.value || null)}
+            className="px-2 py-1 border border-sand rounded-md text-xs font-semibold bg-cream focus:outline-none focus:border-coral"
           >
-            {calendars.map((cal) => (
-              <option key={cal.service_id} value={cal.service_id}>
-                {cal._description || cal.service_id}
+            {routes.map((r) => (
+              <option key={r.route_id} value={r.route_id}>
+                {r.route_short_name || r.route_long_name || r.route_id}
               </option>
             ))}
           </select>
-        )}
-        {/* Adaptive trip-pattern selector. Falls back to the legacy direction
-            toggle when the route has 0-2 shape patterns; for 3+ patterns it
-            renders a dropdown so same-direction variants are reachable. */}
-        {patterns.length >= 1 ? (
-          <PatternSelector
-            patterns={patterns}
-            selectedShapeId={effectiveShapeId}
-            route={route}
-            shapes={shapes}
-            onChange={(p) => {
-              setSelectedShapeId(p.shapeId);
-              if (p.directionId !== directionId) setDirectionId(p.directionId);
-            }}
-          />
-        ) : (
-          <DirectionSelect directionId={directionId} onChange={setDirectionId} route={route} />
-        )}
-        <span className="text-xs text-warm-gray whitespace-nowrap">
-          {routeTrips.length} trips
-        </span>
-        <div className="flex-1" />
-        <button
-          onClick={() => {
-            if (!selectedRouteId) return;
-            const st = useStore.getState();
-            st.setEditingRouteId(selectedRouteId);
-            st.setRouteDetailTab('stops');
-            st.setSidebarSection('routes');
-            st.setRightRailOpen(true);
-          }}
-          disabled={!selectedRouteId}
-          title="Edit the stops on this route's pattern"
-          className="px-3 py-1 border-2 border-dashed border-sand rounded-md text-xs font-semibold text-warm-gray hover:border-coral hover:text-coral transition-colors whitespace-nowrap disabled:opacity-40 disabled:hover:border-sand disabled:hover:text-warm-gray"
-        >
-          Edit Stops
-        </button>
-        <label
-          className="flex items-center gap-1.5 text-[11px] text-warm-gray cursor-pointer select-none whitespace-nowrap"
-          title="Show separate arrival and departure inputs for each stop. Use this for services with dwell time at intermediate stops (e.g. ferries, long-distance rail)."
-        >
-          <input
-            type="checkbox"
-            checked={splitArrDep}
-            onChange={(e) => setSplitArrDep(e.target.checked)}
-            className="accent-coral"
-          />
-          Arr / Dep
-        </label>
-        {routeTrips.length > 0 && (
+          {/* Service pattern */}
+          {calendars.length > 0 && (
+            <select
+              value={activeServiceId || ''}
+              onChange={(e) => setSelectedServiceId(e.target.value)}
+              className="px-2 py-1 border border-sand rounded-md text-xs bg-cream focus:outline-none focus:border-coral"
+            >
+              {calendars.map((cal) => (
+                <option key={cal.service_id} value={cal.service_id}>
+                  {cal._description || cal.service_id}
+                </option>
+              ))}
+            </select>
+          )}
+          {/* Adaptive trip-pattern selector. Falls back to the legacy direction
+              toggle when the route has 0-2 shape patterns; for 3+ patterns it
+              renders a dropdown so same-direction variants are reachable. */}
+          {patterns.length >= 1 ? (
+            <PatternSelector
+              patterns={patterns}
+              selectedShapeId={effectiveShapeId}
+              route={route}
+              shapes={shapes}
+              onChange={(p) => {
+                setSelectedShapeId(p.shapeId);
+                if (p.directionId !== directionId) setDirectionId(p.directionId);
+              }}
+            />
+          ) : (
+            <DirectionSelect directionId={directionId} onChange={setDirectionId} route={route} />
+          )}
+          <span className="text-xs text-warm-gray whitespace-nowrap">
+            {routeTrips.length} trips
+          </span>
           <button
-            onClick={() => setRemoveAllPrompt(true)}
-            title="Delete every trip in this view (keeps the shape and its stops)"
-            className="px-3 py-1 border-2 border-dashed border-sand rounded-md text-xs font-semibold text-warm-gray hover:border-red-400 hover:text-red-500 transition-colors whitespace-nowrap"
+            onClick={() => {
+              if (!selectedRouteId) return;
+              const st = useStore.getState();
+              st.setEditingRouteId(selectedRouteId);
+              st.setRouteDetailTab('stops');
+              st.setSidebarSection('routes');
+              st.setRightRailOpen(true);
+            }}
+            disabled={!selectedRouteId}
+            title="Edit the stops on this route's pattern"
+            className="px-3 py-1 border-2 border-dashed border-sand rounded-md text-xs font-semibold text-warm-gray hover:border-coral hover:text-coral transition-colors whitespace-nowrap disabled:opacity-40 disabled:hover:border-sand disabled:hover:text-warm-gray"
           >
-            Remove All Trips
+            Edit Stops
           </button>
-        )}
-        <button
-          onClick={() => {
-            setRepeatError(null);
-            setShowRepeatForm((v) => !v);
-          }}
-          disabled={!hasStops}
-          className="px-3 py-1 border-2 border-dashed border-sand rounded-md text-xs font-semibold text-warm-gray hover:border-coral hover:text-coral transition-colors whitespace-nowrap disabled:opacity-40 disabled:hover:border-sand disabled:hover:text-warm-gray"
-        >
-          Repeat Every...
-        </button>
-        <button
-          onClick={handleAddTrip}
-          disabled={!hasStops}
-          className="px-3 py-1 border-2 border-dashed border-sand rounded-md text-xs font-semibold text-warm-gray hover:border-coral hover:text-coral transition-colors whitespace-nowrap disabled:opacity-40 disabled:hover:border-sand disabled:hover:text-warm-gray"
-        >
-          + Add Trip
-        </button>
+          <label
+            className="flex items-center gap-1.5 text-[11px] text-warm-gray cursor-pointer select-none whitespace-nowrap"
+            title="Show separate arrival and departure inputs for each stop. Use this for services with dwell time at intermediate stops (e.g. ferries, long-distance rail)."
+          >
+            <input
+              type="checkbox"
+              checked={splitArrDep}
+              onChange={(e) => setSplitArrDep(e.target.checked)}
+              className="accent-coral"
+            />
+            Arr / Dep
+          </label>
+          {routeTrips.length > 0 && (
+            <button
+              onClick={() => setRemoveAllPrompt(true)}
+              title="Delete every trip in this view (keeps the shape and its stops)"
+              className="px-3 py-1 border-2 border-dashed border-sand rounded-md text-xs font-semibold text-warm-gray hover:border-red-400 hover:text-red-500 transition-colors whitespace-nowrap"
+            >
+              Remove All Trips
+            </button>
+          )}
+          <button
+            onClick={() => {
+              setRepeatError(null);
+              setShowRepeatForm((v) => !v);
+            }}
+            disabled={!hasStops}
+            className="px-3 py-1 border-2 border-dashed border-sand rounded-md text-xs font-semibold text-warm-gray hover:border-coral hover:text-coral transition-colors whitespace-nowrap disabled:opacity-40 disabled:hover:border-sand disabled:hover:text-warm-gray"
+          >
+            Repeat Every...
+          </button>
+          <button
+            onClick={handleAddTrip}
+            disabled={!hasStops}
+            className="px-3 py-1 border-2 border-dashed border-sand rounded-md text-xs font-semibold text-warm-gray hover:border-coral hover:text-coral transition-colors whitespace-nowrap disabled:opacity-40 disabled:hover:border-sand disabled:hover:text-warm-gray"
+          >
+            + Add Trip
+          </button>
+        </div>
       </div>
 
       {/* Repeat Every inline form */}

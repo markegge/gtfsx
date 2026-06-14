@@ -217,18 +217,10 @@ export function AlertsEditor() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-warm-gray">
-          Post GTFS-Realtime Service Alerts — detours, delays, stop closures — served live without
-          republishing your schedule.
-        </p>
-        <button
-          onClick={() => { setEditing('new'); setError(null); }}
-          className="shrink-0 bg-coral text-white px-3 py-1.5 rounded-lg font-semibold text-sm hover:brightness-95"
-        >
-          + New alert
-        </button>
-      </div>
+      <p className="text-sm text-warm-gray">
+        Post GTFS-Realtime Service Alerts — detours, delays, stop closures — served live without
+        republishing your schedule.
+      </p>
 
       {error && (
         <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>
@@ -306,6 +298,14 @@ export function AlertsEditor() {
           })}
         </ul>
       )}
+
+      {/* Add alert — dashed ghost button at the bottom, matching the other entity panels */}
+      <button
+        onClick={() => { setEditing('new'); setError(null); }}
+        className="w-full py-2 rounded-lg border-2 border-dashed border-sand text-warm-gray text-sm font-medium hover:border-coral hover:text-coral transition-colors"
+      >
+        + Add alert
+      </button>
     </div>
   );
 }

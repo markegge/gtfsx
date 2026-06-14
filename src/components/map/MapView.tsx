@@ -1260,12 +1260,14 @@ export function MapView() {
           on the map (not the rail) so it's always reachable — closing the
           rail or switching tabs no longer strands the user. Banner stays
           beside the buttons in one cluster so the user reads instruction
-          + action together. */}
+          + action together. On narrow viewports the row wraps so all three
+          elements stack vertically and fit within ~350 px. */}
       {mapMode === 'edit_shape' && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
-          <div className="bg-coral text-white px-5 py-2 rounded-full text-[13px] font-heading font-semibold shadow-md flex items-center gap-2">
-            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-            {editingLabel ? `Editing ${editingLabel}` : 'Editing Shape'} — Drag vertices, click midpoints to add
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex flex-wrap items-center justify-center gap-2 w-[min(92vw,560px)]">
+          <div className="bg-coral text-white px-4 py-2 rounded-full text-[13px] font-heading font-semibold shadow-md flex items-center gap-2">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse shrink-0" />
+            <span className="max-[600px]:hidden">{editingLabel ? `Editing ${editingLabel}` : 'Editing Shape'} — Drag vertices, click midpoints to add</span>
+            <span className="min-[601px]:hidden">{editingLabel ? `Editing ${editingLabel}` : 'Editing Shape'}</span>
           </div>
           <button
             onClick={discardShapeEdit}

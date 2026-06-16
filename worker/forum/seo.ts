@@ -44,12 +44,21 @@ export interface ForumSeo {
   noindex: boolean;   // true for paginated / private-ish pages
 }
 
-function imageOriginHost(env: Env): string | null {
-  try {
-    return env.FEEDS_ORIGIN ? new URL(env.FEEDS_ORIGIN).hostname : null;
-  } catch {
-    return null;
+// Allowed hosts for absolute inline-image URLs in forum markdown: the feeds
+// host (FEEDS_ORIGIN — backward-compat for already-posted feeds.gtfsx.com
+// image URLs) AND the dedicated image host (IMAGES_ORIGIN — where new uploads
+// live). Bad/empty origins are skipped.
+function imageOriginHosts(env: Env): string[] {
+  const hosts: string[] = [];
+  for (const origin of [env.FEEDS_ORIGIN, env.IMAGES_ORIGIN]) {
+    if (!origin) continue;
+    try {
+      hosts.push(new URL(origin).hostname);
+    } catch {
+      // skip an unparseable origin
+    }
   }
+  return hosts;
 }
 
 function appOrigin(env: Env): string {
@@ -163,7 +172,7 @@ export async function renderThreadSeo(env: Env, threadId: string): Promise<Forum
     authorMap.set(uid, await userAuthorDto(env, uid));
   }));
 
-  const opts = { imageOriginHost: imageOriginHost(env) };
+  const opts = { imageOriginHosts: imageOriginHosts(env) };
 
   const opPost = posts[0];
   const opAuthor = opPost ? authorMap.get(opPost.author_user_id) : undefined;
@@ -217,7 +226,7 @@ function renderPostBlock(
   author: AuthorDto,
   thread: ThreadRow,
   isOp: boolean,
-  opts: { imageOriginHost: string | null },
+  opts: { imageOriginHosts: string[] },
 ): string {
   if (post.deleted_at) {
     return `<article class="post deleted"><p><em>[deleted]</em></p></article>`;

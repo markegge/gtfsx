@@ -8,7 +8,7 @@ export interface Env {
   // Storage
   TILES: R2Bucket;         // existing PMTiles archive
   FEEDS: R2Bucket;         // feed blobs: working states, version snapshots, rendered ZIPs
-  FORUM_IMAGES: R2Bucket;  // user-uploaded forum images (served via FEEDS_ORIGIN/_forum-images/<key>)
+  FORUM_IMAGES: R2Bucket;  // user-uploaded forum images (new uploads served via IMAGES_ORIGIN/_forum-images/<key>; legacy FEEDS_ORIGIN URLs still resolve)
   DB: D1Database;          // auth + feed metadata
   KV: KVNamespace;         // rate-limit counters, cache
 
@@ -16,6 +16,10 @@ export interface Env {
   AUTH_EMAIL_FROM: string;
   APP_ORIGIN: string;
   FEEDS_ORIGIN: string;
+  // Dedicated host that serves ONLY user-uploaded forum images
+  // (img.gtfsx.com / staging-img.gtfsx.com). New uploads return URLs on this
+  // host; legacy feeds.gtfsx.com image URLs keep working via the feeds handler.
+  IMAGES_ORIGIN: string;
   BACKEND_ENABLED: string;
   BILLING_ENABLED?: string;
   HARD_LIMITS: string;

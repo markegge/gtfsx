@@ -82,6 +82,11 @@
     "AUTH_EMAIL_FROM": "GTFS·X <noreply@gtfsx.com>",
     "APP_ORIGIN": "https://www.gtfsx.com",
     "FEEDS_ORIGIN": "https://feeds.gtfsx.com",
+    // Dedicated host for user-uploaded forum images. New uploads return
+    // img.gtfsx.com/_forum-images/... URLs; the legacy feeds.gtfsx.com path
+    // keeps working for already-posted images. See worker/index.ts (img-host
+    // dispatch) and worker/forum/uploads.ts (publicUrl).
+    "IMAGES_ORIGIN": "https://img.gtfsx.com",
     // Kill switch. Originally disabled 2026-05-08 after premature launch;
     // re-enabled 2026-05-15 alongside live billing.
     "BACKEND_ENABLED": "true",
@@ -128,6 +133,7 @@
     { "pattern": "gtfsx.com", "custom_domain": true },
     { "pattern": "www.gtfsx.com", "custom_domain": true },
     { "pattern": "feeds.gtfsx.com", "custom_domain": true },
+    { "pattern": "img.gtfsx.com", "custom_domain": true },
     { "pattern": "gtfsstudio.net", "custom_domain": true },
     { "pattern": "www.gtfsstudio.net", "custom_domain": true },
     { "pattern": "feeds.gtfsstudio.net", "custom_domain": true },
@@ -179,6 +185,7 @@
         "AUTH_EMAIL_FROM": "GTFS·X Staging <staging@gtfsx.com>",
         "APP_ORIGIN": "https://staging.gtfsx.com",
         "FEEDS_ORIGIN": "https://staging-feeds.gtfsx.com",
+        "IMAGES_ORIGIN": "https://staging-img.gtfsx.com",
         "BACKEND_ENABLED": "true",
         "BILLING_ENABLED": "true",
         "HARD_LIMITS": "false",
@@ -196,6 +203,7 @@
       "routes": [
         { "pattern": "staging.gtfsx.com", "custom_domain": true },
         { "pattern": "staging-feeds.gtfsx.com", "custom_domain": true },
+        { "pattern": "staging-img.gtfsx.com", "custom_domain": true },
         { "pattern": "staging.gtfsstudio.net", "custom_domain": true },
         { "pattern": "staging-feeds.gtfsstudio.net", "custom_domain": true },
         { "pattern": "staging.gtfsstudio.com", "custom_domain": true },

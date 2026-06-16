@@ -5,7 +5,7 @@ import { handleSearch, handleProxy } from './legacy/imports';
 import { sessionMiddleware, requireClientHeader } from './auth/middleware';
 import { authRouter } from './auth/routes';
 import { apiRouter } from './api';
-import { feedsHandler } from './publication/feeds';
+import { feedsHandler, forumImageOnlyHandler } from './publication/feeds';
 import { maybeRenderForumPage } from './forum/dispatcher';
 import { maybeRenderMarketingPage } from './marketing/ssr';
 import { serveSitemap } from './forum/sitemap';
@@ -166,6 +166,32 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext):
         return await feedsHandler(request, env, ctx);
       } catch (err) {
         console.error(`[feeds] unhandled error: ${errorDetail(err)}`);
+        return new Response('Internal error', { status: 500 });
+      }
+    }
+
+    // Dedicated forum-image host (IMAGES_ORIGIN):
+    //   prod:    img.gtfsx.com
+    //   staging: staging-img.gtfsx.com
+    //   dev:     anything starting with `img.`
+    // New forum uploads return URLs on this host (legacy feeds.gtfsx.com image
+    // URLs still resolve via the feeds handler above). The img host serves ONLY
+    // /_forum-images/... and 404s everything else — it deliberately does NOT
+    // expose the feeds API/RT/embeds/landing surface.
+    let imagesHost: string | null = null;
+    try {
+      imagesHost = env.IMAGES_ORIGIN ? new URL(env.IMAGES_ORIGIN).hostname : null;
+    } catch {
+      imagesHost = null;
+    }
+    if (
+      (imagesHost && url.hostname === imagesHost) ||
+      url.hostname.startsWith('img.')
+    ) {
+      try {
+        return await forumImageOnlyHandler(request, env, ctx);
+      } catch (err) {
+        console.error(`[img] unhandled error: ${errorDetail(err)}`);
         return new Response('Internal error', { status: 500 });
       }
     }

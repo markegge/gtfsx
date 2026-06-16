@@ -313,6 +313,24 @@ export async function feedsHandler(
   return notFound();
 }
 
+// Dedicated handler for the forum-image host (IMAGES_ORIGIN — img.gtfsx.com /
+// staging-img.gtfsx.com). Serves ONLY /_forum-images/... via the same
+// serveForumImage path the feeds host uses; everything else 404s. This keeps
+// the image host off the feeds API/RT/embeds/landing surface. Routed from
+// worker/index.ts by hostname.
+export async function forumImageOnlyHandler(
+  request: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+): Promise<Response> {
+  const url = new URL(request.url);
+  const forumImage = url.pathname.match(FORUM_IMAGE_RE);
+  if (forumImage) {
+    return serveForumImage(request, env, forumImage[1]);
+  }
+  return notFound();
+}
+
 // ─── Forum image (public read) ──────────────────────────────────────────────
 
 // Serve user-uploaded forum images from FORUM_IMAGES at

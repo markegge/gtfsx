@@ -8,9 +8,11 @@
 const FORUM_IMAGE_PATH_PREFIX = '/_forum-images/';
 
 export interface MdRenderOptions {
-  // Whitelisted origin for inline images (FEEDS_ORIGIN). Anything else is
-  // dropped to alt text only.
-  imageOriginHost: string | null;
+  // Whitelisted hosts for inline images (the feeds host from FEEDS_ORIGIN and
+  // the dedicated image host from IMAGES_ORIGIN — see worker/forum/seo.ts).
+  // Anything else is dropped to alt text only. Empty = no absolute image hosts
+  // allowed (relative /_forum-images/ paths still pass).
+  imageOriginHosts: string[];
 }
 
 export function renderMarkdownToHtml(src: string, opts: MdRenderOptions): string {
@@ -238,7 +240,7 @@ function renderInline(text: string, opts: MdRenderOptions): string {
     m = /^!\[([^\]]*)\]\(([^)\s]+)\)/.exec(rest);
     if (m) {
       const alt = m[1];
-      const safeSrc = safeImageSrc(m[2], opts.imageOriginHost);
+      const safeSrc = safeImageSrc(m[2], opts.imageOriginHosts);
       if (safeSrc) {
         out += `<img src="${escapeHtml(safeSrc)}" alt="${escapeHtml(alt)}" loading="lazy" />`;
       } else {
@@ -313,18 +315,18 @@ function safeLinkHref(raw: string): string | null {
 }
 
 // Image URL allowlist: only allow images served from our own forum-images
-// path (relative or absolute against FEEDS_ORIGIN). Everything else falls
-// back to alt text — this defeats hotlinking-from-anywhere abuse vectors
-// (tracking pixels, blasting third-party hosts, malicious SVG/animated
-// payloads on arbitrary domains).
-export function safeImageSrc(raw: string, imageOriginHost: string | null): string | null {
+// path (relative, or absolute against one of the allowed image hosts — the
+// feeds host from FEEDS_ORIGIN and the dedicated image host from
+// IMAGES_ORIGIN). Everything else falls back to alt text — this defeats
+// hotlinking-from-anywhere abuse vectors (tracking pixels, blasting
+// third-party hosts, malicious SVG/animated payloads on arbitrary domains).
+export function safeImageSrc(raw: string, imageOriginHosts: string[]): string | null {
   // Relative path: must start with the forum-images prefix.
   if (raw.startsWith(FORUM_IMAGE_PATH_PREFIX)) return raw;
   try {
     const u = new URL(raw);
     if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
-    if (!imageOriginHost) return null;
-    if (u.hostname !== imageOriginHost) return null;
+    if (!imageOriginHosts.includes(u.hostname)) return null;
     if (!u.pathname.startsWith(FORUM_IMAGE_PATH_PREFIX)) return null;
     return u.toString();
   } catch {

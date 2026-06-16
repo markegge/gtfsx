@@ -20,10 +20,21 @@ afterAll(() => {
 
 describe('safeImageSrc', () => {
   // Regression: feeds.gtfsx.com forum images used to be dropped to alt text
-  // because the allowlist only contained the SPA host.
-  it('allows forum images on the prod feeds origin', () => {
+  // because the allowlist only contained the SPA host. Already-posted images
+  // carry feeds.gtfsx.com URLs, so this MUST keep working.
+  it('allows forum images on the prod feeds origin (legacy URLs)', () => {
     const url = 'https://feeds.gtfsx.com/_forum-images/abc123.png';
     expect(safeImageSrc(url)).toBe(url);
+  });
+
+  // New uploads return URLs on the dedicated image host (img.gtfsx.com).
+  it('allows forum images on the dedicated image origin', () => {
+    const url = 'https://img.gtfsx.com/_forum-images/images/01ABC/01DEF.png';
+    expect(safeImageSrc(url)).toBe(url);
+  });
+
+  it('rejects non-forum-images paths on the image origin', () => {
+    expect(safeImageSrc('https://img.gtfsx.com/something-else/x.png')).toBeNull();
   });
 
   it('allows relative forum-image paths', () => {

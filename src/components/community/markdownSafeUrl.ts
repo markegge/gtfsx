@@ -21,10 +21,27 @@ function feedsOriginHost(): string | null {
   }
 }
 
+// Dedicated forum-image host (img.gtfsx.com / staging-img.gtfsx.com). NEW
+// uploads return URLs here; the feeds host (above) stays allow-listed so
+// already-posted feeds.gtfsx.com image URLs keep rendering. Mirrors the
+// staging-aware fallback used for the feeds host.
+function imagesOriginHost(): string | null {
+  const origin =
+    (import.meta.env.VITE_IMAGES_ORIGIN as string | undefined) ||
+    (typeof window !== 'undefined' && window.location.hostname.startsWith('staging.')
+      ? 'https://staging-img.gtfsx.com'
+      : 'https://img.gtfsx.com');
+  try {
+    return new URL(origin).host;
+  } catch {
+    return null;
+  }
+}
+
 // Allow only images served from our own forum-images path. Relative paths
-// (`/_forum-images/…`) and absolute URLs on the SPA origin or the public feeds
-// origin both pass; anything else falls back to alt text — same allowlist
-// enforced server-side in worker/forum/markdown.ts.
+// (`/_forum-images/…`) and absolute URLs on the SPA origin, the public feeds
+// origin, or the dedicated image origin all pass; anything else falls back to
+// alt text — same allowlist enforced server-side in worker/forum/markdown.ts.
 export function safeImageSrc(raw: string): string | null {
   const prefix = '/_forum-images/';
   if (raw.startsWith(prefix)) return raw;
@@ -32,8 +49,8 @@ export function safeImageSrc(raw: string): string | null {
     const u = new URL(raw, window.location.origin);
     if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
     if (!u.pathname.startsWith(prefix)) return null;
-    // Same-origin (SPA host) or the public feeds origin only.
-    const allowed = [window.location.host, feedsOriginHost()].filter(Boolean) as string[];
+    // Same-origin (SPA host), the public feeds origin, or the image origin only.
+    const allowed = [window.location.host, feedsOriginHost(), imagesOriginHost()].filter(Boolean) as string[];
     if (!allowed.includes(u.host)) return null;
     return u.toString();
   } catch {

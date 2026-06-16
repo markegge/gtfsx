@@ -134,7 +134,7 @@ uploadsRouter.post('/image', requireAuth, async (c) => {
   if (existing) {
     return c.json({
       id: existing.id,
-      url: publicUrl(c.env.FEEDS_ORIGIN, existing.r2_key),
+      url: publicUrl(c.env.IMAGES_ORIGIN, existing.r2_key),
       contentType: existing.content_type,
       deduped: true,
     });
@@ -171,7 +171,7 @@ uploadsRouter.post('/image', requireAuth, async (c) => {
 
   return c.json({
     id,
-    url: publicUrl(c.env.FEEDS_ORIGIN, r2Key),
+    url: publicUrl(c.env.IMAGES_ORIGIN, r2Key),
     contentType: type,
     width,
     height,
@@ -180,9 +180,13 @@ uploadsRouter.post('/image', requireAuth, async (c) => {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function publicUrl(feedsOrigin: string, r2Key: string): string {
-  // The serving path lives on FEEDS_ORIGIN; see worker/publication/feeds.ts.
-  return `${feedsOrigin}/_forum-images/${r2Key}`;
+function publicUrl(imagesOrigin: string, r2Key: string): string {
+  // New uploads are served from the dedicated image host (IMAGES_ORIGIN —
+  // img.gtfsx.com). The path stays /_forum-images/<key>; the worker routes the
+  // img host to forumImageOnlyHandler (see worker/index.ts + publication/feeds.ts).
+  // Legacy feeds.gtfsx.com image URLs already in posts keep resolving via the
+  // feeds handler.
+  return `${imagesOrigin}/_forum-images/${r2Key}`;
 }
 
 function extFor(type: ImageType): string {

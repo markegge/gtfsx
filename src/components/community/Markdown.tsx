@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
+import { safeImageSrc } from './markdownSafeUrl';
 
 // Minimal, XSS-safe markdown renderer that produces React nodes (not raw HTML).
 // Supports a deliberate subset:
@@ -381,32 +382,4 @@ function safeHref(raw: string): string | null {
     // not a valid absolute URL
   }
   return null;
-}
-
-// Allow only images served from our own forum-images path. Relative paths
-// (`/_forum-images/…`) and absolute URLs on the configured feeds origin both
-// pass; anything else falls back to alt text — same allowlist enforced
-// server-side in worker/forum/markdown.ts.
-function safeImageSrc(raw: string): string | null {
-  const prefix = '/_forum-images/';
-  if (raw.startsWith(prefix)) return raw;
-  try {
-    const u = new URL(raw, window.location.origin);
-    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
-    if (!u.pathname.startsWith(prefix)) return null;
-    // Same-origin or feeds-origin only. window.location.host is the SPA
-    // host; the feeds host is configured via VITE_FEEDS_ORIGIN at build time.
-    const allowed = [
-      window.location.host,
-      (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_FEEDS_ORIGIN
-        ? new URL(
-            (import.meta as ImportMeta & { env: Record<string, string | undefined> }).env.VITE_FEEDS_ORIGIN!,
-          ).host
-        : null,
-    ].filter(Boolean) as string[];
-    if (!allowed.includes(u.host)) return null;
-    return u.toString();
-  } catch {
-    return null;
-  }
 }

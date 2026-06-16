@@ -197,7 +197,35 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
   addRouteStop: (rs) => set((state) => {
     // Stamp a per-instance handle so a stop listed twice in one pattern stays
     // individually addressable (remove/reorder one without touching the other).
-    state.routeStops.push(rs._uid ? rs : { ...rs, _uid: generateId('rs') });
+    const stamped = rs._uid ? rs : { ...rs, _uid: generateId('rs') };
+    state.routeStops.push(stamped);
+    // A stop added to a pattern that ALREADY has trips defaults to SERVED — we
+    // seed a blank (no-time) stop_time row on every matching trip. Without a
+    // row the timetable would render the new stop as "skipped" on those trips
+    // (a missing row = skipped). Import uses setRouteStops (not addRouteStop),
+    // so genuinely-skipped stops in an imported feed are preserved. When no
+    // trips exist yet (the normal draw → add stops → add trips order) this is
+    // a no-op.
+    const cs = state as unknown as CrossSliceState;
+    const haveAtSeq = new Set(
+      cs.stopTimes
+        .filter((st) => st.stop_sequence === stamped.stop_sequence)
+        .map((st) => st.trip_id),
+    );
+    for (const t of cs.trips) {
+      if (t.route_id !== stamped.route_id) continue;
+      const matches = stamped.shape_id
+        ? t.shape_id === stamped.shape_id
+        : t.direction_id === stamped.direction_id;
+      if (!matches || haveAtSeq.has(t.trip_id)) continue;
+      cs.stopTimes.push({
+        trip_id: t.trip_id,
+        stop_id: stamped.stop_id,
+        stop_sequence: stamped.stop_sequence,
+        arrival_time: '',
+        departure_time: '',
+      });
+    }
   }),
   removeRouteStop: (route_id, _uid) => set((state) => {
     // Remove exactly one instance (by _uid). Capture it first so we know which

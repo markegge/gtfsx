@@ -324,15 +324,32 @@ export async function exportGtfsZip(): Promise<Blob> {
 
   // stop_times.txt
   //
-  // Per the GTFS spec both `arrival_time` and `departure_time` are REQUIRED
-  // on the first and last stop of every trip — a previous version of this
-  // exporter deliberately blanked them (inverted the spec requirement), which
-  // produced MobilityData `missing_trip_edge` + `stop_time_with_only_arrival_
-  // or_departure_time` errors on every exported feed. Export the store's
-  // values verbatim; the editor guarantees both fields are populated when the
-  // user types a time because `setStopTime` writes both sides.
+  // Each (trip, stop) cell maps to one of three GTFS states:
+  //   • TIMED        — a row with arrival_time / departure_time set.
+  //   • INTERPOLATED — the stop is served but has no explicit time. We emit a
+  //                    row with BLANK arrival/departure and `timepoint=0` so
+  //                    consumers interpolate it. (A blank time with the default
+  //                    timepoint=1/"exact" is a validator error, hence the 0.)
+  //   • SKIPPED      — the trip doesn't serve the stop. There is NO row for it
+  //                    in the store (the editor removes it), so it's naturally
+  //                    omitted here and the trip's first/last become the
+  //                    adjacent SERVED stops — both of which carry times.
+  //
+  // The first/last-must-be-timed rule is enforced by the pre-export validator,
+  // not by blanking fields here (an earlier version inverted the spec and
+  // produced MobilityData `missing_trip_edge` errors on every feed).
   if (state.stopTimes.length > 0 || flex.flexStopTimes.length > 0) {
-    const fixedRows = state.stopTimes.map((st) => stripUIFields(st));
+    const fixedRows = state.stopTimes.map((st) => {
+      const row = stripUIFields(st);
+      const hasTime = !!st.arrival_time || !!st.departure_time;
+      if (!hasTime) {
+        // Interpolated: keep both times blank and mark the row approximate.
+        row.arrival_time = '';
+        row.departure_time = '';
+        row.timepoint = 0;
+      }
+      return row;
+    });
     zip.file('stop_times.txt', toCSV([...fixedRows, ...flex.flexStopTimes]));
   }
 

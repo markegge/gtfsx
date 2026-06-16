@@ -139,9 +139,12 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     messages.push(msg('error', `Stop time references non-existent stop "${sid}"`, 'stop_time'));
   }
 
-  // First + last stop of every trip must have BOTH arrival_time AND
-  // departure_time per the GTFS spec. Intermediate stops may blank either.
-  // Catches regressions of the exporter bug that blanked those fields.
+  // A trip's first and last SERVED stops must be TIMED. "Served" = the stop
+  // has a stop_time row; skipped stops have no row, so they drop out of the
+  // sequence and the endpoints become the adjacent served stops (computing
+  // first/last from the existing rows handles this automatically). An
+  // interpolated stop (served, blank times) is only valid for intermediate
+  // stops — at an endpoint it leaves the trip with no defined start/end time.
   const tripFirstLast = new Map<string, { firstSeq: number; lastSeq: number }>();
   for (const st of state.stopTimes) {
     const fl = tripFirstLast.get(st.trip_id);
@@ -157,10 +160,13 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     const isFirst = st.stop_sequence === fl.firstSeq;
     const isLast = st.stop_sequence === fl.lastSeq;
     if ((isFirst || isLast) && (!st.arrival_time || !st.departure_time)) {
-      const which = isFirst ? 'first' : 'last';
+      const label = isFirst ? 'First' : 'Last';
+      const blankBoth = !st.arrival_time && !st.departure_time;
       messages.push(msg(
         'error',
-        `${which[0].toUpperCase() + which.slice(1)} stop of trip "${st.trip_id}" is missing arrival_time or departure_time — both are required on trip endpoints`,
+        blankBoth
+          ? `${label} served stop of trip "${st.trip_id}" has no time. A trip's first and last stops must be timed — enter a time, or mark this stop skipped if the trip doesn't serve it.`
+          : `${label} served stop of trip "${st.trip_id}" is missing arrival_time or departure_time — both are required on trip endpoints.`,
         'trip',
         st.trip_id,
       ));

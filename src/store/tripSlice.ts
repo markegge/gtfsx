@@ -22,6 +22,16 @@ export interface TripSlice {
    *  trips on a route/direction without delete-and-regenerate. */
   applyTripPattern: (templateTripId: string, targetTripIds: string[]) => void;
   interpolateStopTimes: (tripId: string) => void;
+  /** Mark a stop as SKIPPED on this trip by removing its stop_time row. A
+   *  missing row means the trip doesn't serve that stop, so the exporter omits
+   *  it and the trip's first/last become the adjacent SERVED stops. The grid
+   *  renders a skipped cell distinctly (no editable time). */
+  skipStop: (trip_id: string, stop_sequence: number) => void;
+  /** Ensure a blank (SERVED, no explicit time) stop_time row exists for each
+   *  given (stop_id, stop_sequence) on this trip. Used to seed a freshly added
+   *  trip so its stops default to "served" (interpolated) rather than skipped.
+   *  Never overwrites an existing row. */
+  seedTripStops: (trip_id: string, stops: { stop_id: string; stop_sequence: number }[]) => void;
 }
 
 function addMinutesToGtfsTime(time: string, minutes: number): string {
@@ -232,6 +242,27 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
           departure_time: timeStr,
         });
       }
+    }
+  }),
+  skipStop: (trip_id, stop_sequence) => set((state) => {
+    state.stopTimes = state.stopTimes.filter(
+      (st) => !(st.trip_id === trip_id && st.stop_sequence === stop_sequence),
+    );
+  }),
+  seedTripStops: (trip_id, stops) => set((state) => {
+    const have = new Set(
+      state.stopTimes.filter((st) => st.trip_id === trip_id).map((st) => st.stop_sequence),
+    );
+    for (const sp of stops) {
+      if (have.has(sp.stop_sequence)) continue;
+      have.add(sp.stop_sequence);
+      state.stopTimes.push({
+        trip_id,
+        stop_id: sp.stop_id,
+        stop_sequence: sp.stop_sequence,
+        arrival_time: '',
+        departure_time: '',
+      });
     }
   }),
 });

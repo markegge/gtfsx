@@ -39,7 +39,7 @@ export function TimetableGrid() {
   const {
     selectedRouteId, selectRoute, routes, trips, stops, routeStops, calendars, shapes,
     setStopTime, addTrip, duplicateTrip, applyTripPattern, removeTrip, updateTrip, renameTripId,
-    interpolateStopTimes,
+    interpolateStopTimes, skipStop, seedTripStops,
   } = useStore();
   const { byTrip: stopTimesByTrip } = useStopTimesIndex();
 
@@ -318,36 +318,37 @@ export function TimetableGrid() {
       });
   }, [selectedRouteId, trips, stopTimesByTrip, directionId, activeServiceId, effectiveShapeId]);
 
-  // Tab key navigation
+  // Tab key navigation. Walks to the next focusable cell, stepping OVER skipped
+  // columns (which render no input and so register no ref) until it lands on a
+  // served cell or runs off the grid.
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>, tripIdx: number, stopIdx: number) => {
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const totalStops = orderedStops.length;
-      const totalTrips = routeTrips.length;
+    if (e.key !== 'Tab') return;
+    e.preventDefault();
+    const totalStops = orderedStops.length;
+    const totalTrips = routeTrips.length;
+    if (totalStops === 0 || totalTrips === 0) return;
 
-      let nextTripIdx = tripIdx;
-      let nextStopIdx = stopIdx + (e.shiftKey ? -1 : 1);
+    const step = e.shiftKey ? -1 : 1;
+    let ti = tripIdx;
+    let si = stopIdx;
+    for (let guard = 0; guard < totalStops * totalTrips + 1; guard++) {
+      si += step;
+      if (si >= totalStops) { si = 0; ti++; }
+      else if (si < 0) { si = totalStops - 1; ti--; }
+      if (ti < 0 || ti >= totalTrips) return; // ran off the grid
 
-      if (nextStopIdx >= totalStops) {
-        nextStopIdx = 0;
-        nextTripIdx++;
-      } else if (nextStopIdx < 0) {
-        nextStopIdx = totalStops - 1;
-        nextTripIdx--;
-      }
-
-      if (nextTripIdx >= 0 && nextTripIdx < totalTrips) {
-        const key = cellKey(nextTripIdx, nextStopIdx);
+      const key = cellKey(ti, si);
+      if (cellRefs.current.has(key)) {
         // Defer focus until after the commit-triggered re-render completes.
         // If the commit renames a `_new` trip, the row's key changes and React
         // unmounts it — focusing the old element synchronously is a no-op.
         // Two rAFs is the reliable way to land after React's effect phase.
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            const el = cellRefs.current.get(key);
-            if (el) el.focus();
+            cellRefs.current.get(key)?.focus();
           });
         });
+        return;
       }
     }
   }, [orderedStops.length, routeTrips.length]);
@@ -366,6 +367,9 @@ export function TimetableGrid() {
       trip_headsign: route?.route_short_name || '',
       shape_id: effectiveShapeId ?? trips.find((t) => t.route_id === selectedRouteId && t.direction_id === directionId)?.shape_id,
     });
+    // Seed a blank (served, no time) row for each stop so the new trip's cells
+    // default to "served" — without rows every cell would render as skipped.
+    seedTripStops(tripId, orderedStops.map((c) => ({ stop_id: c.stop.stop_id, stop_sequence: c.seq })));
   };
 
   // Find the first displayed (non-blank) time for a trip using the timetable's stop order
@@ -655,6 +659,19 @@ export function TimetableGrid() {
         </div>
       </div>
 
+      {/* Cell-state legend. Three states per stop: a typed time, a blank
+          served stop (interpolated), and a skipped stop. Kept terse so it
+          doesn't crowd the grid. */}
+      {hasStops && (
+        <p className="px-2 mb-1 text-[10px] text-warm-gray/80 whitespace-nowrap overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          Type a time to set it. Leave a stop blank for "served, time interpolated." Hover a cell and click
+          <span className="mx-0.5 font-semibold text-red-500">&times;</span>
+          to skip a stop the trip doesn&rsquo;t serve (shown as
+          <span className="mx-0.5 font-semibold text-warm-gray/60 line-through">SKIP</span>
+          ).
+        </p>
+      )}
+
       {/* Repeat Every inline form */}
       {showRepeatForm && (
         <div className="mx-2 mb-2 p-3 bg-cream rounded-lg border border-sand">
@@ -877,38 +894,66 @@ export function TimetableGrid() {
                       }
                     };
 
+                    // A missing stop_time row = the trip SKIPS this stop. It
+                    // renders as a distinct "SKIP" chip (not an editable time)
+                    // and the exporter omits it entirely.
+                    const isSkipped = !st;
+
                     return (
                       <td
                         key={uid}
-                        className={`px-1 py-0.5 border-b border-[#F5F0EB] ${isTimepoint ? 'bg-coral/10' : ''}`}
+                        className={`relative group px-1 py-0.5 border-b border-[#F5F0EB] ${isTimepoint ? 'bg-coral/10' : ''}`}
                       >
-                        {splitArrDep ? (
-                          <SplitTimeCell
-                            arrival={st?.arrival_time || ''}
-                            departure={st?.departure_time || ''}
-                            onCommitArrival={(n) => commit('arrival_time', n)}
-                            onCommitDeparture={(n) => commit('departure_time', n)}
-                            inputRef={(el) => {
-                              const key = cellKey(tripIdx, stopIdx);
-                              if (el) cellRefs.current.set(key, el);
-                              else cellRefs.current.delete(key);
-                            }}
-                            onKeyDown={(e) => handleKeyDown(e, tripIdx, stopIdx)}
-                            timeError={errors[stopIdx]}
+                        {isSkipped ? (
+                          <SkippedCell
+                            compact={splitArrDep}
+                            onRestore={() => setStopTime(trip.trip_id, stop.stop_id, seq, { arrival_time: '', departure_time: '' })}
                           />
                         ) : (
-                          <TimeCell
-                            value={st?.arrival_time || st?.departure_time || ''}
-                            onCommit={(normalized) => commit('both', normalized)}
-                            inputRef={(el) => {
-                              const key = cellKey(tripIdx, stopIdx);
-                              if (el) cellRefs.current.set(key, el);
-                              else cellRefs.current.delete(key);
-                            }}
-                            onKeyDown={(e) => handleKeyDown(e, tripIdx, stopIdx)}
-                            isTimepoint={isTimepoint}
-                            timeError={errors[stopIdx]}
-                          />
+                          <>
+                            {splitArrDep ? (
+                              <SplitTimeCell
+                                arrival={st?.arrival_time || ''}
+                                departure={st?.departure_time || ''}
+                                onCommitArrival={(n) => commit('arrival_time', n)}
+                                onCommitDeparture={(n) => commit('departure_time', n)}
+                                inputRef={(el) => {
+                                  const key = cellKey(tripIdx, stopIdx);
+                                  if (el) cellRefs.current.set(key, el);
+                                  else cellRefs.current.delete(key);
+                                }}
+                                onKeyDown={(e) => handleKeyDown(e, tripIdx, stopIdx)}
+                                timeError={errors[stopIdx]}
+                              />
+                            ) : (
+                              <TimeCell
+                                value={st?.arrival_time || st?.departure_time || ''}
+                                onCommit={(normalized) => commit('both', normalized)}
+                                inputRef={(el) => {
+                                  const key = cellKey(tripIdx, stopIdx);
+                                  if (el) cellRefs.current.set(key, el);
+                                  else cellRefs.current.delete(key);
+                                }}
+                                onKeyDown={(e) => handleKeyDown(e, tripIdx, stopIdx)}
+                                isTimepoint={isTimepoint}
+                                timeError={errors[stopIdx]}
+                              />
+                            )}
+                            {/* Skip affordance — appears on hover/focus so the
+                                dense grid stays clean. Clicking removes the
+                                stop_time row (this trip no longer serves the
+                                stop); the cell then shows "SKIP". */}
+                            <button
+                              type="button"
+                              tabIndex={-1}
+                              onClick={() => skipStop(trip.trip_id, seq)}
+                              title="Skip this stop on this trip (the trip won't serve it)"
+                              aria-label="Skip this stop on this trip"
+                              className="absolute top-0 right-0 leading-none text-[10px] px-0.5 rounded text-warm-gray/40 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-red-500 transition-opacity"
+                            >
+                              ×
+                            </button>
+                          </>
                         )}
                       </td>
                     );
@@ -1274,6 +1319,25 @@ function ContinuousOverridePopover({
         Overrides the route default. Applies to every trip on this route. Leave on “Inherit” for normal fixed stops.
       </p>
     </div>
+  );
+}
+
+/** Skipped-stop cell: the trip does NOT serve this stop, so there's no
+ *  stop_time row. Rendered as a muted, struck "SKIP" chip that's clearly
+ *  distinct from a blank-but-served (interpolated) cell. Clicking it restores
+ *  the stop as served (a blank, no-time row the user can then time). Width
+ *  matches the time inputs so toggling doesn't reflow the column. */
+function SkippedCell({ onRestore, compact }: { onRestore: () => void; compact?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onRestore}
+      title="This trip skips this stop (no stop_times row is exported). Click to serve it again."
+      aria-label="Stop skipped on this trip. Click to serve it again."
+      className={`${compact ? 'w-[6.25rem]' : 'w-20'} py-1 text-[10px] font-semibold tracking-wide rounded border border-dashed border-sand text-warm-gray/45 line-through hover:text-coral hover:border-coral hover:no-underline transition-colors`}
+    >
+      SKIP
+    </button>
   );
 }
 

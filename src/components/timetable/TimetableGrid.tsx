@@ -469,6 +469,11 @@ export function TimetableGrid() {
       });
       timings.forEach((t, i) => {
         const col = orderedStops[i];
+        // The travel-time layout runs over ALL columns (a skipped stop is still
+        // physically passed, so downstream times stay right), but we only WRITE
+        // to SERVED stops. A column with no stop_time row is skipped — writing
+        // one would re-create the row and un-skip the stop, so leave it alone.
+        if (!findStopTime(estimatePrompt, col.seq)) return;
         setStopTime(estimatePrompt, col.stop.stop_id, col.seq, {
           arrival_time: secondsToGtfsTime(t.arrivalSec),
           departure_time: secondsToGtfsTime(t.departureSec),

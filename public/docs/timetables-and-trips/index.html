@@ -77,6 +77,15 @@
       <p>The selector at the top of the grid — a <a href="#patterns">pattern dropdown</a> — switches which trips you're editing. Each pattern has its own trip list and its own stop order — the columns are that shape's stops.</p>
       <p>The <strong>Edit Stops</strong> button in the grid toolbar jumps straight to the route's <a href="/docs/stops/">Stops</a> editor, where you set which stops the pattern serves and their order; the Stops tab has the reverse jump back here — an <strong>Open timetable editor</strong> button. A stop may appear <em>more than once</em> in a pattern — handy for a loop or out-and-back whose first and last stop are the same. Add it again from the "Add existing" picker (set <em>Show stops from → All stops</em>) and it becomes a second, independent column here; on export it's written as a repeated <code>stop_id</code> at a distinct <code>stop_sequence</code>.</p>
 
+      <h2 id="stop-states">Stop states: timed, interpolated, skipped</h2>
+      <p>Every cell in the grid is one of three states. The state decides what (if anything) the export writes for that trip at that stop.</p>
+      <ul>
+        <li><strong>Timed.</strong> Type a time into the cell. The trip stops there at a known clock time, and the export writes an explicit <code>arrival_time</code> and <code>departure_time</code>. (Turn on the Arr / Dep toggle to author the two separately when there's dwell.)</li>
+        <li><strong>Interpolated.</strong> Clear the cell so it's blank. The trip still serves the stop, but you're leaving its time for the trip planner to interpolate from the timed stops on either side. The export writes a row with blank times and <code>timepoint=0</code>. A trip's first and last served stops must be timed (not blank), so a downstream consumer has anchors to interpolate between.</li>
+        <li><strong>Skipped.</strong> Hover the cell and click the small <strong>&times;</strong> at its top-right corner. The cell then shows a struck-through <s>SKIP</s> chip: this trip does not serve that stop, and the export writes no <code>stop_times</code> row for it at all. Click the SKIP chip to restore the stop to served. Skipping is how one trip can serve a different set of stops than its siblings on the same route (a short-turn, or an express run that bypasses local stops).</li>
+      </ul>
+      <p>The <strong>Estimate times</strong> and <strong>Interpolate times</strong> tools respect skipped stops: they compute travel time across every stop the vehicle physically passes (so the served stops downstream still get correct times) but only fill the served cells, leaving skipped stops skipped.</p>
+
       <h2 id="creating-trips">Creating trips</h2>
       <p>Click <strong>+ Add Trip</strong> to insert a new row. Each trip needs:</p>
       <ul>

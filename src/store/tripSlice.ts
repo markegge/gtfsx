@@ -220,7 +220,11 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
     const totalDist = lastDist - firstDist;
     if (totalDist <= 0) return;
 
-    // Interpolate intermediate stops
+    // Interpolate intermediate stops. The distance/ratio math runs over ALL
+    // route stops (the vehicle physically passes a skipped stop, so downstream
+    // times stay correct), but we only WRITE to SERVED stops — those with an
+    // existing row. A missing row means the trip skips that stop, so we leave
+    // it skipped rather than re-create the row (which would un-skip it).
     for (let i = firstIdx + 1; i < lastIdx; i++) {
       const ratio = (distances[i] - firstDist) / totalDist;
       const interpolatedSec = Math.round(firstTime + ratio * totalTimeSec);
@@ -230,18 +234,10 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
       const existing = state.stopTimes.findIndex(
         (st) => st.trip_id === tripId && st.stop_sequence === seq
       );
-      if (existing !== -1) {
-        state.stopTimes[existing].arrival_time = timeStr;
-        state.stopTimes[existing].departure_time = timeStr;
-      } else {
-        state.stopTimes.push({
-          trip_id: tripId,
-          stop_id: orderedRouteStops[i].stop_id,
-          stop_sequence: seq,
-          arrival_time: timeStr,
-          departure_time: timeStr,
-        });
-      }
+      // Skipped stop (no row) → leave it skipped; only fill served stops.
+      if (existing === -1) continue;
+      state.stopTimes[existing].arrival_time = timeStr;
+      state.stopTimes[existing].departure_time = timeStr;
     }
   }),
   skipStop: (trip_id, stop_sequence) => set((state) => {

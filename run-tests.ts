@@ -26,6 +26,7 @@ import { getUSHolidaysForYear, getUSHolidaysInRange } from './src/utils/holidays
 import { pointInPolygon } from './src/utils/geometry';
 import { stopsInsidePolygon } from './src/components/fares/fareZoneHelpers';
 import { computeShapePatterns } from './src/components/ui/shapePatterns';
+import { gtfsTimeToSeconds, secondsToGtfsTime } from './src/utils/time';
 import type { RouteStop, Stop, Trip } from './src/types/gtfs';
 
 const FIXTURE_DIR = 'tests/fixtures/benton-area-transit';
@@ -1044,6 +1045,88 @@ async function main() {
   s().setStopTime('SKT', 'KB', 1, { arrival_time: '', departure_time: '' });
   const endErr = runValidation(s()).filter(m => m.severity === 'error' && m.message.includes('"SKT"') && /first served stop/i.test(m.message));
   assert('skip: untimed first served stop is flagged', endErr.length >= 1, endErr.map(m => m.message).join('; '));
+
+  // ---- PHASE 23: skip-aware interpolate + estimate write-path ----
+  // Both auto-fill tools must respect a skipped stop: they keep computing over
+  // ALL stops (the bus still physically passes a skipped one, so downstream
+  // times stay correct) but only WRITE to SERVED stops. A skipped stop has no
+  // row, and neither tool may re-create it (which would silently un-skip it).
+  console.log('\nPhase 23: skip-aware interpolate & estimate write-path');
+  s().setFlexZones([]);
+  s().setStops([
+    { stop_id: 'IA', stop_name: 'A', stop_lat: 45.0, stop_lon: -111.0, location_type: 0, wheelchair_boarding: 0 },
+    { stop_id: 'IB', stop_name: 'B', stop_lat: 45.1, stop_lon: -111.1, location_type: 0, wheelchair_boarding: 0 },
+    { stop_id: 'IC', stop_name: 'C', stop_lat: 45.2, stop_lon: -111.2, location_type: 0, wheelchair_boarding: 0 },
+    { stop_id: 'ID', stop_name: 'D', stop_lat: 45.3, stop_lon: -111.3, location_type: 0, wheelchair_boarding: 0 },
+    { stop_id: 'IE', stop_name: 'E', stop_lat: 45.4, stop_lon: -111.4, location_type: 0, wheelchair_boarding: 0 },
+  ]);
+  s().setRoutes([{ route_id: 'ISR', agency_id: 'A', route_short_name: 'IS', route_long_name: 'Interp Skip', route_type: 3 }]);
+  s().setShapes([]); // no shape → equal-spacing interpolation, deterministic times
+  s().setRouteStops([]);
+  s().setTrips([]);
+  s().setStopTimes([]);
+
+  const istops: [string, number][] = [['IA', 0], ['IB', 1], ['IC', 2], ['ID', 3], ['IE', 4]];
+  for (const [sid, seq] of istops) {
+    s().addRouteStop({ route_id: 'ISR', stop_id: sid, direction_id: 0, stop_sequence: seq, _snapped: false });
+  }
+  s().addTrip({ trip_id: 'IST', route_id: 'ISR', service_id: 'SVC', direction_id: 0 });
+  // All five SERVED (rows exist): endpoints timed, middles blank (served, await
+  // interpolation). Then skip the centre stop C so it has no row at all.
+  s().setStopTime('IST', 'IA', 0, { arrival_time: '08:00:00', departure_time: '08:00:00' });
+  s().setStopTime('IST', 'IB', 1, { arrival_time: '', departure_time: '' });
+  s().setStopTime('IST', 'IC', 2, { arrival_time: '', departure_time: '' });
+  s().setStopTime('IST', 'ID', 3, { arrival_time: '', departure_time: '' });
+  s().setStopTime('IST', 'IE', 4, { arrival_time: '08:40:00', departure_time: '08:40:00' });
+  s().skipStop('IST', 2);
+  assert('interp-skip: stop C has no row before interpolation',
+    !s().stopTimes.some(st => st.trip_id === 'IST' && st.stop_sequence === 2));
+
+  // interpolateStopTimes must fill the served blanks (seq 1, 3) but must NOT
+  // re-create a row for the skipped seq 2.
+  s().interpolateStopTimes('IST');
+  const istRow = (seq: number) => s().stopTimes.find(st => st.trip_id === 'IST' && st.stop_sequence === seq);
+  assert('interp-skip: skipped stop C still has NO row after interpolate', !istRow(2));
+  assert('interp-skip: served stop B (seq 1) got interpolated time', !!istRow(1)?.arrival_time, istRow(1)?.arrival_time);
+  assert('interp-skip: served stop D (seq 3) got interpolated time', !!istRow(3)?.arrival_time, istRow(3)?.arrival_time);
+  assert('interp-skip: endpoints unchanged',
+    istRow(0)?.arrival_time === '08:00:00' && istRow(4)?.arrival_time === '08:40:00');
+  assert('interp-skip: row count stays 4 (skip not un-skipped)',
+    s().stopTimes.filter(st => st.trip_id === 'IST').length === 4,
+    `got ${s().stopTimes.filter(st => st.trip_id === 'IST').length}`);
+
+  // Estimate write-path. The async Mapbox match (and services/travelTime, whose
+  // module top-level reads import.meta.env) can't run under tsx, so we inline a
+  // copy of layoutStopTimes over synthetic cumulative travel seconds (one per
+  // stop, computed over ALL stops) and replay handleEstimateConfirm's guarded
+  // write loop verbatim: skip any column whose stop has no row (it's skipped).
+  const estStart = gtfsTimeToSeconds('10:00:00');
+  const estCum = [0, 60, 120, 180, 240]; // cumulative driving seconds at each of the 5 stops
+  const estDwellSec = 18;
+  const estTimings: { arrivalSec: number; departureSec: number }[] = [{ arrivalSec: estStart, departureSec: estStart }];
+  for (let i = 1; i < estCum.length; i++) {
+    const seg = Math.abs(estCum[i] - estCum[i - 1]); // speedFactor = 1
+    const arrival = Math.round(estTimings[i - 1].departureSec + seg);
+    const isLast = i === estCum.length - 1;
+    estTimings.push({ arrivalSec: arrival, departureSec: isLast ? arrival : arrival + estDwellSec });
+  }
+  assert('estimate-skip: layout covers all 5 stops', estTimings.length === 5, `got ${estTimings.length}`);
+  estTimings.forEach((t, i) => {
+    const [stop_id, seq] = istops[i];
+    // Mirror the component guard: no stop_time row ⇒ skipped column ⇒ don't write.
+    if (!istRow(seq)) return;
+    s().setStopTime('IST', stop_id, seq, {
+      arrival_time: secondsToGtfsTime(t.arrivalSec),
+      departure_time: secondsToGtfsTime(t.departureSec),
+    });
+  });
+  assert('estimate-skip: skipped stop C still has NO row after estimate write', !istRow(2));
+  assert('estimate-skip: served stop A (seq 0) got the start time', istRow(0)?.arrival_time === '10:00:00');
+  assert('estimate-skip: served stop B (seq 1) got an estimate time', !!istRow(1)?.arrival_time);
+  assert('estimate-skip: served stop D (seq 3) got an estimate time', !!istRow(3)?.arrival_time);
+  assert('estimate-skip: row count stays 4 (estimate never un-skips)',
+    s().stopTimes.filter(st => st.trip_id === 'IST').length === 4,
+    `got ${s().stopTimes.filter(st => st.trip_id === 'IST').length}`);
 
   // ---- SUMMARY ----
   console.log(`\n${'='.repeat(50)}`);

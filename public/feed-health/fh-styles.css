@@ -478,6 +478,20 @@ a { color: inherit; }
 /* Override lb-table's pointer cursor — agency rows are not clickable */
 .ag-table tbody tr { cursor: default; }
 
+/* State view: subtle pencil edit icon beside the Feed status badge (no Action column). */
+.ag-status-cell { display: inline-flex; align-items: center; gap: 8px; }
+.ag-edit-link {
+  display: inline-flex; align-items: center; line-height: 0;
+  color: var(--gtfs-warm-gray); opacity: 0.4;
+  transition: opacity var(--dur-base) var(--ease), color var(--dur-base) var(--ease);
+}
+.ag-edit-link:hover, .ag-edit-link:focus-visible { opacity: 1; color: var(--gtfs-teal); }
+.ag-edit-ico { display: block; }
+
+/* State-scoped Flex section: reuse the white flex band, but keep the copy readable
+   (the national override sets section-head max-width:none for its two-column grid). */
+.flex-band.state-flex .section-head { max-width: 64ch; margin-bottom: 0; }
+
 /* ---------------- Closing CTA band ---------------- */
 .closing-band {
   background: var(--gtfs-dark-brown);

@@ -82,6 +82,27 @@
     });
   }
 
+  // ---- Subtle pencil "edit" icon → GTFS·X editor (state view only) ----
+  // Muted by default, darkens on hover. Links to the same editor URL the
+  // "Edit in GTFS·X" CTA used ("/"). Not a button — the owner felt the old
+  // Action column was too pushy for the DOT-facing state view.
+  function editPencil(agencyName) {
+    // NOTE: use the `class` attribute (not `className`) — on SVG elements
+    // `el.className` is a read-only SVGAnimatedString and assigning to it throws.
+    const svg = h("svg", {
+      "class": "ag-edit-ico", viewBox: "0 0 24 24", width: "13", height: "13",
+      fill: "none", stroke: "currentColor", "stroke-width": "2",
+      "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true",
+    });
+    svg.innerHTML = '<path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>';
+    return h("a", {
+      className: "ag-edit-link",
+      href: "/",
+      title: "Edit this feed in GTFS·X",
+      "aria-label": "Edit " + agencyName + " in GTFS·X",
+    }, svg);
+  }
+
   // ===========================================================
   // TOP BAR
   // ===========================================================
@@ -346,8 +367,12 @@
   // ===========================================================
   // AGENCY TABLE (drill-down, lazy-loaded per state)
   // ===========================================================
-  function renderAgencyTable(data) {
+  function renderAgencyTable(data, opts) {
     const { CTAS } = window.FH_DATA;
+    // State view (Campaign B) drops the pushy "Action" column and instead shows
+    // a subtle pencil next to the status badge for agencies that already have a
+    // feed. The national drill-down keeps its Action column (stateMode = false).
+    const stateMode = !!(opts && opts.stateMode);
     let agSortKey = "name";
     let agSortDir = "asc";
 
@@ -368,7 +393,7 @@
       const cta = CTAS.find(function (c) { return c.key === key; }) || CTAS[2];
       const toneClass = ({ teal: "ap-teal", gold: "ap-gold", coral: "ap-coral" })[cta.tone] || "ap-coral";
       const label = ({ edit: "Edit in GTFS·X", fix: "Fix in GTFS·X", build: "Build in GTFS·X" })[key];
-      return { toneClass, label };
+      return { key, toneClass, label };
     }
 
     function reporterLabel(type) {
@@ -408,8 +433,12 @@
       statusTh.style.cursor = "pointer";
       statusTh.addEventListener("click", function () { setAgSort("status"); });
 
-      const actionTh = h("th", { style: { cursor: "default" } }, "Action");
-      tr.append(nameTh, repTh, statusTh, actionTh);
+      if (stateMode) {
+        tr.append(nameTh, repTh, statusTh);
+      } else {
+        const actionTh = h("th", { style: { cursor: "default" } }, "Action");
+        tr.append(nameTh, repTh, statusTh, actionTh);
+      }
       agThead.appendChild(tr);
     }
 
@@ -430,12 +459,20 @@
         tr.appendChild(h("td", null,
           h("span", { className: "reporter-pill" }, reporterLabel(ag.reporterType))
         ));
-        tr.appendChild(h("td", null,
+        const statusCell = h("div", { className: "ag-status-cell" },
           h("span", { className: "lb-pill " + sm.cls }, sm.label)
-        ));
-        tr.appendChild(h("td", null,
-          h("a", { className: "action-pill " + cm.toneClass, href: "/" }, cm.label)
-        ));
+        );
+        // State view: subtle pencil → editor, only for feed-present (edit) agencies.
+        // Fix/Build statuses get no pencil; the section + closing CTAs cover those.
+        if (stateMode && cm.key === "edit") {
+          statusCell.appendChild(editPencil(ag.name));
+        }
+        tr.appendChild(h("td", null, statusCell));
+        if (!stateMode) {
+          tr.appendChild(h("td", null,
+            h("a", { className: "action-pill " + cm.toneClass, href: "/" }, cm.label)
+          ));
+        }
         agTbody.appendChild(tr);
       });
     }
@@ -1124,7 +1161,50 @@
             "Each agency’s current feed status, with a direct path to publish or repair its GTFS in the free GTFS·X editor. This is an opportunity list, not a scorecard: most agencies without a findable feed are rural and demand-response operators that have never had a reason to publish one."
           )
         ),
-        renderAgencyTable(data)
+        renderAgencyTable(data, { stateMode: true })
+      )
+    );
+  }
+
+  // State-scoped GTFS-Flex section. Driven off the per-state flex feed count
+  // (stateMeta.flex). The common case (0 flex feeds) gets a clean "none yet"
+  // message + why it matters + a link to the learning page; states with feeds
+  // get a short positive summary. Styled to match the national flex band.
+  function renderStateFlexSection(stateMeta) {
+    const name = stateMeta.name;
+    const flexCount = stateMeta.flex || 0;
+    const learnLink = h("a",
+      { href: "/learn/gtfs-flex/", className: "flex-inline-link" },
+      "What is GTFS-Flex?"
+    );
+
+    let headline, body;
+    if (flexCount > 0) {
+      const verb = flexCount === 1 ? "feed publishes" : "feeds publish";
+      headline = name + " agencies are publishing GTFS-Flex";
+      body = h("p", { className: "state-flex-body" },
+        flexCount + " " + name + " " + verb + " GTFS-Flex, which makes their " +
+        "demand-response service findable in mainstream trip planners. ",
+        learnLink
+      );
+    } else {
+      headline = "Demand-response service is invisible without GTFS-Flex";
+      body = h("p", { className: "state-flex-body" },
+        "No " + name + " agencies currently report GTFS-Flex. Demand-response " +
+        "service (dial-a-ride, route deviation, on-demand microtransit) stays " +
+        "invisible in mainstream trip planners until an agency publishes it as " +
+        "GTFS-Flex. ",
+        learnLink
+      );
+    }
+
+    return h("section", { className: "flex-band state-flex", id: "flex" },
+      h("div", { className: "wrap section" },
+        h("div", { className: "section-head" },
+          h("span", { className: "eyebrow" }, "GTFS-Flex"),
+          h("h2", null, headline),
+          body
+        )
       )
     );
   }
@@ -1238,6 +1318,7 @@
     const main = document.createElement("main");
     main.appendChild(renderStateHero(stateMeta, data, cov, forValue));
     main.appendChild(renderStateAgencySection(stateMeta, data));
+    main.appendChild(renderStateFlexSection(stateMeta));
     main.appendChild(renderStateMethodology(stateMeta, nationalHref));
 
     root.appendChild(renderStateTopBar(stateMeta.name, nationalHref));

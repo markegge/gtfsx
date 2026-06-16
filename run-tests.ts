@@ -26,6 +26,7 @@ import { getUSHolidaysForYear, getUSHolidaysInRange } from './src/utils/holidays
 import { pointInPolygon } from './src/utils/geometry';
 import { stopsInsidePolygon } from './src/components/fares/fareZoneHelpers';
 import { computeShapePatterns } from './src/components/ui/shapePatterns';
+import { gtfsTimeToSeconds, secondsToGtfsTime } from './src/utils/time';
 import type { RouteStop, Stop, Trip } from './src/types/gtfs';
 
 const FIXTURE_DIR = 'tests/fixtures/benton-area-transit';
@@ -964,6 +965,168 @@ async function main() {
   assert('dup-roundtrip: imported route_stops repeat L1', reLoopRs.filter(rs => rs.stop_id === 'L1').length === 2,
     `got ${reLoopRs.map(rs => rs.stop_id).join(',')}`);
   assert('dup-roundtrip: imported route_stops all carry _uid', reLoopRs.every(rs => !!rs._uid));
+
+  // ---- PHASE 22: timed / interpolated / skipped stop states ----
+  // Reproduces the forum "Assistance Please" case: a trip that skips its first
+  // and last stops on some runs. Skipped stops must drop their rows (so the
+  // trip's first/last become the adjacent SERVED, timed stops and no
+  // missing-start/end error fires); interpolated (served, blank) stops export
+  // with blank times + timepoint=0.
+  console.log('\nPhase 22: timed / interpolated / skipped stops');
+  s().setFlexZones([]);
+  s().setStops([
+    { stop_id: 'KA', stop_name: 'A', stop_lat: 45.0, stop_lon: -111.0, location_type: 0, wheelchair_boarding: 0 },
+    { stop_id: 'KB', stop_name: 'B', stop_lat: 45.1, stop_lon: -111.1, location_type: 0, wheelchair_boarding: 0 },
+    { stop_id: 'KC', stop_name: 'C', stop_lat: 45.2, stop_lon: -111.2, location_type: 0, wheelchair_boarding: 0 },
+    { stop_id: 'KD', stop_name: 'D', stop_lat: 45.3, stop_lon: -111.3, location_type: 0, wheelchair_boarding: 0 },
+    { stop_id: 'KE', stop_name: 'E', stop_lat: 45.4, stop_lon: -111.4, location_type: 0, wheelchair_boarding: 0 },
+  ]);
+  s().setRoutes([{ route_id: 'SKR', agency_id: 'A', route_short_name: 'SK', route_long_name: 'Skip Test', route_type: 3 }]);
+  s().setRouteStops([]);
+  s().setTrips([]);
+  s().setStopTimes([]);
+
+  const kstops: [string, number][] = [['KA', 0], ['KB', 1], ['KC', 2], ['KD', 3], ['KE', 4]];
+  // route_stops added BEFORE the trip exists → no seeding here.
+  for (const [sid, seq] of kstops) {
+    s().addRouteStop({ route_id: 'SKR', stop_id: sid, direction_id: 0, stop_sequence: seq, _snapped: false, shape_id: 'SHK' });
+  }
+  s().addTrip({ trip_id: 'SKT', route_id: 'SKR', service_id: 'SVC', direction_id: 0, shape_id: 'SHK' });
+  for (const [sid, seq] of kstops) {
+    s().setStopTime('SKT', sid, seq, { arrival_time: `09:0${seq}:00`, departure_time: `09:0${seq}:00` });
+  }
+  assert('skip: trip starts with 5 stop_times', s().stopTimes.filter(st => st.trip_id === 'SKT').length === 5);
+
+  // Middle stop C (seq 2) → interpolated: clear the time, KEEP the row.
+  s().setStopTime('SKT', 'KC', 2, { arrival_time: '', departure_time: '' });
+  const cRow = s().stopTimes.find(st => st.trip_id === 'SKT' && st.stop_sequence === 2);
+  assert('skip: interpolated stop keeps its row', !!cRow);
+  assert('skip: interpolated row has blank times', !!cRow && !cRow.arrival_time && !cRow.departure_time);
+
+  // First (seq 0) and last (seq 4) → skipped: remove their rows.
+  s().skipStop('SKT', 0);
+  s().skipStop('SKT', 4);
+  const skRows = s().stopTimes.filter(st => st.trip_id === 'SKT').sort((a, b) => a.stop_sequence - b.stop_sequence);
+  assert('skip: skipped ends drop their rows (3 remain)', skRows.length === 3, `got ${skRows.length}`);
+  assert('skip: served sequences are 1,2,3', skRows.map(st => st.stop_sequence).join(',') === '1,2,3');
+
+  // Validation: skipped ends are NOT a missing-start/end error — the first/last
+  // SERVED stops (seq 1 and 3) are timed.
+  const skErrs = runValidation(s()).filter(m => m.severity === 'error' && m.message.includes('"SKT"'));
+  assert('skip: no missing start/end error when ends are skipped', skErrs.length === 0, skErrs.map(m => m.message).join('; '));
+
+  // Export round-trip of the three states.
+  const skBlob = await exportGtfsZip();
+  const skZip = await JSZip.loadAsync(Buffer.from(await skBlob.arrayBuffer()));
+  const skTxt = await skZip.file('stop_times.txt')?.async('string') ?? '';
+  const skLines = skTxt.split(/\r?\n/).filter(l => l.length > 0);
+  const skHeader = skLines[0].split(',');
+  const col = (name: string) => skHeader.indexOf(name);
+  const skExport = skLines.slice(1)
+    .map(l => l.split(','))
+    .filter(c => c[col('trip_id')] === 'SKT')
+    .sort((a, b) => Number(a[col('stop_sequence')]) - Number(b[col('stop_sequence')]));
+  assert('skip-export: 3 rows for SKT (skipped omitted)', skExport.length === 3, `got ${skExport.length}`);
+  assert('skip-export: skipped seq 0 and 4 absent from export',
+    !skExport.some(c => c[col('stop_sequence')] === '0' || c[col('stop_sequence')] === '4'));
+  const interpRow = skExport.find(c => c[col('stop_sequence')] === '2');
+  assert('skip-export: interpolated row has blank arrival_time', !!interpRow && interpRow[col('arrival_time')] === '');
+  assert('skip-export: interpolated row has blank departure_time', !!interpRow && interpRow[col('departure_time')] === '');
+  assert('skip-export: interpolated row has timepoint=0', !!interpRow && interpRow[col('timepoint')] === '0');
+  const skFirst = skExport[0];
+  const skLast = skExport[skExport.length - 1];
+  assert('skip-export: first emitted row (seq 1) is timed',
+    skFirst[col('stop_sequence')] === '1' && skFirst[col('arrival_time')] !== '');
+  assert('skip-export: last emitted row (seq 3) is timed',
+    skLast[col('stop_sequence')] === '3' && skLast[col('arrival_time')] !== '');
+
+  // An interpolated stop is only valid mid-trip: blank the first SERVED stop
+  // (seq 1) and confirm validation flags the untimed endpoint.
+  s().setStopTime('SKT', 'KB', 1, { arrival_time: '', departure_time: '' });
+  const endErr = runValidation(s()).filter(m => m.severity === 'error' && m.message.includes('"SKT"') && /first served stop/i.test(m.message));
+  assert('skip: untimed first served stop is flagged', endErr.length >= 1, endErr.map(m => m.message).join('; '));
+
+  // ---- PHASE 23: skip-aware interpolate + estimate write-path ----
+  // Both auto-fill tools must respect a skipped stop: they keep computing over
+  // ALL stops (the bus still physically passes a skipped one, so downstream
+  // times stay correct) but only WRITE to SERVED stops. A skipped stop has no
+  // row, and neither tool may re-create it (which would silently un-skip it).
+  console.log('\nPhase 23: skip-aware interpolate & estimate write-path');
+  s().setFlexZones([]);
+  s().setStops([
+    { stop_id: 'IA', stop_name: 'A', stop_lat: 45.0, stop_lon: -111.0, location_type: 0, wheelchair_boarding: 0 },
+    { stop_id: 'IB', stop_name: 'B', stop_lat: 45.1, stop_lon: -111.1, location_type: 0, wheelchair_boarding: 0 },
+    { stop_id: 'IC', stop_name: 'C', stop_lat: 45.2, stop_lon: -111.2, location_type: 0, wheelchair_boarding: 0 },
+    { stop_id: 'ID', stop_name: 'D', stop_lat: 45.3, stop_lon: -111.3, location_type: 0, wheelchair_boarding: 0 },
+    { stop_id: 'IE', stop_name: 'E', stop_lat: 45.4, stop_lon: -111.4, location_type: 0, wheelchair_boarding: 0 },
+  ]);
+  s().setRoutes([{ route_id: 'ISR', agency_id: 'A', route_short_name: 'IS', route_long_name: 'Interp Skip', route_type: 3 }]);
+  s().setShapes([]); // no shape → equal-spacing interpolation, deterministic times
+  s().setRouteStops([]);
+  s().setTrips([]);
+  s().setStopTimes([]);
+
+  const istops: [string, number][] = [['IA', 0], ['IB', 1], ['IC', 2], ['ID', 3], ['IE', 4]];
+  for (const [sid, seq] of istops) {
+    s().addRouteStop({ route_id: 'ISR', stop_id: sid, direction_id: 0, stop_sequence: seq, _snapped: false });
+  }
+  s().addTrip({ trip_id: 'IST', route_id: 'ISR', service_id: 'SVC', direction_id: 0 });
+  // All five SERVED (rows exist): endpoints timed, middles blank (served, await
+  // interpolation). Then skip the centre stop C so it has no row at all.
+  s().setStopTime('IST', 'IA', 0, { arrival_time: '08:00:00', departure_time: '08:00:00' });
+  s().setStopTime('IST', 'IB', 1, { arrival_time: '', departure_time: '' });
+  s().setStopTime('IST', 'IC', 2, { arrival_time: '', departure_time: '' });
+  s().setStopTime('IST', 'ID', 3, { arrival_time: '', departure_time: '' });
+  s().setStopTime('IST', 'IE', 4, { arrival_time: '08:40:00', departure_time: '08:40:00' });
+  s().skipStop('IST', 2);
+  assert('interp-skip: stop C has no row before interpolation',
+    !s().stopTimes.some(st => st.trip_id === 'IST' && st.stop_sequence === 2));
+
+  // interpolateStopTimes must fill the served blanks (seq 1, 3) but must NOT
+  // re-create a row for the skipped seq 2.
+  s().interpolateStopTimes('IST');
+  const istRow = (seq: number) => s().stopTimes.find(st => st.trip_id === 'IST' && st.stop_sequence === seq);
+  assert('interp-skip: skipped stop C still has NO row after interpolate', !istRow(2));
+  assert('interp-skip: served stop B (seq 1) got interpolated time', !!istRow(1)?.arrival_time, istRow(1)?.arrival_time);
+  assert('interp-skip: served stop D (seq 3) got interpolated time', !!istRow(3)?.arrival_time, istRow(3)?.arrival_time);
+  assert('interp-skip: endpoints unchanged',
+    istRow(0)?.arrival_time === '08:00:00' && istRow(4)?.arrival_time === '08:40:00');
+  assert('interp-skip: row count stays 4 (skip not un-skipped)',
+    s().stopTimes.filter(st => st.trip_id === 'IST').length === 4,
+    `got ${s().stopTimes.filter(st => st.trip_id === 'IST').length}`);
+
+  // Estimate write-path. The async Mapbox match (and services/travelTime, whose
+  // module top-level reads import.meta.env) can't run under tsx, so we inline a
+  // copy of layoutStopTimes over synthetic cumulative travel seconds (one per
+  // stop, computed over ALL stops) and replay handleEstimateConfirm's guarded
+  // write loop verbatim: skip any column whose stop has no row (it's skipped).
+  const estStart = gtfsTimeToSeconds('10:00:00');
+  const estCum = [0, 60, 120, 180, 240]; // cumulative driving seconds at each of the 5 stops
+  const estDwellSec = 18;
+  const estTimings: { arrivalSec: number; departureSec: number }[] = [{ arrivalSec: estStart, departureSec: estStart }];
+  for (let i = 1; i < estCum.length; i++) {
+    const seg = Math.abs(estCum[i] - estCum[i - 1]); // speedFactor = 1
+    const arrival = Math.round(estTimings[i - 1].departureSec + seg);
+    const isLast = i === estCum.length - 1;
+    estTimings.push({ arrivalSec: arrival, departureSec: isLast ? arrival : arrival + estDwellSec });
+  }
+  assert('estimate-skip: layout covers all 5 stops', estTimings.length === 5, `got ${estTimings.length}`);
+  estTimings.forEach((t, i) => {
+    const [stop_id, seq] = istops[i];
+    // Mirror the component guard: no stop_time row ⇒ skipped column ⇒ don't write.
+    if (!istRow(seq)) return;
+    s().setStopTime('IST', stop_id, seq, {
+      arrival_time: secondsToGtfsTime(t.arrivalSec),
+      departure_time: secondsToGtfsTime(t.departureSec),
+    });
+  });
+  assert('estimate-skip: skipped stop C still has NO row after estimate write', !istRow(2));
+  assert('estimate-skip: served stop A (seq 0) got the start time', istRow(0)?.arrival_time === '10:00:00');
+  assert('estimate-skip: served stop B (seq 1) got an estimate time', !!istRow(1)?.arrival_time);
+  assert('estimate-skip: served stop D (seq 3) got an estimate time', !!istRow(3)?.arrival_time);
+  assert('estimate-skip: row count stays 4 (estimate never un-skips)',
+    s().stopTimes.filter(st => st.trip_id === 'IST').length === 4,
+    `got ${s().stopTimes.filter(st => st.trip_id === 'IST').length}`);
 
   // ---- SUMMARY ----
   console.log(`\n${'='.repeat(50)}`);

@@ -22,6 +22,16 @@ export interface TripSlice {
    *  trips on a route/direction without delete-and-regenerate. */
   applyTripPattern: (templateTripId: string, targetTripIds: string[]) => void;
   interpolateStopTimes: (tripId: string) => void;
+  /** Mark a stop as SKIPPED on this trip by removing its stop_time row. A
+   *  missing row means the trip doesn't serve that stop, so the exporter omits
+   *  it and the trip's first/last become the adjacent SERVED stops. The grid
+   *  renders a skipped cell distinctly (no editable time). */
+  skipStop: (trip_id: string, stop_sequence: number) => void;
+  /** Ensure a blank (SERVED, no explicit time) stop_time row exists for each
+   *  given (stop_id, stop_sequence) on this trip. Used to seed a freshly added
+   *  trip so its stops default to "served" (interpolated) rather than skipped.
+   *  Never overwrites an existing row. */
+  seedTripStops: (trip_id: string, stops: { stop_id: string; stop_sequence: number }[]) => void;
 }
 
 function addMinutesToGtfsTime(time: string, minutes: number): string {
@@ -210,7 +220,11 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
     const totalDist = lastDist - firstDist;
     if (totalDist <= 0) return;
 
-    // Interpolate intermediate stops
+    // Interpolate intermediate stops. The distance/ratio math runs over ALL
+    // route stops (the vehicle physically passes a skipped stop, so downstream
+    // times stay correct), but we only WRITE to SERVED stops — those with an
+    // existing row. A missing row means the trip skips that stop, so we leave
+    // it skipped rather than re-create the row (which would un-skip it).
     for (let i = firstIdx + 1; i < lastIdx; i++) {
       const ratio = (distances[i] - firstDist) / totalDist;
       const interpolatedSec = Math.round(firstTime + ratio * totalTimeSec);
@@ -220,18 +234,31 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
       const existing = state.stopTimes.findIndex(
         (st) => st.trip_id === tripId && st.stop_sequence === seq
       );
-      if (existing !== -1) {
-        state.stopTimes[existing].arrival_time = timeStr;
-        state.stopTimes[existing].departure_time = timeStr;
-      } else {
-        state.stopTimes.push({
-          trip_id: tripId,
-          stop_id: orderedRouteStops[i].stop_id,
-          stop_sequence: seq,
-          arrival_time: timeStr,
-          departure_time: timeStr,
-        });
-      }
+      // Skipped stop (no row) → leave it skipped; only fill served stops.
+      if (existing === -1) continue;
+      state.stopTimes[existing].arrival_time = timeStr;
+      state.stopTimes[existing].departure_time = timeStr;
+    }
+  }),
+  skipStop: (trip_id, stop_sequence) => set((state) => {
+    state.stopTimes = state.stopTimes.filter(
+      (st) => !(st.trip_id === trip_id && st.stop_sequence === stop_sequence),
+    );
+  }),
+  seedTripStops: (trip_id, stops) => set((state) => {
+    const have = new Set(
+      state.stopTimes.filter((st) => st.trip_id === trip_id).map((st) => st.stop_sequence),
+    );
+    for (const sp of stops) {
+      if (have.has(sp.stop_sequence)) continue;
+      have.add(sp.stop_sequence);
+      state.stopTimes.push({
+        trip_id,
+        stop_id: sp.stop_id,
+        stop_sequence: sp.stop_sequence,
+        arrival_time: '',
+        departure_time: '',
+      });
     }
   }),
 });

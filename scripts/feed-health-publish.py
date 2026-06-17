@@ -117,11 +117,22 @@ REPORTER_MAP = {
 #   Net: no_feed 1018 -> 1013/2238 = 45.26% -> still renders 45 (matches fh.js hero);
 #   matched 788 (denominator unchanged: -10182 +90023 +3 manual), fail 100/788 = 12.7%,
 #   expired 172/788 = 21.8% (PATH, Rock Region, ATI all expired).
+# Updated 2026-06-17 ("no findable feed" audit): 11 agencies previously status=none
+# confirmed as the SAME agency as a real MDB feed and added to CONFIRMED_GOOD_MATCHES
+# (phase_d_mdb.py). They join the findable + matched populations:
+#   no_feed   1013 -> 1002 / 2238 = 44.77% -> still renders 45 (matches fh.js hero).
+#   matched   788  -> 799  (all 11 carry an MDB validation report).
+#   expired   172  -> 175  (20958/40038/40208 have stale service_end) -> 175/799 = 21.9%.
+#   fail      100  -> 104  (40038/40208 expired-with-errors + 91018/91041 invalid) ->
+#             104/799 = 13.0%.
+# NOTE: this constant is a +/-0.5pp drift guard, not the rendered headline; the displayed
+# fh-data.js HEADLINE (noFeedPct 45, expiredPct 22, validatorFailPct 12.7) is left frozen
+# by this surgical edit and is re-derived on the next full pipeline run.
 CANONICAL = {
     "N_roster":              2238,    # full NTD 2024 universe incl. territories
-    "no_feed_anywhere_pct":  45.3,    # 1013 / 2238 = 45.26% (post join fixes)
-    "fail_validation_pct":   12.7,    # 100  / 788 matched
-    "expired_pct_of_matched": 21.8,   # 172  / 788 matched
+    "no_feed_anywhere_pct":  44.8,    # 1002 / 2238 = 44.77% (post 2026-06-17 audit)
+    "fail_validation_pct":   13.0,    # 104  / 799 matched
+    "expired_pct_of_matched": 21.9,   # 175  / 799 matched
 }
 
 # Constant from NTD Annual Data — Service by Mode and Time Period (wwdp-t4re),

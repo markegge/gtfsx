@@ -102,6 +102,29 @@ CONFIRMED_GOOD_MATCHES = {
     ("60033", "mdb-2264"),  # Rock Region Metropolitan Transit Authority / Rock Region METRO
                             #   (North Little Rock AR) — fuzzy 78.6; rrmetro.org/gtfs.zip;
                             #   MDB status=inactive (see note above)
+    # 2026-06-17 "no findable feed" audit — 11 NTD agencies previously marked status=none
+    # (no FTA weblink AND not auto-joined to MDB) confirmed by manual review to be the
+    # SAME agency as the listed MDB feed. Adding them here surfaces each agency as
+    # findable (ok / expired / invalid per the feed's own currency + validator state)
+    # instead of "no feed anywhere". Net: no_feed_anywhere 1013 -> 1002 / 2238 (45.3% ->
+    # 44.8%, still renders 45). Of the 11: 6 ok, 3 expired (20958/40038/40208 — stale
+    # service_end), 2 invalid (91018/91041 — MDB validator ERROR notices, no parseable
+    # service window). 368/91018/91041 have no MDB service_end (mdb-568 validates clean ->
+    # ok; the two calitp feeds carry validator errors -> invalid).
+    ("55",    "tld-4791"),  # Kootenai County, dba: Citylink North (Coeur d'Alene ID) — ok, se 2028-01-01
+    ("317",   "mdb-816"),   # Mt Si Senior Center, dba: Snoqualmie Valley Transportation (North Bend WA) — ok
+    ("368",   "mdb-568"),   # Lower Columbia Community Action Council, dba: Lower Columbia CAP (Longview WA)
+                            #   — active, validates clean, no MDB service_end -> ok
+    ("20213", "mdb-541"),   # City of Mechanicville, dba: Public Transportation System (Mechanicville NY) — ok
+    ("20958", "mdb-899"),   # Cortland County, dba: Way to Go Cortland (Cortland NY) — expired (se 2025-03-29)
+    ("40038", "mdb-335"),   # Escambia County BOCC, dba: Escambia County Area Transit / ECAT (Pensacola FL)
+                            #   — expired (se 2022-11-02)
+    ("40208", "mdb-798"),   # City of Clemson, dba: Clemson Area Transit (Clemson SC) — expired (se 2020-01-02)
+    ("80168", "mdb-1141"),  # Dolores County, dba: Senior and Public Transportation (Dove Creek CO) — ok, flex
+    ("80179", "mdb-2306"),  # City of Burlington, dba: Outback Express (Burlington CO) — ok, flex
+    ("91018", "tld-4798"),  # City of Arcata, dba: Arcata & Mad River Transit System (Arcata CA) — invalid
+                            #   (calitp dial-a-ride flex feed; MDB validator ERROR notices, no service_end)
+    ("91041", "mdb-1818"),  # City of Dixon, dba: Readi-Ride (Dixon CA) — invalid (calitp feed; ERROR notices)
 }
 
 

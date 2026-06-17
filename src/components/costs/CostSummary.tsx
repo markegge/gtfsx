@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../../store';
-import { calculateRouteSpans, applyRouteCosts } from '../../services/costEstimation';
+import { calculateRouteSpans, applyRouteCosts, calculateSystemPeakVehicles } from '../../services/costEstimation';
 import type { RouteStats } from '../../services/costEstimation';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
 import { RailSubHeading } from '../ui/RailHeadings';
@@ -14,7 +14,7 @@ function formatCurrency(n: number): string {
 
 export function CostSummary() {
   const {
-    calendars, calendarDates,
+    calendars, calendarDates, frequencies,
     selectRoute, setEditingRouteId, setSidebarSection,
   } = useStore();
   // Analysis is scoped to routes toggled visible on the map (scenario compare).
@@ -28,8 +28,15 @@ export function CostSummary() {
   const [deadheadFactor, setDeadheadFactor] = useState(1.1);
 
   const stateSlice = useMemo(
-    () => ({ routes, trips, stopTimes, calendars, calendarDates, stopTimesByTrip }),
-    [routes, trips, stopTimes, calendars, calendarDates, stopTimesByTrip]
+    () => ({ routes, trips, stopTimes, calendars, calendarDates, frequencies, stopTimesByTrip }),
+    [routes, trips, stopTimes, calendars, calendarDates, frequencies, stopTimesByTrip]
+  );
+
+  // TRUE whole-system peak (max simultaneous vehicles), NOT the sum of per-route
+  // peaks below. Depends only on the feed shape, so it's memoized on stateSlice.
+  const systemPeakVehicles = useMemo(
+    () => calculateSystemPeakVehicles(stateSlice),
+    [stateSlice]
   );
 
   // Phase 2: Memoize spans separately — these only change when trips/stopTimes change
@@ -135,11 +142,18 @@ export function CostSummary() {
           <StatRow label="Weekly Revenue Hours" value={systemStats.totalRevenueHoursWeekly.toFixed(1)} />
           <StatRow label="Weekly Total Hours" value={systemStats.totalHoursWeekly.toFixed(1)} sub={`× ${deadheadFactor}`} />
           <StatRow label="Total Trips / Week" value={String(systemStats.totalTripsPerWeek)} />
-          <StatRow label="Peak Vehicles" value={String(systemStats.totalPeakVehicles)} />
+          <StatRow
+            label="Vehicles for Peak Service"
+            value={String(systemPeakVehicles)}
+            title={`Max vehicles simultaneously in service at the busiest instant on the busiest service day — the fleet you need to run the schedule. ≤ the sum of per-route peaks (${systemStats.totalPeakVehicles}), which routes never all hit at once.`}
+          />
           <div className="h-px bg-sand my-1" />
           <StatRow label="Weekly Cost" value={formatCurrency(systemStats.totalWeeklyCost)} highlight />
           <StatRow label="Annual Cost" value={formatCurrency(systemStats.totalAnnualCost)} highlight />
         </div>
+        <p className="text-[11px] text-warm-gray leading-relaxed mt-2.5">
+          Vehicles for peak service is the most vehicles in service at one instant on the busiest service day — the fleet required to operate the schedule. It is ≤ the sum of each route&rsquo;s peak ({systemStats.totalPeakVehicles}), since routes peak at different times of day.
+        </p>
       </div>
 
       <PaywallOverlay feature="analysis_basic" currentPlan={plan} preview>
@@ -184,8 +198,10 @@ export function CostSummary() {
                   ];
                 }),
                 [],
+                // System peak = max simultaneous vehicles (≤ sum of route peaks),
+                // the real fleet need — not a column sum.
                 ['TOTAL', systemStats.totalRevenueHoursWeekly.toFixed(1), systemStats.totalHoursWeekly.toFixed(1),
-                  String(systemStats.totalTripsPerWeek), String(systemStats.totalPeakVehicles), '',
+                  String(systemStats.totalTripsPerWeek), String(systemPeakVehicles), '',
                   String(Math.round(systemStats.totalWeeklyCost)), String(Math.round(systemStats.totalAnnualCost))],
               ];
               const csv = rows.map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
@@ -208,10 +224,10 @@ export function CostSummary() {
   );
 }
 
-function StatRow({ label, value, highlight, sub }: { label: string; value: string; highlight?: boolean; sub?: string }) {
+function StatRow({ label, value, highlight, sub, title }: { label: string; value: string; highlight?: boolean; sub?: string; title?: string }) {
   return (
-    <div className="flex justify-between">
-      <span className="text-warm-gray">{label}</span>
+    <div className="flex justify-between" title={title}>
+      <span className={`text-warm-gray${title ? ' cursor-help decoration-dotted underline decoration-warm-gray/40 underline-offset-2' : ''}`}>{label}</span>
       <span className={`font-semibold ${highlight ? 'text-coral' : 'text-dark-brown'}`}>
         {value}
         {sub && <span className="text-warm-gray font-normal text-[11px] ml-1">{sub}</span>}

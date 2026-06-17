@@ -1,5 +1,5 @@
 import type { AppStore } from '../store';
-import type { StopTime } from '../types/gtfs';
+import type { Frequency, StopTime } from '../types/gtfs';
 import { gtfsTimeToSeconds } from '../utils/time';
 
 export interface RouteSpans {
@@ -30,7 +30,13 @@ export interface SystemStats {
   totalRevenueHoursWeekly: number;
   totalHoursWeekly: number;
   totalTripsPerWeek: number;
+  /** Sum of each route's individual peak. OVER-counts the real fleet need
+   *  because routes peak at different times of day — kept for the CSV/context
+   *  only; use `systemPeakVehicles` for "vehicles required for peak service". */
   totalPeakVehicles: number;
+  /** TRUE whole-system peak: max vehicles simultaneously in service at the
+   *  single busiest instant across the entire system (≤ totalPeakVehicles). */
+  systemPeakVehicles: number;
   totalWeeklyCost: number;
   totalAnnualCost: number;
 }
@@ -169,6 +175,94 @@ function computePeakVehicles(spans: { start: number; end: number }[]): number {
   return peak;
 }
 
+/** The in-service spans a single trip contributes to the concurrency sweep.
+ *
+ *  Normally one span = [first departure, last arrival]. But if the trip has
+ *  frequencies.txt entries it is a headway-based pattern standing in for many
+ *  vehicles rather than a single run: during each [start_time, end_time) window
+ *  the number of vehicles simultaneously in service is ≈
+ *  ceil(tripDuration / headway_secs), so we emit that many overlapping copies of
+ *  the window (the reference run's explicit stop_times are ignored, per the GTFS
+ *  spec). Invalid windows (non-positive headway or empty range) are skipped, and
+ *  if every window is invalid we fall back to the single reference span so the
+ *  trip still counts as one vehicle. */
+function tripConcurrencySpans(
+  span: { start: number; end: number },
+  freqs: Frequency[] | undefined,
+): { start: number; end: number }[] {
+  if (!freqs || freqs.length === 0) return [span];
+
+  const duration = span.end - span.start;
+  const out: { start: number; end: number }[] = [];
+  for (const f of freqs) {
+    const winStart = gtfsTimeToSeconds(f.start_time);
+    const winEnd = gtfsTimeToSeconds(f.end_time);
+    if (winEnd <= winStart || f.headway_secs <= 0 || duration <= 0) continue;
+    const concurrent = Math.max(1, Math.ceil(duration / f.headway_secs));
+    for (let i = 0; i < concurrent; i++) out.push({ start: winStart, end: winEnd });
+  }
+
+  return out.length > 0 ? out : [span];
+}
+
+/** TRUE whole-system peak: the maximum number of vehicles simultaneously in
+ *  service at the single busiest instant across the ENTIRE system.
+ *
+ *  Gathers every trip across every route, groups them by service_id, and runs
+ *  the concurrency sweep over ALL of that service_id's trips system-wide; the
+ *  answer is the MAX over service_ids. This is the "vehicles required for peak
+ *  service" number, and it is ≤ the sum of per-route peaks (routes peak at
+ *  different times of day, so their peaks never all stack at one instant).
+ *
+ *  Design notes (matches calculateRouteSpans' existing approach):
+ *   - Grouping by service_id mirrors the per-route logic and keeps day-types
+ *     separate (one service_id ≈ one day type). This can slightly UNDER-count
+ *     when a single calendar DATE is served by multiple overlapping service_ids
+ *     whose peaks would actually stack on that date — acceptable for v1.
+ *   - block_id is intentionally NOT special-cased: a block's trips are
+ *     sequential and never overlap, so the per-trip sweep already yields the
+ *     correct instantaneous peak (block_id affects total fleet/deadhead, not the
+ *     instantaneous in-service count).
+ *   - frequencies.txt IS honored via tripConcurrencySpans (a headway-based trip
+ *     contributes ceil(tripDuration / headway) concurrent vehicles per window). */
+export function calculateSystemPeakVehicles(
+  state: Pick<AppStore, 'trips'> & {
+    stopTimes: StopTime[];
+    stopTimesByTrip?: Map<string, StopTime[]>;
+    frequencies?: Frequency[];
+  },
+): number {
+  const lookup = state.stopTimesByTrip || state.stopTimes;
+
+  // Index frequencies by trip_id for O(1) lookup per trip.
+  const freqByTrip = new Map<string, Frequency[]>();
+  for (const f of state.frequencies || []) {
+    const group = freqByTrip.get(f.trip_id) || [];
+    group.push(f);
+    freqByTrip.set(f.trip_id, group);
+  }
+
+  // Group every trip (all routes) by service_id, accumulating its concurrency
+  // spans into that service_id's bucket.
+  const spansByService = new Map<string, { start: number; end: number }[]>();
+  for (const trip of state.trips) {
+    const span = getTripSpan(trip.trip_id, lookup);
+    if (!span) continue;
+    const group = spansByService.get(trip.service_id) || [];
+    for (const s of tripConcurrencySpans(span, freqByTrip.get(trip.trip_id))) {
+      group.push(s);
+    }
+    spansByService.set(trip.service_id, group);
+  }
+
+  let systemPeak = 0;
+  for (const spans of spansByService.values()) {
+    const peak = computePeakVehicles(spans);
+    if (peak > systemPeak) systemPeak = peak;
+  }
+  return systemPeak;
+}
+
 /** Phase 2: Compute route spans (expensive, depends on trips + stopTimes).
  *  Accepts an optional byTrip index for O(1) lookups instead of O(n) scans. */
 export function calculateRouteSpans(
@@ -276,6 +370,7 @@ export function calculateRouteStats(
 export function calculateSystemStats(
   state: Pick<AppStore, 'routes' | 'trips' | 'stopTimes' | 'calendars' | 'calendarDates'> & {
     stopTimesByTrip?: Map<string, StopTime[]>;
+    frequencies?: Frequency[];
   },
   defaultCostPerHour = 0,
   deadheadFactor = 1.2,
@@ -297,11 +392,16 @@ export function calculateSystemStats(
     totalAnnualCost += stats.annualCost;
   }
 
+  // The real fleet need: max simultaneous vehicles across the whole system,
+  // NOT the sum of per-route peaks above (which over-counts).
+  const systemPeakVehicles = calculateSystemPeakVehicles(state);
+
   return {
     totalRevenueHoursWeekly,
     totalHoursWeekly,
     totalTripsPerWeek,
     totalPeakVehicles,
+    systemPeakVehicles,
     totalWeeklyCost,
     totalAnnualCost,
   };

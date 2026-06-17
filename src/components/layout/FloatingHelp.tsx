@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { useStore } from '../../store';
 import { isPlanAtLeastPro } from '../../utils/planRank';
@@ -6,13 +6,13 @@ import { isPlanAtLeastPro } from '../../utils/planRank';
 const SUPPORT_EMAIL = 'support@gtfsx.com';
 
 /**
- * Floating "?" help button with a hover-over quick-links menu.
+ * Floating "?" help button with a click-to-toggle quick-links menu.
  *
- * Renders in the bottom-left of the editor over the map. Hovering (with a
- * short intent delay) or clicking opens a menu above the pill with links to
- * the quick-start guide, full documentation, and community forum — all in
- * new tabs so the user does not lose editor state. Pro+ users also see a
- * support-email row with a copy-to-clipboard button.
+ * Renders in the bottom-left of the editor over the map. Clicking the pill
+ * toggles a menu above it with links to the quick-start guide, full
+ * documentation, and community forum — all in new tabs so the user does not
+ * lose editor state. Clicking outside or pressing Escape closes the menu.
+ * Pro+ users also see a support-email row with a copy-to-clipboard button.
  *
  * Accessibility:
  *   - Trigger: aria-haspopup / aria-expanded managed by Radix Popover.Trigger.
@@ -23,9 +23,6 @@ const SUPPORT_EMAIL = 'support@gtfsx.com';
 export function FloatingHelp() {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const currentUser = useStore((s) => s.currentUser);
   const userOrgs = useStore((s) => s.userOrgs);
@@ -54,31 +51,6 @@ export function FloatingHelp() {
   // When the right-rail panel fills the screen on mobile, this button sits
   // at z-30 (above the z-20 panel) and covers the last content row. Hide it.
   if (isNarrow && sidebarSection && rightRailOpen) return null;
-
-  // ── Hover management ───────────────────────────────────────────
-  const cancelClose = () => {
-    if (closeTimer.current) {
-      clearTimeout(closeTimer.current);
-      closeTimer.current = null;
-    }
-  };
-  const cancelOpen = () => {
-    if (openTimer.current) {
-      clearTimeout(openTimer.current);
-      openTimer.current = null;
-    }
-  };
-
-  // Small intent delay (150 ms) prevents the menu from flickering open when
-  // the pointer passes over the pill without pausing.
-  const scheduleOpen = () => {
-    cancelClose();
-    openTimer.current = setTimeout(() => setOpen(true), 150);
-  };
-  const scheduleClose = () => {
-    cancelOpen();
-    closeTimer.current = setTimeout(() => setOpen(false), 200);
-  };
 
   // ── Clipboard copy ─────────────────────────────────────────────
   const handleCopy = () => {
@@ -116,8 +88,6 @@ export function FloatingHelp() {
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <button
-          onMouseEnter={scheduleOpen}
-          onMouseLeave={scheduleClose}
           aria-label="Help"
           className="absolute bottom-10 left-3 h-8 px-3 rounded-full bg-white border border-sand shadow-md text-warm-gray hover:text-coral hover:border-coral hover:shadow-lg flex items-center gap-1.5 text-xs font-heading font-bold uppercase tracking-wide transition-all z-30"
         >
@@ -131,8 +101,6 @@ export function FloatingHelp() {
           side="top"
           align="start"
           sideOffset={8}
-          onMouseEnter={cancelClose}
-          onMouseLeave={scheduleClose}
           className="z-50 bg-white rounded-xl shadow-lg border border-sand p-1.5 w-52 outline-none"
         >
           <a

@@ -212,12 +212,10 @@ async function fetchFeedZip(initialUrl: URL): Promise<Uint8Array> {
         throw importError(502, 'fetch_failed', `The feed URL returned ${res.status}.`);
       }
 
-      // Early Content-Type rejection — don't read body for an HTML page.
-      const ct = (res.headers.get('content-type') || '').toLowerCase();
-      if (ct.startsWith('text/html') || ct.startsWith('text/plain')) {
-        throw importError(415, 'not_zip', `That URL didn't return a GTFS zip file (got ${ct.split(';')[0]}).`);
-      }
-
+      // Don't trust Content-Type. Extension-less feed endpoints (e.g. /gtfs)
+      // routinely serve a real ZIP under a generic/wrong type (text/html,
+      // text/plain, …), so the magic-byte sniff below is authoritative. The
+      // streaming size cap bounds the download, so reading an HTML page is safe.
       if (!res.body) {
         throw importError(502, 'fetch_failed', 'Upstream returned an empty body.');
       }

@@ -569,11 +569,11 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
                 }
               }}
               disabled={parsing}
-              placeholder="https://example.org/gtfs.zip"
+              placeholder="https://example.org/gtfs"
               className="w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-white text-dark-brown focus:outline-none focus:border-coral disabled:opacity-50"
             />
             <p className="mt-2 text-xs text-warm-gray leading-relaxed">
-              Paste a direct link to a GTFS <code className="font-mono">.zip</code>. Up to 100 MB; HTTPS preferred.
+              Paste a direct link to a GTFS feed — the URL doesn't need to end in <code className="font-mono">.zip</code>. Up to 100 MB; HTTPS preferred.
               Don't have a URL? Try <button onClick={() => setSource('catalog')} className="text-coral hover:underline">Search Catalog</button> to browse Mobility Database.
             </p>
             <button

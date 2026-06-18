@@ -10,6 +10,7 @@ import type { Route, StopTime } from '../../types/gtfs';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
 import { estimateStopTravelSeconds, layoutStopTimes } from '../../services/travelTime';
 import { GenerateServiceForm } from './GenerateServiceForm';
+import { RuntimeEditor } from './RuntimeEditor';
 
 function generateTripName(routeName: string, departureTime: string, serviceIndex: number): string {
   const prefix = (routeName || 'trip').replace(/\s+/g, '').slice(0, 4).toLowerCase();
@@ -164,6 +165,8 @@ export function TimetableGrid() {
   // with stops but no trips) shows the form automatically; this lets the user
   // re-open it to add another span of service after trips exist.
   const [showGenerate, setShowGenerate] = useState(false);
+  // B2 "Running time" editor — re-time every trip on the pattern.
+  const [showRuntime, setShowRuntime] = useState(false);
 
   // Duplicate trip prompt state
   const [dupPrompt, setDupPrompt] = useState<{ tripId: string; defaultStartTime: string } | null>(null);
@@ -651,7 +654,7 @@ export function TimetableGrid() {
             </button>
           )}
           <button
-            onClick={() => setShowGenerate((v) => !v)}
+            onClick={() => { setShowGenerate((v) => !v); setShowRuntime(false); }}
             disabled={!hasStops}
             title="Generate a whole span of service from a start, end, headway and run time"
             className={`px-3 py-1 rounded-md text-xs font-bold whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
@@ -660,6 +663,18 @@ export function TimetableGrid() {
           >
             ✨ Generate service
           </button>
+          {routeTrips.length > 0 && (
+            <button
+              onClick={() => { setShowRuntime((v) => !v); setShowGenerate(false); }}
+              disabled={!hasStops}
+              title="Set this pattern's running time — re-times every trip, keeping headways"
+              className={`px-3 py-1 rounded-md text-xs font-bold whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                showRuntime ? 'bg-teal text-white' : 'bg-teal/10 text-teal hover:bg-teal/20'
+              }`}
+            >
+              ⏱ Running time
+            </button>
+          )}
           <button
             onClick={() => {
               setRepeatError(null);
@@ -705,6 +720,19 @@ export function TimetableGrid() {
             headsign={route?.route_short_name || undefined}
             onGenerated={() => setShowGenerate(false)}
             onCancel={routeTrips.length > 0 ? () => setShowGenerate(false) : undefined}
+          />
+        </div>
+      )}
+
+      {/* B2 Running-time editor */}
+      {showRuntime && hasStops && routeTrips.length > 0 && activeServiceId && (
+        <div className="mx-2 mb-2 shrink-0">
+          <RuntimeEditor
+            routeId={selectedRouteId!}
+            directionId={directionId}
+            shapeId={effectiveShapeId ?? undefined}
+            serviceId={activeServiceId}
+            onCancel={() => setShowRuntime(false)}
           />
         </div>
       )}

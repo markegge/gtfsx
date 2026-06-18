@@ -2,8 +2,9 @@ import type { ValidationMessage } from '../types/ui';
 import type { AppStore } from '../store';
 import { featureEnabled } from '../store/featuresSlice';
 import { flexZoneHasGroup, flexZoneHasPolygons, flexZoneShape } from '../store/flexSlice';
-import { gtfsTimeToSeconds } from '../utils/time';
+import { gtfsTimeToSeconds, secondsToGtfsTime, formatTimeShort } from '../utils/time';
 import { getUSHolidaysInRange } from '../utils/holidays';
+import { findBlockOverlaps } from './blockBuilder';
 
 let msgId = 0;
 function msg(severity: 'error' | 'warning', message: string, entity_type?: string, entity_id?: string): ValidationMessage {
@@ -788,6 +789,18 @@ export function runValidation(state: AppStore): ValidationMessage[] {
       messages.push(msg('error', `Transfer rule ${ref} references non-existent to_leg_group "${r.to_leg_group_id}".`, 'fare_transfer_rule'));
     }
   });
+
+  // Block feasibility (B3): a vehicle can't run two trips in the same
+  // (block_id, service_id) at once. Promoted from BlocksPanel's sweep so the
+  // blocking Gantt and the pre-publish validator share one definition.
+  for (const o of findBlockOverlaps(state.trips, state.stopTimes)) {
+    messages.push(msg(
+      'warning',
+      `Block ${o.blockId} has two trips overlapping at ${formatTimeShort(secondsToGtfsTime(o.atSec))} on service "${o.serviceId}" — one vehicle can't run both.`,
+      'trip',
+      o.tripB,
+    ));
+  }
 
   return messages;
 }

@@ -10,13 +10,8 @@ import { VariantBanner } from '../variants/VariantBanner';
 // script-eval on first load. Lazy-loading it lets the editor chrome paint and
 // become interactive before the map bundle is fetched and initialized.
 const MapView = lazy(() => import('../map/MapView').then((m) => ({ default: m.MapView })));
-// Scheduling views render in the SAME pane as the map (per Mark). Lazy so they
-// don't weigh on first paint for users who never open them.
-const TimetableView = lazy(() => import('../timetable/TimetableView').then((m) => ({ default: m.TimetableView })));
-const BlockGantt = lazy(() => import('../blocks/BlockGantt').then((m) => ({ default: m.BlockGantt })));
 import { RouteDeleteDialog } from '../routes/RouteDeleteDialog';
 import { FloatingHelp } from './FloatingHelp';
-import { CenterViewSwitcher } from './CenterViewSwitcher';
 import { useStore } from '../../store';
 import { trackEditorLoaded } from '../../services/trackBeacon';
 
@@ -47,8 +42,12 @@ export function AppShell() {
   useEffect(() => {
     trackEditorLoaded();
   }, []);
-  const centerView = useStore((s) => s.centerView);
-  const mapActive = centerView === 'map';
+  // When the bottom panel is maximized (and open), the map + right-rail row
+  // collapses so the timetable / blocking Gantt fills the editor; toggled back
+  // to the split view from the panel's maximize button.
+  const bottomPanelMaximized = useStore((s) => s.bottomPanelMaximized);
+  const bottomPanelOpen = useStore((s) => s.bottomPanelOpen);
+  const collapseMap = bottomPanelMaximized && bottomPanelOpen;
   return (
     <div className="h-full flex flex-col">
       <TopBar />
@@ -58,37 +57,12 @@ export function AppShell() {
       <div className="flex-1 flex overflow-hidden">
         <LeftRail />
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <div className="flex-1 flex overflow-hidden min-h-0">
+          <div className={`flex-1 flex overflow-hidden min-h-0 ${collapseMap ? 'hidden' : ''}`}>
             <div className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
-              {/* Shared thin bar: switch the pane between map and the two
-                  scheduling views. Trip editing is free; the premium Variants
-                  comparison is paywalled inside the timetable view, not here. */}
-              <div className="shrink-0 h-9 flex items-center gap-2 px-2 bg-white border-b border-sand">
-                <CenterViewSwitcher />
-              </div>
-              {/* View area. The map stays MOUNTED (Mapbox re-init is expensive)
-                  but is hidden behind a scheduling view when one is active. */}
-              <div className="flex-1 relative min-h-0 overflow-hidden">
-                <div
-                  className={`absolute inset-0 ${mapActive ? '' : 'invisible pointer-events-none'}`}
-                  aria-hidden={!mapActive}
-                >
-                  <Suspense fallback={<div className="w-full h-full bg-sand/40" aria-hidden />}>
-                    <MapView />
-                  </Suspense>
-                </div>
-                {centerView === 'timetable' && (
-                  <Suspense fallback={<div className="absolute inset-0 bg-white" aria-hidden />}>
-                    <TimetableView />
-                  </Suspense>
-                )}
-                {centerView === 'blocks' && (
-                  <Suspense fallback={<div className="absolute inset-0 bg-white" aria-hidden />}>
-                    <BlockGantt />
-                  </Suspense>
-                )}
-                <FloatingHelp />
-              </div>
+              <Suspense fallback={<div className="flex-1 bg-sand/40" aria-hidden />}>
+                <MapView />
+              </Suspense>
+              <FloatingHelp />
             </div>
             <RightRail />
           </div>

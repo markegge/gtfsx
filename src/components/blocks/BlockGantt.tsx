@@ -86,7 +86,7 @@ function BlockRow({
 }
 
 /**
- * B3 — vehicle-blocking Gantt (centerView === 'blocks').
+ * B3 — vehicle-blocking Gantt (the bottom-rail "Blocks" tab).
  *
  * Vehicle-row × time-axis view: each row is a block (the trips one vehicle
  * runs), trip bars coloured by route, layover gaps between them, with a cost
@@ -230,7 +230,7 @@ export function BlockGantt() {
   };
 
   if (calendars.length === 0) {
-    return <div className="absolute inset-0 bg-white flex items-center justify-center text-warm-gray text-sm">Add a calendar (service day) to start blocking.</div>;
+    return <div className="relative flex-1 min-h-0 bg-white flex items-center justify-center text-warm-gray text-sm">Add a calendar (service day) to start blocking.</div>;
   }
 
   const leftColsHeader = (
@@ -243,7 +243,7 @@ export function BlockGantt() {
   );
 
   return (
-    <div className="absolute inset-0 bg-white flex flex-col min-h-0">
+    <div className="relative flex-1 min-h-0 bg-white flex flex-col">
       {/* Toolbar */}
       <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-sand overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <select

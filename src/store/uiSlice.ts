@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { SidebarSection, BottomPanelTab, MapMode, StopPlacementMode, RouteDetailTab, StopDetailTab, CalendarDetailTab, StopAnalysisOverlay, CenterView } from '../types/ui';
+import type { SidebarSection, BottomPanelTab, MapMode, StopPlacementMode, RouteDetailTab, StopDetailTab, CalendarDetailTab, StopAnalysisOverlay } from '../types/ui';
 import { generateId } from '../services/idGenerator';
 
 /** A saved route-visibility scenario. Captures which routes are hidden so the
@@ -13,12 +13,11 @@ export interface VisibilitySet {
 
 export interface UISlice {
   sidebarSection: SidebarSection | null;
-  /** What the central pane renders: the map, the timetable builder, or the
-   *  blocking Gantt. The map stays mounted (hidden) while a scheduling view is
-   *  active so Mapbox never re-initialises. Shared by both service-planning
-   *  handoffs. See CenterView. */
-  centerView: CenterView;
   bottomPanelOpen: boolean;
+  /** When true, the bottom panel expands to fill the whole editor area (the map
+   *  row collapses) so the timetable / blocking Gantt gets full height. Toggled
+   *  by the maximize button on the panel header. */
+  bottomPanelMaximized: boolean;
   bottomPanelTab: BottomPanelTab;
   mapMode: MapMode;
   stopPlacementMode: StopPlacementMode;
@@ -119,8 +118,9 @@ export interface UISlice {
   toggleRouteType: (routeType: number) => void;
   toggleShapeVisibility: (shapeId: string) => void;
   setSidebarSection: (section: SidebarSection | null) => void;
-  setCenterView: (view: CenterView) => void;
   setBottomPanelOpen: (open: boolean) => void;
+  setBottomPanelMaximized: (v: boolean) => void;
+  toggleBottomPanelMaximized: () => void;
   toggleBottomPanel: () => void;
   setBottomPanelTab: (tab: BottomPanelTab) => void;
   setMapMode: (mode: MapMode) => void;
@@ -160,8 +160,8 @@ export interface UISlice {
 
 export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], [], UISlice> = (set) => ({
   sidebarSection: null,
-  centerView: 'map',
   bottomPanelOpen: false,
+  bottomPanelMaximized: false,
   bottomPanelTab: 'timetable',
   mapMode: 'select',
   stopPlacementMode: 'snap_to_route',
@@ -287,8 +287,13 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     // way out so balancing/intensity/accessibility highlights don't linger.
     if (section !== 'stop-analysis') state.stopAnalysisOverlay = null;
   }),
-  setCenterView: (view) => set((state) => { state.centerView = view; }),
   setBottomPanelOpen: (open) => set((state) => { state.bottomPanelOpen = open; }),
+  setBottomPanelMaximized: (v) => set((state) => { state.bottomPanelMaximized = v; }),
+  toggleBottomPanelMaximized: () => set((state) => {
+    state.bottomPanelMaximized = !state.bottomPanelMaximized;
+    // Maximizing only makes sense with the panel open.
+    if (state.bottomPanelMaximized) state.bottomPanelOpen = true;
+  }),
   toggleBottomPanel: () => set((state) => { state.bottomPanelOpen = !state.bottomPanelOpen; }),
   setBottomPanelTab: (tab) => set((state) => { state.bottomPanelTab = tab; }),
   setMapMode: (mode) => set((state) => { state.mapMode = mode; }),

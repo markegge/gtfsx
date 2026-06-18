@@ -40,13 +40,13 @@ export function RouteTripsTab() {
     })
     .sort((a, b) => timeToSeconds(a.start) - timeToSeconds(b.start));
 
-  // Open the timetable builder in the CENTER pane (its roomier home, per the
-  // service-planning layout) focused on this route. A route with no trips lands
-  // on the timetable's "Generate service" empty state.
+  // Open the timetable builder (bottom rail) focused on this route. A route with
+  // no trips lands on the timetable's "Generate service" empty state.
   const handleEditTimetable = () => {
     const st = useStore.getState();
     st.selectRoute(route.route_id);
-    st.setCenterView('timetable');
+    st.setBottomPanelOpen(true);
+    st.setBottomPanelTab('timetable');
   };
 
   return (

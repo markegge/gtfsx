@@ -49,6 +49,15 @@ export type MapMode =
 
 export type StopPlacementMode = 'snap_to_route' | 'freehand';
 
+/**
+ * What the central pane (the map's div in AppShell) renders. The map stays
+ * mounted-but-hidden when a scheduling view is active so Mapbox never re-inits.
+ *   'map'       — the Mapbox map (default)
+ *   'timetable' — the service/timetable builder (B1)
+ *   'blocks'    — the vehicle-blocking Gantt (Part 2)
+ */
+export type CenterView = 'map' | 'timetable' | 'blocks';
+
 export type RouteDetailTab = 'details' | 'stops' | 'trips' | 'shapes' | 'costs';
 
 export type StopDetailTab = 'details' | 'trips' | 'coverage';

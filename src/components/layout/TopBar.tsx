@@ -11,6 +11,7 @@ import { saveProjectNow } from '../../db/serverPersistence';
 import { backendEnabled } from '../../utils/featureFlags';
 import { AppBrand } from './AppBrand';
 import { ScenarioSwitcher } from './ScenarioSwitcher';
+import { VariantSwitcher } from '../variants/VariantSwitcher';
 import { UserMenu, UserMenuItems } from './UserMenu';
 import { useEditorPlan } from '../billing/useEditorPlan';
 import { planHasFeature } from '../billing/planConfig';
@@ -110,6 +111,13 @@ export function TopBar() {
             visibility set. Self-hides when none exist. */}
         <div className="hidden min-[600px]:flex shrink-0">
           <ScenarioSwitcher />
+        </div>
+
+        {/* Variant switcher (A2) — fork/compare feed variants. Agency+ (or
+            /demo). Self-hides otherwise. Distinct from the visibility-set
+            "Scenarios" switcher above. */}
+        <div className="hidden min-[600px]:flex shrink-0">
+          <VariantSwitcher />
         </div>
 
         {/* Project name */}

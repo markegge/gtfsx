@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { SidebarSection, BottomPanelTab, MapMode, StopPlacementMode, RouteDetailTab, StopDetailTab, CalendarDetailTab, StopAnalysisOverlay } from '../types/ui';
+import type { SidebarSection, BottomPanelTab, MapMode, StopPlacementMode, RouteDetailTab, StopDetailTab, CalendarDetailTab, StopAnalysisOverlay, CenterView } from '../types/ui';
 import { generateId } from '../services/idGenerator';
 
 /** A saved route-visibility scenario. Captures which routes are hidden so the
@@ -13,6 +13,11 @@ export interface VisibilitySet {
 
 export interface UISlice {
   sidebarSection: SidebarSection | null;
+  /** What the central pane renders: the map, the timetable builder, or the
+   *  blocking Gantt. The map stays mounted (hidden) while a scheduling view is
+   *  active so Mapbox never re-initialises. Shared by both service-planning
+   *  handoffs. See CenterView. */
+  centerView: CenterView;
   bottomPanelOpen: boolean;
   bottomPanelTab: BottomPanelTab;
   mapMode: MapMode;
@@ -114,6 +119,7 @@ export interface UISlice {
   toggleRouteType: (routeType: number) => void;
   toggleShapeVisibility: (shapeId: string) => void;
   setSidebarSection: (section: SidebarSection | null) => void;
+  setCenterView: (view: CenterView) => void;
   setBottomPanelOpen: (open: boolean) => void;
   toggleBottomPanel: () => void;
   setBottomPanelTab: (tab: BottomPanelTab) => void;
@@ -154,6 +160,7 @@ export interface UISlice {
 
 export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], [], UISlice> = (set) => ({
   sidebarSection: null,
+  centerView: 'map',
   bottomPanelOpen: false,
   bottomPanelTab: 'timetable',
   mapMode: 'select',
@@ -280,6 +287,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     // way out so balancing/intensity/accessibility highlights don't linger.
     if (section !== 'stop-analysis') state.stopAnalysisOverlay = null;
   }),
+  setCenterView: (view) => set((state) => { state.centerView = view; }),
   setBottomPanelOpen: (open) => set((state) => { state.bottomPanelOpen = open; }),
   toggleBottomPanel: () => set((state) => { state.bottomPanelOpen = !state.bottomPanelOpen; }),
   setBottomPanelTab: (tab) => set((state) => { state.bottomPanelTab = tab; }),

@@ -9,6 +9,7 @@ import { computeShapePatterns } from '../ui/shapePatterns';
 import type { Route, StopTime } from '../../types/gtfs';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
 import { estimateStopTravelSeconds, layoutStopTimes } from '../../services/travelTime';
+import { GenerateServiceForm } from './GenerateServiceForm';
 
 function generateTripName(routeName: string, departureTime: string, serviceIndex: number): string {
   const prefix = (routeName || 'trip').replace(/\s+/g, '').slice(0, 4).toLowerCase();
@@ -158,6 +159,11 @@ export function TimetableGrid() {
   const [repeatHeadway, setRepeatHeadway] = useState('15');
   const [repeatCopies, setRepeatCopies] = useState('5');
   const [repeatError, setRepeatError] = useState<string | null>(null);
+
+  // B1 "Generate service" — toggled from the toolbar. The empty state (a pattern
+  // with stops but no trips) shows the form automatically; this lets the user
+  // re-open it to add another span of service after trips exist.
+  const [showGenerate, setShowGenerate] = useState(false);
 
   // Duplicate trip prompt state
   const [dupPrompt, setDupPrompt] = useState<{ tripId: string; defaultStartTime: string } | null>(null);
@@ -645,6 +651,16 @@ export function TimetableGrid() {
             </button>
           )}
           <button
+            onClick={() => setShowGenerate((v) => !v)}
+            disabled={!hasStops}
+            title="Generate a whole span of service from a start, end, headway and run time"
+            className={`px-3 py-1 rounded-md text-xs font-bold whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+              showGenerate ? 'bg-coral text-white' : 'bg-coral/10 text-coral hover:bg-coral/20'
+            }`}
+          >
+            ✨ Generate service
+          </button>
+          <button
             onClick={() => {
               setRepeatError(null);
               setShowRepeatForm((v) => !v);
@@ -675,6 +691,22 @@ export function TimetableGrid() {
           <span className="mx-0.5 font-semibold text-warm-gray/60 line-through">SKIP</span>
           ).
         </p>
+      )}
+
+      {/* B1 Generate service — auto-shown when the pattern has stops but no
+          trips yet (the empty state), or toggled from the toolbar to add more. */}
+      {hasStops && (showGenerate || routeTrips.length === 0) && activeServiceId && (
+        <div className="mx-2 mb-2 shrink-0">
+          <GenerateServiceForm
+            routeId={selectedRouteId!}
+            directionId={directionId}
+            shapeId={effectiveShapeId ?? undefined}
+            serviceId={activeServiceId}
+            headsign={route?.route_short_name || undefined}
+            onGenerated={() => setShowGenerate(false)}
+            onCancel={routeTrips.length > 0 ? () => setShowGenerate(false) : undefined}
+          />
+        </div>
       )}
 
       {/* Repeat Every inline form */}

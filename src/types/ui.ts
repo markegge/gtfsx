@@ -27,6 +27,7 @@ export type StopAnalysisOverlay =
 
 export type BottomPanelTab =
   | 'timetable'
+  | 'blocks'
   | 'service-summary'
   | 'validation'
   | 'snapshots'

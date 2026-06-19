@@ -40,16 +40,29 @@ export function RouteTripsTab() {
     })
     .sort((a, b) => timeToSeconds(a.start) - timeToSeconds(b.start));
 
+  // Open the timetable builder (bottom rail) focused on this route. A route with
+  // no trips lands on the timetable's "Generate service" empty state.
   const handleEditTimetable = () => {
-    useStore.getState().setBottomPanelOpen(true);
-    useStore.getState().setBottomPanelTab('timetable');
+    const st = useStore.getState();
+    st.selectRoute(route.route_id);
+    st.setBottomPanelOpen(true);
+    st.setBottomPanelTab('timetable');
   };
 
   return (
     <div>
       {tripsWithMeta.length === 0 ? (
-        <div className="rounded-lg bg-cream p-4 text-sm text-warm-gray mb-3">
-          No trips defined yet.
+        <div className="rounded-lg bg-cream p-4 mb-3">
+          <p className="text-sm text-warm-gray mb-3">
+            No trips yet. Generate a whole span of service from a start, end, headway and run
+            time — or open the timetable to add trips by hand.
+          </p>
+          <button
+            onClick={handleEditTimetable}
+            className="w-full px-4 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors"
+          >
+            ✨ Generate service
+          </button>
         </div>
       ) : (
         <div className="rounded-lg border border-sand overflow-hidden mb-3">

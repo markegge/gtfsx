@@ -14,6 +14,10 @@ export interface VisibilitySet {
 export interface UISlice {
   sidebarSection: SidebarSection | null;
   bottomPanelOpen: boolean;
+  /** When true, the bottom panel expands to fill the whole editor area (the map
+   *  row collapses) so the timetable / blocking Gantt gets full height. Toggled
+   *  by the maximize button on the panel header. */
+  bottomPanelMaximized: boolean;
   bottomPanelTab: BottomPanelTab;
   mapMode: MapMode;
   stopPlacementMode: StopPlacementMode;
@@ -115,6 +119,8 @@ export interface UISlice {
   toggleShapeVisibility: (shapeId: string) => void;
   setSidebarSection: (section: SidebarSection | null) => void;
   setBottomPanelOpen: (open: boolean) => void;
+  setBottomPanelMaximized: (v: boolean) => void;
+  toggleBottomPanelMaximized: () => void;
   toggleBottomPanel: () => void;
   setBottomPanelTab: (tab: BottomPanelTab) => void;
   setMapMode: (mode: MapMode) => void;
@@ -155,6 +161,7 @@ export interface UISlice {
 export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], [], UISlice> = (set) => ({
   sidebarSection: null,
   bottomPanelOpen: false,
+  bottomPanelMaximized: false,
   bottomPanelTab: 'timetable',
   mapMode: 'select',
   stopPlacementMode: 'snap_to_route',
@@ -281,6 +288,12 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     if (section !== 'stop-analysis') state.stopAnalysisOverlay = null;
   }),
   setBottomPanelOpen: (open) => set((state) => { state.bottomPanelOpen = open; }),
+  setBottomPanelMaximized: (v) => set((state) => { state.bottomPanelMaximized = v; }),
+  toggleBottomPanelMaximized: () => set((state) => {
+    state.bottomPanelMaximized = !state.bottomPanelMaximized;
+    // Maximizing only makes sense with the panel open.
+    if (state.bottomPanelMaximized) state.bottomPanelOpen = true;
+  }),
   toggleBottomPanel: () => set((state) => { state.bottomPanelOpen = !state.bottomPanelOpen; }),
   setBottomPanelTab: (tab) => set((state) => { state.bottomPanelTab = tab; }),
   setMapMode: (mode) => set((state) => { state.mapMode = mode; }),

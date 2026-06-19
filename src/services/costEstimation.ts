@@ -1,6 +1,7 @@
 import type { AppStore } from '../store';
-import type { Frequency, StopTime } from '../types/gtfs';
+import type { Frequency, StopTime, Trip, Stop } from '../types/gtfs';
 import { gtfsTimeToSeconds } from '../utils/time';
+import { computeTripSpans, deadheadSecs } from './blockBuilder';
 
 export interface RouteSpans {
   weeklyRevHours: number;
@@ -405,4 +406,136 @@ export function calculateSystemStats(
     totalWeeklyCost,
     totalAnnualCost,
   };
+}
+
+// ─── B3: block-derived cost ────────────────────────────────────────────────
+// Upgrades the flat deadheadFactor to real service / layover / deadhead hours
+// derived from the block geometry, when blocks exist. Falls back to the flat
+// factor when they don't (closes REQUIREMENTS.md:246).
+
+export interface BlockCostOptions {
+  costPerHour: number;
+  /** Include in-block layover (recovery) hours in the operating cost. */
+  costLayover: boolean;
+  /** Include inter-trip deadhead hours in the operating cost. */
+  costDeadhead: boolean;
+  deadheadSpeedMph?: number;
+  /** Cap on how much of a within-block gap counts as paid layover. */
+  maxLayoverSecs?: number;
+  /** Flat multiplier used only when the feed has no blocks at all. */
+  deadheadFactor?: number;
+}
+
+export interface BlockServiceCost {
+  serviceId: string;
+  vehicles: number;          // distinct blocks in this day-type
+  unblockedTrips: number;
+  serviceHours: number;      // daily, Σ in-service time
+  layoverHours: number;      // daily, Σ capped in-block gaps
+  deadheadHours: number;     // daily, Σ in-block inter-trip deadhead
+  dailyCost: number;
+  daysPerWeek: number;
+  serviceDaysPerYear: number;
+}
+
+export interface BlockCostResult {
+  hasBlocks: boolean;
+  perService: BlockServiceCost[];
+  /** Peak fleet: the busiest day-type's vehicle (block) count. */
+  maxVehicles: number;
+  weeklyCost: number;
+  annualCost: number;
+}
+
+/**
+ * Per day-type service / layover / deadhead hours from the block geometry, and
+ * the resulting daily / weekly / annual cost. When the feed has no block_id at
+ * all, this matches the flat-deadheadFactor model (regression-safe).
+ */
+export function calculateBlockCost(
+  state: Pick<AppStore, 'trips' | 'stopTimes' | 'stops' | 'calendars' | 'calendarDates'>,
+  opts: BlockCostOptions,
+): BlockCostResult {
+  const speed = opts.deadheadSpeedMph ?? 25;
+  const maxLayover = opts.maxLayoverSecs ?? 3600;
+  const deadheadFactor = opts.deadheadFactor ?? 1.2;
+  const stopsById = new Map<string, Stop>(state.stops.map((s) => [s.stop_id, s]));
+  const spans = computeTripSpans(state.trips as Trip[], state.stopTimes);
+
+  const hasBlocks = (state.trips as Trip[]).some((t) => !!t.block_id);
+
+  const byService = new Map<string, Trip[]>();
+  for (const t of state.trips as Trip[]) {
+    const g = byService.get(t.service_id);
+    if (g) g.push(t); else byService.set(t.service_id, [t]);
+  }
+
+  const perService: BlockServiceCost[] = [];
+  let weeklyCost = 0;
+  let annualCost = 0;
+  let maxVehicles = 0;
+
+  for (const [serviceId, trips] of byService) {
+    let serviceSec = 0;
+    let layoverSec = 0;
+    let deadheadSec = 0;
+    let unblockedTrips = 0;
+
+    const blocks = new Map<string, Trip[]>();
+    for (const t of trips) {
+      const span = spans.get(t.trip_id);
+      if (span) serviceSec += span.endSec - span.startSec;
+      if (t.block_id) {
+        const g = blocks.get(t.block_id);
+        if (g) g.push(t); else blocks.set(t.block_id, [t]);
+      } else if (span) {
+        unblockedTrips++;
+      }
+    }
+
+    for (const blockTrips of blocks.values()) {
+      const ordered = blockTrips
+        .map((t) => spans.get(t.trip_id))
+        .filter((s): s is NonNullable<typeof s> => !!s)
+        .sort((a, b) => a.startSec - b.startSec);
+      for (let i = 1; i < ordered.length; i++) {
+        const gap = ordered[i].startSec - ordered[i - 1].endSec;
+        if (gap <= 0) continue; // overlap — not a real layover
+        const dh = deadheadSecs(ordered[i - 1].endStopId, ordered[i].startStopId, stopsById, speed);
+        deadheadSec += Math.min(dh, gap);
+        layoverSec += Math.min(Math.max(0, gap - dh), maxLayover);
+      }
+    }
+
+    const serviceHours = serviceSec / 3600;
+    const layoverHours = layoverSec / 3600;
+    const deadheadHours = deadheadSec / 3600;
+
+    // Daily operating hours: block-derived when blocks exist, else the flat
+    // factor on revenue hours (regression-safe with applyRouteCosts).
+    const opHours = hasBlocks
+      ? serviceHours + (opts.costLayover ? layoverHours : 0) + (opts.costDeadhead ? deadheadHours : 0)
+      : serviceHours * deadheadFactor;
+    const dailyCost = opHours * opts.costPerHour;
+
+    const cal = state.calendars.find((c) => c.service_id === serviceId);
+    const daysPerWeek = cal
+      ? Number(cal.monday) + Number(cal.tuesday) + Number(cal.wednesday) + Number(cal.thursday) + Number(cal.friday) + Number(cal.saturday) + Number(cal.sunday)
+      : 7;
+    const serviceDaysPerYear = countServiceDaysPerYear([serviceId], state);
+
+    weeklyCost += dailyCost * daysPerWeek;
+    annualCost += dailyCost * serviceDaysPerYear;
+    const vehicles = blocks.size;
+    if (vehicles > maxVehicles) maxVehicles = vehicles;
+
+    perService.push({
+      serviceId, vehicles, unblockedTrips,
+      serviceHours, layoverHours, deadheadHours,
+      dailyCost, daysPerWeek, serviceDaysPerYear,
+    });
+  }
+
+  perService.sort((a, b) => b.dailyCost - a.dailyCost);
+  return { hasBlocks, perService, maxVehicles, weeklyCost, annualCost };
 }

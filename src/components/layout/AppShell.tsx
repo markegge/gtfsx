@@ -5,6 +5,7 @@ import { RightRail } from './RightRail';
 import { BottomPanel } from './BottomPanel';
 import { WelcomeBanner } from './WelcomeBanner';
 import { PartnerBanner } from './PartnerBanner';
+import { VariantBanner } from '../variants/VariantBanner';
 // Mapbox GL (~450 KB) is the single largest contributor to main-thread
 // script-eval on first load. Lazy-loading it lets the editor chrome paint and
 // become interactive before the map bundle is fetched and initialized.
@@ -41,15 +42,22 @@ export function AppShell() {
   useEffect(() => {
     trackEditorLoaded();
   }, []);
+  // When the bottom panel is maximized (and open), the map + right-rail row
+  // collapses so the timetable / blocking Gantt fills the editor; toggled back
+  // to the split view from the panel's maximize button.
+  const bottomPanelMaximized = useStore((s) => s.bottomPanelMaximized);
+  const bottomPanelOpen = useStore((s) => s.bottomPanelOpen);
+  const collapseMap = bottomPanelMaximized && bottomPanelOpen;
   return (
     <div className="h-full flex flex-col">
       <TopBar />
       <WelcomeBanner />
       <PartnerBanner />
+      <VariantBanner />
       <div className="flex-1 flex overflow-hidden">
         <LeftRail />
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <div className="flex-1 flex overflow-hidden min-h-0">
+          <div className={`flex-1 flex overflow-hidden min-h-0 ${collapseMap ? 'hidden' : ''}`}>
             <div className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
               <Suspense fallback={<div className="flex-1 bg-sand/40" aria-hidden />}>
                 <MapView />

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Service planning — GTFS·X</title>
+    <meta name="description" content="Light service planning in GTFS·X: generate a timetable from a headway, fork the feed into variants and compare their cost, block trips onto vehicles, and set running times — all in the map's pane." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/service-planning/" />
+    <meta property="og:title" content="Service planning — GTFS·X" />
+    <meta property="og:description" content="Generate timetables from headways, compare service variants by cost, block trips onto vehicles, and set running times — without an optimizer." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/service-planning/" />
+    <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@gtfsxapp" />
+    <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Service planning — GTFS·X",
+  "description": "Light service planning in GTFS·X: generate a timetable from a headway, fork the feed into variants and compare their cost, block trips onto vehicles, and set running times.",
+  "image": "https://www.gtfsx.com/og-default.png",
+  "author": { "@type": "Organization", "name": "GTFS·X", "url": "https://www.gtfsx.com/" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "GTFS·X",
+    "logo": { "@type": "ImageObject", "url": "https://www.gtfsx.com/gtfsx-lockup.svg" }
+  },
+  "datePublished": "2026-06-18",
+  "dateModified": "2026-06-18",
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "https://www.gtfsx.com/docs/service-planning/" }
+}
+  </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Analysis tools · Service planning</div>
+      <h1>Service planning <span class="tier-badge agency">Agency</span></h1>
+      <p class="lede">GTFS·X is a feed editor that now does light <strong>service planning</strong> too: enter a headway and get a timetable, fork the feed into variants and compare what each one costs, chain trips onto vehicles, and set running times. The scheduling tools open in the map's pane, so you plan and edit in the same window.</p>
+      <p>These tools are built for small and rural agencies. They stay deliberately simple and fully editable: there is no optimizer and no runcutting. The generated timetable and the auto-blocking are starting points you adjust, not black-box answers.</p>
+
+      <h2 id="the-scheduling-views">The scheduling views</h2>
+      <p>A small switcher sits at the top of the map pane with three modes: <strong>Map</strong>, <strong>Timetable</strong>, and <strong>Blocks</strong>. The map stays loaded behind the scheduling views, so switching back to it is instant and keeps your camera position. Pick a route and service day inside each view.</p>
+
+      <h2 id="generate-service">Generate a timetable</h2>
+      <p>Drawing a route gives you a shape and stops, but no trips. Rather than hand-entering every departure, open the <strong>Timetable</strong> view and use <strong>Generate service</strong>. Set a window (say 06:00 to 22:00), a headway ("a bus every 30 min"), and an end-to-end run time, and GTFS·X lays out evenly-spaced trips for you. A live count ("Creates 33 trips") updates as you type.</p>
+      <figure>
+        <img src="/assets/docs/service-planning-generate.png" alt="The Generate service form in the timetable: run-from and to times, a headway with preset chips, an end-to-end run time pre-filled from the route shape, and a live 'Creates 33 trips' preview." loading="lazy" />
+        <figcaption>Generate service reads like a sentence. The end-to-end run time is pre-filled from the route's shape length, so the common case is just a window plus a headway.</figcaption>
+      </figure>
+      <p>The run time is interpolated across intermediate stops by shape distance, and the first and last stops become timed points. The result is ordinary trips and <code>stop_times</code> you can edit by hand in the grid, copy by service day, or re-time later. Prefer a compact, headway-based feed? Switch the form to <strong>Frequency-based</strong> and it writes one reference trip plus a <code>frequencies.txt</code> window instead of individual trips.</p>
+
+      <h2 id="running-times">Set running times</h2>
+      <p>Once trips exist, <strong>Running time</strong> (in the timetable toolbar) sets the scheduled end-to-end run time for the whole pattern. Apply it and every trip on the pattern is re-timed to match, while each trip keeps its own start time, so your headways stay exactly as they were. Intermediate stops are re-interpolated. This is the quick way to push a realistic running time through a generated timetable, or to stretch the schedule for a season with heavier traffic.</p>
+
+      <h2 id="vehicle-blocking">Block trips onto vehicles</h2>
+      <p>The <strong>Blocks</strong> view is a vehicle-by-time chart: one row per vehicle (block), trip bars colored by route, the gaps between them labeled as layover, and dotted connectors where a vehicle deadheads between two stops. Columns on the left show each block's platform hours and its pull-out and pull-in times.</p>
+      <figure>
+        <img src="/assets/docs/service-planning-blocks.png" alt="The Blocks view: a vehicle-row by time-axis Gantt with trip bars colored by route, layover gaps labeled in minutes, and a cost header showing vehicles, peak-in-service, and daily and annual cost split into service, layover, and deadhead hours." loading="lazy" />
+        <figcaption>The blocking view on the Sunny Valley feed. The header tracks vehicles, peak vehicles in service, and the daily and annual cost broken into service, layover, and deadhead hours.</figcaption>
+      </figure>
+      <p><strong>Quick Block</strong> auto-chains feasible trips onto as few vehicles as possible with a transparent greedy rule: it appends each trip to the earliest-finishing vehicle that can still reach the trip's start in time and without sitting idle too long, opening a new vehicle only when none fits. Turn on <strong>Interline</strong> to allow chaining across different routes; leave it off to keep each vehicle on one route. <strong>Unblock all</strong> clears the day. Everything Quick Block produces is editable: drag a trip bar onto another vehicle (or click it and pick one) to reassign it. If two trips on the same vehicle would overlap, GTFS·X flags them in red and counts them in the toolbar, because one bus can't run two trips at once.</p>
+      <p>The cost header upgrades the flat deadhead multiplier used elsewhere to real, block-derived numbers: service hours from the trips, layover hours from the in-block gaps, and deadhead hours from the distance a vehicle repositions between trips. Toggle <strong>Cost layover</strong> and <strong>Cost deadhead</strong> to see how each affects the total. Block overlaps also surface as a warning in the pre-publish validation, so an infeasible block can't slip into a published feed.</p>
+
+      <h2 id="variants">Variants and baseline comparison</h2>
+      <p>Service planning is comparative. You rarely ask "what does this network cost?" in isolation; you ask "what does <em>this change</em> cost versus today?". <strong>Variants</strong> let you answer that without keeping two copies of the feed. Fork the feed into a named variant from the header, edit it freely (add a Saturday span, cut a route, re-time a pattern), then compare it to the baseline.</p>
+      <figure>
+        <img src="/assets/docs/service-planning-compare.png" alt="The Compare to baseline dialog showing a KPI delta strip (trips per week, revenue hours, peak vehicles, weekly and annual cost) and a per-route changeset for the variant versus the baseline." loading="lazy" />
+        <figcaption>Compare to baseline. A delta strip shows the change in trips, revenue hours, peak vehicles, and cost, with a per-route breakdown beneath.</figcaption>
+      </figure>
+      <p>The comparison shows a delta strip (change in weekly trips, revenue hours, peak vehicles, and weekly and annual cost) plus a per-route changeset like "Route 5: +12 trips/week, +$48k/yr". A banner reminds you while you're editing a variant that your changes are separate from the baseline, and one click switches back. Variants are an exploration layer that lives in your session; they don't change your saved feed unless you choose to keep one.</p>
+      <p>Variants are distinct from <a href="/docs/scenario-analysis/">route-visibility scenarios</a>, which save which routes are shown for analysis. Variants carry real, independent edits and a computed cost comparison.</p>
+
+      <h2 id="whats-not-here">What this is not</h2>
+      <p>This is good-enough planning for a small agency, not an optimization suite. There is no solver: generated headways are even, Quick Block is a greedy heuristic you edit, and running times are entered by hand (no AVL). Crew scheduling and runcutting are out of scope. If you need those, GTFS·X hands a clean, valid feed to the tool that does.</p>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/timetables-and-trips/">Timetables &amp; trips</a> — the grid the generated trips land in, plus blocks as a trip column.</li>
+          <li><a href="/docs/cost-estimation/">Cost estimation</a> — the per-route cost model the comparison and the block cost build on.</li>
+          <li><a href="/docs/scenario-analysis/">Scenario analysis</a> — saved route-visibility sets, the other "scenarios" in GTFS·X.</li>
+          <li><a href="/docs/service-summary/">Service summary</a> — peak vehicles and revenue hours across the feed.</li>
+        </ul>
+      </div>
+    </main>
+    <footer>
+      <a href="/">Editor</a>
+      <a href="/about/">About</a>
+      <a href="/docs/">Docs</a>
+      <a href="/pricing/">Pricing</a>
+      <a href="/learn/gtfs/">What is GTFS?</a>
+      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
+    </footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+    <script src="/assets/site-nav.js"></script>
+      <script src="/assets/docs/docs-nav.js"></script>
+</body>
+</html>

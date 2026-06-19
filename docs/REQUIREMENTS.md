@@ -109,11 +109,15 @@ Stops are placed in the context of the currently-selected route. Default behavio
 - ✅ Estimate stop times from the drawn route's road-network travel time (Mapbox Map Matching, `◷` per trip): per-stop travel along the matched path + a configurable per-stop dwell (default 18 s) and bus-vs-car speed factor (default 1.3). Fill one trip, then ⇶ to all.
 - ✅ Apply a trip's stop sequence + relative timing to every other trip on the route/direction (`⇶`), each keeping its own start time.
 - ✅ Duplicate a trip with a configurable time offset (e.g. "repeat every 30 min").
+- ✅ **Generate service from a headway** (B1, `timetableGen.ts`) — on an empty pattern, enter a window + headway + end-to-end run time and get evenly-spaced trips (or a `frequencies.txt` window). The run time is pre-filled from the shape length; intermediate stops interpolated by distance. The "Generate service" form is the timetable's empty-state and a route Trips-tab entry.
+- ✅ **Running-time editor** (B2, `runtimes.ts`) — set a pattern's end-to-end run time and re-time every trip on it, each keeping its start (headways intact).
+- ✅ **Scheduling in the map pane** — a `centerView` switcher (Map / Timetable / Blocks) renders the timetable builder and the blocking Gantt in the center pane; the map stays mounted-but-hidden.
 - ✅ Bidirectional editing — changes in the timetable reflect on the map and vice versa.
 - ✅ Service summary showing weekly revenue hours, trips per week, peak vehicles per route.
 - ✅ Per-stop departures view ("departures from this stop today").
 - ✅ Frequency-based (headway) service entry (`frequencies.txt`) — per-trip windows with overlap/validity checks, in the Frequencies panel.
 - ✅ Block assignment UI — `block_id` is first-class: editable per trip, with a Blocks panel grouping trips by block and a soft overlap warning.
+- ✅ **Vehicle-blocking Gantt** (B3, `BlockGantt` + `blockBuilder.ts`) — a vehicle-row × time-axis view in the center pane: trip bars by route, layover gaps, deadhead connectors, ID / platform-hours / pull-out / pull-in columns, a day-type selector, and a cost header (vehicles, peak-in-service, daily/annual cost split into service/layover/deadhead with toggles). **Quick Block** greedily auto-chains feasible trips (editable, no optimizer); **Interline** allows cross-route chaining; drag a trip to reassign its vehicle; overlaps flag red and surface as a pre-publish validation warning.
 - 🔲 Marey diagram (time–distance trip chart).
 
 ### 1.6 Fares
@@ -242,8 +246,8 @@ Estimates annual operating cost from feed structure + per-route inputs.
 - ✅ Per-route UI fields for cost-per-revenue-hour and vehicles-required (stored as `_cost_per_revenue_hour` / `_vehicles_required` UI-only fields, ignored on export).
 - ✅ Computes weekly revenue hours, peak vehicles, weekly cost — broken out per service pattern and rolled up to annual.
 - ✅ `CostSummary` panel surfaces the totals.
-- 🔲 Scenario comparison ("what if we add a Saturday run?").
-- 🔲 Deadhead-factor inputs beyond a global multiplier.
+- ✅ Scenario comparison ("what if we add a Saturday run?") — via **feed variants** (§2.7): fork the feed, edit a variant, then `diffFeedState` (`feedDiff.ts`) reports Δ revenue-hours / peak vehicles / trips / weekly+annual cost plus a per-route changeset against the baseline.
+- ✅ Deadhead-factor inputs beyond a global multiplier — **block-derived cost** (`calculateBlockCost`, §2.6): real service / layover / deadhead hours from the block geometry when blocks exist, with per-bucket cost toggles; falls back to the flat factor otherwise.
 
 ### 2.5 Stop analysis
 
@@ -255,6 +259,24 @@ A dedicated **Stop Analysis** panel (`StopAnalysisPanel`, gated under the `analy
 - ✅ **Accessibility completeness** — share of board points with `wheelchair_boarding` populated, plus a per-route breakdown of the gaps; cross-links to the validator warning (§1.8).
 - ✅ Contextual map highlighting (`StopAnalysisLayer`): amber removal candidates, a trips/day colour ramp, and accessibility-gap pins.
 - 🚫 Stop-level ridership estimates — deliberately not synthesised; honest answer requires APC data.
+
+### 2.6 Vehicle blocking & block-derived cost
+
+Light, **good-enough** vehicle blocking for small agencies — no optimizer, no runcutting. See [`/docs/service-planning/`](https://www.gtfsx.com/docs/service-planning/).
+
+- ✅ **Blocking Gantt** (`BlockGantt`, center pane via `centerView='blocks'`) — vehicle-row × time-axis: trip bars by `route_color`, layover gaps, deadhead connectors, ID / platform-hours / pull-out / pull-in columns, day-type selector.
+- ✅ **Quick Block heuristic** (`blockBuilder.ts`, pure) — greedy first-feasible, minimize vehicles: no overlap, deadhead-reachable within the gap (straight-line ÷ speed), idle ≤ maxLayover, same `route_id` unless interlining. Output always passes the overlap check. Fully editable: drag a trip to another vehicle, or Interline / Unblock.
+- ✅ **Block-derived cost** (`calculateBlockCost`) — per day-type service / layover / deadhead hours from block geometry, with Cost-layover / Cost-deadhead toggles; falls back to the flat `deadheadFactor` when no blocks exist (regression-safe). Header also shows peak-in-service (`calculateSystemPeakVehicles`) and a vehicles-over-day histogram.
+- ✅ **Feasibility** — `findBlockOverlaps` (promoted from `BlocksPanel`'s sweep) flags same-`(block_id, service_id)` overlaps in the Gantt and as a **pre-publish validation warning**.
+- 🔲 Crew scheduling / runcutting (B4) — explicitly deferred; a possible Part 3.
+
+### 2.7 Feed variants & comparison
+
+Fork the feed into editable variants and compare their cost against a baseline ("what does this change cost vs. today?"). Agency-gated. **Distinct** from the route-visibility "Scenarios" (§visibility sets). See [`/docs/service-planning/`](https://www.gtfsx.com/docs/service-planning/).
+
+- ✅ **Variants** (`variantSlice` + `services/variants.ts`) — fork "from current", name, switch the active variant, mark a baseline; a banner shows when editing a non-baseline variant. **Client-side and session-scoped** (not in the working-state blob), so the existing save path is untouched. (Server-side persistence — migration `0023_feed_scenario` + endpoints — is mapped and deferred; see the implementation notes.)
+- ✅ **Feed-state diff** (`feedDiff.ts`, pure, E1) — `diffFeedState(a,b)`: added/removed/changed per entity + headline deltas (Δ revenue-hours, peak vehicles, trips, weekly/annual cost via `calculateSystemStats`) + a per-route changeset.
+- ✅ **Compare-to-baseline UI** (`VariantCompareDialog`) — KPI delta strip + per-route changeset. Closes the long-planned "Scenario comparison" (§2.4).
 
 ---
 

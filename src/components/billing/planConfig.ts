@@ -20,6 +20,7 @@ export type FeatureKey =
   | 'brand_color'
   | 'service_alerts'
   | 'scenarios'
+  | 'variants'
   | 'phone_support';
 
 // Pricing v3 (Jun 2026): demand dots are free for all; cost/coverage split into a
@@ -43,6 +44,7 @@ export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
   brand_color:         ['pro', 'agency', 'enterprise'],
   service_alerts:      ['agency', 'enterprise'],
   scenarios:           ['agency', 'enterprise'],
+  variants:            ['agency', 'enterprise'],
   phone_support:       ['agency', 'enterprise'],
 };
 
@@ -138,6 +140,10 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   scenarios: {
     title: 'Save and compare scenarios',
     description: 'Save named route-visibility sets and switch between them instantly — compare service scenarios on the map and across every analysis panel.',
+  },
+  variants: {
+    title: 'Feed variants',
+    description: 'Fork your feed into named service alternatives, compare cost and service metrics side-by-side, and export any variant as a standalone GTFS feed.',
   },
   phone_support: {
     title: 'Phone support with SLA',

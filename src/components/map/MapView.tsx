@@ -341,14 +341,31 @@ export function MapView() {
   // without a window resize event, so Mapbox's default trackResize misses
   // them and the canvas is left smaller than its box (the gap next to the
   // right rail). A ResizeObserver covers every layout change.
+  //
+  // Debounced: dragging the bottom-rail divider resizes the container dozens of
+  // times a second, and calling map.resize() on each fire makes the WebGL
+  // canvas flicker. Coalesce the burst into a single resize ~90 ms after the
+  // size settles (on a frame boundary). Discrete one-shot changes (rail toggle,
+  // panel open/maximize) also dispatch a window 'resize', so those still snap
+  // immediately via Mapbox's trackResize — this only smooths the drag.
   useEffect(() => {
     const el = containerRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let raf = 0;
     const ro = new ResizeObserver(() => {
-      mapRef.current?.getMap?.()?.resize();
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => mapRef.current?.getMap?.()?.resize());
+      }, 90);
     });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (timer) clearTimeout(timer);
+      cancelAnimationFrame(raf);
+    };
   }, []);
 
   // === Shape editing: Save and Discard ===

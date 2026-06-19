@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../../store';
 import { TimetableGrid } from '../timetable/TimetableGrid';
+import { BlockGantt } from '../blocks/BlockGantt';
 import { ServiceSummary } from '../timetable/ServiceSummary';
 import { ValidationPanel } from '../validation/ValidationPanel';
 import { SnapshotHistoryPanel } from '../snapshots/SnapshotHistoryPanel';
@@ -23,6 +24,8 @@ function getDefaultHeight() {
 
 export function BottomPanel() {
   const { bottomPanelOpen, bottomPanelTab, setBottomPanelTab, toggleBottomPanel } = useStore();
+  const bottomPanelMaximized = useStore((s) => s.bottomPanelMaximized);
+  const toggleBottomPanelMaximized = useStore((s) => s.toggleBottomPanelMaximized);
   const activeServerProjectId = useStore((s) => s.activeServerProjectId);
   const editorPlan = useEditorPlan();
   const [panelHeight, setPanelHeight] = useState(getDefaultHeight);
@@ -53,10 +56,10 @@ export function BottomPanel() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // Trigger map resize when panel opens/closes
+  // Trigger map + grid relayout when the panel opens/closes or (un)maximizes.
   useEffect(() => {
     requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
-  }, [bottomPanelOpen]);
+  }, [bottomPanelOpen, bottomPanelMaximized]);
 
   const dragStartY = useRef(0);
   const dragStartHeight = useRef(0);
@@ -101,17 +104,22 @@ export function BottomPanel() {
     ? (isNarrow ? Math.round(window.innerHeight * 0.6) : panelHeight)
     : 40;
 
+  // Maximize is a desktop affordance: the panel takes flex-1 (filling the
+  // center column, whose map row AppShell has collapsed) instead of a fixed
+  // height.
+  const maximized = bottomPanelMaximized && bottomPanelOpen && !isNarrow;
+
   return (
     <div
       className={
         isNarrow
           ? 'fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-sand flex flex-col'
-          : 'bg-white border-t border-sand flex flex-col shrink-0'
+          : `bg-white border-t border-sand flex flex-col ${maximized ? 'flex-1 min-h-0' : 'shrink-0'}`
       }
-      style={{ height: effectiveHeight }}
+      style={maximized ? undefined : { height: effectiveHeight }}
     >
-      {/* Drag handle — desktop only; mobile relies on tap to open / close */}
-      {bottomPanelOpen && !isNarrow && (
+      {/* Drag handle — desktop only, and not while maximized (resize is moot). */}
+      {bottomPanelOpen && !isNarrow && !maximized && (
         <div
           className="h-1.5 shrink-0 flex items-center justify-center cursor-row-resize group hover:bg-sand"
           onMouseDown={handleDragStart}
@@ -135,8 +143,8 @@ export function BottomPanel() {
           <div className="flex items-center gap-1 min-[600px]:gap-4 px-1 min-[600px]:px-3">
             {(
               activeServerProjectId
-                ? (['timetable', 'service-summary', 'validation', 'snapshots', 'publish', 'embed', 'audit'] as const)
-                : (['timetable', 'service-summary', 'validation'] as const)
+                ? (['timetable', 'blocks', 'service-summary', 'validation', 'snapshots', 'publish', 'embed', 'audit'] as const)
+                : (['timetable', 'blocks', 'service-summary', 'validation'] as const)
             ).map((tab) => {
               // Tab labels collapse on narrow viewports (<800 px — tablets and
               // the demo-capture window size). Shortens the two longest tabs so
@@ -144,6 +152,7 @@ export function BottomPanel() {
               const labels: Record<string, string> = compactLabels
                 ? {
                     timetable: 'Timetable',
+                    blocks: 'Blocks',
                     stops: 'Stops',
                     'service-summary': 'Visualization',
                     validation: 'Validation',
@@ -154,6 +163,7 @@ export function BottomPanel() {
                   }
                 : {
                     timetable: 'Timetable',
+                    blocks: 'Blocks',
                     stops: 'Stops',
                     'service-summary': 'Visualization',
                     validation: 'Validation',
@@ -183,11 +193,32 @@ export function BottomPanel() {
           </div>
         </div>
 
+        {/* Maximize / restore — desktop only. Expands the rail to fill the
+            editor (map row collapses) so the timetable / Gantt gets full height. */}
+        {bottomPanelOpen && !isNarrow && (
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleBottomPanelMaximized(); }}
+            className="w-7 h-7 shrink-0 flex items-center justify-center text-warm-gray hover:text-coral hover:bg-coral-light rounded-md transition-colors"
+            title={maximized ? 'Restore split view' : 'Expand to full view'}
+            aria-pressed={maximized}
+          >
+            {maximized ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M3 8V5a2 2 0 0 1 2-2h3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M21 16v3a2 2 0 0 1-2 2h-3" />
+              </svg>
+            )}
+          </button>
+        )}
         {bottomPanelOpen && (
           <button
             onClick={(e) => {
               e.stopPropagation();
               useStore.getState().selectRoute(null);
+              useStore.getState().setBottomPanelMaximized(false);
               useStore.getState().setBottomPanelOpen(false);
             }}
             className="w-7 h-7 mr-2 shrink-0 flex items-center justify-center text-warm-gray hover:text-red-500 hover:bg-red-50 rounded-md text-lg transition-colors"
@@ -202,6 +233,7 @@ export function BottomPanel() {
       {bottomPanelOpen && (
         <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
           {bottomPanelTab === 'timetable' && <TimetableGrid />}
+          {bottomPanelTab === 'blocks' && <BlockGantt />}
           {bottomPanelTab === 'service-summary' && <ServiceSummary />}
           {bottomPanelTab === 'validation' && <ValidationPanel />}
           {bottomPanelTab === 'snapshots' && activeServerProjectId && (

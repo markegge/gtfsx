@@ -3,6 +3,7 @@ import { Source, Layer } from 'react-map-gl/mapbox';
 import simplify from '@turf/simplify';
 import { lineString } from '@turf/helpers';
 import { useStore } from '../../store';
+import { getArrowColor } from '../../utils/colors';
 import type { LayerProps } from 'react-map-gl/mapbox';
 
 // Ramer–Douglas–Peucker tolerance (degrees, ~20 m) used only when rendering a
@@ -72,6 +73,10 @@ export function RouteLayer({ simplified = false }: { simplified?: boolean }) {
           route_id: route?.route_id || '',
           route_name: route?.route_short_name || route?.route_long_name || '',
           color: route ? `#${route.route_color}` : '#888888',
+          // Arrow color: high-luminance route colors (gold, green, cyan, pink,
+          // orange) are darkened so the ▸ glyph is legible on the light-v11 map
+          // and never confused with a nearby darker route's arrows.
+          arrowColor: route ? getArrowColor(route.route_color) : '#555555',
           isSelected,
           direction_id: trip?.direction_id ?? 0,
           // Route-type filter: dim (don't hide) routes of a filtered-out mode.
@@ -148,13 +153,21 @@ export function RouteLayer({ simplified = false }: { simplified?: boolean }) {
         ['get', 'isSelected'], 16,
         12,
       ],
+      // Arial Unicode MS is specified explicitly so the ▸ glyph (U+25B8) is
+      // loaded from a comprehensive font rather than relying on map-style
+      // fallbacks that may not include the Geometric Shapes block.
+      'text-font': ['DIN Pro Regular', 'Arial Unicode MS Regular'],
       'text-keep-upright': false,
       'text-rotation-alignment': 'map',
       'text-allow-overlap': true,
       'text-ignore-placement': true,
     },
     paint: {
-      'text-color': ['get', 'color'],
+      // Use the pre-computed arrowColor (darkened for high-luminance routes) so
+      // that light route colors (gold, green, cyan…) produce clearly visible,
+      // on-color arrows rather than washing out on the light-v11 background and
+      // being mistaken for the arrows of a nearby darker route.
+      'text-color': ['get', 'arrowColor'],
       'text-halo-color': '#FFFFFF',
       'text-halo-width': 1,
       'text-opacity': ['case',

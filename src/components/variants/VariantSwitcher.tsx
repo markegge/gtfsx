@@ -12,7 +12,7 @@ import { useCanUseVariants } from './useCanUseVariants';
 /**
  * A2b — feed-variant switcher (header). Fork the feed into named variants,
  * switch the active one, mark a baseline, and open the baseline comparison.
- * Kept deliberately separate from the route-visibility "Scenarios" switcher.
+ * Distinct from the basic per-route visibility toggle (hiddenRouteIds).
  */
 export function VariantSwitcher() {
   const variants = useStore((s) => s.variants);

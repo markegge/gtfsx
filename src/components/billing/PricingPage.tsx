@@ -90,7 +90,6 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
       'Network-distance walksheds',
       'Stop-level analysis',
       'Title VI equity analysis',
-      'Scenario comparison',
       'Service Alerts authoring (GTFS-Realtime)',
       'Fully white-labeled rider site (your domain, your brand)',
       'Everything in Pro',
@@ -138,7 +137,6 @@ const AGENCY_FEATURE_GROUPS = [
       'Network-distance walksheds',
       'Stop-level analysis',
       'Title VI equity analysis',
-      'Scenario comparison',
       'Service Alerts authoring (GTFS-Realtime)',
       'Fully white-labeled rider site (your domain, your brand)',
     ],
@@ -884,8 +882,7 @@ export function PricingPage() {
                       <p className="mt-2 text-sm text-warm-gray">
                         Cost estimation (revenue hours, peak vehicles, weekly + annual operating cost),
                         demographic coverage from US Census ACS, a nationwide demand-propensity map layer,
-                        Title VI equity analysis using the FTA four-fifths threshold, and snapshot-based
-                        scenario comparison so you can save and compare multiple feed versions.
+                        and Title VI equity analysis using the FTA four-fifths threshold.
                       </p>
                     ),
                   },

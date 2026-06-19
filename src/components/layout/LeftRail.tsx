@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useStore } from '../../store';
 import { featureEnabled } from '../../store/featuresSlice';
-import { useEditorPlan } from '../billing/useEditorPlan';
-import { planHasFeature } from '../billing/planConfig';
 import type { SidebarSection } from '../../types/ui';
 
 interface NavItem {
@@ -48,18 +46,12 @@ function useGatedSections(): { fixed: NavItem[]; flex: NavItem[]; operations: Na
   const showBlocks = useStore((s) => featureEnabled(s, 'blocks'));
   const showFlex = useStore((s) => featureEnabled(s, 'demandResponse'));
   const showAlerts = useStore((s) => featureEnabled(s, 'serviceAlerts'));
-  // Agency+ plans get the scenario-management UI in the Routes panel, so the
-  // section reads "Routes & Scenarios"; everyone else keeps the plain "Routes".
-  const plan = useEditorPlan();
-  const hasScenarios = planHasFeature(plan, 'scenarios');
   const vis: Record<string, boolean> = {
     stations: showStations,
     frequencies: showFrequencies,
     blocks: showBlocks,
   };
-  const fixed = FIXED_ROUTE.filter((i) => vis[i.key] ?? true).map((i) =>
-    i.key === 'routes' && hasScenarios ? { ...i, label: 'Routes & Scenarios' } : i,
-  );
+  const fixed = FIXED_ROUTE.filter((i) => vis[i.key] ?? true);
   const flex = showFlex ? FLEX : [];
   const operations = showAlerts ? OPERATIONS : [];
   return { fixed, flex, operations };

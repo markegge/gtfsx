@@ -272,7 +272,7 @@ Light, **good-enough** vehicle blocking for small agencies — no optimizer, no 
 
 ### 2.7 Feed variants & comparison
 
-Fork the feed into editable variants and compare their cost against a baseline ("what does this change cost vs. today?"). Agency-gated. **Distinct** from the route-visibility "Scenarios" (§visibility sets). See [`/docs/service-planning/`](https://www.gtfsx.com/docs/service-planning/).
+Fork the feed into editable variants and compare their cost against a baseline ("what does this change cost vs. today?"). Agency-gated. See [`/docs/service-planning/`](https://www.gtfsx.com/docs/service-planning/).
 
 - ✅ **Variants** (`variantSlice` + `services/variants.ts`) — fork "from current", name, switch the active variant, mark a baseline; a banner shows when editing a non-baseline variant. **Client-side and session-scoped** (not in the working-state blob), so the existing save path is untouched. (Server-side persistence — migration `0023_feed_scenario` + endpoints — is mapped and deferred; see the implementation notes.)
 - ✅ **Feed-state diff** (`feedDiff.ts`, pure, E1) — `diffFeedState(a,b)`: added/removed/changed per entity + headline deltas (Δ revenue-hours, peak vehicles, trips, weekly/annual cost via `calculateSystemStats`) + a per-route changeset.

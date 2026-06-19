@@ -19,7 +19,6 @@ export type FeatureKey =
   | 'org_logo'
   | 'brand_color'
   | 'service_alerts'
-  | 'scenarios'
   | 'variants'
   | 'phone_support';
 
@@ -43,7 +42,6 @@ export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
   org_logo:            ['agency', 'enterprise'],
   brand_color:         ['pro', 'agency', 'enterprise'],
   service_alerts:      ['agency', 'enterprise'],
-  scenarios:           ['agency', 'enterprise'],
   variants:            ['agency', 'enterprise'],
   phone_support:       ['agency', 'enterprise'],
 };
@@ -136,10 +134,6 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   service_alerts: {
     title: 'Service Alerts authoring',
     description: 'Publish GTFS-Realtime Service Alerts — detours, delays, and stop closures — to a live feed Google, Apple, and transit apps consume, without republishing your schedule.',
-  },
-  scenarios: {
-    title: 'Save and compare scenarios',
-    description: 'Save named route-visibility sets and switch between them instantly — compare service scenarios on the map and across every analysis panel.',
   },
   variants: {
     title: 'Feed variants',

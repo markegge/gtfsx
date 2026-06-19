@@ -1,7 +1,7 @@
 /**
  * E1 — Feed-state diff.
  *
- * The pure comparison engine under A2 (scenario / variant comparison): given two
+ * The pure comparison engine under A2 (feed variant comparison): given two
  * feed states, produce a structured changeset (added / removed / changed counts
  * per entity type) plus headline KPI deltas (Δ revenue-hours, peak vehicles,
  * trips, weekly/annual cost) and a per-route changeset for the "what does this

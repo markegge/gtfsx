@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand';
 
 /**
- * A2 — Feed variants (scenario forking).
+ * A2 — Feed variants (feed forking).
  *
  * A "variant" is a forked, independently-editable copy of the whole feed,
  * branched from a baseline, so a planner can answer "what does this service
@@ -15,8 +15,9 @@ import type { StateCreator } from 'zustand';
  * compare actions live in services/variants.ts (they need buildSnapshot +
  * applySnapshotToStore); this slice is just the state + low-level setters.
  *
- * Naming: kept distinct from the existing route-visibility "Scenarios"
- * (visibilitySets / ScenarioSwitcher) per Mark — see IMPLEMENTATION-NOTES.
+ * Naming: "variants" is deliberately distinct from the basic per-route
+ * visibility toggle (hiddenRouteIds) — a variant carries real, independent
+ * edits, not just which routes are shown.
  */
 export interface FeedVariant {
   id: string;

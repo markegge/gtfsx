@@ -49,7 +49,7 @@ function walkBadgeLabel(
 }
 
 export function CoveragePanel() {
-  // Analysis is scoped to routes toggled visible on the map (scenario compare).
+  // Analysis is scoped to the routes toggled visible on the map.
   const { stops, routes, visibleRouteCount, totalRouteCount } = useVisibleFeed();
   // System summary + demographic profile are free; per-route coverage is Agency+.
   const plan = useEditorPlan();
@@ -220,7 +220,7 @@ export function CoveragePanel() {
       <EmptyState
         icon="🚏"
         title="All routes hidden"
-        description="Toggle route visibility back on to analyze coverage for that scenario."
+        description="Toggle route visibility back on to analyze coverage for those routes."
       />
     ) : (
       <EmptyState
@@ -345,8 +345,7 @@ export function CoveragePanel() {
  * Walkshed-mode selector. Paid users get a checkbox to switch Coverage from the
  * straight-line buffer to Mapbox street-network walksheds plus a walk-time
  * picker; free/pro users see a disabled control with the standard upgrade
- * affordance (a Link to /pricing carrying the feature, mirroring the Scenarios
- * upsell in RouteList).
+ * affordance (a Link to /pricing carrying the feature).
  */
 function WalkshedModeControl({
   canUse,

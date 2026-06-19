@@ -151,7 +151,7 @@ function SpacingHistogram({
 /* ── main panel ── */
 
 export function StopAnalysisPanel() {
-  // Analysis is scoped to routes toggled visible on the map (scenario compare).
+  // Analysis is scoped to the routes toggled visible on the map.
   const { stops, routes, routeStops, trips, stopTimes, visibleRouteCount, totalRouteCount } = useVisibleFeed();
   const calendars = useStore((s) => s.calendars);
   const calendarDates = useStore((s) => s.calendarDates);
@@ -227,7 +227,7 @@ export function StopAnalysisPanel() {
       <EmptyState
         icon="📊"
         title="All routes hidden"
-        description="Toggle route visibility back on to run stop diagnostics for that scenario."
+        description="Toggle route visibility back on to run stop diagnostics for those routes."
       />
     ) : (
       <EmptyState

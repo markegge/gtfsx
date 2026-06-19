@@ -4,11 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
-    <title>Scenario analysis — GTFS·X</title>
-    <meta name="description" content="Save route-visibility sets as named scenarios in GTFS·X and switch between them from the header. The map and every analysis panel — cost, coverage, Title VI, stop analysis — re-scope to the active scenario." />
+    <title>Route visibility — GTFS·X</title>
+    <meta name="description" content="Hide and show individual routes on the GTFS·X map. The map and every analysis panel — cost, coverage, Title VI, stop analysis — re-scope to the routes you leave visible, so you can read the numbers for a subset of the network." />
     <link rel="canonical" href="https://www.gtfsx.com/docs/scenario-analysis/" />
-    <meta property="og:title" content="Scenario analysis — GTFS·X" />
-    <meta property="og:description" content="Save and switch route-visibility scenarios; the map and every analysis panel re-scope to the active subset of routes." />
+    <meta property="og:title" content="Route visibility — GTFS·X" />
+    <meta property="og:description" content="Hide and show routes on the map; the map and every analysis panel re-scope to the visible subset of routes." />
     <meta property="og:type" content="article" />
     <meta property="og:url" content="https://www.gtfsx.com/docs/scenario-analysis/" />
     <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
@@ -22,8 +22,8 @@
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "Scenario analysis — GTFS·X",
-  "description": "Save route-visibility sets as named scenarios in GTFS·X and switch between them from the header. The map and every analysis panel — cost, coverage, Title VI, stop analysis — re-scope to the active scenario.",
+  "headline": "Route visibility — GTFS·X",
+  "description": "Hide and show individual routes on the GTFS·X map. The map and every analysis panel — cost, coverage, Title VI, stop analysis — re-scope to the routes you leave visible.",
   "image": "https://www.gtfsx.com/og-default.png",
   "author": {
     "@type": "Organization",
@@ -39,7 +39,7 @@
     }
   },
   "datePublished": "2026-06-03",
-  "dateModified": "2026-06-03",
+  "dateModified": "2026-06-18",
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": "https://www.gtfsx.com/docs/scenario-analysis/"
@@ -63,50 +63,26 @@
       </div>
     </header>
     <main>
-      <div class="crumbs"><a href="/docs/">Docs</a> · Analysis tools · Scenario analysis</div>
-      <h1>Scenario analysis <span class="tier-badge agency">Agency</span></h1>
-      <p class="lede">A <strong>scenario</strong> is a saved set of routes you want to look at together — "current network", "proposed redesign", "rapid corridors only". Save the routes currently shown as a named scenario, then switch between scenarios from the header. The map and every analysis panel — Cost, Coverage, Title VI, Stop analysis — re-scope to the active scenario, so you can compare two networks without deleting anything.</p>
-      <p>Scenarios are an <strong>Agency</strong> feature. On the free and Pro plans the save control shows an upsell instead.</p>
-      <figure>
-        <img src="/assets/docs/scenario-controls.png" alt="The Routes & Scenarios visibility settings and the scenario switcher in the header bar." loading="lazy" />
-        <figcaption>Saving a visibility set in the Routes &amp; Scenarios panel, and switching scenarios from the header.</figcaption>
-      </figure>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Analysis tools · Route visibility</div>
+      <h1>Route visibility</h1>
+      <p class="lede">Every route in the <strong>Routes</strong> panel has a visibility toggle — the colour swatch. Click it to hide a route from the map. Hiding isn't an edit: the route stays in the feed and still exports. What it changes is the <em>scope</em> every analysis panel computes over — turn routes off and the Cost, Coverage, Title VI, and Stop analysis panels re-tabulate for just the routes still shown.</p>
 
       <h2 id="what-it-is">What it is</h2>
-      <p>Service planning is comparative. You rarely ask "what does this network cost?" in isolation — you ask "what does the <em>proposed</em> network cost relative to <em>today's</em>?", or "how does coverage change if I drop the two lowest-ridership routes?". Doing that by hand means duplicating a feed, deleting routes, running the numbers, then doing it again for the other variant, and trying to keep the two sets of figures straight.</p>
-      <p>A scenario captures which routes are <em>shown</em> (and, by implication, which are hidden) as a named, switchable view. Nothing is deleted — the hidden routes are still in the feed, still exportable, still one click from coming back. What changes is the scope every analysis tool computes over: turn off a route and the Cost panel's totals, the Coverage population, the Title VI comparison, and the Stop analysis all drop that route's contribution. Save that view as "Network A", build a different view, save it as "Network B", and you can flip between the two and read the analysis side by side.</p>
+      <p>Service planning is comparative. You rarely ask "what does this network cost?" in isolation — you ask "what does coverage look like if I drop the two lowest-ridership routes?", or "how does the equity picture change for the rapid corridors only?". Route visibility lets you answer those questions without deleting anything: hide the routes you want to exclude, read the panels, then toggle them back on.</p>
+      <p>Hiding a route controls which routes are <em>shown</em> (and, by implication, which are excluded from analysis). Nothing is deleted — the hidden routes are still in the feed, still exportable, still one click from coming back. When no routes are hidden, every panel computes over the full feed unchanged.</p>
 
-      <h2 id="when-to-use-it">When to use it</h2>
-      <ul>
-        <li>Comparing an existing network against a proposed redesign without maintaining two copies of the feed.</li>
-        <li>Costing a "what if we cut these three routes?" scenario before taking it to the board.</li>
-        <li>Showing a corridor study to stakeholders: "rapid routes only" vs. "the full local network".</li>
-        <li>Isolating one operating division, one funding source, or one mode for a focused coverage or equity read.</li>
-        <li>Walking through alternatives in a public meeting — flip scenarios live and let the panels re-tabulate.</li>
-      </ul>
-
-      <h2 id="saving">Saving a scenario</h2>
-      <p>Scenarios are built out of the <strong>Routes</strong> panel, where each route has a visibility toggle (the colour swatch). The workflow is:</p>
+      <h2 id="how-to">Hiding and showing routes</h2>
+      <p>Route visibility is controlled from the <strong>Routes</strong> panel, where each route row has a colour swatch on the left:</p>
       <ol>
         <li>Open the <strong>Routes</strong> panel in the left sidebar.</li>
-        <li>Toggle routes on and off until the map shows exactly the network you want to capture — turn off the routes you want excluded.</li>
-        <li>Click <strong>Save current view as scenario</strong> at the bottom of the panel. An inline field appears, pre-filled with a default name (<code>Scenario 1</code>, <code>Scenario 2</code>, …).</li>
-        <li>Type a meaningful name and press <strong>Enter</strong> (or click <strong>Save</strong>). Press <strong>Escape</strong> to cancel.</li>
+        <li>Click a route's <strong>colour swatch</strong> to hide it from the map. The swatch hollows out to show the route is hidden; click it again to bring the route back.</li>
+        <li>Repeat until the map shows exactly the subset of the network you want to analyse.</li>
       </ol>
-      <p>The scenario records the hidden-route set as it stands at save time. A scenario where <em>nothing</em> is hidden is "all routes"; a scenario with most routes hidden is a focused subset. You can save as many as you like — peak network, off-peak network, weekend network, three redesign options.</p>
-      <p>Scenarios are saved <strong>with the feed</strong>, so they persist across sessions (locally for anonymous editing, and to your account when you're signed in). The currently <em>applied</em> view does not persist — reopening a feed starts with all routes visible, and you pick a scenario from the switcher to re-scope.</p>
-
-      <h2 id="switching">Switching scenarios</h2>
-      <p>Once at least one scenario exists, a <strong>scenario switcher</strong> appears in the editor's header bar (it stays hidden until you've saved one, so the default header tagline shows for feeds with no scenarios). The switcher's label tells you what you're looking at:</p>
-      <ul>
-        <li>The <strong>scenario name</strong> when the current visibility exactly matches a saved scenario.</li>
-        <li><strong>All routes</strong> when nothing is hidden and no saved scenario matches.</li>
-        <li><strong>Custom view</strong> when you've toggled routes by hand into a combination that isn't a saved scenario.</li>
-      </ul>
-      <p>That label is <em>derived</em> from the live visibility, not stored separately — so a manual route toggle immediately reads as "Custom view" without any extra step, and re-matching a saved set snaps the label back to its name. Open the switcher to pick <strong>All routes</strong> or any saved scenario; picking one applies its hidden-route set instantly. You can also apply a scenario from the managed list in the Routes panel (below).</p>
+      <p>The eye icon at the top of the list marks the swatch column as the map-visibility toggle. Hiding is per-route and lives only in your current view — it isn't saved with the feed and resets to "all routes visible" when you reopen a feed.</p>
+      <p>To explore a service <em>change</em> (not just which routes are shown) — say "what if we add a Saturday run on Route 5?" — use <a href="/docs/service-planning/">feed variants</a> instead, which carry real, independent edits and a computed cost comparison against a baseline.</p>
 
       <h2 id="re-scoping">What re-scopes</h2>
-      <p>Applying a scenario changes the active set of visible routes, and everything downstream follows from that single source of truth:</p>
+      <p>Hiding routes changes the active set of visible routes, and everything downstream follows from that single source of truth:</p>
       <ul>
         <li><strong>The map.</strong> Hidden routes — and the stops served only by hidden routes — drop out of view.</li>
         <li><strong>Cost estimation.</strong> Revenue hours, peak vehicles, and weekly/annual cost are computed over the visible routes only.</li>
@@ -116,31 +92,23 @@
       </ul>
       <p>The scoping cascades from routes through trips and stop times down to stops, so a stop served exclusively by a hidden route disappears from every panel — but a stop shared with a still-visible route stays. When no routes are hidden, the panels compute over the full feed unchanged.</p>
 
-      <h2 id="managing">Managing scenarios</h2>
-      <p>The Routes panel keeps a <strong>Saved scenarios</strong> list under the save control. Each entry offers three actions:</p>
-      <ul>
-        <li><strong>Apply</strong> — click the scenario name to make it the active view. The currently applied scenario is highlighted and marked with a check.</li>
-        <li><strong>Rename</strong> — the pencil icon opens an inline field; <strong>Enter</strong> commits, <strong>Escape</strong> cancels.</li>
-        <li><strong>Delete</strong> — the trash icon removes the scenario. Deleting a scenario never touches your routes; it only forgets that saved view.</li>
-      </ul>
-      <p>The header switcher offers the same <strong>apply</strong> and <strong>delete</strong> actions in a compact dropdown for quick switching while you work; renaming lives in the Routes panel list.</p>
-
       <h2 id="gotchas">Edge cases and gotchas</h2>
       <ul>
-        <li><strong>A scenario stores a set of routes, not a snapshot of their data.</strong> If you later edit a route that a scenario includes — change its trips, move stops — the scenario reflects the edited route the next time you apply it. Scenarios scope <em>which</em> routes you analyse, not a frozen copy of them.</li>
-        <li><strong>The applied view resets on reload.</strong> Scenarios persist, but reopening a feed starts on "all routes". Re-pick from the switcher to get back to where you were.</li>
-        <li><strong>"Custom view" is not saved automatically.</strong> If you toggle routes by hand into a combination you want to keep, save it as a scenario — otherwise the next apply or reload loses it.</li>
-        <li><strong>Hiding a route doesn't change the exported feed.</strong> Hidden routes are still part of the feed and still export. To actually remove a route from a feed, delete it in the Routes panel; scenarios are an analysis lens, not an editing operation.</li>
+        <li><strong>Hiding a route doesn't change the exported feed.</strong> Hidden routes are still part of the feed and still export. To actually remove a route from a feed, delete it in the Routes panel; visibility is an analysis lens, not an editing operation.</li>
+        <li><strong>Visibility resets on reload.</strong> The set of hidden routes isn't saved with the feed — reopening a feed starts on "all routes visible".</li>
+        <li><strong>All routes hidden = nothing to analyse.</strong> If you hide every route, the analysis panels show an empty state prompting you to toggle a route back on.</li>
+        <li><strong>Want to keep and compare edited alternatives?</strong> Route visibility only shows or hides existing routes. To fork the feed into named, independently-editable alternatives and compare their cost, use <a href="/docs/service-planning/">feed variants</a>.</li>
       </ul>
 
       <div class="see-also">
         <h2>See also</h2>
         <ul>
-          <li><a href="/docs/routes-and-shapes/">Routes &amp; shapes</a> — where the visibility toggles and the save-as-scenario control live.</li>
-          <li><a href="/docs/cost-estimation/">Cost estimation</a> — re-scopes to the active scenario.</li>
-          <li><a href="/docs/demographic-coverage/">Demographic coverage</a> — re-scopes to the active scenario.</li>
-          <li><a href="/docs/title-vi-analysis/">Title VI analysis</a> — re-scopes to the active scenario.</li>
-          <li><a href="/docs/stop-analysis/">Stop analysis</a> — re-scopes to the active scenario.</li>
+          <li><a href="/docs/routes-and-shapes/">Routes &amp; shapes</a> — where the per-route visibility toggles live.</li>
+          <li><a href="/docs/service-planning/">Feed variants &amp; service planning</a> — fork the feed and compare service changes against a baseline.</li>
+          <li><a href="/docs/cost-estimation/">Cost estimation</a> — re-scopes to the visible routes.</li>
+          <li><a href="/docs/demographic-coverage/">Demographic coverage</a> — re-scopes to the visible routes.</li>
+          <li><a href="/docs/title-vi-analysis/">Title VI analysis</a> — re-scopes to the visible routes.</li>
+          <li><a href="/docs/stop-analysis/">Stop analysis</a> — re-scopes to the visible routes.</li>
         </ul>
       </div>
     </main>

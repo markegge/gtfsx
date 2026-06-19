@@ -53,7 +53,7 @@ function GroupColumn({ label, group, isMinority }: { label: string; group: Title
 }
 
 export function TitleVIPanel() {
-  // Analysis is scoped to routes toggled visible on the map (scenario compare).
+  // Analysis is scoped to the routes toggled visible on the map.
   const { stops, stopTimes, visibleRouteCount, totalRouteCount } = useVisibleFeed();
   const [result, setResult] = useState<TitleVIResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -82,7 +82,7 @@ export function TitleVIPanel() {
       <EmptyState
         icon="⚖"
         title="All routes hidden"
-        description="Toggle route visibility back on to run a Title VI analysis for that scenario."
+        description="Toggle route visibility back on to run a Title VI analysis for those routes."
       />
     ) : (
       <EmptyState

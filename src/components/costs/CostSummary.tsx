@@ -17,7 +17,7 @@ export function CostSummary() {
     calendars, calendarDates, frequencies,
     selectRoute, setEditingRouteId, setSidebarSection,
   } = useStore();
-  // Analysis is scoped to routes toggled visible on the map (scenario compare).
+  // Analysis is scoped to the routes toggled visible on the map.
   const { routes, trips, stopTimes } = useVisibleFeed();
   const { byTrip: stopTimesByTrip } = useStopTimesIndex();
   // System totals (above) are free; the route-level breakdown + CSV export are

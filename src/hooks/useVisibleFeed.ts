@@ -5,7 +5,7 @@ import { useStore } from '../store';
  * Feed slices scoped to routes whose visibility is toggled ON (i.e. not in
  * `hiddenRouteIds`). The analysis panels (Costs, Coverage, Title VI, Stop
  * Analysis) compute over these instead of the full feed, so toggling routes
- * off on the map lets you compare scenarios.
+ * off on the map lets you compare different subsets of routes.
  *
  * Scoping cascades route → trip → stop_time → stop, so `stops` includes only
  * stops served by a visible route. When nothing is hidden it returns the full

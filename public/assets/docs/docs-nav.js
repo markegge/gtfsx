@@ -51,7 +51,7 @@
         { path: '/docs/demographic-coverage/', title: 'Demographic Coverage' },
         { path: '/docs/stop-analysis/',        title: 'Stop Analysis' },
         { path: '/docs/title-vi-analysis/',    title: 'Title VI Analysis' },
-        { path: '/docs/scenario-analysis/',    title: 'Scenario Analysis' },
+        { path: '/docs/scenario-analysis/',    title: 'Route Visibility' },
         { path: '/docs/service-planning/',     title: 'Service Planning' },
         { path: '/docs/rider-propensity/',     title: 'Rider Propensity' }
       ]

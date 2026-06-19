@@ -10,11 +10,8 @@ import { patchProject } from '../../services/projectsApi';
 import { saveProjectNow } from '../../db/serverPersistence';
 import { backendEnabled } from '../../utils/featureFlags';
 import { AppBrand } from './AppBrand';
-import { ScenarioSwitcher } from './ScenarioSwitcher';
 import { VariantSwitcher } from '../variants/VariantSwitcher';
 import { UserMenu, UserMenuItems } from './UserMenu';
-import { useEditorPlan } from '../billing/useEditorPlan';
-import { planHasFeature } from '../billing/planConfig';
 
 // Re-export RoleBadge for callers that imported it from TopBar previously.
 export { RoleBadge } from './UserMenu';
@@ -28,13 +25,6 @@ export function TopBar() {
   const routesCount = useStore((s) => s.routes.length);
   const stopsCount = useStore((s) => s.stops.length);
   const agenciesCount = useStore((s) => s.agencies.length);
-  // When ≥1 saved scenario exists, the header shows the scenario switcher in
-  // place of the "GTFS Editor • Route Planner" tagline. Scenarios are Agency+,
-  // so the switcher only appears (and the tagline only yields to it) for plans
-  // that unlock the feature — matching ScenarioSwitcher's own gate.
-  const editorPlan = useEditorPlan();
-  const hasSavedScenarios = useStore((s) => s.visibilitySets.length > 0);
-  const hasScenarios = hasSavedScenarios && planHasFeature(editorPlan, 'scenarios');
   const navigate = useNavigate();
   // /demo is a read-only preview surface — drop the Save button so
   // visitors don't get prompted to upgrade or create an account just
@@ -105,17 +95,10 @@ export function TopBar() {
   return (
     <>
       <div className="h-14 bg-white border-b border-sand flex items-center px-3 sm:px-5 gap-2 sm:gap-3 shrink-0 min-w-0">
-        <AppBrand onResetRequest={() => setShowResetConfirm(true)} showTagline={!hasScenarios} />
-
-        {/* Scenario switcher — replaces the tagline once the user saves a
-            visibility set. Self-hides when none exist. */}
-        <div className="hidden min-[600px]:flex shrink-0">
-          <ScenarioSwitcher />
-        </div>
+        <AppBrand onResetRequest={() => setShowResetConfirm(true)} showTagline />
 
         {/* Variant switcher (A2) — fork/compare feed variants. Agency+ (or
-            /demo). Self-hides otherwise. Distinct from the visibility-set
-            "Scenarios" switcher above. */}
+            /demo). Self-hides otherwise. */}
         <div className="hidden min-[600px]:flex shrink-0">
           <VariantSwitcher />
         </div>
@@ -219,16 +202,6 @@ export function TopBar() {
                   >
                     {saving ? 'Saving…' : 'Save'}
                   </button>
-                )}
-                {/* Scenario switcher — Agency+ only, self-hides when no scenarios */}
-                {hasScenarios && (
-                  <>
-                    <div className="border-t border-sand my-1" />
-                    <div className="px-1 py-0.5">
-                      <ScenarioSwitcher />
-                    </div>
-                    <div className="border-t border-sand my-1" />
-                  </>
                 )}
                 <button
                   onClick={() => { setMobileMenuOpen(false); setShowImport(true); }}

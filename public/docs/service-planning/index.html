@@ -88,7 +88,7 @@
         <figcaption>Compare to baseline. A delta strip shows the change in trips, revenue hours, peak vehicles, and cost, with a per-route breakdown beneath.</figcaption>
       </figure>
       <p>The comparison shows a delta strip (change in weekly trips, revenue hours, peak vehicles, and weekly and annual cost) plus a per-route changeset like "Route 5: +12 trips/week, +$48k/yr". A banner reminds you while you're editing a variant that your changes are separate from the baseline, and one click switches back. Variants are an exploration layer that lives in your session; they don't change your saved feed unless you choose to keep one.</p>
-      <p>Variants are distinct from <a href="/docs/scenario-analysis/">route-visibility scenarios</a>, which save which routes are shown for analysis. Variants carry real, independent edits and a computed cost comparison.</p>
+      <p>Variants are distinct from <a href="/docs/scenario-analysis/">route visibility</a>, which only hides and shows existing routes to scope the analysis panels. Variants carry real, independent edits and a computed cost comparison.</p>
 
       <h2 id="whats-not-here">What this is not</h2>
       <p>This is good-enough planning for a small agency, not an optimization suite. There is no solver: generated headways are even, Quick Block is a greedy heuristic you edit, and running times are entered by hand (no AVL). Crew scheduling and runcutting are out of scope. If you need those, GTFS·X hands a clean, valid feed to the tool that does.</p>
@@ -98,7 +98,7 @@
         <ul>
           <li><a href="/docs/timetables-and-trips/">Timetables &amp; trips</a> — the grid the generated trips land in, plus blocks as a trip column.</li>
           <li><a href="/docs/cost-estimation/">Cost estimation</a> — the per-route cost model the comparison and the block cost build on.</li>
-          <li><a href="/docs/scenario-analysis/">Scenario analysis</a> — saved route-visibility sets, the other "scenarios" in GTFS·X.</li>
+          <li><a href="/docs/scenario-analysis/">Route visibility</a> — hide and show routes to scope the analysis panels to a subset of the network.</li>
           <li><a href="/docs/service-summary/">Service summary</a> — peak vehicles and revenue hours across the feed.</li>
         </ul>
       </div>

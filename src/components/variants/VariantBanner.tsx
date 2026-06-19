@@ -2,17 +2,21 @@ import { useState } from 'react';
 import { useStore } from '../../store';
 import { switchToVariant, baselineVariant } from '../../services/variants';
 import { VariantCompareDialog } from './VariantCompareDialog';
+import { useCanUseVariants } from './useCanUseVariants';
 
 /**
  * Slim banner shown while a NON-baseline variant is active, so it's always
  * obvious you're editing a fork (not your baseline / saved feed) — and a Save
  * here saves the variant. Mirrors WelcomeBanner / PartnerBanner placement.
+ * Agency+ only (mirrors VariantSwitcher's useCanUseVariants gate).
  */
 export function VariantBanner() {
+  const canUse = useCanUseVariants();
   const variants = useStore((s) => s.variants);
   const activeVariantId = useStore((s) => s.activeVariantId);
   const [showCompare, setShowCompare] = useState(false);
 
+  if (!canUse) return null;
   const active = variants.find((v) => v.id === activeVariantId);
   if (!active || active.baseline) return null;
 

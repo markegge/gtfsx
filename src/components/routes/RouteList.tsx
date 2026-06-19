@@ -1,5 +1,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import { RouteDetailPanel } from './RouteDetailPanel';
@@ -28,8 +29,8 @@ export function RouteList() {
   } = useStore();
   const flexZones = useStore((s) => s.flexZones);
 
-  // Scenarios (save/switch/manage named route-visibility sets) are Agency+ only;
-  // hidden entirely for free/pro/anonymous — consistent with ScenarioSwitcher.
+  // Scenarios (save/switch/manage named route-visibility sets) are an Agency+
+  // feature; free/pro users see a compact upsell instead of the controls.
   const plan = useEditorPlan();
   const canUseScenarios = planHasFeature(plan, 'scenarios');
 
@@ -261,10 +262,24 @@ export function RouteList() {
 
           {/* Scenarios — save the routes currently shown (toggle others off with
               the colour swatches) as a named visibility set you can switch
-              between from the header bar. Agency+ only; completely hidden for
-              free/pro/anonymous users (consistent with ScenarioSwitcher). */}
-          {canUseScenarios && (
-            <div className="mt-3 pt-3 border-t border-sand">
+              between from the header bar. Agency+ only; free/pro see an upsell. */}
+          <div className="mt-3 pt-3 border-t border-sand">
+            {!canUseScenarios ? (
+              <Link
+                to="/pricing?feature=scenarios"
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-warm-gray hover:text-teal hover:bg-teal-light transition-colors"
+                title="Save and switch between route-visibility scenarios — an Agency plan feature"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <rect x="3" y="11" width="18" height="11" rx="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <span>Save view as scenario</span>
+                <span className="text-[10px] font-bold uppercase tracking-wide bg-cream text-warm-gray px-1.5 py-0.5 rounded border border-sand">
+                  Agency
+                </span>
+              </Link>
+            ) : (
               <>
                 {savingScenario ? (
                   <div className="flex items-center gap-1.5">
@@ -379,8 +394,8 @@ export function RouteList() {
                   </div>
                 )}
               </>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
     </div>

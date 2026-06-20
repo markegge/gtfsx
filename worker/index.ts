@@ -3,6 +3,7 @@ import type { Env, AppContext } from './env';
 import { TILE_RE, serveTile } from './legacy/tiles';
 import { handleSearch, handleProxy } from './legacy/imports';
 import { sessionMiddleware, requireClientHeader } from './auth/middleware';
+import { readSessionCookie } from './auth/session';
 import { authRouter } from './auth/routes';
 import { apiRouter } from './api';
 import { feedsHandler, forumImageOnlyHandler } from './publication/feeds';
@@ -37,6 +38,7 @@ const LEGACY_ALIAS_REDIRECTS: Record<string, string> = {
 // render throws and falls through.)
 const SPA_SHELL_EXACT = new Set([
   '/',
+  '/editor',
   '/import',
   '/login',
   '/signup',
@@ -259,6 +261,23 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext):
       } catch (err) {
         console.error(`[forum-sitemap] error, falling back to static sitemap: ${errorDetail(err)}`);
       }
+    }
+
+    // Marketing home page: logged-out visitors at "/" get the static landing
+    // page (public/home/index.html); logged-in users go straight to the editor.
+    // Auth-gated, so this response must not be cached.
+    if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '')) {
+      if (readSessionCookie(request) !== null) {
+        return Response.redirect(`${url.origin}/editor`, 302);
+      }
+      const landing = await env.ASSETS.fetch(new URL('/home/index.html', url.origin).toString());
+      if (landing.status === 200) {
+        const headers = new Headers(landing.headers);
+        headers.set('Content-Type', 'text/html; charset=utf-8');
+        headers.set('Cache-Control', 'no-store');
+        return new Response(landing.body, { status: 200, headers });
+      }
+      // Fall through to the SPA shell if the landing asset is somehow missing.
     }
 
     // Everything else: static assets, with a real 404 for genuine misses.

@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- ============================== SEO ============================== -->
+<title>GTFS·X — GTFS Editor &amp; Transit Service Planner</title>
+<meta name="description" content="The fast, easy GTFS editor and service planner. Build, validate, and publish GTFS and GTFS-Flex feeds in your browser — no account, no install. Editing in under a minute.">
+<link rel="canonical" href="https://www.gtfsx.com/">
+<meta name="robots" content="index, follow">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="GTFS·X">
+<meta property="og:title" content="GTFS·X — GTFS Editor &amp; Transit Service Planner">
+<meta property="og:description" content="The fast, easy GTFS editor and service planner. Build, validate, and publish GTFS &amp; GTFS-Flex feeds in your browser — no account required.">
+<meta property="og:url" content="https://www.gtfsx.com/">
+<meta property="og:image" content="https://www.gtfsx.com/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@gtfsxapp">
+<meta name="twitter:title" content="GTFS·X — GTFS Editor &amp; Transit Service Planner">
+<meta name="twitter:description" content="The fast, easy GTFS editor and service planner — build, validate, and publish feeds in your browser.">
+<meta name="twitter:image" content="https://www.gtfsx.com/og-image.png">
+
+<link rel="icon" type="image/svg+xml" href="/gtfsx-mark.svg">
+<link rel="apple-touch-icon" href="/gtfsx-mark-256.svg">
+
+<link rel="stylesheet" href="/home/landing.css">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "GTFS·X",
+  "url": "https://www.gtfsx.com/",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web browser",
+  "description": "The fast, easy GTFS editor and service planner. Build, validate, and publish GTFS and GTFS-Flex feeds in the browser — no account required.",
+  "offers": [
+    { "@type": "Offer", "name": "Free",   "price": "0",   "priceCurrency": "USD" },
+    { "@type": "Offer", "name": "Pro",    "price": "49",  "priceCurrency": "USD" },
+    { "@type": "Offer", "name": "Agency", "price": "299", "priceCurrency": "USD" }
+  ]
+}
+</script>
+</head>
+<body>
+
+<!-- ============================== NAV ============================== -->
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" aria-label="GTFS·X home"><img class="lockup" src="/gtfsx-lockup.svg" alt="GTFS·X" width="108" height="30"></a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="/pricing">Pricing</a>
+      <a href="/planning">Planning</a>
+      <a href="/docs/">Docs</a>
+    </nav>
+    <div class="nav-cta">
+      <a href="/login" class="nav-login">Log in</a>
+      <a href="/editor" class="btn btn-primary btn-sm" data-cta="open-editor">Open the editor</a>
+      <button class="hamburger" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ============================== HERO ============================== -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <p class="eyebrow">GTFS &amp; GTFS-Flex editor · runs in your browser</p>
+      <h1>The fast, easy <span class="accent">GTFS editor</span> and service planner</h1>
+      <p class="subhead">Everything a small transit agency needs to plan and publish its service.</p>
+      <p class="support">Build, validate, and publish GTFS and GTFS-Flex feeds right in your browser — no account, no installation, no GIS. You're editing in under a minute.</p>
+      <div class="hero-ctas">
+        <a href="/editor" class="btn btn-primary btn-lg" data-cta="open-editor">Open the editor <span class="arrow">→</span></a>
+        <a href="/pricing" class="btn btn-ghost btn-lg">See pricing</a>
+      </div>
+      <p class="hero-trust">
+        <span class="pin">●</span> No signup required
+        <span class="dot-sep">·</span>
+        Nothing you build leaves your browser until you publish it.
+      </p>
+    </div>
+
+    <div class="hero-visual reveal">
+      <div class="editor" role="img" aria-label="The GTFS·X editor: a map with bus routes and stops being edited">
+        <div class="editor-bar">
+          <span class="mark"></span>
+          <span class="proj">Mountain Line — Bozeman</span>
+          <span class="pill">3 routes · 42 stops</span>
+          <span class="save"><span class="d"></span> Saved</span>
+          <span class="grow"></span>
+          <span class="ebtn">Export GTFS</span>
+        </div>
+        <div class="editor-body">
+          <div class="editor-rail">
+            <span class="tile active" title="Routes"><span class="ico" style="background:var(--gtfs-coral)"></span></span>
+            <span class="tile" title="Stops"><span class="ico" style="background:var(--gtfs-teal)"></span></span>
+            <span class="tile" title="Calendars"><span class="ico" style="background:var(--gtfs-gold)"></span></span>
+            <span class="tile" title="Flex zones"><span class="ico" style="background:var(--gtfs-purple)"></span></span>
+            <span class="tile" title="Agency"><span class="ico" style="background:var(--gtfs-pink)"></span></span>
+          </div>
+          <div class="map">
+            <!-- meet (not slice) so the whole diagram + every pinned label stays visible -->
+            <svg viewBox="0 0 800 480" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+              <path d="M 110 360 L 220 320 L 340 280 L 460 240 L 600 200" stroke="#fff" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M 110 360 L 220 320 L 340 280 L 460 240 L 600 200" stroke="#274BAC" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M 380 400 L 540 380 L 460 240 L 700 290" stroke="#fff" stroke-width="11" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M 380 400 L 540 380 L 460 240 L 700 290" stroke="#E8734A" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M 250 130 L 340 280 L 540 380 L 700 290" stroke="#fff" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M 250 130 L 340 280 L 540 380 L 700 290" stroke="#1DD719" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+              <g fill="#fff" stroke="#3D2E22" stroke-width="2.5">
+                <circle cx="110" cy="360" r="7"/><circle cx="220" cy="320" r="7"/><circle cx="340" cy="280" r="7"/>
+                <circle cx="460" cy="240" r="8"/><circle cx="600" cy="200" r="7"/><circle cx="700" cy="290" r="7"/>
+                <circle cx="540" cy="380" r="7"/><circle cx="380" cy="400" r="7"/><circle cx="250" cy="130" r="7"/>
+              </g>
+              <!-- Feature labels pinned to stops (stem from pill to circle). Blue line
+                   L→R traces the lifecycle; off-blue stops carry the other capabilities. -->
+              <g>
+                <line x1="110" y1="346" x2="110" y2="353" stroke="#C9BBA8" stroke-width="1.5"/>
+                <rect x="62" y="322" width="96" height="24" rx="5" fill="#fff" stroke="#EADBC8" stroke-width="1.2"/>
+                <text class="feat-label" x="110" y="338" text-anchor="middle">Create routes</text>
+              </g>
+              <g>
+                <line x1="220" y1="306" x2="220" y2="313" stroke="#C9BBA8" stroke-width="1.5"/>
+                <rect x="174" y="282" width="92" height="24" rx="5" fill="#fff" stroke="#EADBC8" stroke-width="1.2"/>
+                <text class="feat-label" x="220" y="298" text-anchor="middle">Define stops</text>
+              </g>
+              <g>
+                <line x1="340" y1="266" x2="340" y2="273" stroke="#C9BBA8" stroke-width="1.5"/>
+                <rect x="269" y="242" width="142" height="24" rx="5" fill="#fff" stroke="#EADBC8" stroke-width="1.2"/>
+                <text class="feat-label" x="340" y="258" text-anchor="middle">Manage timetables</text>
+              </g>
+              <g>
+                <line x1="460" y1="226" x2="460" y2="233" stroke="#C9BBA8" stroke-width="1.5"/>
+                <rect x="412" y="202" width="96" height="24" rx="5" fill="#fff" stroke="#EADBC8" stroke-width="1.2"/>
+                <text class="feat-label" x="460" y="218" text-anchor="middle">Publish feed</text>
+              </g>
+              <g>
+                <line x1="600" y1="186" x2="600" y2="193" stroke="#C9BBA8" stroke-width="1.5"/>
+                <rect x="544" y="162" width="112" height="24" rx="5" fill="#fff" stroke="#EADBC8" stroke-width="1.2"/>
+                <text class="feat-label" x="600" y="178" text-anchor="middle">Grow ridership</text>
+              </g>
+              <g>
+                <line x1="250" y1="118" x2="250" y2="123" stroke="#C9BBA8" stroke-width="1.5"/>
+                <rect x="209" y="92" width="82" height="24" rx="5" fill="#fff" stroke="#EADBC8" stroke-width="1.2"/>
+                <text class="feat-label" x="250" y="108" text-anchor="middle">GTFS-Flex</text>
+              </g>
+              <g>
+                <line x1="700" y1="276" x2="700" y2="283" stroke="#C9BBA8" stroke-width="1.5"/>
+                <rect x="668" y="252" width="64" height="24" rx="5" fill="#fff" stroke="#EADBC8" stroke-width="1.2"/>
+                <text class="feat-label" x="700" y="268" text-anchor="middle">Title VI</text>
+              </g>
+              <g>
+                <line x1="540" y1="366" x2="540" y2="373" stroke="#C9BBA8" stroke-width="1.5"/>
+                <rect x="476" y="342" width="128" height="24" rx="5" fill="#fff" stroke="#EADBC8" stroke-width="1.2"/>
+                <text class="feat-label" x="540" y="358" text-anchor="middle">Compare Scenarios</text>
+              </g>
+              <g>
+                <line x1="380" y1="386" x2="380" y2="393" stroke="#C9BBA8" stroke-width="1.5"/>
+                <rect x="331" y="362" width="98" height="24" rx="5" fill="#fff" stroke="#EADBC8" stroke-width="1.2"/>
+                <text class="feat-label" x="380" y="378" text-anchor="middle">Cost Analysis</text>
+              </g>
+            </svg>
+            <div class="map-card map-layers">
+              <div class="row">
+                <span class="lp active">Routes</span>
+                <span class="lp">Coverage</span>
+                <span class="lp">Stops</span>
+              </div>
+              <span class="chk"><i class="on"></i> Show stop labels</span>
+              <span class="chk"><i></i> Coverage heatmap</span>
+            </div>
+            <div class="map-card map-validate"><span class="d"></span> Valid GTFS · 0 errors</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== TRUST STRIP ============================== -->
+<section class="trust section-sm">
+  <div class="wrap trust-grid">
+    <div class="trust-stat">
+      <div class="n">~45%</div>
+      <div class="l">of U.S. transit agencies don't publish a valid GTFS feed.<br><a href="/feed-health/">See the Feed Health data →</a></div>
+    </div>
+    <div class="trust-item"><span class="tick">✓</span><div>Built by an AICP transit planner.</div></div>
+    <div class="trust-item"><span class="tick">✓</span><div>Speaks native GTFS — validated against the spec as you type.</div></div>
+    <div class="trust-item"><span class="tick">✓</span><div>Your data stays in your browser.</div></div>
+  </div>
+</section>
+
+<!-- ============================== EDIT → PUBLISH → PLAN SPINE ============================== -->
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Edit · Publish · Plan</p>
+      <h2 class="title">One tool, the whole lifecycle of a feed</h2>
+      <p class="lede">Start free in the editor. Add publishing when you're ready to go live. Bring the planning suite when your team plans service around it.</p>
+    </div>
+    <div class="spine-grid">
+
+      <div class="spine-card c-edit reveal">
+        <div class="spine-ico edit">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8734A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 L9 6 L15 18 L20 4"/><circle cx="4" cy="20" r="1.6" fill="#E8734A"/><circle cx="20" cy="4" r="1.6" fill="#E8734A"/></svg>
+        </div>
+        <div><span class="verb">Edit</span><span class="tier">Free</span></div>
+        <p class="promise">Create and maintain the feed itself.</p>
+        <ul>
+          <li>Routes, stops, trips, and schedules on a live map</li>
+          <li>GTFS-Flex zones and booking rules</li>
+          <li>Real-time spec validation</li>
+        </ul>
+        <div class="foot"><a href="/editor" class="textlink" data-cta="open-editor">Open the editor →</a></div>
+      </div>
+
+      <div class="spine-card c-publish reveal">
+        <div class="spine-ico publish">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19 V7"/><path d="M6 11 L12 5 L18 11"/><path d="M5 21 H19"/></svg>
+        </div>
+        <div><span class="verb">Publish</span><span class="tier">Pro</span></div>
+        <p class="promise">Put it live and keep it current.</p>
+        <ul>
+          <li>Stable auto-updating URL (<span class="mono" style="font-size:12px">feeds.gtfsx.com/your-agency</span>)</li>
+          <li>Rider mini-site + embeddable widgets</li>
+          <li>One-click Mobility Database submission</li>
+        </ul>
+        <div class="foot"><a href="/pricing" class="textlink">See Pro →</a></div>
+      </div>
+
+      <div class="spine-card c-plan reveal">
+        <div class="spine-ico plan">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#7B68EE" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 V4"/><path d="M4 20 H20"/><rect x="7" y="12" width="3" height="5" rx="1"/><rect x="12.5" y="8" width="3" height="9" rx="1"/><rect x="18" y="14" width="3" height="3" rx="1"/></svg>
+        </div>
+        <div><span class="verb">Plan</span><span class="tier">Agency</span></div>
+        <p class="promise">Plan service around it, as a team.</p>
+        <ul>
+          <li>Operating cost, demographic coverage, Title VI equity</li>
+          <li>Scenario comparison</li>
+          <li>Service alerts</li>
+        </ul>
+        <div class="foot"><a href="/planning" class="textlink">See planning features →</a></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================== FEATURE GRID ============================== -->
+<section class="section band-cream">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">What you can do</p>
+      <h2 class="title">A full GTFS toolkit, nothing to install</h2>
+    </div>
+    <div class="feat-grid">
+
+      <div class="feat reveal">
+        <div class="feat-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E8734A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6 L9 4 L15 6 L21 4 V18 L15 20 L9 18 L3 20 Z"/><path d="M9 4 V18"/><path d="M15 6 V20"/></svg></div>
+        <h3>Map-based editing</h3>
+        <p>Draw routes and place stops on an interactive map.</p>
+      </div>
+
+      <div class="feat reveal">
+        <div class="feat-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E8734A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 C7 7 5 11 5 14 a7 7 0 0 0 14 0 c0-3-2-7-7-11Z"/><circle cx="12" cy="14" r="3"/></svg></div>
+        <h3>GTFS-Flex authoring</h3>
+        <p>Add demand-response zones, booking rules, and stop groups — self-serve.</p>
+      </div>
+
+      <div class="feat reveal">
+        <div class="feat-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E8734A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 L9 17 L20 6"/></svg></div>
+        <h3>Live validation</h3>
+        <p>Catch spec errors as you work, not after you publish.</p>
+      </div>
+
+      <div class="feat reveal">
+        <div class="feat-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E8734A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16 V4"/><path d="M8 8 L12 4 L16 8"/><path d="M5 16 V19 a1 1 0 0 0 1 1 H18 a1 1 0 0 0 1-1 V16"/></svg></div>
+        <h3>Import or start fresh</h3>
+        <p>Open an existing feed or build from scratch. Export a spec-clean <span class="mono" style="font-size:12.5px">.zip</span> anytime.</p>
+      </div>
+
+      <div class="feat reveal">
+        <div class="feat-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E8734A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12 H21"/><path d="M12 3 C15 6 15 18 12 21 C9 18 9 6 12 3Z"/></svg></div>
+        <h3>Hosted publishing</h3>
+        <p>A permanent URL that updates itself and registers with trip planners.</p>
+      </div>
+
+      <div class="feat reveal">
+        <div class="feat-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E8734A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19 V5"/><path d="M4 19 H20"/><path d="M7 15 L11 10 L14 13 L19 6"/></svg></div>
+        <h3>Planning analyses</h3>
+        <p>Cost, coverage, and equity, computed straight from your feed.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================== GTFS-FLEX SPOTLIGHT ============================== -->
+<section class="section band-dark">
+  <div class="wrap split">
+    <div>
+      <p class="eyebrow">GTFS-Flex editor</p>
+      <h2 class="title">The only self-serve GTFS-Flex editor</h2>
+      <p class="lede">Make demand-response and dial-a-ride service discoverable. Draw service zones, set booking windows and rules, and publish a valid GTFS-Flex feed — without a consultant and without a four-week engagement. The same map you use for fixed routes.</p>
+      <div class="hero-ctas">
+        <a href="/editor" class="btn btn-primary btn-md" data-cta="open-editor">Open the editor →</a>
+        <a href="/learn/gtfs-flex/" class="btn btn-ghost on-dark btn-md">What is GTFS-Flex?</a>
+      </div>
+    </div>
+    <div class="split-visual reveal">
+      <div class="editor" role="img" aria-label="The editor showing a GTFS-Flex demand-response zone drawn on the map">
+        <div class="editor-bar">
+          <span class="mark"></span>
+          <span class="proj">Flex zone — Gallatin Valley</span>
+          <span class="pill" style="background:var(--gtfs-purple-light);color:var(--gtfs-purple)">Dial-a-ride</span>
+          <span class="grow"></span>
+          <span class="ebtn">Save zone</span>
+        </div>
+        <div class="editor-body">
+          <div class="map" style="min-height:330px">
+            <svg viewBox="0 0 800 440" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <path d="M 180 110 Q 360 60 560 130 Q 700 200 620 320 Q 460 420 250 360 Q 120 280 180 110 Z" fill="rgba(123,104,238,0.16)" stroke="#7B68EE" stroke-width="3" stroke-dasharray="10 8" stroke-linejoin="round"/>
+              <g fill="#7B68EE" stroke="#fff" stroke-width="2.5">
+                <circle cx="180" cy="110" r="6"/><circle cx="560" cy="130" r="6"/><circle cx="620" cy="320" r="6"/><circle cx="250" cy="360" r="6"/>
+              </g>
+              <circle cx="400" cy="230" r="10" fill="#fff" stroke="#7B68EE" stroke-width="3"/>
+              <circle cx="400" cy="230" r="4" fill="#7B68EE"/>
+            </svg>
+            <div class="map-pill" style="left:50%;top:52%;border-color:var(--gtfs-purple);color:var(--gtfs-purple)">Booking: 2 hrs ahead</div>
+            <div class="map-card map-tools">
+              <span class="tb">↖</span>
+              <span class="tb active" title="Draw flex zone">▱</span>
+              <span class="tb">●</span>
+            </div>
+            <div class="map-card map-validate" style="color:var(--gtfs-purple)"><span class="d" style="background:var(--gtfs-purple)"></span> Valid GTFS-Flex zone</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== PUBLISHING BAND ============================== -->
+<section class="section band-cream">
+  <div class="wrap split reverse">
+    <div>
+      <p class="eyebrow">Publish &amp; host a GTFS feed</p>
+      <h2 class="title">Publish once. Stay published.</h2>
+      <p class="lede">Host your feed at a stable URL that auto-updates, stand up a rider-facing mini-site and embeddable widget, and submit to the Mobility Database in one click — so Google Maps, Transit, and trip planners can find you.</p>
+      <a href="/pricing" class="btn btn-primary btn-md">See Pro pricing →</a>
+    </div>
+    <div class="split-visual reveal">
+      <div class="pub-diagram">
+        <div class="url-bar">
+          <span class="lock">🔒</span>
+          <span>feeds.gtfsx.com/mountain-line</span>
+          <span class="live"><span class="d"></span> Live · auto-updates</span>
+        </div>
+        <div class="pub-flow">
+          <div class="pub-node"><div class="t">Your feed</div><div class="s">edited in-browser</div></div>
+          <span class="pub-arrow">→</span>
+          <div class="pub-node"><div class="t">Stable URL</div><div class="s">+ rider mini-site</div></div>
+          <span class="pub-arrow">→</span>
+          <div class="pub-node"><div class="t">Trip planners</div><div class="s">Google · Transit</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== PLANNING SUITE BAND ============================== -->
+<section class="section band-dark">
+  <div class="wrap split">
+    <div>
+      <p class="eyebrow">Transit service planning</p>
+      <h2 class="title">Transit service planning, built into the editor</h2>
+      <p class="lede">The same feed you edit is the feed you analyze. Operating cost, demographic coverage, Title VI equity, stop spacing, and demand — computed from your GTFS, with documented methodology you can put in a grant narrative or a board memo. No GIS to set up, nothing uploaded.</p>
+      <a href="/planning" class="btn btn-primary btn-md">See all planning features →</a>
+    </div>
+    <div class="split-visual reveal">
+      <div class="plan-thumbs">
+        <div class="thumb">
+          <div class="cap">Operating cost <span class="v">$1.2M/yr</span></div>
+          <div class="bars">
+            <span style="height:40%;background:var(--gtfs-coral)"></span>
+            <span style="height:65%;background:var(--gtfs-coral)"></span>
+            <span style="height:52%;background:var(--gtfs-coral)"></span>
+            <span style="height:80%;background:var(--gtfs-gold)"></span>
+            <span style="height:60%;background:var(--gtfs-coral)"></span>
+          </div>
+        </div>
+        <div class="thumb">
+          <div class="cap">Coverage <span class="v">68% pop.</span></div>
+          <div class="coverage"></div>
+        </div>
+        <div class="thumb">
+          <div class="cap">Title VI equity <span class="v">passes</span></div>
+          <div class="equity">
+            <span class="er" style="width:90%;background:var(--gtfs-teal)"></span>
+            <span class="er" style="width:72%;background:var(--gtfs-gold)"></span>
+            <span class="er" style="width:84%;background:var(--gtfs-teal)"></span>
+            <span class="er" style="width:60%;background:var(--gtfs-purple)"></span>
+          </div>
+        </div>
+        <div class="thumb">
+          <div class="cap">Demand <span class="v">+12% est.</span></div>
+          <div class="donut" style="background:conic-gradient(var(--gtfs-coral) 0 62%, var(--gtfs-teal) 62% 84%, rgba(255,248,240,0.18) 84% 100%)"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== VIDEO BAND ============================== -->
+<section class="section">
+  <div class="wrap">
+    <div class="section-head center">
+      <p class="eyebrow">See it in action</p>
+      <h2 class="title">From blank map to published feed in a few minutes</h2>
+      <p class="lede">Watch a real feed come together — draw a route, place stops, add a Flex zone, validate, and publish.</p>
+    </div>
+    <div class="video-slot reveal" role="img" aria-label="Overview video — coming soon">
+      <div class="play" aria-hidden="true"></div>
+      <p class="note"><b>VIDEO SLOT</b> · 16:9 overview, 60–90s, captioned<br>Poster frame doubles as the page og:image</p>
+    </div>
+    <div style="text-align:center;margin-top:28px">
+      <a href="/editor" class="btn btn-primary btn-md" data-cta="open-editor">Open the editor →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== PRICING TEASER ============================== -->
+<section class="section band-cream">
+  <div class="wrap">
+    <div class="section-head center">
+      <p class="eyebrow">Transparent pricing</p>
+      <h2 class="title">Skip the procurement. Get started in minutes.</h2>
+      <p class="lede">No quotes, no procurement cycle. Pick a plan and you're working in minutes.</p>
+    </div>
+    <div class="price-grid">
+
+      <div class="price-card reveal">
+        <div class="pname">Free</div>
+        <div class="pprice">$0</div>
+        <p class="pwho">Create, edit, validate, export.</p>
+        <ul>
+          <li>Full map-based editor</li>
+          <li>GTFS-Flex authoring</li>
+          <li>Live spec validation</li>
+          <li>Export spec-clean <span class="mono" style="font-size:12px">.zip</span></li>
+        </ul>
+        <div class="pcta"><a href="/editor" class="btn btn-ghost btn-full btn-sm" data-cta="open-editor">Open the editor</a></div>
+      </div>
+
+      <div class="price-card feature reveal">
+        <span class="ribbon">Most popular</span>
+        <div class="pname">Pro</div>
+        <div class="pprice">$49 <span class="per">/mo</span></div>
+        <p class="pwho">Host and publish, kept current.</p>
+        <ul>
+          <li>Everything in Free</li>
+          <li>Stable auto-updating feed URL</li>
+          <li>Rider mini-site + widgets</li>
+          <li>One-click Mobility Database submission</li>
+        </ul>
+        <div class="pcta"><a href="/pricing" class="btn btn-primary btn-full btn-sm">Upgrade to Pro</a></div>
+      </div>
+
+      <div class="price-card reveal">
+        <div class="pname">Agency</div>
+        <div class="pprice">$299 <span class="per">/mo</span></div>
+        <p class="pwho">Plan service as a team — about ⅙ the price of Remix.</p>
+        <ul>
+          <li>Everything in Pro</li>
+          <li>Cost, coverage &amp; Title VI analyses</li>
+          <li>Scenario comparison</li>
+          <li>Team seats &amp; service alerts</li>
+        </ul>
+        <div class="pcta"><a href="/pricing" class="btn btn-ghost btn-full btn-sm">Start trial</a></div>
+      </div>
+
+    </div>
+    <p class="price-compare"><a href="/pricing" class="textlink">Compare all plans →</a></p>
+  </div>
+</section>
+
+<!-- ============================== "WHY GTFS·X" COMPARISON ============================== -->
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Why GTFS·X</p>
+      <h2 class="title">Fast, Easy Self-Serve Route and GTFS Editing</h2>
+      <p class="lede">You open a browser tab and you're editing in a minute — free. Here's the contrast.</p>
+    </div>
+    <div class="compare-wrap reveal">
+      <table class="compare">
+        <thead>
+          <tr>
+            <th scope="col"></th>
+            <th scope="col" class="us">GTFS·X</th>
+            <th scope="col">Managed services</th>
+            <th scope="col">Enterprise platforms</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Time to first feed</td><td class="us">Minutes</td><td class="dim">Weeks</td><td class="dim">Days–weeks</td></tr>
+          <tr><td>Signup to start</td><td class="us">None</td><td class="dim">Account + onboarding</td><td class="dim">Enterprise onboarding</td></tr>
+          <tr><td>Pricing</td><td class="us">Published, from $0</td><td class="dim">Quote</td><td class="dim">Quote</td></tr>
+          <tr><td>GTFS-Flex self-serve</td><td class="us">Yes</td><td class="dim">Service only</td><td class="dim">Limited</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="compare-cta">
+      <a href="/compare/trillium" class="textlink">Compare vs Trillium →</a>
+      <a href="/compare/remix" class="textlink">Compare vs Remix →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== ENTERPRISE / STATE DOT — low-key strip ============================== -->
+<div class="wrap">
+  <div class="ent-strip">
+    <p class="ent-line">
+      <strong>Running a statewide or multi-agency program?</strong>
+      GTFS·X has an Enterprise tier for state DOTs, RTAP networks, and consortiums.
+      <a href="/use-cases/state-dot/" class="textlink">Learn more →</a>
+    </p>
+  </div>
+</div>
+
+<!-- ============================== FINAL CTA ============================== -->
+<section class="section final">
+  <div class="wrap">
+    <h2 class="title">Open a tab. Start editing.</h2>
+    <p class="lede">The fast, easy GTFS editor and service planner — right in your browser.</p>
+    <div class="final-ctas">
+      <a href="/editor" class="btn btn-primary btn-lg" data-cta="open-editor">Open the editor →</a>
+      <a href="/pricing" class="btn btn-ghost btn-lg">See pricing</a>
+    </div>
+    <p class="micro">Free · no signup required.</p>
+  </div>
+</section>
+
+</main>
+
+<!-- ============================== FOOTER ============================== -->
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-top">
+      <div>
+        <img class="lockup" src="/gtfsx-lockup-on-dark.svg" alt="GTFS·X" width="100" height="28">
+        <p class="blurb">The fast, easy GTFS editor and service planner. Built for transit agencies, planners, and consultants.</p>
+        <div class="social">
+          <a href="https://twitter.com/gtfsxapp" aria-label="GTFS·X on X">X</a>
+          <a href="https://www.linkedin.com/company/gtfsx" aria-label="GTFS·X on LinkedIn">in</a>
+          <a href="https://github.com/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
+        </div>
+      </div>
+      <div class="fcol">
+        <h4>Product</h4>
+        <a href="/editor" data-cta="open-editor">Editor</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/planning">Planning</a>
+        <a href="/pricing">Publishing</a>
+      </div>
+      <div class="fcol">
+        <h4>Learn</h4>
+        <a href="/learn/gtfs/">What is GTFS</a>
+        <a href="/learn/gtfs-flex/">What is GTFS-Flex</a>
+        <a href="/learn/publish-gtfs-feed/">Publish a GTFS feed</a>
+        <a href="/feed-health/">GTFS Dashboard</a>
+        <a href="/docs/">Docs</a>
+      </div>
+      <div class="fcol">
+        <h4>Compare</h4>
+        <a href="/compare/trillium">vs Trillium</a>
+        <a href="/compare/remix">vs Remix</a>
+        <a href="/compare/rtap">vs RTAP</a>
+      </div>
+      <div class="fcol">
+        <h4>Company</h4>
+        <a href="/about">About</a>
+        <a href="/blog">Blog</a>
+        <a href="mailto:hello@gtfsx.com">Contact</a>
+        <a href="/use-cases/state-dot/">State DOTs</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 GTFS·X · Vector &amp; Vertex</span>
+      <span class="mono" style="font-size:12px">hello@gtfsx.com</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Hamburger (mobile)
+  (function () {
+    var btn = document.querySelector('.hamburger');
+    var links = document.querySelector('.nav-links');
+    if (btn && links) {
+      btn.addEventListener('click', function () {
+        var open = links.style.display === 'flex';
+        links.style.display = open ? '' : 'flex';
+        links.style.cssText += open ? '' : 'position:absolute;top:70px;left:0;right:0;flex-direction:column;background:var(--gtfs-cream);padding:18px 28px;gap:16px;border-bottom:1px solid var(--border-strong);';
+        btn.setAttribute('aria-expanded', String(!open));
+      });
+    }
+  })();
+
+  // Scroll reveal
+  (function () {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+  })();
+</script>
+
+</body>
+</html>

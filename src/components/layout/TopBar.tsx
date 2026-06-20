@@ -135,7 +135,7 @@ export function TopBar() {
           <button
             onClick={handleSaveClick}
             disabled={saving || (!isDirty && !!activeServerProjectId)}
-            className="hidden min-[600px]:inline-block px-3 py-1.5 rounded-lg font-heading font-bold text-xs bg-teal text-white hover:bg-[#0e7e75] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            className="hidden min-[860px]:inline-block px-3 py-1.5 rounded-lg font-heading font-bold text-xs bg-teal text-white hover:bg-[#0e7e75] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
             title={
               !currentUser
                 ? 'Sign in to save'
@@ -158,7 +158,7 @@ export function TopBar() {
         {/* Editor actions — hidden on phones; available in the mobile menu. */}
         <button
           onClick={() => setShowImport(true)}
-          className="hidden min-[600px]:inline-block px-3 sm:px-4 py-2 rounded-lg font-heading font-bold text-sm bg-sand text-brown hover:bg-coral-light hover:text-coral transition-colors whitespace-nowrap shrink-0"
+          className="hidden min-[860px]:inline-block px-3 sm:px-4 py-2 rounded-lg font-heading font-bold text-sm bg-sand text-brown hover:bg-coral-light hover:text-coral transition-colors whitespace-nowrap shrink-0"
         >
           Import
         </button>
@@ -166,14 +166,15 @@ export function TopBar() {
           onClick={() => setShowExport(true)}
           disabled={!hasContent}
           title={hasContent ? 'Export GTFS feed' : 'Add some routes or stops before exporting'}
-          className="hidden min-[600px]:inline-block px-3 sm:px-4 py-2 rounded-lg font-heading font-bold text-sm bg-coral text-white hover:bg-[#d4603a] transition-colors whitespace-nowrap shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-coral"
+          className="hidden min-[860px]:inline-block px-3 sm:px-4 py-2 rounded-lg font-heading font-bold text-sm bg-coral text-white hover:bg-[#d4603a] transition-colors whitespace-nowrap shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-coral"
         >
           <span className="hidden sm:inline">Export GTFS</span>
           <span className="sm:hidden">Export</span>
         </button>
 
-        {/* Mobile-only overflow menu containing Save / Import / Export. */}
-        <div className="min-[600px]:hidden relative shrink-0">
+        {/* Overflow menu containing Save / Import / Export — shown until the bar
+            is wide enough (≥860px) to lay the buttons out without overflowing. */}
+        <div className="min-[860px]:hidden relative shrink-0">
           <button
             onClick={() => setMobileMenuOpen((v) => !v)}
             aria-label="Menu"
@@ -229,9 +230,9 @@ export function TopBar() {
           )}
         </div>
 
-        {/* UserMenu (avatar) — desktop only; on phones its items live inside
-            the hamburger above so the bar stops overflowing. */}
-        <div className="hidden min-[600px]:flex">
+        {/* UserMenu (avatar) — wide layouts only; below 860px its items live
+            inside the hamburger above so the bar stops overflowing. */}
+        <div className="hidden min-[860px]:flex">
           <UserMenu />
         </div>
       </div>

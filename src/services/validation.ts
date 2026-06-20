@@ -35,7 +35,8 @@ export function runValidation(state: AppStore): ValidationMessage[] {
 
   // Agency checks
   if (state.agencies.length === 0) {
-    messages.push(msg('error', 'At least one agency is required'));
+    // entity_type 'agency' so ValidationPanel deep-links this to the Agency panel.
+    messages.push(msg('error', 'At least one agency is required', 'agency'));
   } else {
     for (const a of state.agencies) {
       if (!a.agency_name) messages.push(msg('error', `Agency "${a.agency_id}" is missing a name`, 'agency', a.agency_id));

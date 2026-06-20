@@ -326,6 +326,7 @@ function App() {
         <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<EditorRoute />} />
+          <Route path="/editor" element={<EditorRoute />} />
           <Route path="/demo" element={<EditorRoute demo />} />
           <Route path="/import" element={<DeepLinkImportPage />} />
           <Route path="/pricing" element={<PricingPage />} />
@@ -356,6 +357,7 @@ function App() {
       <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/" element={<EditorRoute />} />
+        <Route path="/editor" element={<EditorRoute />} />
         <Route path="/demo" element={<EditorRoute demo />} />
         <Route path="/import" element={<DeepLinkImportPage />} />
         <Route path="/login" element={<LoginPage />} />

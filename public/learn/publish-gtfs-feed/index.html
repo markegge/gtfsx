@@ -187,14 +187,72 @@
       <hr>
       <p><em>Build and publish your GTFS feed at <a href="/">gtfsx.com</a>. No signup required to start.</em></p>
     </main>
-    <footer>
-      <a href="/">Editor</a>
-      <a href="/about/">About</a>
-      <a href="/docs/">Docs</a>
-      <a href="/learn/gtfs/">What is GTFS?</a>
-      <a href="/learn/gtfs-flex/">What is GTFS-Flex?</a>
-      <a href="/docs/deep-links/">Deep-link integration</a>
-    </footer>
+    <style>
+footer.gx-footer { max-width: none; width: 100%; margin: 0; padding: 0; background: #3D2E22; color: #FFF8F0; font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif; box-sizing: border-box; }
+footer.gx-footer * { box-sizing: border-box; }
+footer.gx-footer a { text-decoration: none; }
+footer.gx-footer .gx-wrap { max-width: 1180px; margin: 0 auto; padding: 64px 28px 36px; }
+footer.gx-footer .gx-top { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 36px; }
+footer.gx-footer .gx-lockup { height: 28px; width: auto; display: block; margin-bottom: 16px; }
+footer.gx-footer .gx-blurb { font-size: 13.5px; color: rgba(255,248,240,0.6); line-height: 1.55; max-width: 240px; margin: 0; }
+footer.gx-footer .gx-social { display: flex; gap: 10px; margin-top: 18px; }
+footer.gx-footer .gx-social a { width: 34px; height: 34px; border-radius: 9px; background: rgba(255,248,240,0.08); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #FFF8F0; transition: background 0.12s; }
+footer.gx-footer .gx-social a:hover { background: #E8734A; }
+footer.gx-footer .gx-col h4 { font-family: "Nunito", ui-rounded, system-ui, sans-serif; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.07em; color: rgba(255,248,240,0.5); margin: 0 0 16px; }
+footer.gx-footer .gx-col a { display: block; font-size: 14px; color: rgba(255,248,240,0.82); margin-bottom: 11px; transition: color 0.12s; }
+footer.gx-footer .gx-col a:hover { color: #E8734A; }
+footer.gx-footer .gx-bottom { max-width: 1180px; margin: 48px auto 0; padding: 24px 28px 0; border-top: 1px solid rgba(255,248,240,0.12); display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 13px; color: rgba(255,248,240,0.5); }
+footer.gx-footer .gx-mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+@media (max-width: 780px) { footer.gx-footer .gx-top { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 480px) { footer.gx-footer .gx-top { grid-template-columns: 1fr; } }
+</style>
+<footer class="gx-footer">
+  <div class="gx-wrap">
+    <div class="gx-top">
+      <div>
+        <img class="gx-lockup" src="/gtfsx-lockup-on-dark.svg" alt="GTFS·X" width="100" height="28">
+        <p class="gx-blurb">The fast, easy GTFS editor and service planner. Built for transit agencies, planners, and consultants.</p>
+        <div class="gx-social">
+          <a href="https://twitter.com/gtfsxapp" aria-label="GTFS·X on X">X</a>
+          <a href="https://www.linkedin.com/company/gtfsx" aria-label="GTFS·X on LinkedIn">in</a>
+          <a href="https://github.com/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
+        </div>
+      </div>
+      <div class="gx-col">
+        <h4>Product</h4>
+        <a href="/editor">Editor</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/planning">Planning</a>
+        <a href="/pricing">Publishing</a>
+      </div>
+      <div class="gx-col">
+        <h4>Learn</h4>
+        <a href="/learn/gtfs/">What is GTFS</a>
+        <a href="/learn/gtfs-flex/">What is GTFS-Flex</a>
+        <a href="/learn/publish-gtfs-feed/">Publish a GTFS feed</a>
+        <a href="/feed-health/">GTFS Dashboard</a>
+        <a href="/docs/">Docs</a>
+      </div>
+      <div class="gx-col">
+        <h4>Compare</h4>
+        <a href="/compare/trillium/">vs Trillium</a>
+        <a href="/compare/remix/">vs Remix</a>
+        <a href="/compare/gtfs-builder-rtap/">vs RTAP</a>
+      </div>
+      <div class="gx-col">
+        <h4>Company</h4>
+        <a href="/about/">About</a>
+        <a href="/blog">Blog</a>
+        <a href="mailto:hello@gtfsx.com">Contact</a>
+        <a href="/use-cases/state-dot/">State DOTs</a>
+      </div>
+    </div>
+    <div class="gx-bottom">
+      <span>© 2026 GTFS·X · Vector &amp; Vertex</span>
+      <span class="gx-mono">hello@gtfsx.com</span>
+    </div>
+  </div>
+</footer>
     <script>
       (function () {
         fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })

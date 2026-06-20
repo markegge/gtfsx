@@ -161,12 +161,21 @@ export function TimetableGrid() {
   const [repeatCopies, setRepeatCopies] = useState('5');
   const [repeatError, setRepeatError] = useState<string | null>(null);
 
-  // B1 "Generate service" — toggled from the toolbar. The empty state (a pattern
-  // with stops but no trips) shows the form automatically; this lets the user
-  // re-open it to add another span of service after trips exist.
+  // B1 "Generate service" — opens the GenerateServiceForm as a modal. Triggered
+  // by the toolbar control and by the empty-state button (a pattern with stops
+  // but no trips). The modal lets the user lay out a service span; on the empty
+  // state it's the primary call to action.
   const [showGenerate, setShowGenerate] = useState(false);
   // B2 "Running time" editor — re-time every trip on the pattern.
   const [showRuntime, setShowRuntime] = useState(false);
+
+  // Esc closes the Generate service modal (matches the app's modal affordance).
+  useEffect(() => {
+    if (!showGenerate) return;
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') setShowGenerate(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showGenerate]);
 
   // Duplicate trip prompt state
   const [dupPrompt, setDupPrompt] = useState<{ tripId: string; defaultStartTime: string } | null>(null);
@@ -654,7 +663,7 @@ export function TimetableGrid() {
             </button>
           )}
           <button
-            onClick={() => { setShowGenerate((v) => !v); setShowRuntime(false); }}
+            onClick={() => { setShowGenerate(true); setShowRuntime(false); }}
             disabled={!hasStops}
             title="Generate a whole span of service from a start, end, headway and run time"
             className={`px-3 py-1 rounded-md text-xs font-bold whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
@@ -697,8 +706,8 @@ export function TimetableGrid() {
 
       {/* Cell-state legend. Three states per stop: a typed time, a blank
           served stop (interpolated), and a skipped stop. Kept terse so it
-          doesn't crowd the grid. */}
-      {hasStops && (
+          doesn't crowd the grid. Hidden in the empty state (no grid to explain). */}
+      {hasStops && routeTrips.length > 0 && (
         <p className="px-2 mb-1 text-[10px] text-warm-gray/80 whitespace-nowrap overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           Type a time to set it. Leave a stop blank for "served, time interpolated." Hover a cell and click
           <span className="mx-0.5 font-semibold text-red-500">&times;</span>
@@ -706,22 +715,6 @@ export function TimetableGrid() {
           <span className="mx-0.5 font-semibold text-warm-gray/60 line-through">SKIP</span>
           ).
         </p>
-      )}
-
-      {/* B1 Generate service — auto-shown when the pattern has stops but no
-          trips yet (the empty state), or toggled from the toolbar to add more. */}
-      {hasStops && (showGenerate || routeTrips.length === 0) && activeServiceId && (
-        <div className="mx-2 mb-2 shrink-0">
-          <GenerateServiceForm
-            routeId={selectedRouteId!}
-            directionId={directionId}
-            shapeId={effectiveShapeId ?? undefined}
-            serviceId={activeServiceId}
-            headsign={route?.route_short_name || undefined}
-            onGenerated={() => setShowGenerate(false)}
-            onCancel={routeTrips.length > 0 ? () => setShowGenerate(false) : undefined}
-          />
-        </div>
       )}
 
       {/* B2 Running-time editor */}
@@ -837,6 +830,26 @@ export function TimetableGrid() {
               </tr>
             </tbody>
           </table>
+        ) : routeTrips.length === 0 ? (
+          // Empty state — the pattern has stops but no trips yet. Surface a
+          // single, prominent call to action centered where the grid would be
+          // (replacing the old inline form). "Generate service" opens the modal.
+          <div className="h-full min-h-[16rem] flex flex-col items-center justify-center text-center px-6 py-10">
+            <span className="text-coral mb-3" aria-hidden>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" />
+              </svg>
+            </span>
+            <p className="text-sm text-warm-gray mb-4 max-w-xs">
+              No trips yet — generate a service pattern to get started.
+            </p>
+            <button
+              onClick={() => { setShowGenerate(true); setShowRuntime(false); }}
+              className="px-6 py-3 bg-coral text-white rounded-xl font-heading font-bold text-base shadow-sm hover:bg-[#d4603a] transition-colors"
+            >
+              ✨ Generate service
+            </button>
+          </div>
         ) : (
         <table className="w-full text-xs border-collapse min-w-[600px]">
           <thead>
@@ -1275,6 +1288,28 @@ export function TimetableGrid() {
                 {estimating ? 'Estimating…' : 'Estimate'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* B1 Generate service — modal. Opened by the toolbar control and by the
+          empty-state button. GenerateServiceForm is a self-contained card; we
+          drop it onto a backdrop (click-out or Esc dismisses). On generate it
+          closes and the populated grid renders. */}
+      {showGenerate && hasStops && activeServiceId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setShowGenerate(false)} />
+          <div className="relative w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <GenerateServiceForm
+              routeId={selectedRouteId!}
+              directionId={directionId}
+              shapeId={effectiveShapeId ?? undefined}
+              serviceId={activeServiceId}
+              headsign={route?.route_short_name || undefined}
+              variant="card"
+              onGenerated={() => setShowGenerate(false)}
+              onCancel={() => setShowGenerate(false)}
+            />
           </div>
         </div>
       )}

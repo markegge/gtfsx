@@ -64,6 +64,11 @@ export interface Shape {
   shape_id: string;
   points: ShapePoint[];
   _name?: string; // UI-only label for the shape (GTFS shapes.txt has no name); stripped on export
+  // UI-only: the route a freshly DRAWN shape belongs to before it has any trip
+  // or route_stop, so it doesn't vanish from the Route Shapes panel / map (which
+  // otherwise derive a shape's route from its trips). Editor association only —
+  // shapes.txt has no route link; stripped on export.
+  _route_id?: string;
 }
 
 export interface Stop {

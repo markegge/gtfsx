@@ -120,18 +120,22 @@ function PlaceStopDialog() {
     }> = [];
     for (const shape of shapes) {
       const trip = trips.find((t) => t.shape_id === shape.shape_id);
-      if (!trip) continue;
-      const route = routes.find((r) => r.route_id === trip.route_id);
+      // A freshly drawn shape has no trip yet — fall back to its draft route
+      // association so it's still an assignable target for placing stops.
+      const routeId = trip?.route_id ?? shape._route_id;
+      if (!routeId) continue;
+      const route = routes.find((r) => r.route_id === routeId);
       if (!route) continue;
-      const k = `${route.route_id}__${trip.direction_id}`;
+      const directionId = trip?.direction_id ?? 0;
+      const k = `${route.route_id}__${directionId}`;
       if (seen.has(k)) continue;
       seen.add(k);
       const name = route.route_short_name || route.route_long_name || route.route_id;
       out.push({
         key: k,
         routeId: route.route_id,
-        directionId: trip.direction_id,
-        label: `${name} — ${directionName(route, trip.direction_id)}`,
+        directionId,
+        label: `${name} — ${directionName(route, directionId)}`,
         color: route.route_color,
       });
     }

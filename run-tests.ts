@@ -26,6 +26,7 @@ import { getUSHolidaysForYear, getUSHolidaysInRange } from './src/utils/holidays
 import { pointInPolygon } from './src/utils/geometry';
 import { stopsInsidePolygon } from './src/components/fares/fareZoneHelpers';
 import { computeShapePatterns } from './src/components/ui/shapePatterns';
+import { createDrawnShape, deriveRouteShapeIds } from './src/services/routeShapes';
 import { gtfsTimeToSeconds, secondsToGtfsTime } from './src/utils/time';
 import type { RouteStop, Stop, Trip } from './src/types/gtfs';
 
@@ -1127,6 +1128,51 @@ async function main() {
   assert('estimate-skip: row count stays 4 (estimate never un-skips)',
     s().stopTimes.filter(st => st.trip_id === 'IST').length === 4,
     `got ${s().stopTimes.filter(st => st.trip_id === 'IST').length}`);
+
+  // Drawing a route shape must create a SHAPE only — no placeholder/stub trip
+  // (which used to show as an empty trip in the timetable). The drawn shape is
+  // associated to its route via the editor-only Shape._route_id, so it still
+  // surfaces in the Route Shapes panel (deriveRouteShapeIds) and on the map.
+  console.log('\nPhase 24: drawn shape has no stub trip but stays route-associated');
+  s().setFlexZones([]);
+  s().setRoutes([{ route_id: 'DR', agency_id: 'A', route_short_name: 'D', route_long_name: 'Draw Route', route_type: 3 }]);
+  s().setStops([
+    { stop_id: 'DA', stop_name: 'DA', stop_lat: 45.0, stop_lon: -111.0, location_type: 0, wheelchair_boarding: 0 },
+  ]);
+  s().setShapes([]);
+  s().setRouteStops([]);
+  s().setTrips([]);
+  s().setStopTimes([]);
+
+  const tripsBeforeDraw = s().trips.length;
+  const drawnShapeId = createDrawnShape(
+    [[-111.00, 45.00], [-111.01, 45.01], [-111.02, 45.02]], 'DR',
+  );
+  assert('draw-shape: shape was created', s().shapes.some(sh => sh.shape_id === drawnShapeId));
+  assert('draw-shape: NO stub trip created', s().trips.length === tripsBeforeDraw,
+    `trips went ${tripsBeforeDraw} -> ${s().trips.length}`);
+  assert('draw-shape: tagged with its route via _route_id',
+    s().shapes.find(sh => sh.shape_id === drawnShapeId)?._route_id === 'DR');
+  assert('draw-shape: distances were recalculated',
+    (s().shapes.find(sh => sh.shape_id === drawnShapeId)?.points.at(-1)?.shape_dist_traveled ?? 0) > 0);
+
+  // Appears in the route's shapes (the panel's source) with ZERO trips.
+  const drawnDerived = deriveRouteShapeIds('DR', s().trips, s().routeStops, s().shapes);
+  assert('draw-shape: appears in route shapes with zero trips', drawnDerived.includes(drawnShapeId));
+
+  // Once it gains a route_stop, it stays listed exactly once (draft deduped).
+  s().addRouteStop({ route_id: 'DR', stop_id: 'DA', direction_id: 0, stop_sequence: 0, _snapped: false, shape_id: drawnShapeId });
+  const drawnDerived2 = deriveRouteShapeIds('DR', s().trips, s().routeStops, s().shapes);
+  assert('draw-shape: still listed once after gaining a route_stop',
+    drawnDerived2.filter(id => id === drawnShapeId).length === 1);
+
+  // A shape with neither a draft tag nor a trip/route_stop on this route is NOT listed.
+  s().addShape({ shape_id: 'UNREL', points: [
+    { shape_pt_lat: 1, shape_pt_lon: 1, shape_pt_sequence: 0, shape_dist_traveled: 0 },
+    { shape_pt_lat: 1, shape_pt_lon: 2, shape_pt_sequence: 1, shape_dist_traveled: 0 },
+  ] });
+  assert('draw-shape: unrelated untagged shape is not listed for the route',
+    !deriveRouteShapeIds('DR', s().trips, s().routeStops, s().shapes).includes('UNREL'));
 
   // ---- SUMMARY ----
   console.log(`\n${'='.repeat(50)}`);

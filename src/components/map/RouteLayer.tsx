@@ -60,7 +60,11 @@ export function RouteLayer({ simplified = false }: { simplified?: boolean }) {
     .filter((shape) => !(mapMode === 'edit_shape' && shape.shape_id === editingShapeId))
     .map((shape) => {
       const trip = trips.find((t) => t.shape_id === shape.shape_id);
-      const route = trip ? routes.find((r) => r.route_id === trip.route_id) : null;
+      // Resolve the shape's route via its trip, falling back to the editor-only
+      // draft association for a freshly drawn shape that has no trip yet — so it
+      // still renders in its route color and highlights when selected.
+      const routeId = trip?.route_id ?? shape._route_id;
+      const route = routeId ? routes.find((r) => r.route_id === routeId) : null;
       // Skip hidden routes or individually hidden shapes
       if (route && hiddenRouteSet.has(route.route_id)) return null;
       if (hiddenShapeSet.has(shape.shape_id)) return null;

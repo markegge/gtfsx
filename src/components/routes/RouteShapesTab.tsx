@@ -4,6 +4,7 @@ import { generateId } from '../../services/idGenerator';
 import { snapToRoad } from '../../services/snapToRoad';
 import { simplifyShapePoints, SIMPLIFY_LEVELS } from '../../services/simplifyShape';
 import { duplicateShapePoints } from '../../services/shapeHelpers';
+import { deriveRouteShapeIds } from '../../services/routeShapes';
 
 /**
  * Shapes subpanel for the Routes editor. Extracted out of RouteEditor.tsx so
@@ -54,14 +55,12 @@ export function RouteShapesTab() {
   const routeShapes = useMemo(() => {
     if (!selectedRouteId) return [];
     const routeTrips = trips.filter((t) => t.route_id === selectedRouteId);
-    // Derive the route's shapes from the UNION of (a) its trips' shape_ids and
-    // (b) its routeStops' shape_ids. A shape that still has stops on this route
-    // stays listed even after its last trip is deleted — deleting a trip never
-    // removes the shape from state.shapes, so the panel shouldn't drop it.
-    const shapeIds = [...new Set([
-      ...routeTrips.map((t) => t.shape_id),
-      ...routeStops.filter((rs) => rs.route_id === selectedRouteId).map((rs) => rs.shape_id),
-    ].filter(Boolean))] as string[];
+    // Derive the route's shapes from the UNION of its trips' shape_ids, its
+    // routeStops' shape_ids, and freshly drawn shapes tagged with this route
+    // (Shape._route_id) that have no trip/routeStop yet — so a just-drawn shape
+    // doesn't vanish from this panel before it gets stops or trips. (A shape
+    // with stops stays listed even after its last trip is deleted.)
+    const shapeIds = deriveRouteShapeIds(selectedRouteId, trips, routeStops, shapes);
     return shapeIds.map((sid) => {
       const shape = shapes.find((s) => s.shape_id === sid);
       const shapeTrips = routeTrips.filter((t) => t.shape_id === sid);

@@ -26,9 +26,8 @@ import type { ShapePoint } from '../../types/gtfs';
 import { generateId } from '../../services/idGenerator';
 import { ROUTE_COLORS, getContrastTextColor } from '../../utils/colors';
 import { snapToRoadDetailed, type SnapStatus } from '../../services/snapToRoad';
-import { simplifyShapePoints } from '../../services/simplifyShape';
 import { suggestStopName } from '../../services/suggestStopName';
-import { ensureDefaultCalendar } from '../../services/defaultCalendar';
+import { createDrawnShape, deriveRouteShapeIds } from '../../services/routeShapes';
 import { trimShapeAtPoint } from '../../services/shapeHelpers';
 import nearestPointOnLine from '@turf/nearest-point-on-line';
 import distance from '@turf/distance';
@@ -58,47 +57,6 @@ function createBlankRoute(): string {
   });
   st.selectRoute(id);
   return id;
-}
-
-/** Create a shape from drawn coords + a stub trip pointing at it, for the given
- *  route and direction. Shared by the draw-finish handler and the snap-warning
- *  "keep unsnapped" path. */
-function createShapeAndTrip(coords: [number, number][], routeId: string, direction: 0 | 1) {
-  const shapeId = generateId('shape');
-  let points = coords.map((c, i) => ({
-    shape_pt_lat: c[1],
-    shape_pt_lon: c[0],
-    shape_pt_sequence: i,
-    shape_dist_traveled: 0,
-  }));
-  // Auto-simplify if the drawn line has too many points (freehand creates ~1 per pixel)
-  if (points.length > 20) {
-    points = simplifyShapePoints(points, 0.00005); // Light simplify ~5m
-  }
-
-  const st = useStore.getState();
-  st.addShape({ shape_id: shapeId, points });
-  st.recalcShapeDistances(shapeId);
-
-  const route = st.routes.find((r) => r.route_id === routeId);
-  const routeName = route?.route_short_name || route?.route_long_name || '';
-  // Materialize a Default Calendar on the fly if the project has no calendars
-  // yet — otherwise the trip would point at the hardcoded "service-1"
-  // placeholder and the timetable would show two unrelated services later.
-  const serviceId = ensureDefaultCalendar();
-  const svcIdx = st.calendars.findIndex((c) => c.service_id === serviceId) + 1 || 1;
-  const prefix = (routeName || 'trip').replace(/\s+/g, '').slice(0, 4).toLowerCase();
-  const existingIds = new Set(st.trips.map((t) => t.trip_id));
-  let tripId = `${svcIdx}${prefix}_new`;
-  if (existingIds.has(tripId)) { let s = 2; while (existingIds.has(`${tripId}${s}`)) s++; tripId = `${tripId}${s}`; }
-  st.addTrip({
-    trip_id: tripId,
-    route_id: routeId,
-    service_id: serviceId,
-    direction_id: direction,
-    shape_id: shapeId,
-    trip_headsign: '',
-  });
 }
 
 /** Leave draw mode and open the Route Shapes editor for the route just drawn. */
@@ -836,7 +794,11 @@ export function MapView() {
         const routeId = currentDrawingNewRoute || !currentDrawingRouteId
           ? createBlankRoute()
           : currentDrawingRouteId;
-        createShapeAndTrip(coords, routeId, drawingDirection);
+        // Create the shape only — no stub trip. The shape is associated to its
+        // route via the editor-only Shape._route_id (see createDrawnShape) so it
+        // still shows in the Route Shapes panel / on the map without a
+        // placeholder trip cluttering the timetable.
+        createDrawnShape(coords, routeId);
         useStore.getState().setDrawingNewRoute(false);
         finishDrawingTo(routeId);
       };
@@ -883,7 +845,7 @@ export function MapView() {
     const routeId = snapWarning.isNewRoute || !snapWarning.routeId
       ? createBlankRoute()
       : snapWarning.routeId;
-    createShapeAndTrip(snapWarning.rawCoords, routeId, snapWarning.direction);
+    createDrawnShape(snapWarning.rawCoords, routeId);
     useStore.getState().setDrawingNewRoute(false);
     finishDrawingTo(routeId);
     setSnapWarning(null);
@@ -995,17 +957,22 @@ export function MapView() {
       const hasRoute = !!currentState.selectedRouteId;
 
       if (hasRoute && currentState.stopPlacementMode === 'snap_to_route') {
-        const routeTrips = currentState.trips.filter((t) => t.route_id === currentState.selectedRouteId);
-        let shapeTrips = routeTrips.filter((t) => t.shape_id);
+        // Candidate shapes to snap to = the route's shapes derived from trips,
+        // route_stops, AND freshly drawn drafts (Shape._route_id). Deriving from
+        // shapes (not just trips) means a route shape drawn but not yet given
+        // trips is still snap-able for its first stops.
+        let candidateShapeIds = deriveRouteShapeIds(
+          currentState.selectedRouteId, currentState.trips, currentState.routeStops, currentState.shapes,
+        );
         // When a specific shape is being edited, snap only to it — out-and-back
         // shapes overlap, so "nearest shape" would be ambiguous.
         if (currentState.stopPlacementShapeId) {
-          shapeTrips = shapeTrips.filter((t) => t.shape_id === currentState.stopPlacementShapeId);
+          candidateShapeIds = candidateShapeIds.filter((id) => id === currentState.stopPlacementShapeId);
         }
         let bestDist = Infinity;
 
-        for (const trip of shapeTrips) {
-          const shape = currentState.shapes.find((s) => s.shape_id === trip.shape_id);
+        for (const shapeId of candidateShapeIds) {
+          const shape = currentState.shapes.find((s) => s.shape_id === shapeId);
           if (!shape || shape.points.length < 2) continue;
 
           const coords = shape.points.map((p) => [p.shape_pt_lon, p.shape_pt_lat] as [number, number]);
@@ -1018,8 +985,10 @@ export function MapView() {
             bestDist = dist;
             stopLat = snapped.geometry.coordinates[1];
             stopLon = snapped.geometry.coordinates[0];
-            bestDirectionId = trip.direction_id;
-            bestShapeId = trip.shape_id;
+            // Direction: prefer a trip on this shape; else the placement default.
+            bestDirectionId = currentState.trips.find((t) => t.shape_id === shapeId)?.direction_id
+              ?? currentState.stopPlacementDirection;
+            bestShapeId = shapeId;
           }
         }
       }

@@ -75,9 +75,12 @@ export function MapToolbar() {
     if (!state.selectedRouteId && state.shapes.length > 0) {
       const latestShape = state.shapes[state.shapes.length - 1];
       const trip = state.trips.find((t) => t.shape_id === latestShape.shape_id);
-      if (trip) {
-        state.selectRoute(trip.route_id);
-        state.setStopPlacementDirection(trip.direction_id);
+      // A freshly drawn shape has no trip yet — fall back to its draft route
+      // association so Add Stop still defaults to the route just drawn.
+      const routeId = trip?.route_id ?? latestShape._route_id;
+      if (routeId) {
+        state.selectRoute(routeId);
+        state.setStopPlacementDirection(trip?.direction_id ?? 0);
       }
     } else {
       ensureActiveRoute();

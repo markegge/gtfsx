@@ -58,11 +58,20 @@ export function AppBrand({
         className="flex items-center hover:opacity-80 transition-opacity"
         title={mode === 'editor' ? 'Start new project' : 'Home'}
       >
+        {/* Full "GTFS·X" lockup on roomy viewports; just the [X] mark below the
+            editor's mobile breakpoint (600px), where the wordmark crowds the top
+            bar. The static marketing pages keep their own full lockup. */}
         <img
           src={`${import.meta.env.BASE_URL}gtfsx-lockup.svg`}
           alt="GTFS·X"
           height="36"
-          className="shrink-0 h-9 w-auto"
+          className="hidden min-[600px]:block shrink-0 h-9 w-auto"
+        />
+        <img
+          src={`${import.meta.env.BASE_URL}gtfsx-mark.svg`}
+          alt="GTFS·X"
+          height="36"
+          className="block min-[600px]:hidden shrink-0 h-9 w-auto"
         />
       </button>
       {showTagline && (

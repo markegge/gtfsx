@@ -74,7 +74,6 @@ h3.sub { font-weight: 800; font-size: 20px; line-height: 1.2; }
 }
 .nav-inner { height: 70px; display: flex; align-items: center; gap: 28px; }
 .nav .lockup { height: 30px; }
-.nav .lockup-mark { display: none; height: 30px; }   /* X-only mark; shown on small screens */
 .nav-links { display: flex; align-items: center; gap: 26px; margin-left: auto; }
 .nav-links a { font-weight: 600; font-size: 15px; color: var(--gtfs-brown); transition: color var(--dur-fast) var(--ease); }
 .nav-links a:hover { color: var(--gtfs-coral-deep); }
@@ -355,9 +354,6 @@ h3.sub { font-weight: 800; font-size: 20px; line-height: 1.2; }
 }
 @media (max-width: 560px) {
   .wrap { padding: 0 20px; }
-  /* Super-small / mobile: drop the "GTFS" wordmark, keep just the [X] mark. */
-  .nav .lockup { display: none; }
-  .nav .lockup-mark { display: inline-block; }
   .trust-grid, .plan-thumbs { grid-template-columns: 1fr; }
   .footer-top { grid-template-columns: 1fr; }
   .hero-ctas .btn, .final-ctas .btn { width: 100%; }

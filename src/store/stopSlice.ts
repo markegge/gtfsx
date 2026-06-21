@@ -4,6 +4,13 @@ import type { TripSlice } from './tripSlice';
 import type { RouteSlice } from './routeSlice';
 import { generateId } from '../services/idGenerator';
 
+/** One stop's prior wheelchair_boarding, captured by a bulk fill so it can be
+ *  undone. */
+export interface WheelchairFill {
+  stop_id: string;
+  prev: number;
+}
+
 export interface StopSlice {
   stops: Stop[];
   addStop: (stop: Stop) => void;
@@ -13,6 +20,16 @@ export interface StopSlice {
    * nudged slightly so it doesn't sit exactly under the original. Returns the
    * new stop_id, or null if the source doesn't exist. */
   duplicateStop: (stop_id: string) => string | null;
+  /** Bulk-fill wheelchair_boarding = `value` on the given stops, but ONLY where
+   *  the stop has no accessible/not-accessible value yet — anything other than
+   *  1 or 2 (0 / undefined = "no information" = a gap per the GTFS spec) is
+   *  treated as missing. Never overwrites a stop that already has 1 or 2.
+   *  Returns the prior values of the stops it changed, so the caller can offer
+   *  an undo. */
+  fillMissingWheelchairBoarding: (stopIds: string[], value: number) => WheelchairFill[];
+  /** Revert a fillMissingWheelchairBoarding using its returned snapshot
+   *  (unconditional set — restores exactly what those stops had before). */
+  restoreWheelchairBoarding: (entries: WheelchairFill[]) => void;
   setStops: (stops: Stop[]) => void;
 }
 
@@ -61,5 +78,27 @@ export const createStopSlice: StateCreator<StopSlice, [['zustand/immer', never]]
     });
     return newId;
   },
+  fillMissingWheelchairBoarding: (stopIds, value) => {
+    const ids = new Set(stopIds);
+    const changed: WheelchairFill[] = [];
+    set((state) => {
+      for (const s of state.stops) {
+        if (!ids.has(s.stop_id)) continue;
+        const cur = s.wheelchair_boarding;
+        // Never overwrite a stop that already declares accessibility (1 or 2).
+        if (cur === 1 || cur === 2) continue;
+        changed.push({ stop_id: s.stop_id, prev: Number.isFinite(cur) ? cur : 0 });
+        s.wheelchair_boarding = value;
+      }
+    });
+    return changed;
+  },
+  restoreWheelchairBoarding: (entries) => set((state) => {
+    const prevById = new Map(entries.map((e) => [e.stop_id, e.prev]));
+    for (const s of state.stops) {
+      const prev = prevById.get(s.stop_id);
+      if (prev !== undefined) s.wheelchair_boarding = prev;
+    }
+  }),
   setStops: (stops) => set((state) => { state.stops = stops; }),
 });

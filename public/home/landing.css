@@ -189,7 +189,7 @@ h3.sub { font-weight: 800; font-size: 20px; line-height: 1.2; }
 .spine-card .foot { margin-top: auto; }
 
 /* ---------- Feature grid ---------- */
-.feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 48px; }
+.feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 48px; align-items: start; }
 .feat {
   background: #fff; border: 1px solid var(--border-strong); border-radius: var(--radius-xl);
   padding: 26px; transition: border-color var(--dur-base) var(--ease), transform var(--dur-base) var(--ease);
@@ -198,6 +198,25 @@ h3.sub { font-weight: 800; font-size: 20px; line-height: 1.2; }
 .feat-ico { width: 46px; height: 46px; border-radius: 12px; background: var(--gtfs-coral-light); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
 .feat h3 { font-weight: 800; font-size: 17px; margin-bottom: 8px; letter-spacing: -0.01em; }
 .feat p { font-size: 14px; line-height: 1.55; color: var(--gtfs-warm-gray); margin: 0; }
+/* Optional screenshot preview, appended below a card's text. Cards without one
+   simply stay shorter (the grid uses align-items:start), so image and icon-only
+   cards read as one intentional system rather than leaving a hollow gap.
+   A fixed 3:2 frame keeps every preview the same proportion at any width. */
+.feat-img {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  margin-top: 22px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-strong);
+  overflow: hidden;
+  background: var(--gtfs-sand);
+}
+.feat-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
 .feat .badge { display: inline-block; font-family: var(--font-mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gtfs-coral); background: var(--gtfs-coral-light); padding: 2px 7px; border-radius: 4px; margin-bottom: 12px; font-weight: 700; }
 
 /* ---------- Dark bands ---------- */

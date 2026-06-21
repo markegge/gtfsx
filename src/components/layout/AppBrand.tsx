@@ -36,16 +36,17 @@ export function AppBrand({
     if (state.isDirty && onResetRequest) {
       onResetRequest();
     } else {
-      // Navigate home rather than reload(): on a server-backed editor route
-      // (/feeds/:slug) a reload just re-loads the same feed. A hard load of
-      // the editor home gives a fresh, empty project; the active workspace
-      // persists in localStorage so a signed-in user stays in the same org.
+      // Open a FRESH EDITOR session — not the marketing landing at '/'. Hard-load
+      // /editor (not reload(): on a server-backed route /feeds/:slug a reload just
+      // re-loads the same feed) so the logo always drops into a clean, empty
+      // project; the active workspace persists in localStorage so a signed-in
+      // user stays in the same org.
       db.projectData
         .clear()
         .then(() => db.projectBulk.clear())
         .then(() => db.projects.clear())
         .then(() => {
-          window.location.href = import.meta.env.BASE_URL;
+          window.location.href = `${import.meta.env.BASE_URL}editor`;
         });
     }
   };

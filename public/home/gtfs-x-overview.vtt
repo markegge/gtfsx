@@ -1,0 +1,40 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:06.560
+GTFS·X is the fastest way to build a GTFS feed.
+
+00:00:06.560 --> 00:00:10.760
+Draw new or existing routes, which snap to the streets.
+
+00:00:10.760 --> 00:00:13.000
+Then add stops.
+
+00:00:13.000 --> 00:00:19.200
+The stops automatically snap to your route.
+
+00:00:19.200 --> 00:00:23.059
+With your stops placed, you can build a timetable.
+
+00:00:23.059 --> 00:00:28.480
+The system automatically estimates travel times on the roadway based on real-world travel times.
+
+00:00:28.959 --> 00:00:34.400
+The Visualization tab shows your headways, and the Validation tab shows errors or warnings
+
+00:00:34.400 --> 00:00:40.000
+in real-time with links that make it easy to make corrections.
+
+00:00:40.000 --> 00:00:45.820
+When your feed is ready, save a snapshot for publication.
+
+00:00:45.820 --> 00:00:50.099
+From the Publish tab, scroll down and click Publish Now.
+
+00:00:50.099 --> 00:00:53.400
+This publishes your feed to a stable URL.
+
+00:00:53.400 --> 00:00:56.560
+Build your feed the easy way with GTFS·X.
+
+00:00:58.480 --> 00:01:00.480
+www.gtfsx.com

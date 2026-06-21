@@ -22,6 +22,7 @@ const SMALL_KEYS = [
   // every flex zone (geometry, name, booking rules) on reload.
   'flexZones',
   'featureSettings',
+  'dismissedValidations',
   'projectId', 'projectName',
 ] as const;
 
@@ -155,6 +156,13 @@ export async function loadProject(projectId: string) {
   if (snapshot.pathways) state.setPathways(snapshot.pathways);
   if (snapshot.flexZones) state.setFlexZones(snapshot.flexZones);
   if (snapshot.featureSettings) state.setFeatureSettings(snapshot.featureSettings);
+  // Per-feed dismissed validation rules. Set unconditionally (not `if present`)
+  // so switching between drafts in one session can't leak feed A's dismissals
+  // into a feed B whose snapshot predates this key — a brand-new/older feed
+  // shows the warning again.
+  state.setDismissedValidations(
+    Array.isArray(snapshot.dismissedValidations) ? snapshot.dismissedValidations : [],
+  );
   // Older local snapshots may still carry a `visibilitySets` key (the removed
   // "Scenarios" feature); it's intentionally ignored.
   if (snapshot.projectName) state.setProjectName(snapshot.projectName);

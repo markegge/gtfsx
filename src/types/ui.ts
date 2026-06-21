@@ -63,4 +63,12 @@ export interface ValidationMessage {
   entity_type?: string;
   entity_id?: string;
   field?: string;
+  /**
+   * Stable rule code identifying the validation RULE that emitted this message
+   * (unlike `id`, which is a per-run sequential index). Shared by every message
+   * a rule produces, so a rule can be dismissed feed-wide by code. Only set on
+   * rules that opt into being dismissible (see VALIDATION_CODES in
+   * services/validation.ts). Absent → the message is not dismissible.
+   */
+  code?: string;
 }

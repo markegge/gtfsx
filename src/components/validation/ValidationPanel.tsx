@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useStore } from '../../store';
-import { runValidation } from '../../services/validation';
+import { runValidation, DISMISSIBLE_RULE_LABELS } from '../../services/validation';
 import { Badge } from '../ui/Badge';
 
 export function ValidationPanel() {
   const state = useStore();
+  const [showDismissed, setShowDismissed] = useState(false);
   // Depend on the specific entity slices the validator reads; `state` as a
   // whole would re-trigger on every unrelated store change (UI state,
   // selection, etc.). Listing the slices is intentional — but it MUST cover
@@ -26,8 +27,22 @@ export function ValidationPanel() {
     state.fareLegRules, state.fareTransferRules,
   ]);
 
-  const errors = messages.filter((m) => m.severity === 'error');
-  const warnings = messages.filter((m) => m.severity === 'warning');
+  // A message is dismissed when its rule `code` is in the per-feed dismissed
+  // set. Dismissed messages drop out of the main list (and the error/warning
+  // counts) but stay restorable from the drawer below. runValidation doesn't
+  // read dismissedValidations, so this filtering lives outside the memo.
+  const dismissedCodes = state.dismissedValidations;
+  const isDismissed = (m: typeof messages[0]) => !!m.code && dismissedCodes.includes(m.code);
+  const visible = messages.filter((m) => !isDismissed(m));
+  const dismissed = messages.filter(isDismissed);
+
+  const errors = visible.filter((m) => m.severity === 'error');
+  const warnings = visible.filter((m) => m.severity === 'warning');
+
+  // Group the currently-suppressed messages by rule code so the drawer shows one
+  // restorable row per rule (with a count when a rule silenced several services).
+  const dismissedCounts = new Map<string, number>();
+  for (const m of dismissed) dismissedCounts.set(m.code!, (dismissedCounts.get(m.code!) ?? 0) + 1);
 
   const handleClick = (m: typeof messages[0]) => {
     if (m.entity_type === 'agency') state.setSidebarSection('agency');
@@ -81,32 +96,83 @@ export function ValidationPanel() {
         <span className="font-heading font-bold text-sm">Validation</span>
         {errors.length > 0 && <Badge variant="error">{errors.length} Errors</Badge>}
         {warnings.length > 0 && <Badge variant="warning">{warnings.length} Warnings</Badge>}
-        {messages.length === 0 && <Badge variant="success">All good</Badge>}
+        {visible.length === 0 && <Badge variant="success">All good</Badge>}
       </div>
 
-      {messages.length === 0 ? (
-        <p className="text-sm text-warm-gray px-2">No issues found. Your feed looks good!</p>
+      {visible.length === 0 ? (
+        <p className="text-sm text-warm-gray px-2">
+          {dismissed.length > 0
+            ? 'No active issues. Dismissed reminders are listed below.'
+            : 'No issues found. Your feed looks good!'}
+        </p>
       ) : (
         <div className="flex flex-col">
-          {messages.map((m) => (
-            <button
+          {visible.map((m) => (
+            <div
               key={m.id}
-              onClick={() => handleClick(m)}
-              className="flex items-start gap-3 px-3 py-2.5 hover:bg-cream transition-colors text-left border-b border-[#F5F0EB]"
+              className="group flex items-stretch border-b border-[#F5F0EB] hover:bg-cream transition-colors"
             >
-              <Badge variant={m.severity === 'error' ? 'error' : 'warning'}>
-                {m.severity === 'error' ? 'Error' : 'Warn'}
-              </Badge>
-              <div>
-                <p className="text-[13px] text-dark-brown">{m.message}</p>
-                {m.entity_type && (
-                  <p className="text-[11px] text-warm-gray mt-0.5">
-                    {m.entity_type} {m.entity_id ? `→ ${m.entity_id}` : ''} · Click to view
-                  </p>
-                )}
-              </div>
-            </button>
+              <button
+                onClick={() => handleClick(m)}
+                className="flex items-start gap-3 px-3 py-2.5 text-left flex-1 min-w-0"
+              >
+                <Badge variant={m.severity === 'error' ? 'error' : 'warning'}>
+                  {m.severity === 'error' ? 'Error' : 'Warn'}
+                </Badge>
+                <div className="min-w-0">
+                  <p className="text-[13px] text-dark-brown">{m.message}</p>
+                  {m.entity_type && (
+                    <p className="text-[11px] text-warm-gray mt-0.5">
+                      {m.entity_type} {m.entity_id ? `→ ${m.entity_id}` : ''} · Click to view
+                    </p>
+                  )}
+                </div>
+              </button>
+              {m.code && (
+                <button
+                  onClick={() => state.dismissValidation(m.code!)}
+                  title="Dismiss this reminder for this feed"
+                  aria-label="Dismiss this reminder for this feed"
+                  className="shrink-0 px-2.5 text-warm-gray hover:text-dark-brown text-lg leading-none opacity-60 hover:opacity-100"
+                >
+                  ×
+                </button>
+              )}
+            </div>
           ))}
+        </div>
+      )}
+
+      {dismissedCounts.size > 0 && (
+        <div className="mt-2 border-t border-[#F5F0EB] pt-1.5">
+          <button
+            onClick={() => setShowDismissed((v) => !v)}
+            className="text-[12px] text-warm-gray hover:text-dark-brown px-2 py-1 flex items-center gap-1"
+          >
+            <span className="inline-block w-3">{showDismissed ? '▾' : '▸'}</span>
+            {dismissed.length} dismissed
+          </button>
+          {showDismissed && (
+            <div className="flex flex-col mt-0.5">
+              {[...dismissedCounts.entries()].map(([code, count]) => (
+                <div
+                  key={code}
+                  className="flex items-center justify-between gap-2 px-3 py-1.5 text-[12px] text-warm-gray border-b border-[#F5F0EB]"
+                >
+                  <span className="line-through min-w-0 truncate">
+                    {DISMISSIBLE_RULE_LABELS[code] ?? code}
+                    {count > 1 ? ` (${count})` : ''}
+                  </span>
+                  <button
+                    onClick={() => state.restoreValidation(code)}
+                    className="shrink-0 text-coral hover:underline font-medium"
+                  >
+                    Restore
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

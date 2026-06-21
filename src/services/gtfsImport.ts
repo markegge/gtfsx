@@ -118,6 +118,10 @@ export function loadImportIntoStore(data: Awaited<ReturnType<typeof importGtfsZi
     fs.faresV2 = true;
   }
   store.setFeatureSettings(fs);
+
+  // A freshly imported feed starts with nothing dismissed — validation
+  // dismissals are per-feed, so the new feed surfaces every applicable rule.
+  store.setDismissedValidations([]);
 }
 
 /**

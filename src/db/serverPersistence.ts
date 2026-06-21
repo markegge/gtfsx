@@ -40,6 +40,7 @@ const DATA_KEYS = [
   'pathways',
   'flexZones',
   'featureSettings',
+  'dismissedValidations',
 ] as const;
 
 type DataKey = (typeof DATA_KEYS)[number];
@@ -102,6 +103,7 @@ export function resetStoreEntities() {
   state.setPathways([] as never);
   state.setFlexZones([] as never);
   state.setFeatureSettings({});
+  state.setDismissedValidations([]);
 }
 
 export function applySnapshotToStore(snapshot: Record<string, unknown>) {
@@ -166,6 +168,12 @@ export function applySnapshotToStore(snapshot: Record<string, unknown>) {
   if (Array.isArray(g('flexZones'))) state.setFlexZones(g('flexZones') as never);
   if (g('featureSettings') && typeof g('featureSettings') === 'object') {
     state.setFeatureSettings(g('featureSettings') as never);
+  }
+  // Per-feed dismissed validation rules. resetStoreEntities() above already
+  // cleared this to [], so an absent key correctly leaves a fresh feed showing
+  // every rule (no cross-feed leak).
+  if (Array.isArray(g('dismissedValidations'))) {
+    state.setDismissedValidations(g('dismissedValidations') as never);
   }
   // Older saved blobs may still carry a `visibilitySets` key (the removed
   // "Scenarios" feature). It's intentionally ignored here — unknown keys are

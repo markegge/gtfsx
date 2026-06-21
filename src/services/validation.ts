@@ -6,9 +6,33 @@ import { gtfsTimeToSeconds, secondsToGtfsTime, formatTimeShort } from '../utils/
 import { getUSHolidaysInRange } from '../utils/holidays';
 import { findBlockOverlaps } from './blockBuilder';
 
+// Stable codes for validation rules the user can dismiss per feed. The code is
+// attached to EVERY message a rule emits (a rule can emit one message per
+// service/entity), so dismissing it silences the whole class for the current
+// feed. Dismissal is persisted with the feed (IndexedDB + server), never global
+// — a different feed still shows the rule. See store/validationSlice.ts.
+export const VALIDATION_CODES = {
+  // #17 holiday-exception nudge: a service runs on a major US holiday with no
+  // calendar_dates exception. A soft "most agencies run a holiday schedule"
+  // reminder, not a real defect — hence dismissible.
+  holidayExceptions: 'holiday-exceptions',
+} as const;
+
+// Human label for each dismissible rule, shown in the validation panel's
+// "dismissed" drawer so a silenced rule stays identifiable and restorable.
+export const DISMISSIBLE_RULE_LABELS: Record<string, string> = {
+  [VALIDATION_CODES.holidayExceptions]: 'Holiday calendar_dates reminders',
+};
+
 let msgId = 0;
-function msg(severity: 'error' | 'warning', message: string, entity_type?: string, entity_id?: string): ValidationMessage {
-  return { id: String(++msgId), severity, message, entity_type, entity_id };
+function msg(
+  severity: 'error' | 'warning',
+  message: string,
+  entity_type?: string,
+  entity_id?: string,
+  code?: string,
+): ValidationMessage {
+  return { id: String(++msgId), severity, message, entity_type, entity_id, code };
 }
 
 export function runValidation(state: AppStore): ValidationMessage[] {
@@ -474,6 +498,7 @@ export function runValidation(state: AppStore): ValidationMessage[] {
         'warning',
         `Service "${label}" has no calendar_dates exception for ${missing.length} major US holiday${missing.length !== 1 ? 's' : ''} (${missing.join(', ')}). Most agencies run a holiday or reduced schedule those days; add exceptions if so.`,
         'calendar', c.service_id,
+        VALIDATION_CODES.holidayExceptions,
       ));
     }
   }

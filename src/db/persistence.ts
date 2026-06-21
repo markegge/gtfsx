@@ -16,6 +16,11 @@ const SMALL_KEYS = [
   'timeframes', 'riderCategories', 'fareMedia',
   'fareProducts', 'fareLegRules', 'fareTransferRules',
   'frequencies', 'levels', 'pathways',
+  // GTFS-Flex demand-response service areas. Must be persisted alongside their
+  // paired routes/stops; the server-backed path (serverPersistence.ts) already
+  // saves these, so the IndexedDB cache has to match or anonymous drafts lose
+  // every flex zone (geometry, name, booking rules) on reload.
+  'flexZones',
   'featureSettings',
   'projectId', 'projectName',
 ] as const;
@@ -148,6 +153,7 @@ export async function loadProject(projectId: string) {
   if (snapshot.frequencies) state.setFrequencies(snapshot.frequencies);
   if (snapshot.levels) state.setLevels(snapshot.levels);
   if (snapshot.pathways) state.setPathways(snapshot.pathways);
+  if (snapshot.flexZones) state.setFlexZones(snapshot.flexZones);
   if (snapshot.featureSettings) state.setFeatureSettings(snapshot.featureSettings);
   // Older local snapshots may still carry a `visibilitySets` key (the removed
   // "Scenarios" feature); it's intentionally ignored.

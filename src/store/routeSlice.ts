@@ -40,7 +40,27 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
   addRoute: (route) => set((state) => { state.routes.push(route); }),
   updateRoute: (route_id, updates) => set((state) => {
     const idx = state.routes.findIndex((r) => r.route_id === route_id);
-    if (idx !== -1) Object.assign(state.routes[idx], updates);
+    if (idx === -1) return;
+    Object.assign(state.routes[idx], updates);
+    // A flex service area is materialized as a route (createFlexZoneWithRoute).
+    // That route is hidden from the Routes list but reachable for editing via
+    // the map flex-zone popup's "Edit Route" button (FlexZonePopup), which opens
+    // the RouteEditor. Renaming it there must also rename the area shape itself:
+    // the map label, the Flex panel, and the GTFS-Flex export (location_group_name
+    // + locations.geojson stop_name) all read FlexZone.name — not the route's
+    // name. Keep the zone's canonical name in sync with the route's short name.
+    // (The reverse direction — the Flex panel's inline rename writing back to the
+    // route — lives in FlexEditor.commitRename; the `name !== newName` guard makes
+    // that path a no-op here rather than a loop.)
+    if (typeof updates.route_short_name === 'string') {
+      const newName = updates.route_short_name.trim();
+      if (newName) {
+        const zone = (state as unknown as CrossSliceState).flexZones.find(
+          (z) => z.routeId === route_id,
+        );
+        if (zone && zone.name !== newName) zone.name = newName;
+      }
+    }
   }),
   removeRoute: (route_id, opts) => set((state) => {
     const deleteOrphanedStops = opts?.deleteOrphanedStops ?? true;

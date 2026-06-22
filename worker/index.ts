@@ -3,7 +3,7 @@ import type { Env, AppContext } from './env';
 import { TILE_RE, serveTile } from './legacy/tiles';
 import { handleSearch, handleProxy } from './legacy/imports';
 import { sessionMiddleware, requireClientHeader } from './auth/middleware';
-import { readSessionCookie } from './auth/session';
+import { readSessionCookie, resolveSession } from './auth/session';
 import { authRouter } from './auth/routes';
 import { apiRouter } from './api';
 import { feedsHandler, forumImageOnlyHandler } from './publication/feeds';
@@ -273,7 +273,12 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext):
     // page (public/home/index.html); logged-in users go straight to the editor.
     // Auth-gated, so this response must not be cached.
     if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '')) {
-      if (readSessionCookie(request) !== null) {
+      // Only redirect genuinely logged-in users to the editor. Validate the
+      // session (not just the cookie's presence) so a stale/expired gb_session
+      // cookie still lands on the marketing page instead of trapping the
+      // visitor in /editor.
+      const token = readSessionCookie(request);
+      if (token !== null && (await resolveSession(env, token)) !== null) {
         return Response.redirect(`${url.origin}/editor`, 302);
       }
       const landing = await env.ASSETS.fetch(new URL('/home/index.html', url.origin).toString());

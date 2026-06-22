@@ -12,6 +12,7 @@ import { VariantBanner } from '../variants/VariantBanner';
 const MapView = lazy(() => import('../map/MapView').then((m) => ({ default: m.MapView })));
 import { RouteDeleteDialog } from '../routes/RouteDeleteDialog';
 import { FloatingHelp } from './FloatingHelp';
+import { ProUpgradeToast } from '../billing/ProUpgradeToast';
 import { useStore } from '../../store';
 import { trackEditorLoaded } from '../../services/trackBeacon';
 
@@ -70,6 +71,7 @@ export function AppShell() {
         </div>
       </div>
       <RouteDeleteDialog />
+      <ProUpgradeToast />
     </div>
   );
 }

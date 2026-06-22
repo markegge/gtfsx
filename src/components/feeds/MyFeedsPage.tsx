@@ -21,6 +21,7 @@ import {
   type TransferResult,
 } from '../../services/projectsApi';
 import { ApiError } from '../../services/authApi';
+import { fireProNudge } from '../../services/proIntent';
 import { roleAtLeast } from '../../services/orgsApi';
 import { ImportDialog } from '../import-export/ImportDialog';
 import { buildSnapshot, resetStoreEntities, setCurrentWorkingStateVersion, wipeLocalProject } from '../../db/serverPersistence';
@@ -108,6 +109,28 @@ export function MyFeedsPage() {
     fetchList();
   }, [authChecked, currentUser, fetchList]);
 
+  // Feed-cap nudge (nudge "b") instrumentation. When the active workspace is at
+  // or over its saved-feed cap, record the feed_cap pro-intent signal once.
+  // fireProNudge gates to logged-in free owners + dedupes per trigger, so this
+  // is a no-op for paid workspaces and for the soft "approaching" warning.
+  useEffect(() => {
+    if (!feedsQuotaWarning) return;
+    const m = /^(\d+)\s*\/\s*(\d+)$/.exec(feedsQuotaWarning.trim());
+    if (!m) return;
+    if (Number(m[1]) < Number(m[2])) return; // only at/over the cap
+    const activeOrg =
+      activeWorkspace.type === 'org'
+        ? userOrgs.find((o) => o.id === activeWorkspace.orgId)
+        : null;
+    const ownerPlan = activeOrg ? activeOrg.plan : currentUser?.plan;
+    fireProNudge({
+      loggedIn: !!currentUser,
+      plan: ownerPlan,
+      action: 'feed_cap',
+      source: 'feeds_quota_banner',
+    });
+  }, [feedsQuotaWarning, activeWorkspace, userOrgs, currentUser]);
+
   // After ImportDialog loads the feed into the editor store, persist it as a
   // new project owned by the active workspace (mirrors SaveAsDialog), then
   // open it in the editor. ImportDialog surfaces errors inline and stays open
@@ -182,7 +205,7 @@ export function MyFeedsPage() {
               <span>
                 Feeds used: <strong>{feedsQuotaWarning}</strong>.
                 {ownerPlan === 'free'
-                  ? ' Free workspaces include up to 3 feeds — upgrade to keep saving more.'
+                  ? ' Free saves 3 feeds. Pro saves unlimited and hosts them.'
                   : ' Archive or delete feeds to free space, or upgrade for higher limits.'}
               </span>
               <a
@@ -583,6 +606,8 @@ function CreateFeedDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const activeWorkspace = useStore((s) => s.activeWorkspace);
+  const currentUser = useStore((s) => s.currentUser);
+  const userOrgs = useStore((s) => s.userOrgs);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -600,8 +625,37 @@ function CreateFeedDialog({
       });
       onCreated(p);
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Create failed';
-      setError(msg);
+      // Hard-limit path (HARD_LIMITS=true): the server rejects the over-cap
+      // create with a quota/payment error. Reword it to SELL (nudge "b") and
+      // record the feed_cap signal. In prod the cap is soft, so this branch is
+      // dormant and the banner on MyFeedsPage carries the nudge instead.
+      const apiErr = err instanceof ApiError ? err : null;
+      // The worker sends these codes (quotas.ts), but the client ApiErrorCode
+      // union is narrower, so compare as a string. 402 = paymentRequired,
+      // 409 = quotaExceeded for the projects quota.
+      const code = apiErr?.code as string | undefined;
+      const isQuota =
+        !!apiErr &&
+        (apiErr.status === 402 ||
+          apiErr.status === 409 ||
+          code === 'quota_exceeded' ||
+          code === 'payment_required');
+      if (isQuota) {
+        const activeOrg =
+          activeWorkspace.type === 'org'
+            ? userOrgs.find((o) => o.id === activeWorkspace.orgId)
+            : null;
+        const ownerPlan = activeOrg ? activeOrg.plan : currentUser?.plan;
+        fireProNudge({
+          loggedIn: !!currentUser,
+          plan: ownerPlan,
+          action: 'feed_cap',
+          source: 'create_feed_dialog',
+        });
+        setError('Free saves 3 feeds. Pro saves unlimited and hosts them.');
+      } else {
+        setError(apiErr ? apiErr.message : 'Create failed');
+      }
     } finally {
       setBusy(false);
     }

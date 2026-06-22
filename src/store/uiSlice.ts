@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand';
 import type { SidebarSection, BottomPanelTab, MapMode, StopPlacementMode, RouteDetailTab, StopDetailTab, CalendarDetailTab, StopAnalysisOverlay } from '../types/ui';
+import type { ProIntentAction } from '../services/proIntent';
 
 export interface UISlice {
   sidebarSection: SidebarSection | null;
@@ -93,6 +94,12 @@ export interface UISlice {
    *  reload (intentionally session-scoped, not durable). */
   selectedHolidayNames: string[];
   routeDeleteConfirmId: string | null;
+  /** Active publish/hosting-intent upgrade toast (nudge "a"). Set when a
+   *  logged-in free user exports a feed; rendered by ProUpgradeToast in the
+   *  editor shell. Survives the ExportDialog closing because it lives here, not
+   *  in the dialog. null = no toast. */
+  proNudgeToast: { action: ProIntentAction } | null;
+  setProNudgeToast: (toast: { action: ProIntentAction } | null) => void;
   toggleRouteVisibility: (routeId: string) => void;
   setHiddenRouteIds: (ids: string[]) => void;
   toggleRouteType: (routeType: number) => void;
@@ -191,6 +198,8 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     'Christmas Day',
   ],
   routeDeleteConfirmId: null,
+  proNudgeToast: null,
+  setProNudgeToast: (toast) => set((state) => { state.proNudgeToast = toast; }),
   toggleRouteVisibility: (routeId) => set((state) => {
     const idx = state.hiddenRouteIds.indexOf(routeId);
     if (idx === -1) state.hiddenRouteIds.push(routeId);

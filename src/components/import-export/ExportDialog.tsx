@@ -4,6 +4,7 @@ import { flexZoneHasGroup, flexZoneHasPolygons } from '../../store/flexSlice';
 import { exportGtfsZip, downloadBlob } from '../../services/gtfsExport';
 import { runValidation } from '../../services/validation';
 import { trackFeedExported } from '../../services/trackBeacon';
+import { useProNudge } from '../billing/useProNudge';
 import { Badge } from '../ui/Badge';
 
 interface ExportDialogProps {
@@ -13,6 +14,7 @@ interface ExportDialogProps {
 export function ExportDialog({ onClose }: ExportDialogProps) {
   const [exporting, setExporting] = useState(false);
   const [warningsExpanded, setWarningsExpanded] = useState(false);
+  const fireNudge = useProNudge();
   const state = useStore();
   const [fileName, setFileName] = useState(
     () => state.projectName.replace(/\s+/g, '_').toLowerCase()
@@ -79,6 +81,10 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
       downloadBlob(blob, `${name}.zip`);
       // The export succeeded and the download fired — record it (best-effort).
       trackFeedExported();
+      // Publish/hosting-intent nudge: a free user just produced the artifact —
+      // exactly the moment to offer stable hosting. Shows a one-time toast and
+      // records the pro-intent signal (no-op for pro/agency and logged-out).
+      fireNudge('publish_intent', 'export_zip');
       // Update project name to match exported filename
       if (fileName.trim() && fileName.trim() !== state.projectName.replace(/\s+/g, '_').toLowerCase()) {
         useStore.getState().setProjectName(fileName.trim());

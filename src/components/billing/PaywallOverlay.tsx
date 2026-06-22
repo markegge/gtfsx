@@ -4,6 +4,7 @@ import { useStore } from '../../store';
 import { planHasFeature, FEATURE_COPY, planDisplayName, cheapestPlanFor, type FeatureKey } from './planConfig';
 import { AuthButton } from '../auth/AuthButton';
 import { trackPaywallView } from '../../services/trackBeacon';
+import { fireProNudge, type ProIntentAction } from '../../services/proIntent';
 import type { Plan } from '../../services/billingApi';
 
 interface PaywallOverlayProps {
@@ -24,6 +25,12 @@ interface PaywallOverlayProps {
    *  gate links free users to the public demo mini-site). */
   exampleHref?: string;
   exampleLabel?: string;
+  /** When set, record a first-party pro-intent signal (Part B nudges) the
+   *  first time this gate is shown to a logged-in free user — separate from the
+   *  anonymous paywall_view analytics above, and deduped once-per-trigger. Used
+   *  by the publish ("publish_intent") and embed ("mini_site") gates. */
+  proIntentAction?: ProIntentAction;
+  proIntentSource?: string;
 }
 
 export function PaywallOverlay({
@@ -36,6 +43,8 @@ export function PaywallOverlay({
   className = '',
   exampleHref,
   exampleLabel,
+  proIntentAction,
+  proIntentSource,
 }: PaywallOverlayProps) {
   const currentUser = useStore((s) => s.currentUser);
   const navigate = useNavigate();
@@ -48,6 +57,20 @@ export function PaywallOverlay({
   useEffect(() => {
     if (!hasAccess) trackPaywallView(feature);
   }, [hasAccess, feature]);
+
+  // When a proIntentAction is configured, also fire the first-party pro-intent
+  // nudge (logged-in free users only, once per trigger) — the "shown =
+  // attempted a paid thing" signal for the warm-cohort export. Kept in its own
+  // effect so it doesn't change the paywall_view tracking semantics above.
+  useEffect(() => {
+    if (hasAccess || !proIntentAction) return;
+    fireProNudge({
+      loggedIn: !!currentUser,
+      plan: currentPlan,
+      action: proIntentAction,
+      source: proIntentSource,
+    });
+  }, [hasAccess, proIntentAction, proIntentSource, currentUser, currentPlan]);
 
   if (hasAccess) {
     return <>{children}</>;

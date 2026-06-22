@@ -7,6 +7,7 @@ import { createOrg, type OrgRole } from '../../services/orgsApi';
 import { FormField } from '../ui/FormField';
 import { backendEnabled } from '../../utils/featureFlags';
 import { PlanBadge } from '../billing/PlanBadge';
+import { shouldShowUpgradeEntry } from '../../services/proIntent';
 
 const ROLE_COLORS: Record<OrgRole, string> = {
   owner: 'bg-coral/15 text-coral border-coral/30',
@@ -98,6 +99,22 @@ export function UserMenuItems({ onClose }: { onClose?: () => void } = {}) {
         </div>
         <div className="text-xs text-warm-gray truncate">{currentUser.email}</div>
       </div>
+
+      {/* Upgrade entry — logged-in free users only (hidden for pro/agency/
+          enterprise). Gives a free user who decides to pay a one-click path to
+          /pricing instead of hunting through Billing. */}
+      {shouldShowUpgradeEntry(true, currentUser.plan) && (
+        <>
+          <button
+            onClick={() => go('/pricing')}
+            className="w-full text-left px-3 py-2 mb-1 rounded-md bg-coral-light text-coral hover:bg-coral hover:text-white transition-colors flex items-center justify-between gap-2"
+          >
+            <span className="text-sm font-heading font-bold">Upgrade to Pro</span>
+            <span aria-hidden>→</span>
+          </button>
+          <div className="border-t border-sand my-1" />
+        </>
+      )}
 
       <div className="px-3 pt-2 pb-1 text-[11px] font-semibold text-warm-gray uppercase tracking-wide">
         Workspace

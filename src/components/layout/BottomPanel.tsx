@@ -242,7 +242,12 @@ export function BottomPanel() {
             </PaywallOverlay>
           )}
           {bottomPanelTab === 'publish' && activeServerProjectId && (
-            <PaywallOverlay feature="managed_publishing" currentPlan={editorPlan}>
+            <PaywallOverlay
+              feature="managed_publishing"
+              currentPlan={editorPlan}
+              proIntentAction="publish_intent"
+              proIntentSource="publish_tab"
+            >
               <PublishWithDistribution />
             </PaywallOverlay>
           )}
@@ -250,8 +255,12 @@ export function BottomPanel() {
             <PaywallOverlay
               feature="embeds"
               currentPlan={editorPlan}
+              title="The embeddable rider site is a Pro feature"
+              description="Host a rider-facing mini-site and copy-paste embeds (schedules, route maps, stop times) on any website."
               exampleHref="https://feeds.gtfsx.com/svt-demo/"
               exampleLabel="See a live example mini-site"
+              proIntentAction="mini_site"
+              proIntentSource="embed_tab"
             >
               <EmbedPanel />
             </PaywallOverlay>

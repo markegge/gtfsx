@@ -123,9 +123,12 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     }
   }
 
-  // Stop checks
+  // Stop checks. Per the GTFS spec, stop_name is required only for stops/
+  // platforms (location_type 0), stations (1) and entrances/exits (2); it is
+  // optional for generic nodes (3) and boarding areas (4).
   for (const s of state.stops) {
-    if (!s.stop_name) messages.push(msg('error', `Stop "${s.stop_id}" is missing a name`, 'stop', s.stop_id));
+    const lt = s.location_type ?? 0;
+    if (!s.stop_name && lt <= 2) messages.push(msg('error', `Stop "${s.stop_id}" is missing a name`, 'stop', s.stop_id));
     if (!s.stop_lat || !s.stop_lon) messages.push(msg('error', `Stop "${s.stop_name || s.stop_id}" has invalid coordinates`, 'stop', s.stop_id));
   }
 
@@ -253,8 +256,13 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     }
   }
 
-  // Parent station integrity: a parent_station must point to a location_type=1 stop
+  // Parent station integrity. The required parent type depends on the child's
+  // location_type per the GTFS spec:
+  //   - boarding areas (4) must be parented by a platform/stop (location_type 0)
+  //   - stops/platforms (0), entrances/exits (2) and generic nodes (3) must be
+  //     parented by a station (location_type 1)
   const stationIds = new Set(state.stops.filter((s) => s.location_type === 1).map((s) => s.stop_id));
+  const platformIds = new Set(state.stops.filter((s) => (s.location_type ?? 0) === 0).map((s) => s.stop_id));
   for (const s of state.stops) {
     if (!s.parent_station) continue;
     if (!stopIdSet.has(s.parent_station)) {
@@ -263,6 +271,14 @@ export function runValidation(state: AppStore): ValidationMessage[] {
         `Stop "${s.stop_name || s.stop_id}" references non-existent parent_station "${s.parent_station}".`,
         'stop', s.stop_id,
       ));
+    } else if ((s.location_type ?? 0) === 4) {
+      if (!platformIds.has(s.parent_station)) {
+        messages.push(msg(
+          'error',
+          `Boarding area "${s.stop_name || s.stop_id}" parent_station "${s.parent_station}" is not a Platform (location_type=0).`,
+          'stop', s.stop_id,
+        ));
+      }
     } else if (!stationIds.has(s.parent_station)) {
       messages.push(msg(
         'error',

@@ -1,0 +1,14 @@
+table_name,field_name,language,translation,record_id,record_sub_id,field_value
+feed_info,feed_publisher_url,de-DE,https://example.org/?locale=de-DE,,,
+agency,agency_url,de-DE,https://fta.example.org/?locale=de-DE,FTA,,
+stops,stop_name,de-DE,Eingang,airport-entrance,,
+stops,stop_name,es-ES,Entrada,airport-entrance,,
+stops,stop_name,de-DE,Gleis 1,airport-1,,
+routes,route_long_name,de-AT,Tram-Linie Charles Babbage,,,Charles Babbage Tram Line
+routes,route_desc,de-AT,Verbindet das Stadtzentrum mit dem Flughafen.,B,,
+trips,trip_headsign,de-DE,Babbage (Richtung Stadt),b-downtown-on-weekends,,
+trips,trip_headsign,de-DE,Babbage (auswärts),,,Babbage (Outbound)
+stop_times,stop_headsign,de-DE,hAllo,b-outbound-on-weekends,11,
+levels,level_name,de-DE,Erdgeschoss,airport-level-0,,
+levels,level_name,de-DE,Gleis 1,,,platform 1
+levels,level_name,de-DE,Gleis 2,airport-level-3,,

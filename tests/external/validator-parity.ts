@@ -74,9 +74,9 @@ interface FeedDef {
   build: () => Promise<Buffer>;
 }
 
-const FIXTURE_DIR = path.join(REPO_ROOT, 'tests', 'fixtures', 'benton-area-transit');
+const FIXTURE_DIR = path.join(REPO_ROOT, 'tests', 'fixtures', 'sample-gtfs-feed');
 
-/** Zip the bundled Benton Area Transit feed exactly as it sits on disk. */
+/** Zip the bundled public-transport/sample-gtfs-feed exactly as it sits on disk. */
 async function buildFixtureZip(): Promise<Buffer> {
   const zip = new JSZip();
   for (const name of readdirSync(FIXTURE_DIR)) {
@@ -113,6 +113,7 @@ async function buildFixtureBrokenZip(): Promise<Buffer> {
       const header = lines[0].split(',');
       const firstDataRow = lines.find((l, i) => i > 0 && l.trim().length > 0);
       const tripId = firstDataRow ? firstDataRow.split(',')[header.indexOf('trip_id')] : 'BROKEN_TRIP';
+      // (sample-gtfs-feed: the first stop_times row belongs to a-downtown-all-day)
       // Build a row matching the header width with a bogus stop_id.
       const cells = header.map((col) => {
         if (col === 'trip_id') return tripId;
@@ -131,15 +132,17 @@ async function buildFixtureBrokenZip(): Promise<Buffer> {
 
 const FEEDS: FeedDef[] = [
   {
-    id: 'benton-area-transit',
-    label: 'Benton Area Transit (mdb-3109) -- pristine bundled feed',
-    countryCode: 'US',
+    id: 'sample-gtfs-feed',
+    label: 'public-transport/sample-gtfs-feed -- pristine bundled feed',
+    // Fictional feed (example.org, Europe timezones) — leave the country unset
+    // so MobilityData doesn't impose region-specific rules.
+    countryCode: '',
     build: buildFixtureZip,
   },
   {
-    id: 'benton-area-transit-broken',
-    label: 'Benton Area Transit + injected errors (dropped calendar, dangling stop_id)',
-    countryCode: 'US',
+    id: 'sample-gtfs-feed-broken',
+    label: 'sample-gtfs-feed + injected errors (dropped calendar, dangling stop_id)',
+    countryCode: '',
     build: buildFixtureBrokenZip,
   },
 ];

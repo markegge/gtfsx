@@ -1,6 +1,6 @@
 {
-  "_comment": "Baseline of ACCEPTED parity gaps, keyed by feed id. A 'gap' is a MobilityData ERROR/WARNING notice code that our validator does NOT flag on the same feed. The parity test exits non-zero only when it finds a gap NOT listed here for that feed (a regression / newly-surfaced canonical rule). To accept a new gap intentionally, add its code to the feed's array and commit. Regenerate the suggested contents by running `npm run test:validator-parity -- --write-baseline`. INFO-severity notices are never gating.",
-  "streamline": [
+  "_comment": "Baseline of ACCEPTED parity gaps, keyed by feed id. A 'gap' is a MobilityData ERROR/WARNING notice code that our validator does NOT flag on the same feed. The parity test exits non-zero only when it finds a gap NOT listed here for that feed (a regression / newly-surfaced canonical rule). To accept a new gap intentionally, add its code to the feed's array and commit. Regenerate the suggested contents by running `npm run test:validator-parity -- --write-baseline`. INFO-severity notices are never gating. NOTE: the gap lists below were carried over when the fixture switched to sample-gtfs-feed; regenerate against the new feed on the next network run.",
+  "sample-gtfs-feed": [
     "decreasing_or_equal_stop_time_distance",
     "equal_shape_distance_same_coordinates",
     "leading_or_trailing_whitespaces",
@@ -13,7 +13,7 @@
     "stop_without_stop_time",
     "trip_distance_exceeds_shape_distance_below_threshold"
   ],
-  "streamline-broken": [
+  "sample-gtfs-feed-broken": [
     "decreasing_or_equal_stop_time_distance",
     "equal_shape_distance_same_coordinates",
     "leading_or_trailing_whitespaces",

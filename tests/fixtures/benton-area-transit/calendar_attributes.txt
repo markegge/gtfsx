@@ -1,8 +1,0 @@
-service_id,service_description
-c_71144_b_84437_d_64,Coast to Valley Express Starting 3/1/2025 (Sunday only)
-c_71144_b_84437_d_63,Coast to Valley Express Starting 3/1/2025 (No Sunday)
-c_71144_b_84437_d_127,Coast to Valley Express Starting 3/1/2025 (All days of week)
-c_45775_b_55813_d_31,99 Express Service Beginning 6/20/22 (Weekday)
-c_17475_b_21315_d_64,Flex year round (Sunday only)
-c_17475_b_21315_d_32,Flex year round (Saturday only)
-c_17475_b_21315_d_31,Flex year round (Weekday)

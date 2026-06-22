@@ -2,14 +2,17 @@
  * Run GTFS·X integration tests headlessly via tsx.
  * Usage: npx tsx run-tests.ts
  *
- * Fixture is built in-memory from `tests/fixtures/benton-area-transit/` so the
+ * Fixture is built in-memory from `tests/fixtures/sample-gtfs-feed/` so the
  * test is self-contained on a fresh checkout (and in CI). No external zips required.
  *
- * Fixture feed: Benton Area Transit (mdb-3109), Corvallis OR.
- * Source: https://mobilitydatabase.org/feeds/gtfs/mdb-3109
- * Validation: 0 errors, 2 warnings (MobilityData canonical validator).
- * The feed includes GTFS-Flex v2 demand-response routes (BAT Lift + Paratransit)
- * alongside fixed-route service (99 Express, Coast to Valley Express).
+ * Fixture feed: public-transport/sample-gtfs-feed (npm v0.13.0).
+ * Source: https://github.com/public-transport/sample-gtfs-feed
+ * An imaginary, fully-specified GTFS dataset that exercises stations
+ * (parent_station), boarding areas, generic nodes, transfers, frequencies,
+ * pathways and levels — features a flat stop list would lack. Two
+ * agencies (FTA + MTA), 4 routes (A/B/C/D), 10 stops, 10 trips. It is a test
+ * feed and ships two `c-outbound` trips with intentionally incomplete endpoint
+ * times, which our validator (correctly, per spec) flags — see Phase 9.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -20,6 +23,7 @@ import { runValidation } from './src/services/validation';
 import {
   computeStopSpacing, computeBalancingCandidates, computeServiceIntensity,
   computeAccessibilityAudit, representativeDay,
+  type FeedSlice,
 } from './src/services/stopAnalysis';
 import { useStore } from './src/store';
 import { getUSHolidaysForYear, getUSHolidaysInRange } from './src/utils/holidays';
@@ -30,14 +34,14 @@ import { createDrawnShape, deriveRouteShapeIds } from './src/services/routeShape
 import { gtfsTimeToSeconds, secondsToGtfsTime } from './src/utils/time';
 import type { RouteStop, Stop, Trip } from './src/types/gtfs';
 
-const FIXTURE_DIR = 'tests/fixtures/benton-area-transit';
+const FIXTURE_DIR = 'tests/fixtures/sample-gtfs-feed';
 
 async function buildFixtureZip(): Promise<Buffer> {
   const zip = new JSZip();
   for (const name of readdirSync(FIXTURE_DIR)) {
     const full = path.join(FIXTURE_DIR, name);
     if (!statSync(full).isFile()) continue;
-    // Include standard GTFS text files and the GTFS-Flex GeoJSON zone file.
+    // Include standard GTFS text files (and a GeoJSON flex-zone file if present).
     if (!name.endsWith('.txt') && !name.endsWith('.geojson')) continue;
     zip.file(name, readFileSync(full));
   }
@@ -130,42 +134,66 @@ function s() { return useStore.getState(); }
 async function main() {
   console.log('=== GTFS·X Integration Tests ===\n');
 
-  // Build fixture zip from the in-repo Benton Area Transit feed.
+  // Build fixture zip from the in-repo sample-gtfs-feed.
   const zipBuffer = await buildFixtureZip();
   const zipFile = zipBuffer as unknown as File;
 
   // ---- PHASE 1: IMPORT ----
-  // Feed: Benton Area Transit (mdb-3109). The zip contains both fixed-route
-  // service (routes 844/845) and GTFS-Flex demand-response routes (13401,
-  // 77756, 77757). The importer splits Flex stop_times out and, once it
-  // resolves the polygon zones from locations.geojson, drops the Flex-only
-  // routes/trips from the regular tables. Result: 2 fixed routes, 15 trips.
-  console.log('Phase 1: Import Benton Area Transit (mdb-3109) GTFS');
+  // Feed: public-transport/sample-gtfs-feed. A small but fully-specified feed:
+  // 2 agencies (FTA + MTA), 4 routes (A/B/C/D), 10 stops (incl. 2 stations,
+  // child platforms, entrances, generic nodes and a boarding area), 10 trips,
+  // 4 calendars, 2 shapes, 1 transfer, 2 frequencies, 3 levels, 6 pathways.
+  console.log('Phase 1: Import sample-gtfs-feed GTFS');
   const data = await importGtfsZip(zipFile);
   loadImportIntoStore(data);
 
-  assert('agencies loaded', s().agencies.length === 1, `got ${s().agencies.length}`);
-  assert('agency name correct', s().agencies[0]?.agency_name === 'Benton Area Transit');
-  // 3 of the 5 routes are Flex-only (no fixed stop_times); the importer
-  // drops them once it resolves their polygon zones from locations.geojson.
-  assert('routes loaded (2 fixed)', s().routes.length === 2, `got ${s().routes.length}`);
-  assert('stops loaded (50)', s().stops.length === 50, `got ${s().stops.length}`);
-  // 22 total trips; 7 are Flex-only and are stripped from the regular table.
-  assert('trips loaded (15)', s().trips.length === 15, `got ${s().trips.length}`);
-  assert('calendars loaded (7)', s().calendars.length === 7, `got ${s().calendars.length}`);
+  assert('agencies loaded (2)', s().agencies.length === 2, `got ${s().agencies.length}`);
+  assert('agency name correct', s().agencies[0]?.agency_name === 'Full Transit Agency');
+  assert('routes loaded (4)', s().routes.length === 4, `got ${s().routes.length}`);
+  assert('stops loaded (10)', s().stops.length === 10, `got ${s().stops.length}`);
+  assert('trips loaded (10)', s().trips.length === 10, `got ${s().trips.length}`);
+  assert('calendars loaded (4)', s().calendars.length === 4, `got ${s().calendars.length}`);
   assert('shapes loaded', s().shapes.length > 0, `got ${s().shapes.length}`);
   assert('stop_times loaded', s().stopTimes.length > 0, `got ${s().stopTimes.length}`);
-  // streamline has no fare_attributes.txt — fare round-trip is exercised separately in phase 12
+  // The sample feed has no fare_attributes.txt — fare round-trip is exercised
+  // separately in phase 12 with a synthetic v2 feed.
   assert('feed info loaded', s().feedInfo !== null);
   assert('route stops built', s().routeStops.length > 0, `got ${s().routeStops.length}`);
 
+  // Spec-completeness files a minimal feed would omit — make sure they import
+  // (round-trip is checked in phase 10, validation in phase 9).
+  assert('transfers loaded (1)', s().transfers.length === 1, `got ${s().transfers.length}`);
+  assert('transfer is airport-1 → airport-2 (type 1)',
+    s().transfers[0]?.from_stop_id === 'airport-1' && s().transfers[0]?.to_stop_id === 'airport-2' && s().transfers[0]?.transfer_type === 1);
+  assert('frequencies loaded (2)', s().frequencies.length === 2, `got ${s().frequencies.length}`);
+  assert('frequency exact_times honored', s().frequencies.find(f => f.trip_id === 'b-downtown-on-working-days')?.exact_times === 1);
+  assert('levels loaded (3)', s().levels.length === 3, `got ${s().levels.length}`);
+  assert('pathways loaded (6)', s().pathways.length === 6, `got ${s().pathways.length}`);
+
+  // Stations / parent_station. The airport is a station with child platforms,
+  // entrances, generic nodes and a boarding area beneath it.
+  const stationStops = s().stops.filter(st => st.location_type === 1);
+  assert('two stations present (airport, museum)',
+    stationStops.length === 2 && stationStops.map(st => st.stop_id).sort().join(',') === 'airport,museum',
+    stationStops.map(st => st.stop_id).join(','));
+  assert('six stops carry a parent_station', s().stops.filter(st => st.parent_station).length === 6,
+    `got ${s().stops.filter(st => st.parent_station).length}`);
+  assert('child platform airport-1 parented by the airport station',
+    s().stops.find(st => st.stop_id === 'airport-1')?.parent_station === 'airport');
+  // Boarding area (location_type 4) parented by a PLATFORM (location_type 0),
+  // which a flat stop list never exercises.
+  const boarding = s().stops.find(st => st.stop_id === 'airport-2-boarding');
+  assert('boarding area airport-2-boarding has location_type 4', boarding?.location_type === 4, `got ${boarding?.location_type}`);
+  assert('boarding area parented by platform airport-2', boarding?.parent_station === 'airport-2');
+
   // ---- PHASE 2: DATA INTEGRITY ----
   console.log('\nPhase 2: Data Integrity');
-  // Use the 99 Express (route_id 844) as the primary test route throughout.
-  // It has 8 weekday trips and stop_times with real stop_ids (fixed-route).
-  const blueline = s().routes.find(r => r.route_id === '844');
-  assert('99 Express route exists', !!blueline);
-  assert('99 Express long name', blueline?.route_long_name === '99 Express');
+  // Use route A (Ada Lovelace Bus Line) as the primary test route throughout.
+  // It has two trips (a-downtown-all-day / a-outbound-all-day), each with
+  // stop_times over real stop_ids and an associated shape.
+  const blueline = s().routes.find(r => r.route_id === 'A');
+  assert('route A exists', !!blueline);
+  assert('route A long name', blueline?.route_long_name === 'Ada Lovelace Bus Line');
 
   const routeIds = new Set(s().routes.map(r => r.route_id));
   const orphanTrips = s().trips.filter(t => !routeIds.has(t.route_id));
@@ -193,15 +221,43 @@ async function main() {
   assert('spacing: benchmark counts sum ≤ total',
     spacing.tooCloseCount + spacing.inTargetCount + spacing.aboveMaxCount <= spacing.pairCount);
 
-  // Feature 2 — balancing (a valid feed may legitimately have 0 candidates;
-  // assert the result is well-formed and that a generous threshold finds some).
-  const balancing = computeBalancingCandidates(s(), { thresholdFt: 600, dwellSeconds: 18, serviceIds: rep.serviceIds });
-  assert('balancing: result well-formed', Array.isArray(balancing.candidates));
-  const balancingLoose = computeBalancingCandidates(s(), { thresholdFt: 1500, dwellSeconds: 18, serviceIds: rep.serviceIds });
-  assert('balancing: finds candidates at 1500 ft', balancingLoose.candidates.length > 0, `${balancingLoose.candidates.length}`);
+  // Feature 2 — balancing. The sample feed is a wide-area, station-heavy network
+  // whose served patterns are short (2–3 stops) and bracketed by stations, so it
+  // has NO interior consolidation pair at any threshold. Exercise that the
+  // function runs and returns a well-formed empty result on the real fixture…
+  const balancingFixture = computeBalancingCandidates(s(), { thresholdFt: 1500, dwellSeconds: 18, serviceIds: rep.serviceIds });
+  assert('balancing: result well-formed', Array.isArray(balancingFixture.candidates));
+  assert('balancing: sparse fixture has no <1500 ft interior pairs', balancingFixture.candidates.length === 0, `${balancingFixture.candidates.length}`);
+  // …then exercise the candidate + savings path on a controlled 4-stop pattern
+  // whose interior pair (BP1,BP2) sits ~110 ft apart (both plain stops, so not
+  // skipped as stations). The scan only looks at interior segments i ∈ [1, n-2],
+  // so only the (1,2) pair qualifies; BP0→BP1 and BP2→BP3 are terminal segments.
+  const balSlice: FeedSlice = {
+    stops: [
+      { stop_id: 'BP0', stop_name: 'BP0', stop_lat: 45.0000, stop_lon: -111.0, location_type: 0, wheelchair_boarding: 0 },
+      { stop_id: 'BP1', stop_name: 'BP1', stop_lat: 45.0200, stop_lon: -111.0, location_type: 0, wheelchair_boarding: 0 },
+      { stop_id: 'BP2', stop_name: 'BP2', stop_lat: 45.0203, stop_lon: -111.0, location_type: 0, wheelchair_boarding: 0 },
+      { stop_id: 'BP3', stop_name: 'BP3', stop_lat: 45.0400, stop_lon: -111.0, location_type: 0, wheelchair_boarding: 0 },
+    ],
+    routes: [{ route_id: 'BR', agency_id: 'MTA', route_short_name: 'Bal', route_long_name: 'Balancing Test', route_type: 3 }],
+    routeStops: [],
+    trips: [{ trip_id: 'BT', route_id: 'BR', service_id: 'BS', direction_id: 0 }],
+    stopTimes: [
+      { trip_id: 'BT', stop_id: 'BP0', stop_sequence: 0, arrival_time: '08:00:00', departure_time: '08:00:00' },
+      { trip_id: 'BT', stop_id: 'BP1', stop_sequence: 1, arrival_time: '08:05:00', departure_time: '08:05:00' },
+      { trip_id: 'BT', stop_id: 'BP2', stop_sequence: 2, arrival_time: '08:06:00', departure_time: '08:06:00' },
+      { trip_id: 'BT', stop_id: 'BP3', stop_sequence: 3, arrival_time: '08:10:00', departure_time: '08:10:00' },
+    ],
+    calendars: [{ service_id: 'BS', monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 1, sunday: 1, start_date: '20260101', end_date: '20261231' }],
+    calendarDates: [],
+  };
+  const balancingLoose = computeBalancingCandidates(balSlice, { thresholdFt: 600, dwellSeconds: 18, serviceIds: new Set(['BS']) });
+  assert('balancing: finds the interior close pair', balancingLoose.candidates.length === 1, `${balancingLoose.candidates.length}`);
+  assert('balancing: candidate is the BP1/BP2 pair',
+    balancingLoose.candidates[0]?.stopAId === 'BP1' && balancingLoose.candidates[0]?.stopBId === 'BP2');
   assert('balancing: savings = dwell × trips/day',
     balancingLoose.candidates.every(c => c.savingsSecPerDay === 18 * c.tripsPerDay));
-  console.log(`    (balancing: ${balancing.candidates.length} pairs <600 ft, ${balancingLoose.candidates.length} <1500 ft)`);
+  console.log(`    (balancing: fixture ${balancingFixture.candidates.length} <1500 ft; synthetic ${balancingLoose.candidates.length} <600 ft)`);
 
   // Feature 3 — service intensity
   const intensity = computeServiceIntensity(s(), { serviceIds: rep.serviceIds });
@@ -252,7 +308,7 @@ async function main() {
     assert('route color updated', s().routes.find(r => r.route_id === blueline.route_id)?.route_color === 'FF0000');
   }
   s().addRoute({
-    route_id: 'test-route', agency_id: '148', route_short_name: 'T99',
+    route_id: 'test-route', agency_id: 'MTA', route_short_name: 'T99',
     route_long_name: 'TEST EXPRESS', route_type: 3, route_color: '00FF00', route_text_color: '000000',
   });
   assert('add route', s().routes.length === origRouteCount + 1);
@@ -330,8 +386,18 @@ async function main() {
   console.log('\nPhase 9: Validation');
   const msgs = runValidation(s());
   const errors = msgs.filter(m => m.severity === 'error');
-  assert('no validation errors', errors.length === 0,
-    errors.map(e => e.message).join('; '));
+  // The sample feed ships two c-outbound trips with intentionally incomplete
+  // endpoint times (blank arrival on the first stop / blank departure on the
+  // last). Our validator correctly flags both endpoints of each, so the
+  // otherwise-pristine fixture has exactly these 4 errors and nothing else —
+  // none of the phase 3–8 edits add or remove one. Assert the exact set
+  // (stronger than "zero": a new defect, or a regression that drops one, fails).
+  const isCOutboundEndpointErr = (m: { message: string }) =>
+    /(First|Last) served stop of trip "c-outbound-(all-day|on-weekends)"/.test(m.message);
+  const endpointErrs = errors.filter(isCOutboundEndpointErr);
+  assert('validation: only the 4 known c-outbound endpoint errors',
+    errors.length === 4 && endpointErrs.length === 4,
+    errors.map(e => e.message).join(' | '));
 
   // ---- PHASE 10: EXPORT & ROUND-TRIP ----
   console.log('\nPhase 10: Export & Round-trip');
@@ -355,8 +421,11 @@ async function main() {
   assert('round-trip route color', s().routes.find(r => r.route_id === blueline?.route_id)?.route_color === 'FF0000');
 
   const postErrors = runValidation(s()).filter(m => m.severity === 'error');
-  assert('round-trip no errors', postErrors.length === 0,
-    postErrors.map(e => e.message).join('; '));
+  // Round-trip preserves the feed's validity profile: the same 4 c-outbound
+  // endpoint errors survive export → re-import, and no new error appears.
+  assert('round-trip preserves exactly the c-outbound endpoint errors',
+    postErrors.length === 4 && postErrors.filter(isCOutboundEndpointErr).length === 4,
+    postErrors.map(e => e.message).join(' | '));
 
   // ---- PHASE 11: DELETES ----
   console.log('\nPhase 11: Delete Operations (with cascading)');

@@ -1,8 +1,0 @@
-route_id,direction_id,direction
-77757,0,No direction
-77756,0,No direction
-13401,0,No direction
-845,1,Eastbound
-845,0,Westbound
-844,1,Southbound
-844,0,Northbound

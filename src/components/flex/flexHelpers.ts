@@ -52,3 +52,15 @@ export function deleteFlexZoneWithRoute(zoneId: string) {
     state.removeRoute(zone.routeId);
   }
 }
+
+/**
+ * Open a flex zone's Details panel in the Flex Zones section. Fallback for
+ * zones with no materialized route (legacy / orphaned) which therefore can't
+ * open via the Routes editor. Lives in this non-component module so the
+ * window-flag handoff (mirrored from FlexZonePopup) isn't flagged by the
+ * react-hooks immutability rule, which only analyzes components and hooks.
+ */
+export function openFlexZoneDetails(zoneId: string) {
+  useStore.getState().setSidebarSection('flex');
+  window.__flexZoneExpand = zoneId;
+}

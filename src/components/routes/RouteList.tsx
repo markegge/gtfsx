@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import { RouteDetailPanel } from './RouteDetailPanel';
+import { FlexRouteSection } from './FlexRouteSection';
 import { generateId } from '../../services/idGenerator';
 import { ROUTE_COLORS, getContrastTextColor } from '../../utils/colors';
 import { ROUTE_TYPES } from '../../utils/constants';
@@ -89,7 +90,7 @@ export function RouteList() {
   // Otherwise show the route list
   return (
     <div>
-      {managedRoutes.length === 0 ? (
+      {managedRoutes.length === 0 && flexZones.length === 0 ? (
         <EmptyState
           icon="🗺️"
           title="No routes yet"
@@ -99,6 +100,8 @@ export function RouteList() {
         />
       ) : (
         <>
+          {managedRoutes.length > 0 && (
+          <>
           <div className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-2">
             Routes ({filteredRoutes.length === managedRoutes.length ? managedRoutes.length : `${filteredRoutes.length} of ${managedRoutes.length}`})
           </div>
@@ -210,12 +213,17 @@ export function RouteList() {
               );
             })}
           </div>
+          </>
+          )}
+
           <button
             onClick={handleAdd}
             className="w-full flex items-center gap-1.5 px-3 py-2 border-2 border-dashed border-sand rounded-lg text-sm font-semibold text-warm-gray hover:border-coral hover:text-coral hover:bg-coral-light transition-colors"
           >
             + Add Route
           </button>
+
+          <FlexRouteSection filterText={text} />
         </>
       )}
     </div>

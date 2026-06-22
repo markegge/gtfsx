@@ -21,6 +21,7 @@ import {
   invalidateAuthTokensForUser,
 } from '../auth/tokens';
 import { sendVerifyEmail } from '../email';
+import { buildWarmCohortCsv } from './warmCohort';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -247,6 +248,27 @@ adminRouter.use('*', async (c, next) => {
   const path = new URL(c.req.url).pathname;
   if (path === '/api/admin/end-impersonation') return next();
   return requireStaff(c, next);
+});
+
+// ─── Warm-cohort export (founder outreach) ─────────────────────────────────
+//
+// One CSV row per account, ranked by willingness-to-pay signals; the top rows
+// ARE the outreach list. Internal-only — staff-gated by the middleware above
+// (non-staff get 404, not 403, to avoid advertising the admin surface). All
+// logic + signal provenance lives in ./warmCohort.ts.
+adminRouter.get('/warm-cohort.csv', async (c) => {
+  const staff = c.var.user!;
+  await rateLimit(c.env, { key: `admin:warm-cohort:${staff.id}`, limit: 30, windowSec: 60 });
+  const { csv, rowCount } = await buildWarmCohortCsv(c.env);
+  return new Response(csv, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="warm-cohort.csv"',
+      'Cache-Control': 'private, no-store',
+      'X-Warm-Cohort-Row-Count': String(rowCount),
+    },
+  });
 });
 
 // ─── Stats ────────────────────────────────────────────────────────────────

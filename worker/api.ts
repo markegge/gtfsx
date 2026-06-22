@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { ulid } from 'ulidx';
 import type { AppContext } from './env';
 import { requireAuth } from './auth/middleware';
 import {
@@ -50,6 +51,12 @@ const deleteMeSchema = z.object({
   password: z.string().min(1).max(256).optional(),
 });
 
+// FROZEN CONTRACT — the in-app upgrade-nudge frontend POSTs this exact shape.
+const proIntentSchema = z.object({
+  action: z.enum(['publish_intent', 'feed_cap', 'mini_site', 'mdb_submit', 'checkout_started']),
+  source: z.string().max(64).optional(),
+});
+
 async function parseJson<T extends z.ZodTypeAny>(c: { req: { json: () => Promise<unknown> } }, schema: T): Promise<z.infer<T>> {
   let body: unknown;
   try {
@@ -87,6 +94,25 @@ apiRouter.get('/me/usage', requireAuth, async (c) => {
   const user = c.var.user!;
   const userUsage = await computeUserUsage(c.env, user.id);
   return c.json({ user: userUsage });
+});
+
+// Record a Pro-intent signal — fired when a free user reaches for a Pro-gated
+// action (publish, 4th saved feed, mini-site/embed, MobilityDatabase submit) or
+// starts Stripe checkout. THE hottest warm-lead signal; surfaced (ranked) by
+// GET /api/admin/warm-cohort.csv. Inherits the global X-GB-Client CSRF +
+// rate-limit middleware. Cheap and idempotency-free on purpose — multiple fires
+// per user are expected and fine. We record it here in authenticated D1
+// because the cookieless `event` table is deliberately anonymous (no user_id)
+// and can't carry a per-account signal. See migration 0023_pro_intent.sql.
+apiRouter.post('/me/pro-intent', requireAuth, async (c) => {
+  const body = await parseJson(c, proIntentSchema);
+  const user = c.var.user!;
+  await c.env.DB.prepare(
+    `INSERT INTO pro_intent (id, user_id, ts, action, source) VALUES (?, ?, ?, ?, ?)`,
+  )
+    .bind(ulid(), user.id, Date.now(), body.action, body.source ?? null)
+    .run();
+  return c.body(null, 204);
 });
 
 apiRouter.patch('/me', requireAuth, async (c) => {

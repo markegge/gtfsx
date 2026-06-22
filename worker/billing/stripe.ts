@@ -70,9 +70,11 @@ export function billingReady(env: Env): boolean {
   return env.BILLING_ENABLED === 'true' && !!env.STRIPE_SECRET_KEY;
 }
 
-// Pass-through for Stripe SDK errors so the client gets the actual reason
-// (e.g. "head office address required for automatic tax") instead of our
-// generic 500. Stripe writes these messages to be customer-readable.
+// Detect Stripe SDK errors so callers can log full detail server-side and
+// return a generic, key-safe message to the client. NOTE: do NOT forward the
+// raw Stripe `.message` to the browser — it can contain the secret key
+// verbatim (e.g. "Expired API Key provided: sk_live_…"). See `stripeFailure`
+// in routes.ts for the client-facing mapping.
 export function isStripeError(err: unknown): err is InstanceType<typeof Stripe.errors.StripeError> {
   return err instanceof Stripe.errors.StripeError;
 }

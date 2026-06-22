@@ -166,6 +166,26 @@ async function parseJson<T extends z.ZodTypeAny>(
   return result.data;
 }
 
+// A Stripe SDK error message can embed our secret key verbatim — e.g.
+// "Expired API Key provided: sk_live_…a1cjVy" — so it must NEVER be echoed to
+// the browser. Log the full detail server-side (Worker logs) and hand the
+// client a generic, key-safe message. Used by every Stripe-call catch block.
+export function stripeFailure(
+  err: { message?: string; code?: string; type?: string; statusCode?: number },
+  action: string,
+): ApiError {
+  console.error(`[billing] Stripe error during ${action}`, {
+    message: err.message,
+    code: err.code,
+    type: err.type,
+    statusCode: err.statusCode,
+  });
+  return badGateway(
+    'Payment processing is temporarily unavailable. Please try again in a moment — if it keeps happening, email hello@gtfsx.com.',
+    { reason: 'stripe_error' },
+  );
+}
+
 billingRouter.post('/checkout', async (c) => {
   if (!billingReady(c.env)) {
     throw new ApiError(503, 'internal', 'Billing is not yet enabled in this environment.');
@@ -276,7 +296,7 @@ billingRouter.post('/checkout', async (c) => {
     });
   } catch (err) {
     if (isStripeError(err)) {
-      throw badGateway(`Stripe: ${err.message}`, { stripeCode: err.code, stripeType: err.type });
+      throw stripeFailure(err, 'checkout.sessions.create');
     }
     throw err;
   }
@@ -343,7 +363,7 @@ billingRouter.post('/portal', async (c) => {
     });
   } catch (err) {
     if (isStripeError(err)) {
-      throw badGateway(`Stripe: ${err.message}`, { stripeCode: err.code, stripeType: err.type });
+      throw stripeFailure(err, 'billingPortal.sessions.create');
     }
     throw err;
   }

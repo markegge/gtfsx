@@ -21,6 +21,12 @@ interface PaywallOverlayProps {
   description?: string;
   /** Optional className for the outer wrapper. */
   className?: string;
+  /** Fill the parent's height and center the card, rather than hugging the
+   *  card's content. Use inside fixed-height containers (the bottom panel's
+   *  Embed/Publish/Snapshots tabs) so the gate covers the whole panel instead
+   *  of leaving an empty band below the card. Leave off in content-driven
+   *  rails (Costs/Coverage), where hugging is correct. */
+  fill?: boolean;
   /** Optional "see a live example" link in the overlay card (e.g. the embeds
    *  gate links free users to the public demo mini-site). */
   exampleHref?: string;
@@ -41,6 +47,7 @@ export function PaywallOverlay({
   title,
   description,
   className = '',
+  fill = false,
   exampleHref,
   exampleLabel,
   proIntentAction,
@@ -87,12 +94,14 @@ export function PaywallOverlay({
     : `/signup?next=${encodeURIComponent(`/pricing?feature=${feature}`)}`;
 
   return (
-    // The card renders in normal flow so the wrapper hugs its content — no fixed
-    // `min-h`/`h-full`, which used to leave a tall washed-out empty block below
-    // the card in content-driven panels (the Costs/Coverage right rail). In
-    // `preview` mode the gated content is painted as a faded backdrop behind the
-    // card, clipped to the card's height.
-    <div className={`relative overflow-hidden ${className}`}>
+    // Default (hug): the card renders in normal flow so the wrapper hugs its
+    // content — no fixed `min-h`/`h-full`, which used to leave a tall washed-out
+    // empty block below the card in content-driven panels (the Costs/Coverage
+    // right rail). `fill`: cover the parent's full height and center the card —
+    // for fixed-height containers (the bottom panel's Embed/Publish/Snapshots
+    // tabs) where hugging leaves an empty band below the card. In `preview` mode
+    // the gated content is painted as a faded backdrop behind the card.
+    <div className={`relative overflow-hidden ${fill ? 'h-full' : ''} ${className}`}>
       {preview && (
         <div
           aria-hidden
@@ -101,7 +110,11 @@ export function PaywallOverlay({
           {children}
         </div>
       )}
-      <div className="relative flex items-start justify-center bg-cream/85 backdrop-blur-sm">
+      <div
+        className={`flex justify-center bg-cream/85 backdrop-blur-sm ${
+          fill ? 'absolute inset-0 items-center' : 'relative items-start'
+        }`}
+      >
         <div className="m-6 max-w-md rounded-2xl border border-sand bg-white p-6 shadow-lg">
           <div className="mb-2 text-xs font-bold uppercase tracking-wide text-coral">
             {planDisplayName(target)} plan

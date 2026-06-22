@@ -34,7 +34,7 @@ export const PRO_NUDGE_COPY: Record<
 > = {
   publish_intent: {
     message:
-      "Want this feed to live at a stable, auto-updating URL — and show up in Google/Apple/Transit? That's Pro.",
+      'Want this feed to live at a stable, auto-updating URL — and show up in Google/Apple/Transit? Get these features by upgrading to Pro.',
     cta: 'See Pro',
     feature: 'managed_publishing',
   },

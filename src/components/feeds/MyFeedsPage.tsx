@@ -27,6 +27,11 @@ import { ImportDialog } from '../import-export/ImportDialog';
 import { buildSnapshot, resetStoreEntities, setCurrentWorkingStateVersion, wipeLocalProject } from '../../db/serverPersistence';
 import { generateId } from '../../services/idGenerator';
 
+// Free plan saves 3 feeds (server PLAN_QUOTAS.free.projects). Creating a 4th is
+// allowed in prod (the cap is soft, HARD_LIMITS=false) but is the moment to sell
+// Pro. Mirrors the "Free saves 3 feeds" copy.
+const FREE_FEED_CAP = 3;
+
 function formatDate(ms: number | null | undefined): string {
   if (!ms) return '—';
   const d = new Date(ms);
@@ -47,6 +52,7 @@ export function MyFeedsPage() {
   const feedsProjects = useStore((s) => s.feedsProjects);
   const feedsQuotaWarning = useStore((s) => s.feedsQuotaWarning);
   const setFeedsProjects = useStore((s) => s.setFeedsProjects);
+  const setProNudgeToast = useStore((s) => s.setProNudgeToast);
   const upsertFeedProject = useStore((s) => s.upsertFeedProject);
   const removeFeedProject = useStore((s) => s.removeFeedProject);
   const setProjectId = useStore((s) => s.setProjectId);
@@ -109,27 +115,39 @@ export function MyFeedsPage() {
     fetchList();
   }, [authChecked, currentUser, fetchList]);
 
-  // Feed-cap nudge (nudge "b") instrumentation. When the active workspace is at
-  // or over its saved-feed cap, record the feed_cap pro-intent signal once.
-  // fireProNudge gates to logged-in free owners + dedupes per trigger, so this
-  // is a no-op for paid workspaces and for the soft "approaching" warning.
+  // Feed-cap nudge (nudge "b"): a free owner who is OVER the saved-feed cap gets
+  // a one-time, dismissible upgrade toast + the recorded pro-intent signal.
+  // fireProNudge gates to logged-in free owners and dedupes per trigger, so this
+  // is a no-op for paid workspaces and after the first fire. The cap is soft in
+  // prod (HARD_LIMITS=false), so this is the only thing that sells at the cap.
+  const fireFeedCapNudge = useCallback(
+    (source: string): boolean => {
+      const activeOrg =
+        activeWorkspace.type === 'org'
+          ? userOrgs.find((o) => o.id === activeWorkspace.orgId)
+          : null;
+      const ownerPlan = activeOrg ? activeOrg.plan : currentUser?.plan;
+      const fired = fireProNudge({
+        loggedIn: !!currentUser,
+        plan: ownerPlan,
+        action: 'feed_cap',
+        source,
+      });
+      if (fired) setProNudgeToast({ action: 'feed_cap' });
+      return fired;
+    },
+    [activeWorkspace, userOrgs, currentUser, setProNudgeToast],
+  );
+
+  // Visiting the feeds list while over the cap (e.g. returning later) is a valid
+  // moment to nudge too — `used/limit` from the server, strictly over.
   useEffect(() => {
     if (!feedsQuotaWarning) return;
     const m = /^(\d+)\s*\/\s*(\d+)$/.exec(feedsQuotaWarning.trim());
     if (!m) return;
-    if (Number(m[1]) < Number(m[2])) return; // only at/over the cap
-    const activeOrg =
-      activeWorkspace.type === 'org'
-        ? userOrgs.find((o) => o.id === activeWorkspace.orgId)
-        : null;
-    const ownerPlan = activeOrg ? activeOrg.plan : currentUser?.plan;
-    fireProNudge({
-      loggedIn: !!currentUser,
-      plan: ownerPlan,
-      action: 'feed_cap',
-      source: 'feeds_quota_banner',
-    });
-  }, [feedsQuotaWarning, activeWorkspace, userOrgs, currentUser]);
+    if (Number(m[1]) <= Number(m[2])) return; // only OVER the cap (4th+ feed)
+    fireFeedCapNudge('feeds_quota_banner');
+  }, [feedsQuotaWarning, fireFeedCapNudge]);
 
   // After ImportDialog loads the feed into the editor store, persist it as a
   // new project owned by the active workspace (mirrors SaveAsDialog), then
@@ -306,6 +324,14 @@ export function MyFeedsPage() {
           onCreated={async (p) => {
             upsertFeedProject(p);
             setShowCreate(false);
+            // Feed-cap nudge at the moment of value: this create takes a free
+            // user OVER the free cap (the soft prod path succeeds silently, so
+            // nothing else sells here). +1 because feedsProjects hasn't
+            // re-rendered with the new feed yet. fireFeedCapNudge gates to free
+            // owners + dedupes; the toast shows in the editor we navigate to.
+            if (feedsProjects.length + 1 > FREE_FEED_CAP) {
+              fireFeedCapNudge('create_over_cap');
+            }
             // The previous project's routes/stops/calendars are still in the
             // in-memory store and in IndexedDB. Without a wipe, the new
             // editor would briefly render that stale data before the empty

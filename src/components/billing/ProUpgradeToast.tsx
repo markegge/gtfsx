@@ -1,29 +1,18 @@
-import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { PRO_NUDGE_COPY } from '../../services/proIntent';
 
-// How long the toast lingers before auto-dismissing (it has already recorded
-// the intent + marked itself shown, so dismissing never re-triggers it). Long
-// enough to read + click, short enough to stay non-naggy.
-const AUTO_DISMISS_MS = 14000;
-
 /**
- * Non-modal upgrade toast for the publish/hosting-intent nudge (nudge "a").
- * Mounted once in the editor shell; renders only when uiSlice.proNudgeToast is
- * set (a logged-in free user just exported a feed). Dismissible and self-
- * dismissing. Links to /pricing for the gated feature.
+ * Non-modal upgrade toast for the contextual upgrade nudges (publish/hosting,
+ * feed-cap, mini-site). Mounted once in the editor shell; renders only when
+ * uiSlice.proNudgeToast is set (a logged-in free user just hit a Pro moment).
+ * It stays put until the user dismisses it (the × or the CTA) — no auto-
+ * dismiss, so it can't vanish before it's read. Links to /pricing.
  */
 export function ProUpgradeToast() {
   const toast = useStore((s) => s.proNudgeToast);
   const setProNudgeToast = useStore((s) => s.setProNudgeToast);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setProNudgeToast(null), AUTO_DISMISS_MS);
-    return () => clearTimeout(t);
-  }, [toast, setProNudgeToast]);
 
   if (!toast) return null;
   const copy = PRO_NUDGE_COPY[toast.action];

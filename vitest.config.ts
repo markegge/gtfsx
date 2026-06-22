@@ -60,6 +60,7 @@ export default defineConfig(async () => {
             BACKEND_ENABLED: 'true',
             HARD_LIMITS: 'false',
             AUTH_EMAIL_FROM: 'test@example.com',
+            OWNER_NOTIFY_EMAIL: 'owner@example.com',
             RESEND_API_KEY: 'test-resend-key',
             MOBILITY_DATABASE_REFRESH_TOKEN: 'test-md-token',
             // Google OAuth (issue #20). Deterministic test creds so the

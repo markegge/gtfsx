@@ -14,6 +14,8 @@ export interface Env {
 
   // Vars (wrangler.jsonc `vars`)
   AUTH_EMAIL_FROM: string;
+  // Internal inbox for owner notifications (e.g. new paid subscriber). Optional.
+  OWNER_NOTIFY_EMAIL?: string;
   APP_ORIGIN: string;
   FEEDS_ORIGIN: string;
   // Dedicated host that serves ONLY user-uploaded forum images

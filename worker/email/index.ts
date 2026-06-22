@@ -153,6 +153,33 @@ export async function sendTrialEndingEmail(
   });
 }
 
+// Internal notification to the GTFS·X owner inbox whenever someone subscribes to
+// a paid plan (Pro/Agency). Fired best-effort from the checkout webhook; no-op
+// when OWNER_NOTIFY_EMAIL isn't configured. Does NOT fire for comp/manual grants
+// (those never go through Stripe checkout).
+export async function sendUpgradeNotification(
+  env: Env,
+  opts: { plan: 'pro' | 'agency'; ownerType: string; email: string; amountTotal: number | null },
+): Promise<void> {
+  const to = env.OWNER_NOTIFY_EMAIL;
+  if (!to) return;
+  const planLabel = opts.plan === 'agency' ? 'Agency' : 'Pro';
+  const email = escapeHtml(opts.email);
+  const billedTo = opts.ownerType === 'org' ? 'an organization' : 'a user';
+  const amount = opts.amountTotal != null ? `$${(opts.amountTotal / 100).toFixed(2)}` : '—';
+  await send(env, {
+    to,
+    subject: `New ${planLabel} subscriber: ${opts.email}`,
+    html: wrap(`
+      <p>🎉 A new <strong>${planLabel}</strong> subscription was just created on gtfsx.com.</p>
+      <p><strong>Customer:</strong> ${email}<br />
+         <strong>Billed to:</strong> ${billedTo}<br />
+         <strong>Checkout total:</strong> ${amount}</p>
+    `),
+    text: `New ${planLabel} subscriber: ${opts.email} (billed to ${billedTo}). Checkout total: ${amount}.`,
+  });
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')

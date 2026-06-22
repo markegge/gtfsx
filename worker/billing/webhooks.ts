@@ -12,7 +12,7 @@ import { sha256Hex } from '../util/crypto';
 import { logAudit } from '../util/audit';
 import type { Plan, OwnerType } from '../projects/quotas';
 import { isPlan } from '../projects/quotas';
-import { sendTrialEndingEmail } from '../email';
+import { sendTrialEndingEmail, sendUpgradeNotification } from '../email';
 import { PLAN_CATALOG } from './plans';
 
 const RELEVANT_EVENTS = [
@@ -189,6 +189,24 @@ async function handleCheckoutSessionCompleted(env: Env, session: Stripe.Checkout
   )
     .bind(now, session.id)
     .run();
+
+  // Notify the owner inbox when someone subscribes to a paid plan. checkout
+  // .session.completed fires exactly once per new subscription (no dedup needed)
+  // and carries the target plan + customer email in metadata. Best-effort: a
+  // failed notification must never fail the webhook (Stripe would retry).
+  const targetPlan = session.metadata?.target_plan;
+  if (targetPlan === 'pro' || targetPlan === 'agency') {
+    try {
+      await sendUpgradeNotification(env, {
+        plan: targetPlan,
+        ownerType: session.metadata?.owner_type ?? 'user',
+        email: session.customer_details?.email ?? session.customer_email ?? '(unknown)',
+        amountTotal: session.amount_total ?? null,
+      });
+    } catch (err) {
+      console.error('[billing] upgrade notification failed:', err);
+    }
+  }
 
   // The subscription created from this checkout fires its own event; the
   // primary work happens there. We just stamp the session and (if the

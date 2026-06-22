@@ -84,17 +84,23 @@ export function AgencyEditor() {
 
       <RailDivider />
       <RailSubHeading>Feed Info</RailSubHeading>
+      {/* feed_publisher is fixed to GTFS·X on every export and publish (see
+          gtfsExport buildFeedInfoRow). The prior/imported publisher is shown
+          here read-only for reference but is never written to the exported
+          feed_info.txt. */}
       <FormField
-        label="Publisher Name"
+        label="Prior publisher"
         value={feedInfo?.feed_publisher_name || ''}
-        onChange={(v) => updateFeedInfo({ feed_publisher_name: v })}
-        placeholder="e.g., Your Agency"
+        onChange={() => {}}
+        disabled
+        placeholder="None — published as GTFS·X"
       />
       <FormField
-        label="Publisher URL"
+        label="Prior publisher URL"
         value={feedInfo?.feed_publisher_url || ''}
-        onChange={(v) => updateFeedInfo({ feed_publisher_url: v })}
-        placeholder="https://..."
+        onChange={() => {}}
+        disabled
+        placeholder="None — published as GTFS·X"
       />
       <FormField
         label="Feed Language"

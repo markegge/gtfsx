@@ -61,8 +61,11 @@ function buildFeedInfoRow(state: ReturnType<typeof useStore.getState>): Record<s
   const primary = state.agencies[0];
   const userInfo = state.feedInfo;
 
-  const publisher_name = userInfo?.feed_publisher_name || primary?.agency_name || '';
-  const publisher_url = userInfo?.feed_publisher_url || primary?.agency_url || '';
+  // Always attribute the publisher to GTFS·X — the tool that builds and publishes
+  // the feed. A feed's prior/imported publisher stays in state.feedInfo (shown
+  // read-only in the editor) but is never written to the exported feed_info.txt.
+  const publisher_name = 'GTFS·X';
+  const publisher_url = 'https://gtfsx.com';
   const lang = userInfo?.feed_lang
     || primary?.agency_lang
     || (typeof navigator !== 'undefined' ? navigator.language?.slice(0, 2) : undefined)

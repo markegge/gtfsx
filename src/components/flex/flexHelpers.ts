@@ -32,7 +32,22 @@ export function createFlexZoneWithRoute(
       route_text_color: getContrastTextColor(nextColor),
     });
   }
-  state.addFlexZone({ ...zone, routeId });
+
+  // Auto-assign the lone service pattern. When the feed defines exactly ONE
+  // service_id (across calendar.txt + calendar_dates.txt), a new flex zone can
+  // only run on that service, so pre-pick it — saving the user a trip to the
+  // Details panel and making the zone immediately export-eligible. With 0 or
+  // 2+ patterns we leave it unset (current behavior). A serviceId already on
+  // the incoming zone is always respected.
+  let serviceId = zone.serviceId;
+  if (serviceId === undefined) {
+    const ids = new Set<string>();
+    for (const c of state.calendars) ids.add(c.service_id);
+    for (const d of state.calendarDates) ids.add(d.service_id);
+    if (ids.size === 1) serviceId = [...ids][0];
+  }
+
+  state.addFlexZone({ ...zone, routeId, serviceId });
 }
 
 /**

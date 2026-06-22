@@ -32,7 +32,7 @@ function describeServicePattern(c: {
 export function FlexZoneDetails({ zone }: Props) {
   const {
     updateFlexZone, updateFlexZoneBooking, fareAttributes, calendars, calendarDates,
-    stops, setSidebarSection,
+    stops, agencies, setSidebarSection,
     addFlexZoneGroup, removeFlexZoneGroup, clearFlexZonePolygons, setMapMode,
   } = useStore();
   const hasGroup = flexZoneHasGroup(zone);
@@ -58,8 +58,24 @@ export function FlexZoneDetails({ zone }: Props) {
   const setField = <K extends keyof FlexZone>(k: K, v: FlexZone[K]) =>
     updateFlexZone(zone.id, { [k]: v } as Partial<FlexZone>);
 
-  const setBooking = <K extends keyof BookingRule>(k: K, v: BookingRule[K]) =>
+  const setBooking = <K extends keyof BookingRule>(k: K, v: BookingRule[K]) => {
+    // The first time a zone gets a booking rule, pre-seed the rider-facing
+    // contact fields from the primary agency: booking phone ← agency_phone,
+    // info URL ← agency_url. Only fields the agency actually sets are seeded,
+    // and the field the user is editing right now always wins (it's spread
+    // last). Once the rule exists we never re-seed, so a value the user typed
+    // or cleared is never overwritten.
+    if (!zone.bookingRule) {
+      const agency = agencies[0];
+      const seed: Partial<BookingRule> = {};
+      if (agency?.agency_phone) seed.phoneNumber = agency.agency_phone;
+      if (agency?.agency_url) seed.infoUrl = agency.agency_url;
+      const update: Partial<BookingRule> = { ...seed, [k]: v };
+      updateFlexZoneBooking(zone.id, update);
+      return;
+    }
     updateFlexZoneBooking(zone.id, { [k]: v });
+  };
 
   const addStop = (stopId: string) => {
     if (!stopId) return;
@@ -366,35 +382,47 @@ export function FlexZoneDetails({ zone }: Props) {
           </div>
         )}
 
-        <div className="space-y-1.5">
-          <input
-            type="tel"
-            value={b.phoneNumber || ''}
-            onChange={(e) => setBooking('phoneNumber', e.target.value || undefined)}
-            placeholder="Booking phone (e.g. (406) 555-1234)"
-            className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
-          />
-          <input
-            type="url"
-            value={b.bookingUrl || ''}
-            onChange={(e) => setBooking('bookingUrl', e.target.value || undefined)}
-            placeholder="Booking URL (rider-facing booking page)"
-            className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
-          />
-          <input
-            type="url"
-            value={b.infoUrl || ''}
-            onChange={(e) => setBooking('infoUrl', e.target.value || undefined)}
-            placeholder="Info URL (about the service)"
-            className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
-          />
-          <textarea
-            value={b.message || ''}
-            onChange={(e) => setBooking('message', e.target.value || undefined)}
-            placeholder="Rider message (e.g. &quot;Call at least 1 hour before pickup.&quot;)"
-            rows={2}
-            className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple resize-y min-h-[3.5rem]"
-          />
+        <div className="space-y-2">
+          <div>
+            <label className="block text-[10px] text-warm-gray mb-0.5">Booking phone</label>
+            <input
+              type="tel"
+              value={b.phoneNumber || ''}
+              onChange={(e) => setBooking('phoneNumber', e.target.value || undefined)}
+              placeholder="e.g. (406) 555-1234"
+              className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] text-warm-gray mb-0.5">Booking URL</label>
+            <input
+              type="url"
+              value={b.bookingUrl || ''}
+              onChange={(e) => setBooking('bookingUrl', e.target.value || undefined)}
+              placeholder="Rider-facing booking page"
+              className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] text-warm-gray mb-0.5">Info URL</label>
+            <input
+              type="url"
+              value={b.infoUrl || ''}
+              onChange={(e) => setBooking('infoUrl', e.target.value || undefined)}
+              placeholder="Page about the service"
+              className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] text-warm-gray mb-0.5">Rider message</label>
+            <textarea
+              value={b.message || ''}
+              onChange={(e) => setBooking('message', e.target.value || undefined)}
+              placeholder="e.g. &quot;Call at least 1 hour before pickup.&quot;"
+              rows={2}
+              className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple resize-y min-h-[3.5rem]"
+            />
+          </div>
         </div>
       </div>
 

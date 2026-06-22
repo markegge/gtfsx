@@ -7,6 +7,7 @@ import type { FlexZone } from '../../store/flexSlice';
 import { flexZoneShape } from '../../store/flexSlice';
 import { FlexZoneDetails } from './FlexZoneDetails';
 import { createFlexZoneWithRoute, deleteFlexZoneWithRoute } from './flexHelpers';
+import { gtfsTimeToSeconds, secondsToGtfsTime } from '../../utils/time';
 
 const DEFAULT_FLEX_BUFFER_MILES = 0.75;
 
@@ -63,9 +64,61 @@ function generateServiceArea(
   return featureCollection([buffered]) as GeoJSON.FeatureCollection;
 }
 
+/**
+ * The service span of the fixed routes that feed the buffer, as a GTFS
+ * HH:MM:SS pickup window: earliest departure_time → latest arrival_time across
+ * the stop_times of every trip running on those routes. Used to pre-seed a
+ * buffered flex zone's pickup window so the on-demand area inherits its parent
+ * routes' hours of service. Returns null when no contributing route has any
+ * timed stop_times (the zone's window then stays blank — current behavior).
+ */
+function computeBufferedServiceSpan(
+  shapes: ReturnType<typeof useStore.getState>['shapes'],
+  routes: ReturnType<typeof useStore.getState>['routes'],
+  trips: ReturnType<typeof useStore.getState>['trips'],
+  stopTimes: ReturnType<typeof useStore.getState>['stopTimes'],
+  hiddenRouteIds: string[],
+): { start: string; end: string } | null {
+  const hiddenSet = new Set(hiddenRouteIds);
+
+  // The routes whose shapes contribute to the buffer — same predicate as
+  // generateServiceArea, so the span matches the geometry's parent routes.
+  const bufferedRouteIds = new Set<string>();
+  for (const shape of shapes) {
+    if (shape.points.length < 2) continue;
+    const trip = trips.find((t) => t.shape_id === shape.shape_id);
+    if (!trip) continue;
+    const route = routes.find((r) => r.route_id === trip.route_id);
+    if (!route) continue;
+    if (hiddenSet.has(route.route_id)) continue;
+    if (route.route_type === 0) continue;
+    bufferedRouteIds.add(route.route_id);
+  }
+  if (bufferedRouteIds.size === 0) return null;
+
+  // Every trip on those routes, then min departure / max arrival over their
+  // stop_times. Times are compared as seconds-since-midnight so post-midnight
+  // values (>= 24:00:00) order correctly; a row missing one side falls back to
+  // the other so single-sided stop_times still contribute.
+  const tripIds = new Set(
+    trips.filter((t) => bufferedRouteIds.has(t.route_id)).map((t) => t.trip_id),
+  );
+  let minDep = Infinity;
+  let maxArr = -Infinity;
+  for (const st of stopTimes) {
+    if (!tripIds.has(st.trip_id)) continue;
+    const dep = st.departure_time || st.arrival_time;
+    const arr = st.arrival_time || st.departure_time;
+    if (dep) minDep = Math.min(minDep, gtfsTimeToSeconds(dep));
+    if (arr) maxArr = Math.max(maxArr, gtfsTimeToSeconds(arr));
+  }
+  if (!Number.isFinite(minDep) || !Number.isFinite(maxArr)) return null;
+  return { start: secondsToGtfsTime(minDep), end: secondsToGtfsTime(maxArr) };
+}
+
 export function FlexEditor() {
   const {
-    shapes, routes, trips, hiddenRouteIds,
+    shapes, routes, trips, stopTimes, hiddenRouteIds,
     flexZones, updateFlexZone, updateRoute,
     mapMode, setMapMode, editingFlexZoneId, setEditingFlexZoneId,
   } = useStore();
@@ -132,18 +185,23 @@ export function FlexEditor() {
         setError('No visible bus route shapes found. Draw routes on the map first.');
         return;
       }
+      // Seed the pickup window from the buffered routes' service span so the
+      // demand-response zone inherits its parent routes' hours. Left blank when
+      // those routes have no timed stop_times to derive it from.
+      const span = computeBufferedServiceSpan(shapes, routes, trips, stopTimes, hiddenRouteIds);
       createFlexZoneWithRoute({
         id: `flex-zone-${Date.now()}`,
         name: `Service Area ${zoneCounter++}`,
         bufferMiles,
         geojson,
+        ...(span ? { pickupWindowStart: span.start, pickupWindowEnd: span.end } : {}),
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to generate service area');
     } finally {
       setGenerating(false);
     }
-  }, [shapes, routes, trips, hiddenRouteIds, bufferMiles, bufferValid]);
+  }, [shapes, routes, trips, stopTimes, hiddenRouteIds, bufferMiles, bufferValid]);
 
   const handleDrawZone = () => {
     setMapMode('draw_flex_zone');

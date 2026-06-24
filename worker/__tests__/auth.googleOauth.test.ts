@@ -10,11 +10,13 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { makeClient, locationPath, locationQuery } from './_client';
-import { applyMigrations, dbAll, dbGet, resetDb, seedUser } from './_setup';
+import { applyMigrations, dbAll, dbGet, resetDb, seedUser, type CapturedEmail } from './_setup';
 
 const AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN = 'https://oauth2.googleapis.com/token';
 const USERINFO = 'https://openidconnect.googleapis.com/v1/userinfo';
+
+const RESEND = 'https://api.resend.com/emails';
 
 interface GoogleMock {
   /** Identity returned by the userinfo endpoint. */
@@ -23,11 +25,19 @@ interface GoogleMock {
   tokenStatus?: number;
   /** When set, the userinfo endpoint returns this status (default 200). */
   userinfoStatus?: number;
+  /** Outbound Resend emails captured during the flow (the welcome send lands here). */
+  emails: CapturedEmail[];
+  /** When set, Resend calls return this failure instead of success (welcome-send-failure test). */
+  failResend?: { status: number; body?: string };
   restore(): void;
 }
 
+// A single globalThis.fetch mock that handles Google's token + userinfo calls
+// AND captures outbound Resend emails. (We can't layer a second `vi.spyOn` on
+// top of setupEmailCapture — spying an already-mocked fetch overwrites rather
+// than chains, which self-recurses — so the email capture is folded in here.)
 function mockGoogle(identity: GoogleMock['identity']): GoogleMock {
-  const self: GoogleMock = { identity, restore: () => spy.mockRestore() };
+  const self: GoogleMock = { identity, emails: [], restore: () => spy.mockRestore() };
   const original = globalThis.fetch;
   const spy: MockInstance = vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -49,6 +59,27 @@ function mockGoogle(identity: GoogleMock['identity']): GoogleMock {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });
+      }
+      if (url.startsWith(RESEND)) {
+        if (self.failResend) {
+          return new Response(self.failResend.body ?? '', { status: self.failResend.status });
+        }
+        const bodyStr = typeof init?.body === 'string' ? init.body : '';
+        try {
+          const parsed = JSON.parse(bodyStr) as CapturedEmail;
+          self.emails.push({
+            to: String(parsed.to ?? ''),
+            from: String(parsed.from ?? ''),
+            subject: String(parsed.subject ?? ''),
+            html: String(parsed.html ?? ''),
+            text: String(parsed.text ?? ''),
+            ...(parsed.reply_to != null ? { reply_to: String(parsed.reply_to) } : {}),
+            ...(parsed.bcc != null ? { bcc: String(parsed.bcc) } : {}),
+          });
+        } catch {
+          // ignore malformed body
+        }
+        return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       return original(input as RequestInfo, init);
     },
@@ -90,6 +121,9 @@ describe('auth /google', () => {
     g?.restore();
     g = null;
   });
+
+  const welcomeEmails = () =>
+    (g?.emails ?? []).filter((e) => e.subject.startsWith('Welcome to GTFS·X'));
 
   it('/start redirects to Google with the right params and sets a state cookie', async () => {
     const client = makeClient();
@@ -263,6 +297,66 @@ describe('auth /google', () => {
       user!.id,
     );
     expect(googleCreds).toHaveLength(1);
+  });
+
+  it('new OAuth user gets exactly one welcome email with reply_to + bcc', async () => {
+    g = mockGoogle({ sub: 'g-welcome-1', email: 'gwelcome@example.com', email_verified: true, name: 'G Welcome' });
+    const client = makeClient();
+    const { state } = await startFlow(client);
+
+    const cb = await client.get(`/auth/google/callback?code=abc&state=${state}`);
+    expect(cb.status).toBe(302);
+
+    const welcomes = welcomeEmails();
+    expect(welcomes).toHaveLength(1);
+    expect(welcomes[0].to).toBe('gwelcome@example.com');
+    expect(welcomes[0].reply_to).toBe('hello@gtfsx.com');
+    expect(welcomes[0].bcc).toBe('mark@gtfsx.com');
+  });
+
+  it('existing user linking Google gets NO welcome email', async () => {
+    await seedUser({ email: 'glink@example.com', status: 'active' });
+    g = mockGoogle({ sub: 'g-link-welcome', email: 'glink@example.com', email_verified: true });
+    const client = makeClient();
+    const { state } = await startFlow(client);
+
+    const cb = await client.get(`/auth/google/callback?code=abc&state=${state}`);
+    expect(cb.status).toBe(302);
+    // Link path — not a brand-new user — so no welcome.
+    expect(welcomeEmails()).toHaveLength(0);
+  });
+
+  it('returning OAuth user (known sub) gets NO welcome on a later sign-in', async () => {
+    g = mockGoogle({ sub: 'g-return-welcome', email: 'greturn@example.com', email_verified: true });
+    const first = makeClient();
+    const { state: s1 } = await startFlow(first);
+    await first.get(`/auth/google/callback?code=abc&state=${s1}`);
+    // First sign-in is the brand-new user → one welcome.
+    expect(welcomeEmails()).toHaveLength(1);
+
+    const second = makeClient();
+    const { state: s2 } = await startFlow(second);
+    const cb = await second.get(`/auth/google/callback?code=abc&state=${s2}`);
+    expect(cb.status).toBe(302);
+    // Returning user → still just the one welcome from the first sign-in.
+    expect(welcomeEmails()).toHaveLength(1);
+  });
+
+  it('a failing welcome send does not break new-OAuth-user signup (active + session)', async () => {
+    g = mockGoogle({ sub: 'g-wfail', email: 'gwfail@example.com', email_verified: true });
+    g.failResend = { status: 500, body: '{"error":"boom"}' };
+    const client = makeClient();
+    const { state } = await startFlow(client);
+
+    const cb = await client.get(`/auth/google/callback?code=abc&state=${state}`);
+    expect(cb.status).toBe(302);
+    expect(sessionCookieFrom(cb)).toBeTruthy();
+
+    const user = await dbGet<{ status: string }>(
+      `SELECT status FROM user WHERE email = ?`,
+      'gwfail@example.com',
+    );
+    expect(user?.status).toBe('active');
   });
 
   it('rejects when Google reports email_verified=false (no account, no session)', async () => {

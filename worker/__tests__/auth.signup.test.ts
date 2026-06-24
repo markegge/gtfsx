@@ -75,6 +75,76 @@ describe('auth /signup + /verify', () => {
     expect(me.user.status).toBe('active');
   });
 
+  it('first password verify sends exactly one welcome email with reply_to + bcc', async () => {
+    const client = makeClient();
+    await client.post('/auth/signup', {
+      email: 'welcome@example.com',
+      displayName: 'Welcome',
+      password: 'correct-horse-battery',
+    });
+    const link = capture.linkFor('welcome@example.com');
+    expect(link).toBeTruthy();
+    const linkPath = new URL(link!).pathname + new URL(link!).search;
+    const verify = await client.get(linkPath);
+    expect(verify.status).toBe(302);
+
+    const welcomes = capture.emails.filter((e) => e.subject.startsWith('Welcome to GTFS·X'));
+    expect(welcomes).toHaveLength(1);
+    expect(welcomes[0].to).toBe('welcome@example.com');
+    expect(welcomes[0].reply_to).toBe('hello@gtfsx.com');
+    expect(welcomes[0].bcc).toBe('mark@gtfsx.com');
+    // The welcome links at the editor + the two onboarding docs.
+    expect(welcomes[0].text).toContain('/docs/quick-start/');
+    expect(welcomes[0].text).toContain('/docs/hosted-publishing/');
+  });
+
+  it('re-clicking the verify link does NOT send a second welcome email', async () => {
+    const client = makeClient();
+    await client.post('/auth/signup', {
+      email: 'once@example.com',
+      displayName: 'Once',
+      password: 'correct-horse-battery',
+    });
+    const token = capture.tokenFor('once@example.com')!;
+    expect(token).toBeTruthy();
+
+    const first = await client.get(`/auth/verify?token=${token}`);
+    expect(first.status).toBe(302);
+    expect(capture.emails.filter((e) => e.subject.startsWith('Welcome to GTFS·X'))).toHaveLength(1);
+
+    // Re-click with a fresh client → hits the already-active short-circuit.
+    const fresh = makeClient();
+    const reuse = await fresh.get(`/auth/verify?token=${token}`);
+    expect(reuse.status).toBe(302);
+    expect(locationQuery(reuse, 'status')).toBe('already_verified');
+    // Still exactly one welcome — the short-circuit returns before the send.
+    expect(capture.emails.filter((e) => e.subject.startsWith('Welcome to GTFS·X'))).toHaveLength(1);
+  });
+
+  it('a failing welcome send does not break activation (user ends active, 302)', async () => {
+    const client = makeClient();
+    await client.post('/auth/signup', {
+      email: 'wfail@example.com',
+      displayName: 'WFail',
+      password: 'correct-horse-battery',
+    });
+    const token = capture.tokenFor('wfail@example.com')!;
+    expect(token).toBeTruthy();
+
+    // The verify email already went out; from here every Resend call fails. The
+    // only send during /verify is the welcome — its failure must be swallowed.
+    capture.simulateSendFailure(500, '{"error":"boom"}');
+    const verify = await client.get(`/auth/verify?token=${token}`);
+    expect(verify.status).toBe(302);
+    expect(locationPath(verify)).toBe('/pricing');
+
+    const row = await dbGet<{ status: string }>(
+      `SELECT status FROM user WHERE email = ?`,
+      'wfail@example.com',
+    );
+    expect(row?.status).toBe('active');
+  });
+
   it('duplicate signup for an already-active account returns 409 conflict', async () => {
     const client = makeClient();
     await client.post('/auth/signup', {

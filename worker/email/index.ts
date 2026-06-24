@@ -11,26 +11,35 @@ interface SendOpts {
   subject: string;
   html: string;
   text: string;
+  /** Optional Resend top-level `reply_to`. Omitted from the body when empty. */
+  replyTo?: string;
+  /** Optional Resend top-level `bcc`. Omitted from the body when empty. */
+  bcc?: string;
 }
 
 async function send(env: Env, opts: SendOpts): Promise<void> {
+  const body: Record<string, unknown> = {
+    from: env.AUTH_EMAIL_FROM,
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
+    text: opts.text,
+  };
+  // Only attach reply_to / bcc when actually set — Resend rejects an empty
+  // string, and most transactional mails want neither.
+  if (opts.replyTo) body.reply_to = opts.replyTo;
+  if (opts.bcc) body.bcc = opts.bcc;
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      from: env.AUTH_EMAIL_FROM,
-      to: opts.to,
-      subject: opts.subject,
-      html: opts.html,
-      text: opts.text,
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Resend send failed: ${res.status} ${body}`);
+    const errBody = await res.text();
+    throw new Error(`Resend send failed: ${res.status} ${errBody}`);
   }
 }
 
@@ -55,6 +64,48 @@ export async function sendVerifyEmail(env: Env, to: string, link: string): Promi
       <p style="color: #666; font-size: 13px;">This link expires in 24 hours.</p>
     `),
     text: `Welcome to GTFS·X! Confirm your email by visiting: ${link}\n\nThis link expires in 24 hours.`,
+  });
+}
+
+/**
+ * One-time welcome email, sent best-effort when an account FIRST becomes active
+ * (password verify pending→active, or a brand-new Google-OAuth user). The
+ * activation nudge for Campaign A: confirms they're in, points at the
+ * quick-start + hosted-publishing docs, nudges the first save/publish, and opens
+ * a reply channel for done-for-you feed help.
+ *
+ * `reply_to` comes from `WELCOME_REPLY_TO` (falls back to `AUTH_EMAIL_FROM`);
+ * `bcc` from `WELCOME_BCC`. Both are optional env vars — when unset, `send()`
+ * simply omits them from the Resend body.
+ */
+export async function sendWelcomeEmail(env: Env, to: string): Promise<void> {
+  const editor = `${env.APP_ORIGIN}/`;
+  const quickStart = `${env.APP_ORIGIN}/docs/quick-start/`;
+  const hostedPublishing = `${env.APP_ORIGIN}/docs/hosted-publishing/`;
+  await send(env, {
+    to,
+    subject: 'Welcome to GTFS·X — your account is ready',
+    replyTo: env.WELCOME_REPLY_TO || env.AUTH_EMAIL_FROM,
+    bcc: env.WELCOME_BCC || undefined,
+    html: wrap(`
+      <p>Your GTFS·X account is active. You can build, validate, and publish GTFS feeds right in the browser.</p>
+      <p><a href="${editor}" style="display: inline-block; background: #8a5a3b; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none;">Open the editor</a></p>
+      <p>Two good places to start:</p>
+      <ul style="padding-left: 18px; color: #333;">
+        <li><a href="${quickStart}" style="color: #8a5a3b;">Quick start</a> walks you through building or importing your first feed.</li>
+        <li><a href="${hostedPublishing}" style="color: #8a5a3b;">Hosted publishing</a> puts your feed on a stable public URL for riders and apps.</li>
+      </ul>
+      <p>The fastest way to see it click: import or draw a route, then save (or publish) your first feed.</p>
+      <p style="color: #666; font-size: 13px;">Rather not build it yourself? Just reply. We also fix and publish feeds for agencies.</p>
+    `),
+    text:
+      `Your GTFS·X account is active. You can build, validate, and publish GTFS feeds right in the browser.\n\n` +
+      `Open the editor: ${editor}\n\n` +
+      `Two good places to start:\n` +
+      `- Quick start: ${quickStart}\n` +
+      `- Hosted publishing: ${hostedPublishing}\n\n` +
+      `The fastest way to see it click: import or draw a route, then save (or publish) your first feed.\n\n` +
+      `Rather not build it yourself? Just reply. We also fix and publish feeds for agencies.`,
   });
 }
 

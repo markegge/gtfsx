@@ -5,6 +5,7 @@ import { generateToken } from '../util/crypto';
 import { clientIp } from '../util/rateLimit';
 import { logAudit } from '../util/audit';
 import { createSession, sessionCookie } from './session';
+import { sendWelcomeEmail } from '../email';
 
 // ─── Google OAuth: server-side authorization-code flow (issue #20) ───────────
 //
@@ -325,6 +326,15 @@ googleRouter.get('/callback', async (c) => {
         metadata: { method: 'google_oauth' },
         ip,
       });
+      // Brand-new Google-OAuth user → send the one-time welcome email.
+      // Best-effort: never block the OAuth callback / redirect on a send error.
+      // This branch runs only for genuinely new users (the link / returning
+      // paths above don't reach here), so it fires at most once per user.
+      try {
+        await sendWelcomeEmail(c.env, email);
+      } catch (err) {
+        console.error('[google-oauth] welcome email send failed', err);
+      }
       auditAction = 'user.oauth_created';
     }
   }

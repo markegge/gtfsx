@@ -28,7 +28,7 @@ import {
 } from './tokens';
 import { requireAuth } from './middleware';
 import { googleRouter } from './google';
-import { sendVerifyEmail, sendMagicLink, sendPasswordReset } from '../email';
+import { sendVerifyEmail, sendMagicLink, sendPasswordReset, sendWelcomeEmail } from '../email';
 import { verifyTurnstile } from '../util/turnstile';
 
 const emailSchema = z.string().trim().toLowerCase().email();
@@ -420,9 +420,9 @@ authRouter.get('/verify', async (c) => {
   }
   if (resolved.expiresAt <= Date.now()) return invalidRedirect();
 
-  const userRow = await c.env.DB.prepare(`SELECT id, status FROM user WHERE id = ?`)
+  const userRow = await c.env.DB.prepare(`SELECT id, status, email FROM user WHERE id = ?`)
     .bind(resolved.userId)
-    .first<{ id: string; status: string }>();
+    .first<{ id: string; status: string; email: string }>();
   if (!userRow || userRow.status === 'deleted_soft' || userRow.status === 'disabled') {
     return invalidRedirect();
   }
@@ -465,6 +465,16 @@ authRouter.get('/verify', async (c) => {
     metadata: { method: 'verify_email' },
     ip,
   });
+
+  // First activation of a password account → send the one-time welcome email.
+  // Best-effort: a Resend hiccup must never block activation or the redirect
+  // (mirrors the signup-retry pattern above). The pending→active UPDATE above
+  // only runs once per user, so this fires at most once.
+  try {
+    await sendWelcomeEmail(c.env, userRow.email);
+  } catch (err) {
+    console.error('[verify] welcome email send failed', err);
+  }
 
   // Signup verifications land on the /pricing page unless the signup carried a
   // `next` (e.g. a /pricing card click carries ?plan= so checkout resumes

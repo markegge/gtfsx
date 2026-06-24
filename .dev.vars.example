@@ -20,3 +20,11 @@ RESEND_API_KEY=re_your_dev_key_here
 # For the catalog-search Worker. If you're not using /_import/search locally,
 # any string works.
 MOBILITY_DATABASE_REFRESH_TOKEN=unused-locally
+
+# Welcome email (sent once on first account activation). Both optional locally:
+#  - WELCOME_REPLY_TO: reply-to inbox on the welcome mail (prod: hello@gtfsx.com).
+#    When unset, the welcome email falls back to AUTH_EMAIL_FROM.
+#  - WELCOME_BCC: address BCC'd on every welcome mail (prod: mark@gtfsx.com).
+#    When unset, no bcc is added.
+WELCOME_REPLY_TO=hello@gtfsx.com
+WELCOME_BCC=mark@gtfsx.com

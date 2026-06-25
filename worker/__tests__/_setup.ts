@@ -138,6 +138,10 @@ export interface CapturedEmail {
   subject: string;
   html: string;
   text: string;
+  /** Resend top-level reply_to, when the sender set one. */
+  reply_to?: string;
+  /** Resend top-level bcc, when the sender set one. */
+  bcc?: string;
 }
 
 export interface EmailCapture {
@@ -179,6 +183,8 @@ export function setupEmailCapture(): EmailCapture {
             subject: String(parsed.subject ?? ''),
             html: String(parsed.html ?? ''),
             text: String(parsed.text ?? ''),
+            ...(parsed.reply_to != null ? { reply_to: String(parsed.reply_to) } : {}),
+            ...(parsed.bcc != null ? { bcc: String(parsed.bcc) } : {}),
           });
         } catch {
           // ignore malformed body

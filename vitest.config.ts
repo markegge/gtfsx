@@ -61,6 +61,10 @@ export default defineConfig(async () => {
             HARD_LIMITS: 'false',
             AUTH_EMAIL_FROM: 'test@example.com',
             OWNER_NOTIFY_EMAIL: 'owner@example.com',
+            // Welcome-email reply channel + owner bcc (Campaign A). Set to the
+            // prod values so the welcome-email tests assert the real wiring.
+            WELCOME_REPLY_TO: 'hello@gtfsx.com',
+            WELCOME_BCC: 'mark@gtfsx.com',
             RESEND_API_KEY: 'test-resend-key',
             MOBILITY_DATABASE_REFRESH_TOKEN: 'test-md-token',
             // Google OAuth (issue #20). Deterministic test creds so the

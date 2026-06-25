@@ -16,6 +16,12 @@ export interface Env {
   AUTH_EMAIL_FROM: string;
   // Internal inbox for owner notifications (e.g. new paid subscriber). Optional.
   OWNER_NOTIFY_EMAIL?: string;
+  // Welcome-email reply channel. Optional; when unset the welcome email falls
+  // back to AUTH_EMAIL_FROM. Prod value: hello@gtfsx.com.
+  WELCOME_REPLY_TO?: string;
+  // BCC applied to every welcome email so the owner sees each new activation.
+  // Optional; omitted from the Resend body when unset. Prod value: mark@gtfsx.com.
+  WELCOME_BCC?: string;
   APP_ORIGIN: string;
   FEEDS_ORIGIN: string;
   // Dedicated host that serves ONLY user-uploaded forum images

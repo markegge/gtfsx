@@ -81,6 +81,10 @@
   "vars": {
     "AUTH_EMAIL_FROM": "GTFS·X <noreply@gtfsx.com>",
     "OWNER_NOTIFY_EMAIL": "mark@eateggs.com",
+    // Welcome email (Campaign A activation): reply-to is a monitored inbox; bcc
+    // copies the owner on every activation. See worker/email/sendWelcomeEmail.
+    "WELCOME_REPLY_TO": "hello@gtfsx.com",
+    "WELCOME_BCC": "mark@gtfsx.com",
     "APP_ORIGIN": "https://www.gtfsx.com",
     "FEEDS_ORIGIN": "https://feeds.gtfsx.com",
     // Dedicated host for user-uploaded forum images. New uploads return
@@ -185,6 +189,8 @@
       "vars": {
         "AUTH_EMAIL_FROM": "GTFS·X Staging <staging@gtfsx.com>",
         "OWNER_NOTIFY_EMAIL": "mark@eateggs.com",
+        "WELCOME_REPLY_TO": "hello@gtfsx.com",
+        "WELCOME_BCC": "mark@gtfsx.com",
         "APP_ORIGIN": "https://staging.gtfsx.com",
         "FEEDS_ORIGIN": "https://staging-feeds.gtfsx.com",
         "IMAGES_ORIGIN": "https://staging-img.gtfsx.com",

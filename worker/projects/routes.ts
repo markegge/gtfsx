@@ -360,19 +360,24 @@ projectsRouter.get('/', async (c) => {
             p.working_state_r2_key, p.working_state_version, p.working_state_size, p.working_state_updated_at,
             p.archived_at, p.deleted_at, p.created_at, p.updated_at, p.brand_primary_color, p.locked, p.thumbnail_version,
             (SELECT COUNT(*) FROM feed_snapshot v WHERE v.project_id = p.id) AS snapshot_count,
-            (SELECT MAX(v.created_at) FROM feed_snapshot v WHERE v.project_id = p.id) AS last_snapshot_created_at
+            (SELECT MAX(v.created_at) FROM feed_snapshot v WHERE v.project_id = p.id) AS last_snapshot_created_at,
+            EXISTS(SELECT 1 FROM publication pub WHERE pub.project_id = p.id) AS is_published
        FROM feed_project p
        WHERE p.owner_type = ? AND p.owner_id = ? AND p.deleted_at IS NULL${archivedFilter}
        ORDER BY COALESCE(p.working_state_updated_at, p.updated_at) DESC`,
   )
     .bind(ownerType, ownerId)
-    .all<ProjectRow & { snapshot_count: number; last_snapshot_created_at: number | null }>();
+    .all<ProjectRow & { snapshot_count: number; last_snapshot_created_at: number | null; is_published: number }>();
 
   const feedsOrigin = c.env.FEEDS_ORIGIN.replace(/\/$/, '');
   const projects = (rows.results ?? []).map((r) => ({
     ...shapeProject(r),
     snapshotCount: r.snapshot_count,
     lastSnapshotCreatedAt: r.last_snapshot_created_at,
+    // Whether this feed has a live canonical publication at
+    // FEEDS_ORIGIN/<slug>/gtfs.zip. The importer's "My feeds" source uses this
+    // to only offer published feeds (v1 imports from the stable published feed).
+    published: !!r.is_published,
     thumbnailUrl: r.thumbnail_version
       ? `${feedsOrigin}/${r.slug}/thumbnail-sm.png?v=${r.thumbnail_version}`
       : null,

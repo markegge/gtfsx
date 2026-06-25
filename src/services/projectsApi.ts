@@ -15,6 +15,13 @@ export interface ProjectSummary {
   updatedAt: number;
   snapshotCount?: number;
   lastSnapshotCreatedAt?: number | null;
+  /**
+   * True when the feed has a live canonical publication served at
+   * FEEDS_ORIGIN/<slug>/gtfs.zip. Set by the list endpoint; the importer's
+   * "My feeds" source shows it as a published/draft label (informational only —
+   * every feed is importable from its working state regardless).
+   */
+  published?: boolean;
   /** 6-char hex without leading "#"; null = use default coral. */
   brandPrimaryColor?: string | null;
   /** Absolute URL of the small route-map thumbnail; null when none generated. */

@@ -122,6 +122,25 @@ describe('/api/projects/:id/publish', () => {
     expect(body.error).toBe('fetch_failed');
   });
 
+  it('GET /api/projects marks published feeds with published:true (drives the "My feeds" importer source)', async () => {
+    const client = await loggedInClient('listpub@example.com');
+
+    // One published feed…
+    const pub = await createProject(client, 'Published Feed');
+    const v = await createSnapshot(client, pub.id, { agencies: [], routes: [] });
+    await publishMultipart(client, pub.id, v.snapshot.id, new TextEncoder().encode('PK\x03\x04x'));
+
+    // …and one that never gets published.
+    const draft = await createProject(client, 'Draft Feed');
+
+    const list = await client.json<{ projects: { id: string; published: boolean }[] }>(
+      await client.get('/api/projects'),
+    );
+    const publishedById = new Map(list.projects.map((p) => [p.id, p.published]));
+    expect(publishedById.get(pub.id)).toBe(true);
+    expect(publishedById.get(draft.id)).toBe(false);
+  });
+
   it('publish with validation errors returns 422; ignoreWarnings allows it', async () => {
     const client = await loggedInClient('pub2@example.com');
     const proj = await createProject(client, 'Broken');

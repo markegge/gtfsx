@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { runValidation, DISMISSIBLE_RULE_LABELS } from '../../services/validation';
+import { getValidationFix, applyValidationFix, type ValidationFixResult } from '../../services/validationFixes';
 import { Badge } from '../ui/Badge';
 
 export function ValidationPanel() {
   const state = useStore();
   const [showDismissed, setShowDismissed] = useState(false);
+  // Last applied one-click fix, held for the undo toast. Lives outside the
+  // validation memo so it survives the re-validate that clears the fixed error.
+  const [fixUndo, setFixUndo] = useState<ValidationFixResult | null>(null);
   // Depend on the specific entity slices the validator reads; `state` as a
   // whole would re-trigger on every unrelated store change (UI state,
   // selection, etc.). Listing the slices is intentional — but it MUST cover
@@ -99,6 +103,26 @@ export function ValidationPanel() {
         {visible.length === 0 && <Badge variant="success">All good</Badge>}
       </div>
 
+      {fixUndo && (
+        <div className="flex items-center gap-2 bg-teal-light rounded-md px-2.5 py-1.5 mb-2 mx-2 text-[11px] text-dark-brown">
+          <span className="flex-1">{fixUndo.label}</span>
+          <button
+            onClick={() => { fixUndo.undo(); setFixUndo(null); }}
+            className="text-coral font-semibold hover:underline shrink-0"
+          >
+            Undo
+          </button>
+          <button
+            onClick={() => setFixUndo(null)}
+            className="text-warm-gray hover:text-dark-brown shrink-0"
+            title="Dismiss"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {visible.length === 0 ? (
         <p className="text-sm text-warm-gray px-2">
           {dismissed.length > 0
@@ -128,6 +152,20 @@ export function ValidationPanel() {
                   )}
                 </div>
               </button>
+              {m.fix && getValidationFix(m.fix.id) && (
+                <button
+                  onClick={() => {
+                    const result = applyValidationFix(m);
+                    // Only surface the undo toast when the fix actually changed
+                    // something (re-clicking an already-fixed message is a no-op).
+                    if (result?.changed) setFixUndo(result);
+                  }}
+                  title={getValidationFix(m.fix.id)!.description}
+                  className="shrink-0 self-center mr-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-teal text-white hover:bg-teal/90 transition-colors"
+                >
+                  {getValidationFix(m.fix.id)!.label}
+                </button>
+              )}
               {m.code && (
                 <button
                   onClick={() => state.dismissValidation(m.code!)}

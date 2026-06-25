@@ -3,8 +3,10 @@ import { parseGtfsInWorker, inspectGtfsZip, loadImportIntoStore, mergeImportInto
 import { useStore } from '../../store';
 import type { Route } from '../../types/gtfs';
 import { CatalogSearch, type CatalogFeed } from './CatalogSearch';
+import { MyFeedsSource } from './MyFeedsSource';
+import type { MyFeedItem } from '../../services/myFeedsImport';
 
-type ImportSource = 'upload' | 'url' | 'catalog';
+type ImportSource = 'upload' | 'url' | 'catalog' | 'myfeeds';
 
 type ImportMode = 'replace' | 'merge';
 
@@ -56,6 +58,9 @@ interface ImportDialogProps {
 }
 
 export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialogProps) {
+  // Only signed-in users have feeds of their own to import from, so the
+  // "My feeds" source tab is gated on an authenticated session.
+  const currentUser = useStore((s) => s.currentUser);
   const [source, setSource] = useState<ImportSource>('upload');
   const [dragging, setDragging] = useState(false);
   const [parsing, setParsing] = useState(false);
@@ -203,6 +208,39 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
     if (!r.ok) throw new Error(`Download failed: ${r.status} ${await r.text()}`);
     const blob = await r.blob();
     const file = new File([blob], `${fileNameStem}.zip`, { type: 'application/zip' });
+    await parseFile(file);
+  }, [parseFile]);
+
+  // "My feeds" import: resolve the selected feed to its published GTFS zip and
+  // run the SAME parse → route/stop picker → merge/replace pipeline as every
+  // other source. The published feed lives on our own feeds zone, so we route
+  // through /api/import/fetch (which reads the bytes straight from R2 — a
+  // browser/worker can't fetch our own zone cross-zone) rather than the
+  // generic /_import/proxy used for third-party catalog URLs.
+  const handleMyFeedSelect = useCallback(async (feed: MyFeedItem) => {
+    if (!feed.gtfsUrl) throw new Error('That feed isn’t published yet.');
+    setError(null);
+    const res = await fetch(`/api/import/fetch?url=${encodeURIComponent(feed.gtfsUrl)}`, {
+      method: 'GET',
+      headers: { 'X-GB-Client': 'web' },
+      credentials: 'omit',
+    });
+    if (!res.ok) {
+      let message = `Download failed (${res.status}).`;
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        try {
+          const payload = (await res.json()) as { message?: string };
+          if (payload?.message) message = payload.message;
+        } catch {
+          /* keep default message */
+        }
+      }
+      throw new Error(message);
+    }
+    const blob = await res.blob();
+    const stem = (feed.name || feed.slug).slice(0, 60).replace(/[\\/:*?"<>|]+/g, '_') || feed.slug;
+    const file = new File([blob], `${stem}.zip`, { type: 'application/zip' });
     await parseFile(file);
   }, [parseFile]);
 
@@ -521,6 +559,15 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
           >
             Search Catalog
           </button>
+          {currentUser && (
+            <button
+              onClick={() => setSource('myfeeds')}
+              className={`flex-1 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors
+                ${source === 'myfeeds' ? 'bg-white text-dark-brown shadow-sm' : 'text-warm-gray hover:text-dark-brown'}`}
+            >
+              My feeds
+            </button>
+          )}
         </div>
 
         {error && (
@@ -591,6 +638,14 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
             <div className="border border-sand rounded-lg p-12 text-center text-warm-gray">{progress ?? 'Parsing feed…'}</div>
           ) : (
             <CatalogSearch onSelect={handleCatalogSelect} />
+          )
+        )}
+
+        {source === 'myfeeds' && (
+          parsing ? (
+            <div className="border border-sand rounded-lg p-12 text-center text-warm-gray">{progress ?? 'Parsing feed…'}</div>
+          ) : (
+            <MyFeedsSource onSelect={handleMyFeedSelect} />
           )
         )}
 

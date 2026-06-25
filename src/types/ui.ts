@@ -56,6 +56,15 @@ export type StopDetailTab = 'details' | 'trips' | 'coverage';
 
 export type CalendarDetailTab = 'details' | 'routes' | 'exceptions';
 
+/**
+ * Stable id for an auto-applicable validation fix. A message carries only the
+ * id; the human label, description, and the `apply` mutation live in the fix
+ * registry (services/validationFixes.ts) so this types module stays free of any
+ * store import. Grow the one-click "Fix" catalog by adding an id here and
+ * registering it in that registry.
+ */
+export type ValidationFixId = 'fill-trip-edge-times';
+
 export interface ValidationMessage {
   id: string;
   severity: 'error' | 'warning';
@@ -71,4 +80,11 @@ export interface ValidationMessage {
    * services/validation.ts). Absent → the message is not dismissible.
    */
   code?: string;
+  /**
+   * Optional one-click auto-fix descriptor. When present, the validation panel
+   * renders a "Fix" button that looks the id up in the fix registry
+   * (services/validationFixes.ts) and applies the store mutation that resolves
+   * the issue (with undo). Absent → the issue is manual-only.
+   */
+  fix?: { id: ValidationFixId };
 }

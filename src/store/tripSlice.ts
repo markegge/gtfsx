@@ -5,6 +5,17 @@ import type { ShapeSlice } from './shapeSlice';
 import type { StopSlice } from './stopSlice';
 import { gtfsTimeToSeconds, secondsToGtfsTime } from '../utils/time';
 
+/** One trip-edge stop_time's prior arrival/departure, captured by the
+ *  fill-trip-edge-times fix so it can be undone. Keyed by trip_id +
+ *  stop_sequence (stop_sequence is the per-instance key, since a pattern may
+ *  repeat a stop_id). */
+export interface TripEdgeTimeFill {
+  trip_id: string;
+  stop_sequence: number;
+  prevArrival: string;
+  prevDeparture: string;
+}
+
 export interface TripSlice {
   trips: Trip[];
   stopTimes: StopTime[];
@@ -32,6 +43,17 @@ export interface TripSlice {
    *  trip so its stops default to "served" (interpolated) rather than skipped.
    *  Never overwrites an existing row. */
   seedTripStops: (trip_id: string, stops: { stop_id: string; stop_sequence: number }[]) => void;
+  /** One-click validation fix for the `missing_trip_edge` error: on this trip's
+   *  first and last SERVED stops (min/max stop_sequence), for each endpoint that
+   *  has EXACTLY ONE of arrival_time/departure_time set, copy the present value
+   *  into the blank field (sets both equal — MobilityData's recommended remedy).
+   *  Endpoints that are both-blank (interpolated) have no value to mirror and are
+   *  left untouched; endpoints already fully timed are skipped. Returns the prior
+   *  values of the rows it changed so the caller can offer an undo. */
+  fillTripEdgeTimes: (trip_id: string) => TripEdgeTimeFill[];
+  /** Revert a fillTripEdgeTimes using its returned snapshot (unconditional set —
+   *  restores exactly what those rows had before). */
+  restoreTripEdgeTimes: (entries: TripEdgeTimeFill[]) => void;
 }
 
 function addMinutesToGtfsTime(time: string, minutes: number): string {
@@ -259,6 +281,52 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
         arrival_time: '',
         departure_time: '',
       });
+    }
+  }),
+  fillTripEdgeTimes: (trip_id) => {
+    const changed: TripEdgeTimeFill[] = [];
+    set((state) => {
+      // First/last SERVED stop = min/max stop_sequence among this trip's rows
+      // (skipped stops have no row, so the endpoints are the adjacent served
+      // stops automatically — mirrors the validator's own endpoint logic).
+      let firstSeq = Infinity;
+      let lastSeq = -Infinity;
+      for (const st of state.stopTimes) {
+        if (st.trip_id !== trip_id) continue;
+        if (st.stop_sequence < firstSeq) firstSeq = st.stop_sequence;
+        if (st.stop_sequence > lastSeq) lastSeq = st.stop_sequence;
+      }
+      if (firstSeq === Infinity) return; // no stop_times for this trip
+      for (const st of state.stopTimes) {
+        if (st.trip_id !== trip_id) continue;
+        if (st.stop_sequence !== firstSeq && st.stop_sequence !== lastSeq) continue;
+        const hasArr = !!st.arrival_time;
+        const hasDep = !!st.departure_time;
+        // Only the one-present case has a value to mirror. Both set = already
+        // valid; both blank = interpolated endpoint (no value), left as a manual
+        // fix. hasArr === hasDep covers both of those skip cases.
+        if (hasArr === hasDep) continue;
+        changed.push({
+          trip_id,
+          stop_sequence: st.stop_sequence,
+          prevArrival: st.arrival_time,
+          prevDeparture: st.departure_time,
+        });
+        const present = hasArr ? st.arrival_time : st.departure_time;
+        st.arrival_time = present;
+        st.departure_time = present;
+      }
+    });
+    return changed;
+  },
+  restoreTripEdgeTimes: (entries) => set((state) => {
+    const byKey = new Map(entries.map((e) => [`${e.trip_id} ${e.stop_sequence}`, e]));
+    for (const st of state.stopTimes) {
+      const e = byKey.get(`${st.trip_id} ${st.stop_sequence}`);
+      if (e) {
+        st.arrival_time = e.prevArrival;
+        st.departure_time = e.prevDeparture;
+      }
     }
   }),
 });

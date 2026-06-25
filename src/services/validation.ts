@@ -203,14 +203,19 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     if ((isFirst || isLast) && (!st.arrival_time || !st.departure_time)) {
       const label = isFirst ? 'First' : 'Last';
       const blankBoth = !st.arrival_time && !st.departure_time;
-      messages.push(msg(
+      const m = msg(
         'error',
         blankBoth
           ? `${label} served stop of trip "${st.trip_id}" has no time. A trip's first and last stops must be timed — enter a time, or mark this stop skipped if the trip doesn't serve it.`
           : `${label} served stop of trip "${st.trip_id}" is missing arrival_time or departure_time — both are required on trip endpoints.`,
         'trip',
         st.trip_id,
-      ));
+      );
+      // One-click fix is offered ONLY for the one-present variant: there's a
+      // value to mirror into the blank field (set both equal). The both-blank
+      // (interpolated) endpoint has no value to copy, so it stays a manual fix.
+      if (!blankBoth) m.fix = { id: 'fill-trip-edge-times' };
+      messages.push(m);
     }
   }
 

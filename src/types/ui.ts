@@ -63,7 +63,7 @@ export type CalendarDetailTab = 'details' | 'routes' | 'exceptions';
  * store import. Grow the one-click "Fix" catalog by adding an id here and
  * registering it in that registry.
  */
-export type ValidationFixId = 'fill-trip-edge-times';
+export type ValidationFixId = 'fill-trip-edge-times' | 'fill-missing-wheelchair';
 
 export interface ValidationMessage {
   id: string;

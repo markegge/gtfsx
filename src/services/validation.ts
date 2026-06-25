@@ -22,6 +22,11 @@ export const VALIDATION_CODES = {
   // but noisy — a common artifact of bulk holiday-adders and rough imports —
   // so it's a dismissible cleanup nudge, not a hard error.
   redundantException: 'redundant-calendar-exception',
+  // Board points (location_type 0) with no wheelchair_boarding value (unset or
+  // 0 = "no information" per the GTFS spec). A completeness reminder, not a
+  // defect — accessibility data is recommended, not required — and there is no
+  // safe blind default, so it's a dismissible nudge with a guided bulk-fill.
+  missingWheelchair: 'missing-wheelchair-boarding',
 } as const;
 
 // Human label for each dismissible rule, shown in the validation panel's
@@ -29,6 +34,7 @@ export const VALIDATION_CODES = {
 export const DISMISSIBLE_RULE_LABELS: Record<string, string> = {
   [VALIDATION_CODES.holidayExceptions]: 'Holiday calendar_dates reminders',
   [VALIDATION_CODES.redundantException]: 'Redundant calendar_dates exceptions',
+  [VALIDATION_CODES.missingWheelchair]: 'Missing wheelchair_boarding reminders',
 };
 
 let msgId = 0;
@@ -147,19 +153,28 @@ export function runValidation(state: AppStore): ValidationMessage[] {
   // Accessibility completeness — aggregate (one message, not one per stop) so
   // the warning is actionable without flooding the panel. Counts board points
   // (location_type 0/blank) where wheelchair_boarding is unset or 0 (= "no
-  // information" per the GTFS spec). Detailed per-route breakdown lives in
-  // Stop Analysis → Accessibility, which this cross-links to.
+  // information" per the GTFS spec) — the exact gap set Stop Analysis →
+  // Accessibility surfaces (computeAccessibilityAudit().gapStopIds). The Fix
+  // button opens a guided 0/1/2 bulk-fill (no safe blind default), and the
+  // reminder is dismissible per feed since accessibility data is recommended,
+  // not required.
   const boardPoints = state.stops.filter((s) => (s.location_type ?? 0) === 0);
   const missingWheelchair = boardPoints.filter(
     (s) => s.wheelchair_boarding !== 1 && s.wheelchair_boarding !== 2,
   ).length;
   if (boardPoints.length > 0 && missingWheelchair > 0) {
     const pct = Math.round((missingWheelchair / boardPoints.length) * 100);
-    messages.push(msg(
+    const wcMsg = msg(
       'warning',
-      `${missingWheelchair} of ${boardPoints.length} stops (${pct}%) are missing wheelchair_boarding — riders see "no accessibility information." Populate it in Stop Analysis → Accessibility.`,
+      `${missingWheelchair} of ${boardPoints.length} stops (${pct}%) have no wheelchair_boarding value — riders see "no accessibility information." Set them in bulk with Fix, or stop-by-stop in Stop Analysis → Accessibility.`,
       'stop',
-    ));
+      undefined,
+      VALIDATION_CODES.missingWheelchair,
+    );
+    // Guided fix: the value (0 = no info, 1 = accessible, 2 = not accessible)
+    // must be user-chosen, so the panel opens a picker rather than auto-applying.
+    wcMsg.fix = { id: 'fill-missing-wheelchair' };
+    messages.push(wcMsg);
   }
 
   // Trip checks (using pre-built indexes — O(n) not O(n²))

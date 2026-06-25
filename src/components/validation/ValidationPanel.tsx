@@ -1,8 +1,19 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { runValidation, DISMISSIBLE_RULE_LABELS } from '../../services/validation';
-import { getValidationFix, applyValidationFix, type ValidationFixResult } from '../../services/validationFixes';
+import {
+  getValidationFix, applyValidationFix, applyValidationFixWithValue,
+  type ValidationFix, type ValidationFixResult,
+} from '../../services/validationFixes';
 import { Badge } from '../ui/Badge';
+
+/** Sensible initial pick for a guided fix's value picker — prefer "Accessible"
+ *  (value 1, matching Stop Analysis's default) when offered, else the first
+ *  option. Only seeds the dropdown; it never auto-applies. */
+function defaultFixValue(fix: ValidationFix): number {
+  const opts = fix.options ?? [];
+  return opts.find((o) => o.value === 1)?.value ?? opts[0]?.value ?? 0;
+}
 
 export function ValidationPanel() {
   const state = useStore();
@@ -10,6 +21,12 @@ export function ValidationPanel() {
   // Last applied one-click fix, held for the undo toast. Lives outside the
   // validation memo so it survives the re-validate that clears the fixed error.
   const [fixUndo, setFixUndo] = useState<ValidationFixResult | null>(null);
+  // Open guided-fix picker: the message id whose interactive fix is being
+  // configured, and the value chosen so far. A guided fix (e.g. the wheelchair
+  // bulk-fill) needs a user-chosen value, so clicking Fix opens this inline
+  // picker instead of applying immediately. null = no picker open.
+  const [pickerMsgId, setPickerMsgId] = useState<string | null>(null);
+  const [pickerValue, setPickerValue] = useState<number>(0);
   // Depend on the specific entity slices the validator reads; `state` as a
   // whole would re-trigger on every unrelated store change (UI state,
   // selection, etc.). Listing the slices is intentional — but it MUST cover
@@ -131,53 +148,94 @@ export function ValidationPanel() {
         </p>
       ) : (
         <div className="flex flex-col">
-          {visible.map((m) => (
-            <div
-              key={m.id}
-              className="group flex items-stretch border-b border-[#F5F0EB] hover:bg-cream transition-colors"
-            >
-              <button
-                onClick={() => handleClick(m)}
-                className="flex items-start gap-3 px-3 py-2.5 text-left flex-1 min-w-0"
-              >
-                <Badge variant={m.severity === 'error' ? 'error' : 'warning'}>
-                  {m.severity === 'error' ? 'Error' : 'Warn'}
-                </Badge>
-                <div className="min-w-0">
-                  <p className="text-[13px] text-dark-brown">{m.message}</p>
-                  {m.entity_type && (
-                    <p className="text-[11px] text-warm-gray mt-0.5">
-                      {m.entity_type} {m.entity_id ? `→ ${m.entity_id}` : ''} · Click to view
-                    </p>
+          {visible.map((m) => {
+            const fix = m.fix ? getValidationFix(m.fix.id) : undefined;
+            const pickerOpen = !!fix?.interactive && pickerMsgId === m.id;
+            return (
+              <div key={m.id}>
+                <div className="group flex items-stretch border-b border-[#F5F0EB] hover:bg-cream transition-colors">
+                  <button
+                    onClick={() => handleClick(m)}
+                    className="flex items-start gap-3 px-3 py-2.5 text-left flex-1 min-w-0"
+                  >
+                    <Badge variant={m.severity === 'error' ? 'error' : 'warning'}>
+                      {m.severity === 'error' ? 'Error' : 'Warn'}
+                    </Badge>
+                    <div className="min-w-0">
+                      <p className="text-[13px] text-dark-brown">{m.message}</p>
+                      {m.entity_type && (
+                        <p className="text-[11px] text-warm-gray mt-0.5">
+                          {m.entity_type} {m.entity_id ? `→ ${m.entity_id}` : ''} · Click to view
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                  {fix && (
+                    <button
+                      onClick={() => {
+                        if (fix.interactive) {
+                          // Guided fix: toggle the inline value picker, seeded
+                          // with a sensible default (without auto-applying).
+                          setPickerValue(defaultFixValue(fix));
+                          setPickerMsgId((cur) => (cur === m.id ? null : m.id));
+                        } else {
+                          const result = applyValidationFix(m);
+                          // Only surface the undo toast when the fix actually
+                          // changed something (re-clicking a fixed message is a no-op).
+                          if (result?.changed) setFixUndo(result);
+                        }
+                      }}
+                      title={fix.description}
+                      className="shrink-0 self-center mr-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-teal text-white hover:bg-teal/90 transition-colors"
+                    >
+                      {fix.label}
+                    </button>
+                  )}
+                  {m.code && (
+                    <button
+                      onClick={() => state.dismissValidation(m.code!)}
+                      title="Dismiss this reminder for this feed"
+                      aria-label="Dismiss this reminder for this feed"
+                      className="shrink-0 px-2.5 text-warm-gray hover:text-dark-brown text-lg leading-none opacity-60 hover:opacity-100"
+                    >
+                      ×
+                    </button>
                   )}
                 </div>
-              </button>
-              {m.fix && getValidationFix(m.fix.id) && (
-                <button
-                  onClick={() => {
-                    const result = applyValidationFix(m);
-                    // Only surface the undo toast when the fix actually changed
-                    // something (re-clicking an already-fixed message is a no-op).
-                    if (result?.changed) setFixUndo(result);
-                  }}
-                  title={getValidationFix(m.fix.id)!.description}
-                  className="shrink-0 self-center mr-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-teal text-white hover:bg-teal/90 transition-colors"
-                >
-                  {getValidationFix(m.fix.id)!.label}
-                </button>
-              )}
-              {m.code && (
-                <button
-                  onClick={() => state.dismissValidation(m.code!)}
-                  title="Dismiss this reminder for this feed"
-                  aria-label="Dismiss this reminder for this feed"
-                  className="shrink-0 px-2.5 text-warm-gray hover:text-dark-brown text-lg leading-none opacity-60 hover:opacity-100"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
+                {pickerOpen && fix?.options && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-cream border-b border-[#F5F0EB]">
+                    <span className="text-[11px] text-warm-gray shrink-0">Set value:</span>
+                    <select
+                      value={pickerValue}
+                      onChange={(e) => setPickerValue(Number(e.target.value))}
+                      aria-label="Value to apply"
+                      className="flex-1 min-w-0 px-2 py-1 border border-sand rounded-md text-xs bg-white focus:outline-none focus:border-coral"
+                    >
+                      {fix.options.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => {
+                        const result = applyValidationFixWithValue(m, pickerValue);
+                        if (result?.changed) setFixUndo(result);
+                        setPickerMsgId(null);
+                      }}
+                      className="shrink-0 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-teal text-white hover:bg-teal/90 transition-colors"
+                    >
+                      Apply
+                    </button>
+                    <button
+                      onClick={() => setPickerMsgId(null)}
+                      className="shrink-0 text-[11px] text-warm-gray hover:text-dark-brown"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

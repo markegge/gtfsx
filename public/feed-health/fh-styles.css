@@ -478,16 +478,12 @@ a { color: inherit; }
   border: 1px solid var(--gtfs-sand);
 }
 
-/* Service indicators (Fixed Route / Demand Response) — compact chips, shown only
-   when the agency reports that service type in the NTD modes data. */
-.ag-service-cell { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.svc-chip {
-  font-family: var(--font-body); font-weight: 700; font-size: 9px;
-  text-transform: uppercase; letter-spacing: 0.04em;
-  padding: 2px 6px; border-radius: var(--radius-xs); white-space: nowrap;
-}
-.svc-fr { background: var(--gtfs-teal-light); color: var(--gtfs-teal); }
-.svc-dr { background: var(--gtfs-purple-light); color: var(--gtfs-purple); }
+/* Fixed Route / Demand Response service columns — each a centered yes/– cell.
+   A colored check marks the service; a muted dash means not reported. */
+.ag-svc-col { text-align: center; white-space: nowrap; }
+.svc-yes { font-weight: 800; font-size: 13px; line-height: 1; }
+.svc-yes-fr { color: var(--gtfs-teal); }
+.svc-yes-dr { color: var(--gtfs-purple); }
 /* Last feed-update date + the muted dash used when a value is unavailable. */
 .ag-update-date { font-size: 12px; color: var(--gtfs-warm-gray); white-space: nowrap; }
 .ag-muted-dash { color: var(--gtfs-sand); }

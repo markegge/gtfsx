@@ -442,6 +442,40 @@
       if (!d) return null;
       return (ag.expired ? "Service ended " : "Service ends ") + d;
     }
+    // Compact "MMM YYYY" for the last-feed-update column (keeps the cell tidy at
+    // ~390px); the full date sits in the cell's title attribute.
+    function shortMonthYear(iso) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+      if (!m) return null;
+      const mi = parseInt(m[2], 10) - 1;
+      if (mi < 0 || mi > 11) return null;
+      return MONTHS[mi] + " " + m[1];
+    }
+
+    // Fixed-route and demand-response service indicators, each in its OWN column.
+    // Classified from the agency's NTD reported service modes (Service-by-Mode
+    // table): demand-response = modes DR/DT; fixed-route = any scheduled mode that
+    // is not DR/DT or vanpool. An agency can be both. A colored check marks the
+    // service; a muted dash means it's not reported (e.g. vanpool-only / no NTD
+    // mode record).
+    function serviceFlagCell(on, yesClass, yesTitle) {
+      if (!on) {
+        return h("span", { className: "ag-muted-dash", title: "Not reported in NTD service modes" }, "–");
+      }
+      return h("span", { className: "svc-yes " + yesClass, title: yesTitle }, "✓");
+    }
+
+    // Last-feed-update cell: the date the Mobility Database last captured the
+    // matched feed's latest dataset (proxy for "feed last published/updated").
+    // Null when the agency has no MDB-matched feed.
+    function lastUpdateCell(ag) {
+      const short = shortMonthYear(ag.lastFeedUpdate);
+      if (!short) return h("span", { className: "ag-muted-dash" }, "–");
+      return h("span", {
+        className: "ag-update-date",
+        title: "Feed last updated in the Mobility Database: " + prettyDate(ag.lastFeedUpdate),
+      }, short);
+    }
 
     function getSorted() {
       return data.agencies.slice().sort(function (a, b) {
@@ -468,7 +502,13 @@
       nameTh.style.cursor = "pointer";
       nameTh.addEventListener("click", function () { setAgSort("name"); });
 
-      const repTh = h("th", { className: "tl", style: { cursor: "default" } }, "Reporter type");
+      // Fixed Route / Demand Response each get their OWN yes/– column, and the
+      // last feed-update date sits between them and Feed status so the status badge
+      // + trailing pencil/action stay the right-hand pair. Last-update is hidden on
+      // small screens (hide-mobile) to keep the table uncrowded at ~390px.
+      const frTh = h("th", { className: "tl ag-svc-col", style: { cursor: "default" } }, "Fixed Route");
+      const drTh = h("th", { className: "tl ag-svc-col", style: { cursor: "default" } }, "Demand Response");
+      const updateTh = h("th", { className: "tl hide-mobile", style: { cursor: "default" } }, "Last update");
 
       const statusTh = h("th", null);
       statusTh.innerHTML = "Feed status" + (agSortKey === "status"
@@ -481,10 +521,10 @@
         // badge above it stays cleanly right-aligned.
         const pencilTh = h("th", { className: "ag-pencil-col", style: { cursor: "default" } });
         pencilTh.setAttribute("aria-label", "Edit");
-        tr.append(nameTh, repTh, statusTh, pencilTh);
+        tr.append(nameTh, frTh, drTh, updateTh, statusTh, pencilTh);
       } else {
         const actionTh = h("th", { style: { cursor: "default" } }, "Action");
-        tr.append(nameTh, repTh, statusTh, actionTh);
+        tr.append(nameTh, frTh, drTh, updateTh, statusTh, actionTh);
       }
       agThead.appendChild(tr);
     }
@@ -520,10 +560,14 @@
         }
         tr.appendChild(h("td", null, nameCell));
 
-        // ---- Reporter type cell ----
-        tr.appendChild(h("td", null,
-          h("span", { className: "reporter-pill" }, reporterLabel(ag.reporterType))
-        ));
+        // ---- Service columns: Fixed Route + Demand Response (own yes/– columns) ----
+        tr.appendChild(h("td", { className: "ag-svc-col" },
+          serviceFlagCell(ag.fixedRoute, "svc-yes-fr", "Operates fixed-route service (NTD reported modes)")));
+        tr.appendChild(h("td", { className: "ag-svc-col" },
+          serviceFlagCell(ag.demandResponse, "svc-yes-dr", "Operates demand-response service (NTD reported modes)")));
+
+        // ---- Last feed-update cell (hidden on small screens) ----
+        tr.appendChild(h("td", { className: "hide-mobile ag-update-cell" }, lastUpdateCell(ag)));
 
         // ---- Feed status cell: JUST the badge (stays right-aligned) ----
         tr.appendChild(h("td", null,

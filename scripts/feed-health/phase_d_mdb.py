@@ -202,6 +202,12 @@ def pull_mdb(tok, cache_path):
                 "total_warning": vr.get("total_warning"),
                 "features":     vr.get("features") or [],
                 "service_end":  ld.get("service_date_range_end") or "",
+                # downloaded_at = when MDB last captured this feed's latest dataset
+                # version. MDB mints a new dataset (and advances downloaded_at) only
+                # when the feed CONTENT changes, so it is the closest available proxy
+                # for "date the feed was last published/updated." NOT the service-period
+                # end (that is service_end). Surfaced to the dashboard as lastFeedUpdate.
+                "last_updated": ld.get("downloaded_at") or "",
             })
         off += 1000
     json.dump(feeds, open(cache_path, "w"))
@@ -325,6 +331,7 @@ def main():
     for r in spine:
         r["in_mdb"] = False; r["mdb_id"] = ""; r["mdb_total_error"] = ""; r["mdb_total_warning"] = ""
         r["mdb_service_end"] = ""; r["mdb_is_flex"] = ""; r["join_method"] = ""; r["mdb_expired"] = ""
+        r["mdb_last_updated"] = ""
 
     matched_feed_ids = set()
 
@@ -340,6 +347,7 @@ def main():
         r["mdb_total_warning"] = f["total_warning"]
         r["mdb_service_end"]   = f["service_end"]
         r["mdb_is_flex"]       = is_flex(f["features"])
+        r["mdb_last_updated"]  = (f.get("last_updated") or "")[:10]
         r["mdb_expired"]       = (f["service_end"][:10] < TODAY) if f["service_end"] else ""
         r["join_method"]       = method
         matched_feed_ids.add(f["mdb_id"])
@@ -408,10 +416,11 @@ def main():
 def write_outputs(spine, feeds, flex_feeds, unmatched, feat, workdir, review_queue=None):
     base  = ["ntd_id", "agency_name", "city", "state", "reporter_type", "organization_type",
              "uza_name", "agency_voms", "unlinked_passenger_trips", "report_year",
+             "ntd_mode_codes", "fixed_route", "demand_response",
              "has_fta_weblink", "weblink_url", "weblink_modes", "certification_flag",
              "url_status", "url_reachable", "url_returns_zip", "url_note"]
     extra = ["in_mdb", "mdb_id", "mdb_total_error", "mdb_total_warning",
-             "mdb_expired", "mdb_is_flex", "join_method"]
+             "mdb_expired", "mdb_is_flex", "mdb_last_updated", "join_method"]
 
     with open(os.path.join(workdir, "ntd_feed_health.csv"), "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=base+extra); w.writeheader()

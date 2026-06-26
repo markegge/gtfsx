@@ -477,6 +477,16 @@ a { color: inherit; }
   background: var(--gtfs-cream); color: var(--gtfs-warm-gray);
   border: 1px solid var(--gtfs-sand);
 }
+
+/* Fixed Route / Demand Response service columns — each a centered yes/– cell.
+   A colored check marks the service; a muted dash means not reported. */
+.ag-svc-col { text-align: center; white-space: nowrap; }
+.svc-yes { font-weight: 800; font-size: 13px; line-height: 1; }
+.svc-yes-fr { color: var(--gtfs-teal); }
+.svc-yes-dr { color: var(--gtfs-purple); }
+/* Last feed-update date + the muted dash used when a value is unavailable. */
+.ag-update-date { font-size: 12px; color: var(--gtfs-warm-gray); white-space: nowrap; }
+.ag-muted-dash { color: var(--gtfs-sand); }
 .action-pill {
   font-family: var(--font-body); font-weight: 700; font-size: 11px;
   padding: 4px 10px; border-radius: var(--radius-pill);
@@ -623,11 +633,14 @@ a { color: inherit; }
      screens so the trailing pencil column is never clipped. The page itself
      does not scroll horizontally. National drill-down is untouched. */
   #agencies .lb-card { overflow-x: auto; }
-  #agencies .ag-table { min-width: 420px; }
+  #agencies .ag-table { min-width: 460px; }
   #agencies .ag-table td, #agencies .ag-table th { padding-left: 12px; padding-right: 10px; }
   #agencies .ag-table td:first-child, #agencies .ag-table th:first-child { padding-left: 14px; }
   #agencies .ag-table th { font-size: 9px; }
   #agencies .reporter-pill { font-size: 9px; padding: 2px 5px; }
+  /* Drop the wider "Last update" column on small screens to keep the agency
+     table uncrowded; Fixed Route / Demand Response chips stay visible. */
+  .hide-mobile { display: none !important; }
   .closing-band { padding: 48px 0 40px; }
   .closing-h2 { font-size: 24px; }
   .closing-plank-stat { font-size: 44px; }

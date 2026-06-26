@@ -49,6 +49,65 @@ def fetch_soda(resource, params):
     return rows
 
 
+# ---------- NTD service modes — fixed-route vs demand-response ----------
+# Per-agency service modes come from the NTD Annual Data "Service by Mode and Time
+# Period" table (data.transportation.gov wwdp-t4re) — the SAME source behind the
+# dashboard's drAgencies headline (DR count reconciles exactly: 1925 in FY2024).
+# Each agency reports one or more 2-letter NTD mode codes. We classify:
+#   demand_response — agency reports DR (Demand Response) or DT (Demand Taxi, a
+#                     retired code folded into DR since report_year 2019).
+#   fixed_route     — agency reports ANY scheduled fixed-route mode, i.e. anything
+#                     that is NOT demand-response and NOT vanpool: MB CB RB LR HR CR
+#                     SR YR MG TB FB CC IP AR TR PB, etc.
+#   Vanpool (VP) is treated as NEITHER fixed-route nor demand-response — it is a
+#     ride-matching program, not a published-schedule transit service. A VP-only
+#     agency therefore gets both flags False.
+#   An agency can be BOTH fixed_route AND demand_response (962 of 2238 in FY2024).
+SERVICE_MODE_RESOURCE = "wwdp-t4re"
+DEMAND_RESPONSE_MODES = {"DR", "DT"}
+VANPOOL_MODES         = {"VP"}
+
+
+def norm_ntd(x):
+    """Normalize an NTD id for joining: digits only, leading zeros stripped.
+    (wwdp-t4re uses zero-padded 5-digit ids like '00001'; the roster does not.)"""
+    if x is None:
+        return ""
+    s = "".join(ch for ch in str(x) if ch.isdigit())
+    return s.lstrip("0") or ("0" if s else "")
+
+
+def fetch_service_modes(year=ROSTER_YEAR):
+    """Return {normalized_ntd_id: sorted list of NTD mode codes} for the report year."""
+    raw = fetch_soda(SERVICE_MODE_RESOURCE,
+                     {"report_year": year, "$select": "_5_digit_ntd_id,mode"})
+    modes = {}
+    for r in raw:
+        nid = norm_ntd(r.get("_5_digit_ntd_id"))
+        m   = (r.get("mode") or "").strip().upper()
+        if nid and m:
+            modes.setdefault(nid, set()).add(m)
+    return {k: sorted(v) for k, v in modes.items()}
+
+
+def classify_modes(mode_codes):
+    """(fixed_route, demand_response) booleans from a collection of NTD mode codes."""
+    s = {str(m).strip().upper() for m in mode_codes if m}
+    demand_response = bool(s & DEMAND_RESPONSE_MODES)
+    fixed_route     = bool(s - DEMAND_RESPONSE_MODES - VANPOOL_MODES)
+    return fixed_route, demand_response
+
+
+def attach_service_modes(spine, modes_by_ntd):
+    """Stamp ntd_mode_codes / fixed_route / demand_response onto each spine row."""
+    for r in spine.values():
+        codes  = modes_by_ntd.get(norm_ntd(r.get("ntd_id")), [])
+        fr, dr = classify_modes(codes)
+        r["ntd_mode_codes"]  = ",".join(codes)
+        r["fixed_route"]     = fr
+        r["demand_response"] = dr
+
+
 # ---------- Phase A: NTD spine ----------
 def build_spine():
     raw = fetch_soda("g27i-aq2u", {"report_year": ROSTER_YEAR})
@@ -191,6 +250,7 @@ def run_reachability(spine, workdir):
 
 COLS = ["ntd_id", "agency_name", "city", "state", "reporter_type", "organization_type",
         "uza_name", "agency_voms", "unlinked_passenger_trips", "report_year",
+        "ntd_mode_codes", "fixed_route", "demand_response",
         "has_fta_weblink", "weblink_url", "weblink_modes", "certification_flag",
         "url_status", "url_reachable", "url_returns_zip", "url_note"]
 
@@ -267,6 +327,14 @@ def main():
     print("Phase A: NTD spine...", file=sys.stderr)
     spine = build_spine()
     print(f"  {len(spine)} agencies", file=sys.stderr)
+
+    print("Phase A2: NTD service modes (fixed-route vs demand-response)...", file=sys.stderr)
+    modes_by_ntd = fetch_service_modes()
+    attach_service_modes(spine, modes_by_ntd)
+    n_fr = sum(1 for r in spine.values() if r.get("fixed_route"))
+    n_dr = sum(1 for r in spine.values() if r.get("demand_response"))
+    print(f"  mode data for {len(modes_by_ntd)} agencies — "
+          f"fixed_route={n_fr}, demand_response={n_dr}", file=sys.stderr)
 
     print("Phase B: FTA Weblinks join...", file=sys.stderr)
     _, weblink_only = join_weblinks(spine)

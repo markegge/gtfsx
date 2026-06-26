@@ -21,8 +21,30 @@ Usage:
   uv run scripts/feed-health-publish.py [path/to/ntd_feed_health.csv]
 """
 
-import argparse, csv, json, os, sys
+import argparse, csv, json, os, re, sys
 from datetime import date, datetime
+
+# MDB hosted-dataset filenames embed the capture timestamp, e.g.
+# files.mobilitydatabase.org/mdb-195/mdb-195-202604250036/mdb-195-202604250036.zip
+# → 2026-04-25. Used as a fallback for lastFeedUpdate when a cache entry predates
+# the last_updated (downloaded_at) field added 2026-06.
+_MDB_DATE_TOKEN = re.compile(r"/(?:mdb|tld|ntd)-[^/]*-(\d{12})/")
+
+
+def feed_last_updated(feed):
+    """Date (YYYY-MM-DD) the matched MDB feed's latest dataset was last captured.
+    Prefers the explicit last_updated (MDB downloaded_at); falls back to the
+    timestamp embedded in the hosted_url. Returns None when neither is available."""
+    if not feed:
+        return None
+    lu = (feed.get("last_updated") or "").strip()
+    if lu:
+        return lu[:10]
+    m = _MDB_DATE_TOKEN.search(feed.get("hosted_url") or "")
+    if m:
+        t = m.group(1)
+        return f"{t[0:4]}-{t[4:6]}-{t[6:8]}"
+    return None
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_CSV = os.path.join(REPO_ROOT, "handoffs", "Feed Health Data", "ntd_feed_health.csv")
@@ -378,10 +400,15 @@ def write_agency_jsons(rows_by_state, mdb_by_id, as_of_iso):
             #   expired    ← mdb_expired (service period already ended)
             mdb_id = r.get("mdb_id", "").strip()
             service_end = None
+            last_feed_update = None
             if mdb_id and mdb_id in mdb_by_id:
                 se = (mdb_by_id[mdb_id].get("service_end") or "").strip()
                 if se:
                     service_end = se[:10]  # YYYY-MM-DD from the ISO timestamp
+                # lastFeedUpdate ← MDB downloaded_at (date the feed's latest dataset
+                # was last captured by the Mobility Database) — proxy for "feed last
+                # published/updated". Distinct from serviceEnd (service-period end).
+                last_feed_update = feed_last_updated(mdb_by_id[mdb_id])
 
             agencies.append({
                 "name":         r["agency_name"],
@@ -393,8 +420,13 @@ def write_agency_jsons(rows_by_state, mdb_by_id, as_of_iso):
                 "lastValidated": None,  # not stored in current CSV pipeline output
                 "orgType":      r.get("organization_type") or None,
                 "modes":        (r.get("weblink_modes") or "").strip() or None,
+                # fixedRoute / demandResponse ← NTD Service-by-Mode classification
+                # (wwdp-t4re), full-roster coverage; an agency can be BOTH.
+                "fixedRoute":     r.get("fixed_route") == "True",
+                "demandResponse": r.get("demand_response") == "True",
                 "isFlex":       r.get("mdb_is_flex") == "True",
                 "serviceEnd":   service_end,
+                "lastFeedUpdate": last_feed_update,
                 "expired":      r.get("mdb_expired") == "True",
             })
         payload = {"asOf": as_of_iso, "agencies": agencies}

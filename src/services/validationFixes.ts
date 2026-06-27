@@ -82,3 +82,47 @@ export function applyValidationFix(message: ValidationMessage): ValidationFixRes
   if (!fix) return null;
   return fix.apply(message);
 }
+
+/**
+ * Apply the relevant fix to EVERY message in a group that carries one, as a
+ * single undoable step. Each per-message `apply` already returns its own undo;
+ * we run them in order, count how many actually changed (vs were already fine),
+ * and fold the per-message undos into one closure so the panel's existing
+ * single-fix undo toast can reverse the whole batch.
+ *
+ * Returns a ValidationFixResult shaped exactly like the single-fix path (so the
+ * toast component is unchanged): `label` reports "Fixed X of N" (with the
+ * already-fine remainder), `changed` is true when at least one row changed, and
+ * `undo()` reverses all of them. Returns null when no message in the batch has a
+ * registered fix. Re-running validation after a batch is automatic: the fixes
+ * mutate store slices the validation memo depends on, so the list refreshes.
+ */
+export function applyValidationFixBatch(messages: ValidationMessage[]): ValidationFixResult | null {
+  const results: ValidationFixResult[] = [];
+  let total = 0;
+  let changed = 0;
+  let fixId: ValidationFixId | null = null;
+  for (const m of messages) {
+    if (!m.fix) continue;
+    const fix = FIXES[m.fix.id];
+    if (!fix) continue;
+    total++;
+    fixId = m.fix.id;
+    const r = fix.apply(m);
+    results.push(r);
+    if (r.changed) changed++;
+  }
+  if (total === 0 || fixId === null) return null;
+  const alreadyFine = total - changed;
+  const label = changed > 0
+    ? `Fixed ${changed} of ${total}${alreadyFine > 0 ? ` (${alreadyFine} already fine)` : ''}.`
+    : `Nothing to fix (all ${total} already fine).`;
+  return {
+    fixId,
+    changed: changed > 0,
+    label,
+    // Reverse order so overlapping snapshots unwind cleanly (independent here,
+    // but order-safe by construction).
+    undo: () => { for (let i = results.length - 1; i >= 0; i--) results[i].undo(); },
+  };
+}

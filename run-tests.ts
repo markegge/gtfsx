@@ -20,6 +20,8 @@ import JSZip from 'jszip';
 import { importGtfsZip, loadImportIntoStore } from './src/services/gtfsImport';
 import { exportGtfsZip } from './src/services/gtfsExport';
 import { runValidation } from './src/services/validation';
+import { groupValidationMessages } from './src/services/validationGrouping';
+import { applyValidationFixBatch } from './src/services/validationFixes';
 import {
   computeStopSpacing, computeBalancingCandidates, computeServiceIntensity,
   computeAccessibilityAudit, representativeDay,
@@ -1281,6 +1283,55 @@ async function main() {
   loadImportIntoStore(reimportForHistory);
   assert('history: importing a feed resets the stack', historyDepths().undo === 0);
   assert('history: cannot undo across a feed load', undo() === null);
+
+  // ---- PHASE 26: validation grouping + batch fix ----
+  // A feed with hundreds of the SAME error must collapse to one "N×" group and
+  // be fixable in one undoable batch. Build many trips whose first stop has only
+  // a departure_time (one-present endpoint) so each emits the trip-edge error,
+  // each carrying the fill-trip-edge-times fix.
+  console.log('\nPhase 26: validation grouping + batch fix');
+  {
+    const N = 200;
+    const gtrips: Trip[] = [];
+    const gsts: StopTime[] = [];
+    for (let i = 0; i < N; i++) {
+      const id = `GRP${i}`;
+      gtrips.push({ trip_id: id, route_id: 'R1', service_id: 'S1', direction_id: 0 } as Trip);
+      gsts.push(
+        { trip_id: id, stop_id: 'g1', stop_sequence: 1, arrival_time: '', departure_time: '08:00:00' } as StopTime,
+        { trip_id: id, stop_id: 'g2', stop_sequence: 2, arrival_time: '08:05:00', departure_time: '08:05:00' } as StopTime,
+        { trip_id: id, stop_id: 'g3', stop_sequence: 3, arrival_time: '08:10:00', departure_time: '08:10:00' } as StopTime,
+      );
+    }
+    s().setTrips(gtrips);
+    s().setStopTimes(gsts);
+
+    const edgeMsgs = runValidation(s()).filter(m => m.message.includes('missing arrival_time or departure_time'));
+    assert('grouping: all N trip-edge errors present', edgeMsgs.length === N, `got ${edgeMsgs.length}`);
+
+    const groups = groupValidationMessages(edgeMsgs);
+    assert('grouping: collapse to a single group', groups.length === 1, `got ${groups.length}`);
+    assert('grouping: group count is N', groups[0].count === N, `got ${groups[0].count}`);
+    assert('grouping: every message is fixable', groups[0].fixableCount === N, `got ${groups[0].fixableCount}`);
+    assert('grouping: group carries the fill-trip-edge-times fix', groups[0].fixId === 'fill-trip-edge-times');
+
+    // Batch fix: one undoable step over the whole group.
+    const batch = applyValidationFixBatch(groups[0].messages);
+    assert('batch fix: returns a result', !!batch);
+    assert('batch fix: reports changed', !!batch && batch.changed === true);
+    assert('batch fix: label reports "Fixed N of N"', !!batch && batch.label.includes(`Fixed ${N} of ${N}`), batch?.label);
+
+    const afterFix = runValidation(s()).filter(m => m.message.includes('missing arrival_time or departure_time'));
+    assert('batch fix: re-validation clears the whole group', afterFix.length === 0, `got ${afterFix.length}`);
+
+    // Single combined undo restores every endpoint.
+    batch!.undo();
+    const afterUndo = runValidation(s()).filter(m => m.message.includes('missing arrival_time or departure_time'));
+    assert('batch fix: one undo restores all N errors', afterUndo.length === N, `got ${afterUndo.length}`);
+
+    s().setTrips([]);
+    s().setStopTimes([]);
+  }
 
   // ---- SUMMARY ----
   console.log(`\n${'='.repeat(50)}`);

@@ -75,7 +75,7 @@ describe('auth /signup + /verify', () => {
     expect(me.user.status).toBe('active');
   });
 
-  it('first password verify sends exactly one welcome email with reply_to + bcc', async () => {
+  it('first password verify sends exactly one welcome email with reply_to and NO owner bcc', async () => {
     const client = makeClient();
     await client.post('/auth/signup', {
       email: 'welcome@example.com',
@@ -92,7 +92,8 @@ describe('auth /signup + /verify', () => {
     expect(welcomes).toHaveLength(1);
     expect(welcomes[0].to).toBe('welcome@example.com');
     expect(welcomes[0].reply_to).toBe('hello@gtfsx.com');
-    expect(welcomes[0].bcc).toBe('mark@gtfsx.com');
+    // Owner is no longer BCC'd per-signup — replaced by the daily owner digest.
+    expect(welcomes[0].bcc).toBeUndefined();
     // The welcome links at the editor + the two onboarding docs.
     expect(welcomes[0].text).toContain('/docs/quick-start/');
     expect(welcomes[0].text).toContain('/docs/hosted-publishing/');

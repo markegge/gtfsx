@@ -74,9 +74,9 @@ export async function sendVerifyEmail(env: Env, to: string, link: string): Promi
  * quick-start + hosted-publishing docs, nudges the first save/publish, and opens
  * a reply channel for done-for-you feed help.
  *
- * `reply_to` comes from `WELCOME_REPLY_TO` (falls back to `AUTH_EMAIL_FROM`);
- * `bcc` from `WELCOME_BCC`. Both are optional env vars — when unset, `send()`
- * simply omits them from the Resend body.
+ * `reply_to` comes from `WELCOME_REPLY_TO` (falls back to `AUTH_EMAIL_FROM`).
+ * The owner is NOT bcc'd here — per-signup owner notifications were replaced by
+ * the daily owner digest (see `sendOwnerDigest` + worker/cron).
  */
 export async function sendWelcomeEmail(env: Env, to: string): Promise<void> {
   const editor = `${env.APP_ORIGIN}/`;
@@ -86,7 +86,6 @@ export async function sendWelcomeEmail(env: Env, to: string): Promise<void> {
     to,
     subject: 'Welcome to GTFS·X — your account is ready',
     replyTo: env.WELCOME_REPLY_TO || env.AUTH_EMAIL_FROM,
-    bcc: env.WELCOME_BCC || undefined,
     html: wrap(`
       <p>Your GTFS·X account is active. You can build, validate, and publish GTFS feeds right in the browser.</p>
       <p><a href="${editor}" style="display: inline-block; background: #8a5a3b; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none;">Open the editor</a></p>
@@ -228,6 +227,69 @@ export async function sendUpgradeNotification(
          <strong>Checkout total:</strong> ${amount}</p>
     `),
     text: `New ${planLabel} subscriber: ${opts.email} (billed to ${billedTo}). Checkout total: ${amount}.`,
+  });
+}
+
+/** Metrics rendered by the daily owner digest. Computed in worker/cron/tasks.ts. */
+export interface OwnerDigestMetrics {
+  /** New user rows created in the last 24h (matches Admin "signups"). */
+  signups24h: number;
+  /** Distinct users with a session active in the last 24h (matches Admin "active users / 24h"). */
+  activeUsers24h: number;
+  /** Paid subscription rows first recorded in the last 24h. */
+  newPaidSubs24h: number;
+  /** Running total: all user rows ever (matches Admin "signups all-time"). */
+  totalUsers: number;
+  /** Running total: currently active/trialing paid subscriptions. */
+  activePaidSubs: number;
+  /** Window label, e.g. "Jun 26 → Jun 27, 2026 (UTC)". */
+  windowLabel: string;
+}
+
+/**
+ * Daily owner digest — replaces the per-signup BCC. Three headline numbers over
+ * the trailing 24h (new sign-ups, active users, new paid subscriptions) plus
+ * cheap running totals. Sent best-effort to the owner inbox; the caller
+ * (worker/cron/tasks.ts → runOwnerDigest) handles the enable flag + recipient
+ * resolution and swallows failures so a Resend hiccup never breaks the cron.
+ */
+export async function sendOwnerDigest(
+  env: Env,
+  to: string,
+  m: OwnerDigestMetrics,
+): Promise<void> {
+  const row = (label: string, value: number, hint: string) => `
+      <tr>
+        <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
+          <div style="font-size: 13px; color: #666;">${label}</div>
+          <div style="font-size: 12px; color: #aaa;">${hint}</div>
+        </td>
+        <td style="padding: 10px 0; border-bottom: 1px solid #f0f0f0; text-align: right; font-size: 24px; font-weight: 600; color: #1a1a1a;">${value.toLocaleString('en-US')}</td>
+      </tr>`;
+  await send(env, {
+    to,
+    subject: `GTFS·X daily: ${m.signups24h} new · ${m.activeUsers24h} active · ${m.newPaidSubs24h} paid`,
+    html: wrap(`
+      <p style="margin: 0 0 4px;">Activity for the last 24 hours.</p>
+      <p style="color: #888; font-size: 12px; margin: 0 0 16px;">${escapeHtml(m.windowLabel)}</p>
+      <table style="width: 100%; border-collapse: collapse;">
+        ${row('New sign-ups', m.signups24h, 'accounts created')}
+        ${row('Active users', m.activeUsers24h, 'distinct sessions used')}
+        ${row('New paid subscriptions', m.newPaidSubs24h, 'Pro / Agency')}
+      </table>
+      <p style="color: #666; font-size: 13px; margin: 18px 0 0;">
+        Running totals: <strong>${m.totalUsers.toLocaleString('en-US')}</strong> users ·
+        <strong>${m.activePaidSubs.toLocaleString('en-US')}</strong> active paid subscriptions.
+      </p>
+      <p style="margin: 18px 0 0;"><a href="${env.APP_ORIGIN}/admin" style="color: #8a5a3b;">Open the admin dashboard →</a></p>
+    `),
+    text:
+      `GTFS·X daily digest — ${m.windowLabel}\n\n` +
+      `New sign-ups (24h):          ${m.signups24h}\n` +
+      `Active users (24h):          ${m.activeUsers24h}\n` +
+      `New paid subscriptions (24h): ${m.newPaidSubs24h}\n\n` +
+      `Running totals: ${m.totalUsers} users, ${m.activePaidSubs} active paid subscriptions.\n\n` +
+      `Admin dashboard: ${env.APP_ORIGIN}/admin`,
   });
 }
 

@@ -67,7 +67,7 @@ in project memory.
 | `marketing/` | Marketing-site SSR (`ssr.ts`) + Google Ads OCI uploader (`ads/`) |
 | `admin/` | Staff operator console (dashboard, users, orgs, audit, events, ads attribution) |
 | `import/` | Catalog-search / external feed import |
-| `cron/` | Scheduled tasks (account-deletion reaper, metrics rollup, OCI upload) |
+| `cron/` | Scheduled tasks (account-deletion reaper, metrics rollup, OCI upload, daily owner digest) |
 | `email/` | Resend templates |
 | `db/`, `util/` | DB helpers; crypto, rate-limit, CSRF, errors |
 | `legacy/` | Legacy tile/catalog handlers retained from before the rebrand |
@@ -260,6 +260,13 @@ Design rationale is preserved in the decisions appendix of the archived
   Logged-out plan CTAs go to `/signup?next=/pricing?plan=…`, so checkout resumes
   automatically after email verification with no second plan choice; the
   post-verify redirect lands on `/pricing?source=welcome`.
+- **Owner notifications:** the per-signup owner BCC on the welcome email was
+  replaced by a **daily owner digest** (new-signups / active-users / new-paid-subs
+  over the trailing 24h). Fires on the `0 13 * * *` cron (gated in
+  `worker/cron/index.ts` by the cron expression), sent best-effort to
+  `OWNER_DIGEST_EMAIL` (falls back to `OWNER_NOTIFY_EMAIL`); kill switch
+  `OWNER_DIGEST_ENABLED`. Metric definitions mirror the Admin dashboard exactly.
+  The per-paid-subscriber notice (`sendUpgradeNotification`) is unchanged.
 - Secrets: `RESEND_API_KEY`, `MOBILITY_DATABASE_REFRESH_TOKEN`,
   `TURNSTILE_SECRET_KEY`, `STRIPE_SECRET_KEY` (live), `STRIPE_WEBHOOK_SIGNING_SECRET` (live).
 - Stripe: live-mode Price IDs (`STRIPE_PRICE_PRO_*`, `STRIPE_PRICE_AGENCY/TEAM_*`),
@@ -340,6 +347,8 @@ endpoint, store the signing secret.
 | `HARD_LIMITS` | `"true"` flips plan quotas from soft-warn to hard reject (for post-RTAP licensing). |
 | `APP_ORIGIN` / `FEEDS_ORIGIN` | Base URLs for emailed links / published feeds. |
 | `MAPBOX_TOKEN` | Public Mapbox token for the embed renderer + static thumbnails (== `VITE_MAPBOX_TOKEN`). |
+| `OWNER_DIGEST_ENABLED` | Daily owner-digest kill switch. `"false"` stops the `0 13 * * *` cron send; any other value (incl. unset) leaves it on. |
+| `OWNER_DIGEST_EMAIL` | Recipient for the daily owner digest. Optional; falls back to `OWNER_NOTIFY_EMAIL`. |
 
 ---
 

@@ -46,6 +46,12 @@ export function RouteLayer({ simplified = false }: { simplified?: boolean }) {
   const editingRouteId = useStore((s) => s.editingRouteId);
   const routeDetailTab = useStore((s) => s.routeDetailTab);
   const stopPlacementDirection = useStore((s) => s.stopPlacementDirection);
+  // The exact shape whose stop list the Stops subpanel is editing. Keying the
+  // highlight on this (not just the direction) means switching the Direction
+  // dropdown — or picking among same-direction pattern variants — moves the
+  // emphasis to that shape. Falls back to the empty string so the `==` never
+  // matches a real shape_id when nothing is active.
+  const stopPlacementShapeId = useStore((s) => s.stopPlacementShapeId);
   const isRouteStopsEditing =
     sidebarSection === 'routes'
     && routeDetailTab === 'stops'
@@ -103,6 +109,14 @@ export function RouteLayer({ simplified = false }: { simplified?: boolean }) {
   // routes so the one being edited stands out, even on a large feed.
   const isEditingRoute = !!editingRouteId;
 
+  // While editing a route's stops, the active shape is the one to spotlight.
+  // Match on its shape_id when one is active (so same-direction variants and
+  // trip-less shapes resolve correctly); otherwise fall back to the active
+  // direction for routes that have no shaped pattern yet.
+  const activeStopShapeMatch: unknown[] = stopPlacementShapeId
+    ? ['==', ['get', 'shape_id'], stopPlacementShapeId]
+    : ['==', ['get', 'direction_id'], stopPlacementDirection];
+
   // Base line styling — dimmed when editing a shape
   const lineStyle: LayerProps = {
     id: 'route-lines',
@@ -128,7 +142,7 @@ export function RouteLayer({ simplified = false }: { simplified?: boolean }) {
               ]
             : isRouteStopsEditing
               ? ['case',
-                  ['all', ['get', 'isSelected'], ['==', ['get', 'direction_id'], stopPlacementDirection]], 1,
+                  ['all', ['get', 'isSelected'], activeStopShapeMatch], 1,
                   ['get', 'isSelected'], 0.3,
                   0.2,
                 ]
@@ -186,7 +200,7 @@ export function RouteLayer({ simplified = false }: { simplified?: boolean }) {
               ]
             : isRouteStopsEditing
               ? ['case',
-                  ['all', ['get', 'isSelected'], ['==', ['get', 'direction_id'], stopPlacementDirection]], 1,
+                  ['all', ['get', 'isSelected'], activeStopShapeMatch], 1,
                   ['get', 'isSelected'], 0.25,
                   0.15,
                 ]

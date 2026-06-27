@@ -120,9 +120,11 @@ export function RouteShapesTab() {
   const handleDrawShape = () => {
     // First shape defaults to outbound (0); once an outbound shape exists, the
     // next drawn shape defaults to inbound (1) — the common out-and-back, which
-    // is the most likely intent. Direction is still changeable via the per-shape
-    // toggle (which can invert the stop order), and duplicate-then-flip is the
-    // other inbound path. Sentinel pattern documented in src/types/window.d.ts.
+    // is the most likely intent. A shape's direction is fixed when it's drawn:
+    // draw the inbound shape to get the opposite direction (it auto-defaults to
+    // inbound here). The Routes > Stops Direction dropdown then selects which
+    // direction's shape you edit. Sentinel pattern documented in
+    // src/types/window.d.ts.
     const dirsUsed = new Set(
       trips
         .filter((t) => t.route_id === route.route_id && t.shape_id)

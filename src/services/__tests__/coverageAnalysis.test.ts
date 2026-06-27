@@ -13,7 +13,7 @@ import {
 function bg(geoid: string, lat: number, lon: number, extra: Partial<BlockGroupData> = {}): BlockGroupData {
   return {
     geoid, lat, lon,
-    population: 0, households: 0, workers: 0,
+    population: 0, households: 0, workers: 0, highPropensityRiders: 0,
     minorityPop: 0, totalRacePop: 0,
     lowIncomePop: 0, povertyUniverse: 0,
     zeroVehicleHouseholds: 0, occupiedHouseholds: 0,
@@ -47,12 +47,15 @@ describe('circleOverlapFraction', () => {
 describe('calculateCoverage', () => {
   it('recovers a block group fully covered by a stop buffer', () => {
     const stops = [stop('s', 40, -100)];
-    const bgs = [bg('g1', 40, -100, { population: 1000, households: 400, workers: 600 })];
+    const bgs = [bg('g1', 40, -100, {
+      population: 1000, households: 400, workers: 600, highPropensityRiders: 350,
+    })];
     // 0.5 mi buffer with the BG centered on the stop and bgRadius 0.5 → fraction 1.
     const r = calculateCoverage(stops, bgs, 0.5);
     expect(r.totalPopulation).toBe(1000);
     expect(r.totalHouseholds).toBe(400);
     expect(r.totalWorkers).toBe(600);
+    expect(r.totalHighPropensityRiders).toBe(350);
   });
 
   it('excludes a block group far outside any buffer', () => {
@@ -114,5 +117,16 @@ describe('demographicShares & baselineShares', () => {
     expect(r.minorityPop).toBe(70);
     expect(r.totalRacePop).toBe(150);
     expect(demographicShares(r).minority).toBeCloseTo(70 / 150, 6);
+  });
+
+  it('apportions high-propensity riders by the overlap fraction', () => {
+    const bgsHp = [
+      bg('a', 40, -100, { highPropensityRiders: 300 }),
+      bg('b', 40, -100, { highPropensityRiders: 200 }),
+    ];
+    const fractions = new Map([['a', 1], ['b', 0.5]]);
+    const r = coverageFromFractions(fractions, bgsHp, 0.25);
+    // 300×1 + 200×0.5 = 400
+    expect(r.totalHighPropensityRiders).toBe(400);
   });
 });

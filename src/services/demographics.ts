@@ -3,6 +3,14 @@ export interface BlockGroupData {
   population: number;
   households: number;
   workers: number;
+  /**
+   * Estimated residents most likely to use transit. Mirrors the demand-dot
+   * model exactly: renters ∪ zero-vehicle households ∪ adults 18–24, summed
+   * then scaled ×0.6 to discount the overlap between those groups, and capped
+   * at total population. A residence-based count, so it apportions into a
+   * walkshed the same way population does.
+   */
+  highPropensityRiders: number;
   lat: number;
   lon: number;
   /** Non-white / Hispanic population (B03002 total minus non-Hispanic White alone) */
@@ -60,6 +68,17 @@ const ACS_YOUTH_NUM = [
   'B01001_003E', 'B01001_004E', 'B01001_005E', 'B01001_006E', // male: <5, 5–9, 10–14, 15–17
   'B01001_027E', 'B01001_028E', 'B01001_029E', 'B01001_030E', // female: <5, 5–9, 10–14, 15–17
 ] as const;
+// High-propensity-rider model inputs (same definition as the demand dots):
+// renters ∪ zero-vehicle households ∪ adults 18–24. Renter share comes from
+// B25003 (tenure), the people-per-household multiplier from B25010, and the
+// 18–24 cells from B01001. Zero-vehicle households reuse ACS_NO_VEHICLE_NUM.
+const ACS_TENURE_TOTAL = 'B25003_001E';
+const ACS_TENURE_RENTER = 'B25003_003E';
+const ACS_AVG_HH_SIZE = 'B25010_001E';
+const ACS_AGE_18_24 = [
+  'B01001_007E', 'B01001_008E', 'B01001_009E', 'B01001_010E', // male: 18–19, 20, 21, 22–24
+  'B01001_031E', 'B01001_032E', 'B01001_033E', 'B01001_034E', // female: 18–19, 20, 21, 22–24
+] as const;
 
 const ACS_ALL_VARS = [
   ...ACS_BASE_VARS,
@@ -67,6 +86,8 @@ const ACS_ALL_VARS = [
   ACS_HOUSEHOLDS_DENOM, ...ACS_NO_VEHICLE_NUM,
   ...ACS_SENIOR_NUM,
   ...ACS_YOUTH_NUM,
+  ACS_TENURE_TOTAL, ACS_TENURE_RENTER, ACS_AVG_HH_SIZE,
+  ...ACS_AGE_18_24,
 ];
 
 /**
@@ -148,6 +169,11 @@ export async function fetchCensusData(
     const i = col(v);
     return i < 0 ? 0 : parseInt(row[i], 10) || 0;
   };
+  // Float reader for ratio variables (e.g. B25010 average household size).
+  const flt = (row: string[], v: string) => {
+    const i = col(v);
+    return i < 0 ? 0 : parseFloat(row[i]) || 0;
+  };
   const sum = (row: string[], vars: readonly string[]) =>
     vars.reduce((acc, v) => acc + num(row, v), 0);
 
@@ -167,18 +193,41 @@ export async function fetchCensusData(
 
     const totalRacePop = num(row, 'B03002_001E');
     const nonHispanicWhite = num(row, 'B03002_003E');
+    const population = num(row, 'B01003_001E');
+
+    // High-propensity riders — identical model to demand-dots/build_dots.py:
+    //   renter_pop  = renter share of tenure × population
+    //   zero_veh_pop = zero-vehicle households × avg household size
+    //   pop_18_24   = adults 18–24 from B01001
+    //   high = min(population, round((renter_pop + zero_veh_pop + pop_18_24) × 0.6))
+    // The ×0.6 discounts the overlap between the three (a young renter in a
+    // car-free household would otherwise be triple-counted).
+    const zeroVehicleHouseholds = sum(row, ACS_NO_VEHICLE_NUM);
+    const tenureTotal = num(row, ACS_TENURE_TOTAL);
+    const renterUnits = num(row, ACS_TENURE_RENTER);
+    const renterPop = tenureTotal > 0 ? Math.round((renterUnits / tenureTotal) * population) : 0;
+    const avgHhSizeRaw = flt(row, ACS_AVG_HH_SIZE);
+    const avgHhSize = avgHhSizeRaw > 0 ? avgHhSizeRaw : 2.5; // US-average fallback
+    const zeroVehiclePop = Math.round(zeroVehicleHouseholds * avgHhSize);
+    const pop18to24 = sum(row, ACS_AGE_18_24);
+    const highPropensityRiders = Math.min(
+      population,
+      Math.round((renterPop + zeroVehiclePop + pop18to24) * 0.6),
+    );
+
     results.push({
       geoid,
-      population:    num(row, 'B01003_001E'),
+      population,
       households:    num(row, 'B25001_001E'),
       workers:       num(row, 'B08301_001E'),
+      highPropensityRiders,
       lat:           centroid.lat,
       lon:           centroid.lon,
       totalRacePop,
       minorityPop:   Math.max(0, totalRacePop - nonHispanicWhite),
       lowIncomePop:         sum(row, ACS_LOW_INCOME_NUM),
       povertyUniverse:      num(row, ACS_LOW_INCOME_DENOM),
-      zeroVehicleHouseholds: sum(row, ACS_NO_VEHICLE_NUM),
+      zeroVehicleHouseholds,
       occupiedHouseholds:   num(row, ACS_HOUSEHOLDS_DENOM),
       seniorPop:            sum(row, ACS_SENIOR_NUM),
       youthPop:             sum(row, ACS_YOUTH_NUM),

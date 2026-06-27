@@ -144,6 +144,49 @@ describe('demographics.fetchCensusData', () => {
     expect(result[0].minorityPop).toBe(0);
   });
 
+  it('computes highPropensityRiders with the demand-dot model', async () => {
+    vi.stubEnv('VITE_CENSUS_API_KEY', 'k');
+    // renterPop  = round(250/500 × 1000)      = 500
+    // zeroVehPop = (20 + 30) × 2.0            = 100
+    // pop_18_24  = 8 cells × 10               = 80
+    // high       = min(1000, round((500+100+80) × 0.6)) = min(1000, 408) = 408
+    const hpAcs = [
+      ['B01003_001E', 'B25003_001E', 'B25003_003E', 'B25044_003E', 'B25044_010E', 'B25010_001E',
+        'B01001_007E', 'B01001_008E', 'B01001_009E', 'B01001_010E',
+        'B01001_031E', 'B01001_032E', 'B01001_033E', 'B01001_034E',
+        'state', 'county', 'tract', 'block group'],
+      ['1000', '500', '250', '20', '30', '2.0',
+        '10', '10', '10', '10', '10', '10', '10', '10',
+        '06', '001', '400100', '1'],
+    ];
+    mockFetchOnce([
+      { body: TRACT_FILE, isText: true },
+      { body: hpAcs },
+    ]);
+
+    const { fetchCensusData } = await import('../demographics');
+    const result = await fetchCensusData('06', '001');
+    expect(result[0].highPropensityRiders).toBe(408);
+  });
+
+  it('caps highPropensityRiders at total population', async () => {
+    vi.stubEnv('VITE_CENSUS_API_KEY', 'k');
+    // Everyone is a renter in a car-free household → scaled sum exceeds pop.
+    const cappedAcs = [
+      ['B01003_001E', 'B25003_001E', 'B25003_003E', 'B25044_003E', 'B25044_010E', 'B25010_001E',
+        'state', 'county', 'tract', 'block group'],
+      ['100', '100', '100', '90', '0', '3.0', '06', '001', '400100', '1'],
+    ];
+    mockFetchOnce([
+      { body: TRACT_FILE, isText: true },
+      { body: cappedAcs },
+    ]);
+
+    const { fetchCensusData } = await import('../demographics');
+    const result = await fetchCensusData('06', '001');
+    expect(result[0].highPropensityRiders).toBe(100);
+  });
+
   it('throws with response body excerpt when Census API returns non-ok', async () => {
     vi.stubEnv('VITE_CENSUS_API_KEY', 'k');
     mockFetchOnce([

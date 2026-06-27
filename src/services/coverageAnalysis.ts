@@ -9,6 +9,8 @@ export interface CoverageResult {
   totalPopulation: number;
   totalHouseholds: number;
   totalWorkers: number;
+  /** Apportioned high-propensity riders (see BlockGroupData.highPropensityRiders). */
+  totalHighPropensityRiders: number;
   // Apportioned demographic counts (numerators + denominators kept separate
   // so shares can be computed after summing — never average pre-computed
   // per-block-group shares). See demographicShares() below.
@@ -146,6 +148,7 @@ export function coverageFromFractions(
 ): CoverageResult {
   const bgMap = new Map(blockGroups.map((bg) => [bg.geoid, bg]));
   let totalPopulation = 0, totalHouseholds = 0, totalWorkers = 0;
+  let totalHighPropensityRiders = 0;
   let minorityPop = 0, totalRacePop = 0;
   let lowIncomePop = 0, povertyUniverse = 0;
   let zeroVehicleHouseholds = 0, occupiedHouseholds = 0;
@@ -157,6 +160,7 @@ export function coverageFromFractions(
     totalPopulation       += f * bg.population;
     totalHouseholds       += f * bg.households;
     totalWorkers          += f * bg.workers;
+    totalHighPropensityRiders += f * bg.highPropensityRiders;
     minorityPop           += f * bg.minorityPop;
     totalRacePop          += f * bg.totalRacePop;
     lowIncomePop          += f * bg.lowIncomePop;
@@ -171,6 +175,7 @@ export function coverageFromFractions(
     totalPopulation:       Math.round(totalPopulation),
     totalHouseholds:       Math.round(totalHouseholds),
     totalWorkers:          Math.round(totalWorkers),
+    totalHighPropensityRiders: Math.round(totalHighPropensityRiders),
     minorityPop:           Math.round(minorityPop),
     totalRacePop:          Math.round(totalRacePop),
     lowIncomePop:          Math.round(lowIncomePop),

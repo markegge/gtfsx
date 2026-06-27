@@ -1,19 +1,24 @@
 import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
+import Papa from 'papaparse';
 import { useStore } from '../../store';
+import type { Route } from '../../types/gtfs';
 import { EmptyState } from '../ui/EmptyState';
 import { useVisibleFeed } from '../../hooks/useVisibleFeed';
 import { RouteScopeNote } from '../ui/RouteScopeNote';
 import { PaywallOverlay } from '../billing/PaywallOverlay';
 import { useEditorPlan } from '../billing/useEditorPlan';
 import { planHasFeature, cheapestPlanFor, planDisplayName } from '../billing/planConfig';
+import { downloadBlob } from '../../services/gtfsExport';
 import { fetchCensusData, lookupFips } from '../../services/demographics';
+import type { CoverageData } from '../../store/coverageSlice';
 import {
   getBufferForRoute,
   generateBufferGeoJSON,
   coverageFromFractions,
   demographicShares,
   baselineShares,
+  type CoverageResult,
   type DemographicShares,
 } from '../../services/coverageAnalysis';
 import {
@@ -46,6 +51,117 @@ function walkBadgeLabel(
 ): string | null {
   if (walkshed?.mode !== 'network') return null;
   return walkshed.auto ? 'auto walk' : `${walkshed.minutes} min walk`;
+}
+
+/** Buffer/walk label for one route result. Walk label wins in network mode. */
+function bufferLabel(bufferMiles: number, walkLabel: string | null): string {
+  if (walkLabel != null) return walkLabel;
+  return bufferMiles === 0.5 ? '1/2 mi' : '1/4 mi';
+}
+
+/** System-level walkshed descriptor for the CSV "buffer" column. */
+function systemBufferLabel(walkshed: CoverageData['walkshed']): string {
+  if (walkshed?.mode === 'network') {
+    return walkshed.auto ? 'auto walk network' : `${walkshed.minutes}-min walk network`;
+  }
+  return '1/4-1/2 mi buffer';
+}
+
+/** Equity share for a CSV cell: percent to 1 dp, blank when no data. */
+function pctCsv(v: number | null): string {
+  return v == null ? '' : (v * 100).toFixed(1);
+}
+
+/** One CSV row from a coverage result (system or per-route). */
+function csvRow(
+  scope: string,
+  routeId: string,
+  buffer: string,
+  result: CoverageResult,
+): Record<string, string | number> {
+  const s = demographicShares(result);
+  return {
+    scope,
+    route_id: routeId,
+    buffer,
+    block_groups_covered: result.coveredBlockGroupIds.length,
+    population: result.totalPopulation,
+    households: result.totalHouseholds,
+    workers: result.totalWorkers,
+    high_propensity_riders: result.totalHighPropensityRiders,
+    minority_pct: pctCsv(s.minority),
+    low_income_pct: pctCsv(s.lowIncome),
+    zero_vehicle_hh_pct: pctCsv(s.zeroVehicle),
+    senior_pct: pctCsv(s.senior),
+    youth_pct: pctCsv(s.youth),
+  };
+}
+
+/**
+ * Build the Coverage CSV: a System row, a County-baseline row, then one row per
+ * route. Per-route rows are the Agency-gated breakdown, so they're only emitted
+ * when `includePerRoute` is true (free users still get System + County).
+ */
+function buildCoverageCsvRows(
+  data: CoverageData,
+  routes: Route[],
+  includePerRoute: boolean,
+): Record<string, string | number>[] {
+  const rows: Record<string, string | number>[] = [];
+
+  rows.push(csvRow('System', '', systemBufferLabel(data.walkshed), data.systemResult));
+
+  // County baseline: whole-county totals + unweighted baseline shares, the
+  // denominator the on-screen equity ratios compare against.
+  const county = data.blockGroups.reduce(
+    (a, bg) => {
+      a.population += bg.population;
+      a.households += bg.households;
+      a.workers += bg.workers;
+      a.high += bg.highPropensityRiders;
+      return a;
+    },
+    { population: 0, households: 0, workers: 0, high: 0 },
+  );
+  const base = baselineShares(data.blockGroups);
+  rows.push({
+    scope: 'County baseline',
+    route_id: '',
+    buffer: 'whole county',
+    block_groups_covered: data.blockGroups.length,
+    population: county.population,
+    households: county.households,
+    workers: county.workers,
+    high_propensity_riders: county.high,
+    minority_pct: pctCsv(base.minority),
+    low_income_pct: pctCsv(base.lowIncome),
+    zero_vehicle_hh_pct: pctCsv(base.zeroVehicle),
+    senior_pct: pctCsv(base.senior),
+    youth_pct: pctCsv(base.youth),
+  });
+
+  if (includePerRoute) {
+    const walkLabel = walkBadgeLabel(data.walkshed);
+    for (const { routeId, result } of data.routeResults) {
+      const route = routes.find((r) => r.route_id === routeId);
+      const name = route ? route.route_short_name || route.route_long_name : routeId;
+      rows.push(csvRow(name, routeId, bufferLabel(result.bufferMiles, walkLabel), result));
+    }
+  }
+
+  return rows;
+}
+
+function exportCsv(filename: string, rows: Record<string, unknown>[]) {
+  downloadBlob(new Blob([Papa.unparse(rows)], { type: 'text/csv;charset=utf-8;' }), filename);
+}
+
+function CsvButton({ onClick, label = 'Download CSV' }: { onClick: () => void; label?: string }) {
+  return (
+    <button onClick={onClick} className="text-[11px] font-semibold text-teal hover:underline whitespace-nowrap">
+      ↓ {label}
+    </button>
+  );
 }
 
 export function CoveragePanel() {
@@ -286,24 +402,49 @@ export function CoveragePanel() {
         <>
           {/* System summary */}
           <div className="bg-teal-light rounded-lg p-3 space-y-2">
-            <h3 className="font-heading font-bold text-sm text-teal">
-              System Summary
-              {coverageData.walkshed?.mode === 'network'
-                ? coverageData.walkshed.auto
-                  ? ' (auto walk network)'
-                  : ` (${coverageData.walkshed.minutes}-min walk network)`
-                : ' (1/4 mi buffer)'}
-            </h3>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="flex items-center gap-2">
+              <h3 className="font-heading font-bold text-sm text-teal flex-1 min-w-0">
+                System Summary
+                {coverageData.walkshed?.mode === 'network'
+                  ? coverageData.walkshed.auto
+                    ? ' (auto walk network)'
+                    : ` (${coverageData.walkshed.minutes}-min walk network)`
+                  : ' (1/4 mi buffer)'}
+              </h3>
+              <CsvButton
+                onClick={() =>
+                  exportCsv(
+                    'coverage-analysis.csv',
+                    buildCoverageCsvRows(coverageData, routes, planHasFeature(plan, 'analysis_basic')),
+                  )
+                }
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
               <SummaryCard label="Population" value={coverageData.systemResult.totalPopulation} />
               <SummaryCard label="Households" value={coverageData.systemResult.totalHouseholds} />
               <SummaryCard label="Workers" value={coverageData.systemResult.totalWorkers} />
+              <SummaryCard
+                label="High-propensity riders"
+                value={coverageData.systemResult.totalHighPropensityRiders}
+              />
             </div>
             <p className="text-[11px] text-warm-gray">
               {coverageData.systemResult.coveredBlockGroupIds.length} of{' '}
               {coverageData.blockGroups.length} block groups covered
             </p>
           </div>
+
+          {/* Definitions for the less-obvious counts. */}
+          <p className="text-[10px] text-warm-gray leading-relaxed">
+            <span className="font-semibold text-dark-brown">Workers:</span> employed residents counted
+            where they live (ACS means-of-transportation-to-work universe).{' '}
+            <span className="font-semibold text-dark-brown">High-propensity riders:</span> residents most
+            likely to use transit (renters, people in zero-vehicle households, and adults 18 to 24,
+            combined and scaled to reduce double-counting), the same model as the demand dots.{' '}
+            <span className="font-semibold text-dark-brown">Jobs</span> (the orange demand dots) are
+            counted at the workplace (LODES) and are not summed into the walkshed here.
+          </p>
 
           {/* Demographic profile — coverage vs. county baseline */}
           <DemographicProfile
@@ -330,6 +471,7 @@ export function CoveragePanel() {
                     population={result.totalPopulation}
                     households={result.totalHouseholds}
                     workers={result.totalWorkers}
+                    highPropensityRiders={result.totalHighPropensityRiders}
                   />
                 );
               })}
@@ -505,6 +647,7 @@ function RouteRow({
   population,
   households,
   workers,
+  highPropensityRiders,
 }: {
   routeName: string;
   routeColor: string;
@@ -514,10 +657,8 @@ function RouteRow({
   population: number;
   households: number;
   workers: number;
+  highPropensityRiders: number;
 }) {
-  const bufferLabel =
-    walkLabel != null ? walkLabel : bufferMiles === 0.5 ? '1/2 mi' : '1/4 mi';
-
   return (
     <div className="bg-cream rounded-lg p-2.5 space-y-1.5">
       <div className="flex items-center gap-2">
@@ -529,10 +670,10 @@ function RouteRow({
           {routeName}
         </span>
         <span className="ml-auto text-[11px] text-warm-gray whitespace-nowrap">
-          {bufferLabel}
+          {bufferLabel(bufferMiles, walkLabel)}
         </span>
       </div>
-      <div className="grid grid-cols-3 gap-1 text-center">
+      <div className="grid grid-cols-4 gap-1 text-center">
         <div>
           <p className="font-heading font-bold text-sm text-dark-brown">{formatNumber(population)}</p>
           <p className="text-[10px] text-warm-gray">Pop.</p>
@@ -544,6 +685,10 @@ function RouteRow({
         <div>
           <p className="font-heading font-bold text-sm text-dark-brown">{formatNumber(workers)}</p>
           <p className="text-[10px] text-warm-gray">Workers</p>
+        </div>
+        <div title="High-propensity riders">
+          <p className="font-heading font-bold text-sm text-dark-brown">{formatNumber(highPropensityRiders)}</p>
+          <p className="text-[10px] text-warm-gray">Riders</p>
         </div>
       </div>
     </div>

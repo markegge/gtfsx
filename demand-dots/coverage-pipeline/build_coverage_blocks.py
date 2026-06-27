@@ -54,6 +54,20 @@ CENSUS_API_BASE = "https://api.census.gov/data"
 ACS_YEAR = 2022
 ACS_DATASET = f"{CENSUS_API_BASE}/{ACS_YEAR}/acs/acs5"
 
+# Connecticut (FIPS 09) replaced its 8 counties with 9 "planning regions" as
+# county-equivalents starting with the ACS 2022 5-yr release (county codes
+# 110-190). But the 2020 census BLOCKS in TIGER/Line still carry the OLD county
+# codes (001-015), so ACS 2022 CT block-group GEOIDs can't prefix-match the
+# blocks → 0 apportioned blocks. Pin CT to the ACS 2021 5-yr (old counties),
+# which prefix-matches the TIGER blocks. One year older for CT ONLY; every other
+# state stays on ACS_YEAR. (CT is the only state that did this.)
+ACS_YEAR_BY_STATE = {"09": 2021}
+
+
+def _acs_year(state_fips: str) -> int:
+    return ACS_YEAR_BY_STATE.get(state_fips, ACS_YEAR)
+
+
 TIGER_YEAR = 2025
 LODES_BASE = "https://lehd.ces.census.gov/data/lodes/LODES8"
 # LODES WAC: probe downward from this year until a file exists. LODES lags
@@ -192,12 +206,15 @@ def _num(df: pd.DataFrame, col: str) -> pd.Series:
 def fetch_block_group_full_state(state_fips: str) -> pd.DataFrame:
     """Fetch the FULL ACS variable set for a state's block groups and derive the
     per-BG attributes that mirror src/services/demographics.ts exactly."""
-    cache_file = cache_path(f"acs{ACS_YEAR}_cov_bg_state_{state_fips}.csv")
+    acs_year = _acs_year(state_fips)
+    dataset = f"{CENSUS_API_BASE}/{acs_year}/acs/acs5"
+    cache_file = cache_path(f"acs{acs_year}_cov_bg_state_{state_fips}.csv")
     if cache_file.exists():
         print(f"  Using cached coverage ACS block-group data: {cache_file}")
         return pd.read_csv(cache_file, dtype={"GEOID": str})
 
-    print(f"  Fetching ACS {ACS_YEAR} 5-yr block-group data ({len(ACS_ALL_VARS)} vars, state {state_fips})...")
+    note = " (pinned: CT planning-region transition)" if acs_year != ACS_YEAR else ""
+    print(f"  Fetching ACS {acs_year} 5-yr block-group data ({len(ACS_ALL_VARS)} vars, state {state_fips}){note}...")
     params = {
         "get": ",".join(ACS_ALL_VARS),
         "for": "block group:*",
@@ -214,7 +231,7 @@ def fetch_block_group_full_state(state_fips: str) -> pd.DataFrame:
             "(or put CENSUS_API_KEY=... in a .env beside this script)."
         )
     params["key"] = key
-    resp = requests.get(ACS_DATASET, params=params)
+    resp = requests.get(dataset, params=params)
     resp.raise_for_status()
     # A missing/invalid key or bad geography returns an HTML error page (200 OK,
     # text/html), not JSON. Surface that clearly instead of a deep JSONDecodeError.

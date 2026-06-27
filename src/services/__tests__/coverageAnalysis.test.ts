@@ -48,7 +48,8 @@ describe('calculateCoverage', () => {
   it('recovers a block group fully covered by a stop buffer', () => {
     const stops = [stop('s', 40, -100)];
     const bgs = [bg('g1', 40, -100, {
-      population: 1000, households: 400, workers: 600, highPropensityRiders: 350,
+      // totalHouseholds is OCCUPIED households (B25044), not housing units.
+      population: 1000, occupiedHouseholds: 400, workers: 600, highPropensityRiders: 350,
     })];
     // 0.5 mi buffer with the BG centered on the stop and bgRadius 0.5 → fraction 1.
     const r = calculateCoverage(stops, bgs, 0.5);

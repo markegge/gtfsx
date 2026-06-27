@@ -158,7 +158,10 @@ export function coverageFromFractions(
     const bg = bgMap.get(geoid);
     if (!bg || !f) continue;
     totalPopulation       += f * bg.population;
-    totalHouseholds       += f * bg.households;
+    // "Households" = OCCUPIED households (ACS B25044), not housing units
+    // (B25001) — matches the exact block-level path (.fgb `hh`) and is the more
+    // meaningful denominator for transit coverage (Mark, 2026-06-27).
+    totalHouseholds       += f * bg.occupiedHouseholds;
     totalWorkers          += f * bg.workers;
     totalHighPropensityRiders += f * bg.highPropensityRiders;
     minorityPop           += f * bg.minorityPop;

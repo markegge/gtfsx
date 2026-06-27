@@ -80,22 +80,29 @@ function pctCsv(v: number | null): string {
   return v == null ? '' : (v * 100).toFixed(1);
 }
 
-/** One CSV row from a coverage result (system or per-route). */
+/** One CSV row from a coverage result (system or per-route). Accepts an exact
+ *  block-level result (adds a jobs count + block tally) or a block-group
+ *  estimate; the `geography` column records which method produced the row. */
 function csvRow(
   scope: string,
   routeId: string,
   buffer: string,
-  result: CoverageResult,
+  result: CoverageResult | BlockCoverageResult,
 ): Record<string, string | number> {
   const s = demographicShares(result);
+  const isBlock = 'totalJobs' in result;
   return {
     scope,
     route_id: routeId,
+    geography: isBlock ? 'block (exact)' : 'block group (estimate)',
     buffer,
-    block_groups_covered: result.coveredBlockGroupIds.length,
+    units_covered: isBlock
+      ? (result as BlockCoverageResult).blocksCovered
+      : result.coveredBlockGroupIds.length,
     population: result.totalPopulation,
     households: result.totalHouseholds,
     workers: result.totalWorkers,
+    jobs: isBlock ? (result as BlockCoverageResult).totalJobs : '',
     high_propensity_riders: result.totalHighPropensityRiders,
     minority_pct: pctCsv(s.minority),
     low_income_pct: pctCsv(s.lowIncome),
@@ -117,14 +124,18 @@ function buildCoverageCsvRows(
 ): Record<string, string | number>[] {
   const rows: Record<string, string | number>[] = [];
 
-  rows.push(csvRow('System', '', systemBufferLabel(data.walkshed), data.systemResult));
+  // System + per-route rows use the EXACT block tabulation when available
+  // (block-level regions), else the block-group estimate.
+  rows.push(csvRow('System', '', systemBufferLabel(data.walkshed), data.blockResult ?? data.systemResult));
 
   // County baseline: whole-county totals + unweighted baseline shares, the
-  // denominator the on-screen equity ratios compare against.
+  // denominator the on-screen equity ratios compare against. Always the
+  // block-group estimate (occupied households, to match the System row's
+  // households definition).
   const county = data.blockGroups.reduce(
     (a, bg) => {
       a.population += bg.population;
-      a.households += bg.households;
+      a.households += bg.occupiedHouseholds;
       a.workers += bg.workers;
       a.high += bg.highPropensityRiders;
       return a;
@@ -135,11 +146,13 @@ function buildCoverageCsvRows(
   rows.push({
     scope: 'County baseline',
     route_id: '',
+    geography: 'block group (county)',
     buffer: 'whole county',
-    block_groups_covered: data.blockGroups.length,
+    units_covered: data.blockGroups.length,
     population: county.population,
     households: county.households,
     workers: county.workers,
+    jobs: '',
     high_propensity_riders: county.high,
     minority_pct: pctCsv(base.minority),
     low_income_pct: pctCsv(base.lowIncome),
@@ -153,7 +166,8 @@ function buildCoverageCsvRows(
     for (const { routeId, result } of data.routeResults) {
       const route = routes.find((r) => r.route_id === routeId);
       const name = route ? route.route_short_name || route.route_long_name : routeId;
-      rows.push(csvRow(name, routeId, bufferLabel(result.bufferMiles, walkLabel), result));
+      const r = data.routeBlockResults?.find((x) => x.routeId === routeId)?.result ?? result;
+      rows.push(csvRow(name, routeId, bufferLabel(result.bufferMiles, walkLabel), r));
     }
   }
 
@@ -318,6 +332,7 @@ export function CoveragePanel() {
       // local dev, fetch/parse error) silently falls back to the block-group
       // estimate so the panel still renders normally.
       let blockResult: BlockCoverageResult | undefined;
+      let routeBlockResults: { routeId: string; result: BlockCoverageResult }[] | undefined;
       const region = regionForState(stateFips);
       if (region) {
         try {
@@ -326,6 +341,14 @@ export function CoveragePanel() {
             const blocks = await loadBlocksInBbox(region, bbox);
             const walkshedPoly = unionWalkshedPolygons(allFeatures);
             blockResult = tabulateBlocks(blocks, walkshedPoly, allFeatures);
+            // Per-route exact-block tabulation: each route's buffer/walkshed
+            // features carry route_id, so group by it and tabulate that route's
+            // blocks the same way as the system (union semantics, counted once).
+            routeBlockResults = routes.map((route) => {
+              const feats = allFeatures.filter((f) => f.properties?.route_id === route.route_id);
+              const poly = unionWalkshedPolygons(feats);
+              return { routeId: route.route_id, result: tabulateBlocks(blocks, poly, feats) };
+            });
           }
         } catch (err) {
           console.warn('Block-level coverage unavailable; using block-group estimate.', err);
@@ -338,6 +361,7 @@ export function CoveragePanel() {
         routeResults,
         bufferGeoJSON,
         blockResult,
+        routeBlockResults,
         walkshed: walkshedByRoute
           ? walkMode === 'auto'
             ? { mode: 'network', auto: true, minutes: null }
@@ -520,6 +544,10 @@ export function CoveragePanel() {
               {coverageData.routeResults.map(({ routeId, result }) => {
                 const route = routes.find((r) => r.route_id === routeId);
                 if (!route) return null;
+                // Use the exact per-route block tabulation when available (block
+                // regions), else the block-group estimate. Buffer label always
+                // comes from the estimate (the block result has no per-route buffer).
+                const r = coverageData.routeBlockResults?.find((x) => x.routeId === routeId)?.result ?? result;
                 return (
                   <RouteRow
                     key={routeId}
@@ -527,10 +555,10 @@ export function CoveragePanel() {
                     routeColor={route.route_color}
                     bufferMiles={result.bufferMiles}
                     walkLabel={walkBadgeLabel(coverageData.walkshed)}
-                    population={result.totalPopulation}
-                    households={result.totalHouseholds}
-                    workers={result.totalWorkers}
-                    highPropensityRiders={result.totalHighPropensityRiders}
+                    population={r.totalPopulation}
+                    households={r.totalHouseholds}
+                    workers={r.totalWorkers}
+                    highPropensityRiders={r.totalHighPropensityRiders}
                   />
                 );
               })}

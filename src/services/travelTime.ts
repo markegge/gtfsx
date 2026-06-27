@@ -1,171 +1,97 @@
 /**
- * Travel-time estimation for drawn routes.
+ * Travel-time estimation for a trip's stops.
  *
- * Uses the same Mapbox Map Matching API that powers snap-to-road, but asks for
- * duration annotations so we get the road-network travel time along the path
- * the user drew. Each stop is projected onto the matched path; the cumulative
- * driving time at each stop gives stop-to-stop travel times, which `layoutStopTimes`
- * turns into arrival/departure times (plus a per-stop dwell and a bus-vs-car
+ * Asks the Mapbox Directions API for the real road driving time between each
+ * pair of CONSECUTIVE stops, in sequence order, and accumulates those per-leg
+ * durations into cumulative seconds at each stop. `layoutStopTimes` then turns
+ * those into arrival/departure times (plus a per-stop dwell and a bus-vs-car
  * speed factor, since Mapbox's `driving` profile is car free-flow).
  *
- * See docs/REQUIREMENTS — "Estimate travel times" — and snapToRoad.ts.
+ * This is deliberately NOT shape-based: the previous implementation matched the
+ * drawn shape and projected each stop onto it, which collapsed to zero travel
+ * time whenever the stop SEQUENCE didn't follow the shape's path (e.g. an
+ * airport→Walmart hop that the drawn line skips). Driving directly between the
+ * stops in order gives the true stop-to-stop time regardless of the shape.
+ *
+ * See docs/REQUIREMENTS — "Estimate travel times".
  */
-import distance from '@turf/distance';
-
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
-// Map Matching allows 100 coords/request. Downsample below that (keeping first
-// + last) so the whole shape fits one call — fidelity is plenty for timing.
-const MAX_MATCH_COORDS = 95;
+
+// Mapbox Directions accepts at most 25 coordinates per request. We chunk longer
+// stop lists into windows of up to 25 stops that OVERLAP by one stop, so each
+// chunk boundary is shared: the leg out of a boundary stop belongs to the next
+// chunk, and the legs stitch end-to-end with no gap or double-count.
+const MAX_WAYPOINTS = 25;
 
 export type LngLat = [number, number];
 
-function downsample(coords: LngLat[], max: number): LngLat[] {
-  if (coords.length <= max) return coords;
-  const step = (coords.length - 1) / (max - 1);
-  const out: LngLat[] = [];
-  for (let i = 0; i < max; i++) out.push(coords[Math.round(i * step)]);
-  out[out.length - 1] = coords[coords.length - 1];
-  return out;
-}
-
-interface MatchResult {
-  coords: LngLat[];
-  durations: number[]; // seconds, one per segment of `coords`
-}
-
-async function matchWithDurations(coords: LngLat[]): Promise<MatchResult | null> {
-  const input = downsample(coords, MAX_MATCH_COORDS);
-  if (input.length < 2) return null;
-  const coordString = input.map((c) => `${c[0]},${c[1]}`).join(';');
-  const url = `https://api.mapbox.com/matching/v5/mapbox/driving/${coordString}`
-    + `?access_token=${MAPBOX_TOKEN}&geometries=geojson&overview=full&annotations=duration`;
-  const res = await fetch(url);
+/**
+ * Per-leg driving durations (seconds) for one chunk of ≤25 stops, in order:
+ * `out[i]` = drive time from `chunk[i]` to `chunk[i+1]` (length = chunk.length-1).
+ * Returns null on any fetch/HTTP/parse failure so the caller can fall back.
+ */
+async function fetchLegDurations(chunk: LngLat[]): Promise<number[] | null> {
+  if (chunk.length < 2) return [];
+  const coordString = chunk.map((c) => `${c[0]},${c[1]}`).join(';');
+  // overview=false&steps=false keeps the response tiny; each leg between a pair
+  // of waypoints carries its own `.duration`, which is exactly the per-leg time.
+  const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordString}`
+    + `?access_token=${MAPBOX_TOKEN}&overview=false&steps=false&annotations=duration`;
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch {
+    return null;
+  }
   if (!res.ok) return null;
-  const data = await res.json();
-  if (data.code !== 'Ok' || !data.matchings?.length) return null;
-  const m = data.matchings[0];
-  const matchedCoords = (m.geometry?.coordinates ?? []) as LngLat[];
-  // No explicit waypoints → one leg covering the whole match; concat per-segment durations.
-  const durations: number[] = (m.legs ?? []).flatMap(
-    (l: { annotation?: { duration?: number[] } }) => l.annotation?.duration ?? [],
-  );
-  if (matchedCoords.length < 2 || durations.length < 1) return null;
-  return { coords: matchedCoords, durations };
+  let data: { code?: string; routes?: { legs?: { duration?: number }[] }[] };
+  try {
+    data = await res.json();
+  } catch {
+    return null;
+  }
+  if (data.code !== 'Ok' || !data.routes?.length) return null;
+  const legs = data.routes[0].legs;
+  // One leg per consecutive pair; bail if the shape of the response is off.
+  if (!Array.isArray(legs) || legs.length !== chunk.length - 1) return null;
+  const durations = legs.map((l) => l.duration);
+  if (durations.some((d) => typeof d !== 'number' || !Number.isFinite(d))) return null;
+  return durations as number[];
 }
 
 /**
- * Cumulative driving seconds (car free-flow) from the first stop to each stop,
- * measured along the matched road path. `stopCoords` must be in route order.
- * Returns null if the path can't be matched (caller can fall back).
+ * Cumulative road driving seconds (car free-flow) at each stop, measured by
+ * driving between CONSECUTIVE stops in sequence order. `cum[0]` is 0 and
+ * `cum[i] = cum[i-1] + (drive time from stop i-1 to stop i)`, so the result is
+ * non-decreasing only insofar as each leg duration is non-negative (it always
+ * is). `stopCoords` must already be in route/stop_sequence order.
+ *
+ * Returns zeros for fewer than 2 stops, and null if any Directions request
+ * fails (the caller surfaces the "couldn't match…" error and the user fills in
+ * times manually).
  */
-export async function estimateStopTravelSeconds(
-  shapeCoords: LngLat[],
+export async function estimateStopTravelByRoad(
   stopCoords: LngLat[],
 ): Promise<number[] | null> {
-  if (shapeCoords.length < 2 || stopCoords.length === 0) return null;
-  const matched = await matchWithDurations(shapeCoords);
-  if (!matched) return null;
-  return cumulativeTravelAtStops(matched.coords, matched.durations, stopCoords);
-}
+  if (stopCoords.length < 2) return stopCoords.map(() => 0);
 
-/**
- * Fraction (0..1) of the closest point on segment a→b to point p, using a
- * local equirectangular projection around `a`. Clamped to the segment.
- */
-function projectFraction(a: LngLat, b: LngLat, p: LngLat): number {
-  const kx = Math.cos((a[1] * Math.PI) / 180); // longitude-degree scale at this latitude
-  const ax = a[0] * kx, ay = a[1];
-  const dx = b[0] * kx - ax, dy = b[1] - ay;
-  const segSq = dx * dx + dy * dy;
-  if (segSq === 0) return 0;
-  const t = ((p[0] * kx - ax) * dx + (p[1] - ay) * dy) / segSq;
-  return Math.min(1, Math.max(0, t));
-}
-
-function lerp(a: LngLat, b: LngLat, t: number): LngLat {
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-}
-
-/** Cumulative driving seconds at a given along-line location (km). */
-function durationAtLocation(
-  loc: number,
-  cumDist: number[],
-  cumDur: number[],
-  durations: number[],
-): number {
-  const lastV = cumDist.length - 1;
-  if (lastV < 1 || loc <= 0) return cumDur[0] ?? 0;
-  if (loc >= cumDist[lastV]) return cumDur[Math.min(cumDur.length - 1, lastV)] ?? 0;
-  let idx = 0;
-  for (let i = 0; i < lastV; i++) {
-    if (loc >= cumDist[i] && loc <= cumDist[i + 1]) { idx = i; break; }
+  // Walk overlapping windows of ≤25 stops. Each window advances by
+  // MAX_WAYPOINTS-1 stops so consecutive windows share their boundary stop; the
+  // legs each window contributes never overlap (the boundary stop's outgoing
+  // leg lives in the later window). Concatenated, they cover every consecutive
+  // pair exactly once.
+  const legDurations: number[] = [];
+  for (let start = 0; start < stopCoords.length - 1; start += MAX_WAYPOINTS - 1) {
+    const end = Math.min(start + MAX_WAYPOINTS, stopCoords.length); // exclusive
+    const chunk = stopCoords.slice(start, end);
+    const chunkLegs = await fetchLegDurations(chunk);
+    if (!chunkLegs) return null;
+    legDurations.push(...chunkLegs);
   }
-  if (idx >= durations.length) idx = Math.max(0, durations.length - 1);
-  const segStart = cumDist[idx] ?? 0;
-  const segEnd = cumDist[idx + 1] ?? segStart;
-  const frac = segEnd > segStart ? Math.min(1, Math.max(0, (loc - segStart) / (segEnd - segStart))) : 0;
-  return (cumDur[idx] ?? 0) + frac * (durations[idx] ?? 0);
-}
-
-/**
- * Pure projection step (exported for testing): given a matched path, its
- * per-segment durations, and the stops *in input/sequence order*, returns
- * cumulative seconds at each stop.
- *
- * Projection honors sequence order: each stop is matched to the nearest point
- * on the line *at or after* the previous stop's along-line location (a running
- * "min location" that only advances). So a stop physically near the shape's
- * start but placed late in the sequence resolves to a LATER along-line position
- * (a late time) rather than an early one, an out-and-back shape resolves a
- * midpoint stop to the correct pass, and the returned cumulative seconds are
- * NON-DECREASING in input order. (The old code projected each stop onto the
- * GLOBAL nearest point independently, which ignored sequence order.)
- */
-export function cumulativeTravelAtStops(
-  coords: LngLat[],
-  durations: number[],
-  stopCoords: LngLat[],
-): number[] {
-  if (coords.length < 2) return stopCoords.map(() => 0);
-
-  // Cumulative distance (km) and duration (s) at each matched vertex.
-  const cumDist: number[] = [0];
-  for (let i = 1; i < coords.length; i++) {
-    cumDist.push(cumDist[i - 1] + distance(coords[i - 1], coords[i], { units: 'kilometers' }));
-  }
-  const cumDur: number[] = [0];
-  for (let i = 0; i < durations.length; i++) cumDur.push(cumDur[i] + durations[i]);
-  const totalLen = cumDist[cumDist.length - 1];
-
-  let minLoc = 0; // km along the line; only advances forward across stops
-  return stopCoords.map((sc) => {
-    let bestDist = Infinity;
-    let bestLoc = minLoc; // default if nothing qualifies: clamp to running min
-    let found = false;
-    for (let i = 0; i < coords.length - 1; i++) {
-      const segStartLoc = cumDist[i];
-      const segEndLoc = cumDist[i + 1];
-      if (segEndLoc <= minLoc) continue; // segment is entirely before the running min
-      const segLen = segEndLoc - segStartLoc;
-      let t = projectFraction(coords[i], coords[i + 1], sc);
-      let loc = segStartLoc + t * segLen;
-      if (loc < minLoc) {
-        // Closest point on this segment falls before the running min → clamp to
-        // the start of this segment's still-qualifying portion.
-        loc = minLoc;
-        t = segLen > 0 ? (minLoc - segStartLoc) / segLen : 0;
-      }
-      const d = distance(sc, lerp(coords[i], coords[i + 1], t), { units: 'kilometers' });
-      if (d < bestDist) {
-        bestDist = d;
-        bestLoc = loc;
-        found = true;
-      }
-    }
-    if (!found) bestLoc = Math.max(minLoc, totalLen); // only the line's end qualifies
-    minLoc = bestLoc; // advance the running min so later stops can't go backward
-    return durationAtLocation(bestLoc, cumDist, cumDur, durations);
-  });
+  // legDurations now has exactly stopCoords.length - 1 entries.
+  const cum: number[] = [0];
+  for (const d of legDurations) cum.push(cum[cum.length - 1] + d);
+  return cum;
 }
 
 export interface StopTiming { arrivalSec: number; departureSec: number; }

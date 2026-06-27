@@ -8,7 +8,7 @@ import { PatternSelector } from '../ui/ShapePatternSelector';
 import { computeShapePatterns } from '../ui/shapePatterns';
 import type { Route, StopTime } from '../../types/gtfs';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
-import { estimateStopTravelSeconds, layoutStopTimes } from '../../services/travelTime';
+import { estimateStopTravelByRoad, layoutStopTimes } from '../../services/travelTime';
 import { GenerateServiceForm } from './GenerateServiceForm';
 import { RuntimeEditor } from './RuntimeEditor';
 
@@ -449,16 +449,6 @@ export function TimetableGrid() {
     setRemoveAllPrompt(false);
   };
 
-  // Ordered [lng, lat] vertices of a trip's drawn shape (empty if none).
-  const shapeCoordsForTrip = useCallback((tripId: string): [number, number][] => {
-    const trip = trips.find((t) => t.trip_id === tripId);
-    const shape = trip?.shape_id ? shapes.find((s) => s.shape_id === trip.shape_id) : undefined;
-    if (!shape || shape.points.length < 2) return [];
-    return [...shape.points]
-      .sort((a, b) => a.shape_pt_sequence - b.shape_pt_sequence)
-      .map((p) => [p.shape_pt_lon, p.shape_pt_lat] as [number, number]);
-  }, [trips, shapes]);
-
   const handleEstimate = (tripId: string) => {
     const firstTime = getFirstDisplayedTime(tripId);
     setEstStart(firstTime ? formatTimeShort(firstTime) : '08:00');
@@ -466,21 +456,23 @@ export function TimetableGrid() {
     setEstimatePrompt(tripId);
   };
 
-  // Estimate stop times from the drawn route's road-network travel time, plus
-  // a per-stop dwell and a bus-vs-car speed factor, then write them to the trip.
+  // Estimate stop times from the real road driving time between consecutive
+  // stops (in sequence order), plus a per-stop dwell and a bus-vs-car speed
+  // factor, then write them to the trip. No drawn shape is required.
   const handleEstimateConfirm = async () => {
     if (!estimatePrompt) return;
     const normalized = normalizeTimeInput(estStart);
     if (!normalized) { setEstError('Enter a valid start time, e.g. 08:00.'); return; }
-    const shapeCoords = shapeCoordsForTrip(estimatePrompt);
-    if (shapeCoords.length < 2) { setEstError('This trip has no drawn route shape to follow.'); return; }
     if (orderedStops.length < 2) { setEstError('Add at least two stops to this route first.'); return; }
 
     setEstimating(true);
     setEstError(null);
     try {
+      // All ordered stops (including skipped columns) drive the directions
+      // request so a skipped stop is still physically passed and downstream
+      // times stay right; we only WRITE to served stops below.
       const stopCoords = orderedStops.map((c) => [c.stop.stop_lon, c.stop.stop_lat] as [number, number]);
-      const cum = await estimateStopTravelSeconds(shapeCoords, stopCoords);
+      const cum = await estimateStopTravelByRoad(stopCoords);
       if (!cum) {
         setEstError("Couldn't match this route to the road network. Try again, or set times manually.");
         return;
@@ -1051,11 +1043,10 @@ export function TimetableGrid() {
                     >
                       ⟿
                     </button>
-                    {trip.shape_id
-                      && (shapes.find((s) => s.shape_id === trip.shape_id)?.points.length ?? 0) >= 2 && (
+                    {orderedStops.length >= 2 && (
                       <button
                         onClick={() => handleEstimate(trip.trip_id)}
-                        title="Estimate stop times from the road network (Mapbox)"
+                        title="Estimate stop times from the road driving time between stops (Mapbox)"
                         className="text-warm-gray hover:text-coral text-[11px]"
                       >
                         ◷
@@ -1204,8 +1195,8 @@ export function TimetableGrid() {
               Estimate times
             </h3>
             <p className="text-sm text-warm-gray mb-4">
-              Fill this trip&rsquo;s stop times from the drawn route&rsquo;s road-network travel time, plus a
-              dwell at each stop. Then use&nbsp;⇶ to apply it to the route&rsquo;s other trips.
+              Fill this trip&rsquo;s stop times from the road driving time between your stops, in order,
+              plus a dwell at each stop. Then use&nbsp;⇶ to apply it to the route&rsquo;s other trips.
             </p>
             <div className="space-y-3 mb-4">
               <label className="block">

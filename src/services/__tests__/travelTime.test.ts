@@ -1,103 +1,139 @@
-// Pure-logic tests for travelTime.ts: the cumulative-duration projection of
-// stops onto a matched path, and the dwell/speed-factor timing layout. The
-// Map Matching fetch itself is not exercised here (it's a thin wrapper).
-import { describe, expect, it } from 'vitest';
-import { cumulativeTravelAtStops, layoutStopTimes } from '../travelTime';
+// Tests for travelTime.ts: the Mapbox Directions per-leg driving-time estimate
+// (with its >25-stop chunk/stitch logic) and the dwell/speed-factor timing
+// layout. The Directions fetch is mocked; we assert the chunks stitch with no
+// gap or double-count and that a failed fetch returns null.
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { estimateStopTravelByRoad, layoutStopTimes } from '../travelTime';
 
-describe('cumulativeTravelAtStops', () => {
-  // A straight west→east path, 4 vertices / 3 equal segments of 60s each.
-  const coords: [number, number][] = [[0, 0], [0.01, 0], [0.02, 0], [0.03, 0]];
-  const durations = [60, 60, 60];
+type LngLat = [number, number];
 
-  it('returns cumulative seconds at each stop sitting on a vertex', () => {
-    const stops: [number, number][] = [[0, 0], [0.02, 0], [0.03, 0]];
-    const cum = cumulativeTravelAtStops(coords, durations, stops);
-    expect(cum[0]).toBeCloseTo(0, 1);
-    expect(cum[1]).toBeCloseTo(120, 1);
-    expect(cum[2]).toBeCloseTo(180, 1);
+// Stops live on a line at lng = i * 0.01 so the mock can recover each stop's
+// global index from its coordinate. Leg (j → j+1) gets duration (j + 1) seconds:
+// distinct per leg, so any gap or double-count across a chunk boundary changes
+// the cumulative sum and fails the assertions below.
+function stopsAt(n: number): LngLat[] {
+  return Array.from({ length: n }, (_, i) => [i * 0.01, 0] as LngLat);
+}
+
+// Parse the Directions URL, derive each waypoint's global index from its lng,
+// and return one leg per consecutive pair with duration = (fromIndex + 1).
+function directionsResponse(url: string) {
+  const path = url.split('/driving/')[1].split('?')[0];
+  const coords = path.split(';').map((c) => Math.round(parseFloat(c.split(',')[0]) / 0.01));
+  const legs: { duration: number }[] = [];
+  for (let i = 0; i < coords.length - 1; i++) legs.push({ duration: coords[i] + 1 });
+  return {
+    ok: true,
+    json: async () => ({ code: 'Ok', routes: [{ legs }] }),
+  } as unknown as Response;
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('estimateStopTravelByRoad', () => {
+  it('returns cumulative per-leg driving seconds in order for a short route', async () => {
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => directionsResponse(String(url)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const cum = await estimateStopTravelByRoad(stopsAt(4));
+    // legs are 1,2,3 → cumulative 0,1,3,6
+    expect(cum).toEqual([0, 1, 3, 6]);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // one request, well under 25 stops
   });
 
-  it('interpolates within a segment for a stop between vertices', () => {
-    const cum = cumulativeTravelAtStops(coords, durations, [[0.015, 0]]);
-    expect(cum[0]).toBeCloseTo(90, 0); // halfway through the middle segment
+  it('splits a 30-stop route into overlapping chunks that stitch with no gap or double-count', async () => {
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => directionsResponse(String(url)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const cum = await estimateStopTravelByRoad(stopsAt(30));
+
+    // 30 stops → 29 legs → 30 cumulative entries.
+    expect(cum).not.toBeNull();
+    expect(cum).toHaveLength(30);
+
+    // Two requests: stops 0..24 (25 coords, the max) then stops 24..29.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstCoordCount = String(fetchMock.mock.calls[0][0]).split('/driving/')[1].split('?')[0].split(';').length;
+    const secondCoordCount = String(fetchMock.mock.calls[1][0]).split('/driving/')[1].split('?')[0].split(';').length;
+    expect(firstCoordCount).toBe(25);          // capped at the Mapbox limit
+    expect(secondCoordCount).toBe(6);          // stops 24..29 inclusive (overlap by 1)
+    expect(firstCoordCount).toBeLessThanOrEqual(25);
+    expect(secondCoordCount).toBeLessThanOrEqual(25);
+
+    // Closed-form: leg (j→j+1) = j+1, so cum[i] = i(i+1)/2. The boundary leg
+    // (stop 24→25 = 25) must appear EXACTLY once: cum[25]-cum[24] === 25.
+    for (let i = 0; i < 30; i++) expect(cum![i]).toBe((i * (i + 1)) / 2);
+    expect(cum![25] - cum![24]).toBe(25);      // boundary leg counted once, no gap/dup
   });
 
-  it('is monotonic non-decreasing in route order', () => {
-    const stops: [number, number][] = [[0, 0], [0.01, 0], [0.025, 0], [0.03, 0]];
-    const cum = cumulativeTravelAtStops(coords, durations, stops);
-    for (let i = 1; i < cum.length; i++) expect(cum[i]).toBeGreaterThanOrEqual(cum[i - 1]);
+  it('exactly 25 stops fits a single request', async () => {
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => directionsResponse(String(url)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const cum = await estimateStopTravelByRoad(stopsAt(25));
+    expect(cum).toHaveLength(25);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('a normal in-order set is unchanged/monotonic (each stop at its vertex)', () => {
-    // Sequence follows the line west→east: expect the natural per-vertex times.
-    const stops: [number, number][] = [[0, 0], [0.01, 0], [0.02, 0], [0.03, 0]];
-    const cum = cumulativeTravelAtStops(coords, durations, stops);
-    expect(cum[0]).toBeCloseTo(0, 1);
-    expect(cum[1]).toBeCloseTo(60, 1);
-    expect(cum[2]).toBeCloseTo(120, 1);
-    expect(cum[3]).toBeCloseTo(180, 1);
+  it('26 stops needs a second request and still stitches contiguously', async () => {
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => directionsResponse(String(url)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const cum = await estimateStopTravelByRoad(stopsAt(26));
+    expect(cum).toHaveLength(26);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (let i = 0; i < 26; i++) expect(cum![i]).toBe((i * (i + 1)) / 2);
   });
 
-  it('stops given out of GEOGRAPHIC order along the line still yield NON-DECREASING cumulative times in input order', () => {
-    // Input sequence is east→west (against the line's drawn direction). Honoring
-    // sequence order means each stop must land at/after the previous one, so the
-    // cumulative times rise in INPUT order rather than tracking geography.
-    const stops: [number, number][] = [[0.03, 0], [0.02, 0], [0.01, 0], [0, 0]];
-    const cum = cumulativeTravelAtStops(coords, durations, stops);
-    for (let i = 1; i < cum.length; i++) expect(cum[i]).toBeGreaterThanOrEqual(cum[i - 1]);
+  it('cumulative output is monotonic non-decreasing', async () => {
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => directionsResponse(String(url)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const cum = await estimateStopTravelByRoad(stopsAt(40));
+    expect(cum).not.toBeNull();
+    for (let i = 1; i < cum!.length; i++) expect(cum![i]).toBeGreaterThanOrEqual(cum![i - 1]);
   });
 
-  it('BZN-style: a stop near the line START but placed LAST gets a LATE (largest) time, not an early one', () => {
-    // The 4th stop sits right at the line's start (like BZN Airport reordered to
-    // the end). The old global-nearest projection gave it loc≈0 → an early time.
-    // Forward-scanning must instead push it to >= its predecessors' location.
-    const stops: [number, number][] = [
-      [0.01, 0],  // 1st
-      [0.02, 0],  // 2nd
-      [0.03, 0],  // 3rd (end of line)
-      [0, 0],     // 4th, but geographically at the START
-    ];
-    const cum = cumulativeTravelAtStops(coords, durations, stops);
-    for (let i = 1; i < cum.length; i++) expect(cum[i]).toBeGreaterThanOrEqual(cum[i - 1]);
-    // The reordered start-stop must end up with the largest cumulative time.
-    expect(cum[3]).toBe(Math.max(...cum));
-    expect(cum[3]).toBeGreaterThanOrEqual(cum[2]);
+  it('returns null on an HTTP error', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 422, json: async () => ({}) }) as unknown as Response));
+    expect(await estimateStopTravelByRoad(stopsAt(5))).toBeNull();
   });
 
-  it('out-and-back line resolves a midpoint stop to the intended (later) pass', () => {
-    // Line runs north out to an apex, then back south to the start. A midpoint
-    // stop is geographically ambiguous (the line passes it twice). Sequenced
-    // AFTER the apex stop, it must resolve to the INBOUND pass (a late time),
-    // not the outbound pass (which would precede the apex and break order).
-    const oab: [number, number][] = [
-      [0, 0], [0, 0.005], [0, 0.01], [0, 0.015], [0, 0.02],
-      [0, 0.015], [0, 0.01], [0, 0.005], [0, 0],
-    ];
-    const oabDur = [60, 60, 60, 60, 60, 60, 60, 60]; // 8 segments, 480s total
-    const stops: [number, number][] = [
-      [0, 0],      // start
-      [0, 0.02],   // apex (turnaround) ≈ 240s in
-      [0, 0.0075], // midpoint, sequenced on the way back
-    ];
-    const cum = cumulativeTravelAtStops(oab, oabDur, stops);
-    for (let i = 1; i < cum.length; i++) expect(cum[i]).toBeGreaterThanOrEqual(cum[i - 1]);
-    expect(cum[1]).toBeCloseTo(240, 0);     // apex near the temporal middle
-    expect(cum[2]).toBeGreaterThan(cum[1]); // resolved to the inbound pass, after the apex
-    expect(cum[2]).toBeGreaterThan(300);    // clearly the inbound (≈390s), not outbound (≈90s)
+  it('returns null when fetch throws (network failure)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('network down'); }));
+    expect(await estimateStopTravelByRoad(stopsAt(5))).toBeNull();
   });
 
-  it('clamps to the running location when a late stop only projects before it', () => {
-    // A stop physically before the running min has no forward projection except
-    // the clamp; its time must equal (not precede) the prior stop's.
-    const cum = cumulativeTravelAtStops(coords, durations, [[0.03, 0], [0, 0]]);
-    expect(cum[0]).toBeCloseTo(180, 1);
-    expect(cum[1]).toBeGreaterThanOrEqual(cum[0]);
-    expect(cum[1]).toBeCloseTo(180, 1); // clamped to the end (running min), not pulled back to 0
+  it('returns null on a non-Ok Directions code', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ code: 'NoRoute', routes: [] }) }) as unknown as Response));
+    expect(await estimateStopTravelByRoad(stopsAt(5))).toBeNull();
   });
 
-  it('guards a degenerate shape (fewer than 2 points)', () => {
-    expect(cumulativeTravelAtStops([[0, 0]], [], [[0, 0], [0.01, 0]])).toEqual([0, 0]);
-    expect(cumulativeTravelAtStops(coords, durations, [])).toEqual([]);
+  it('returns null if any later chunk fails (no partial cumulative)', async () => {
+    // First chunk ok, second chunk HTTP-errors → whole estimate must be null.
+    let call = 0;
+    vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL) => {
+      call += 1;
+      if (call === 1) return directionsResponse(String(url));
+      return { ok: false, status: 500, json: async () => ({}) } as unknown as Response;
+    }));
+    expect(await estimateStopTravelByRoad(stopsAt(30))).toBeNull();
+  });
+
+  it('returns null when the leg count does not match the waypoints (malformed)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ code: 'Ok', routes: [{ legs: [{ duration: 1 }] }] }) }) as unknown as Response));
+    // 5 stops should yield 4 legs; the mock returns 1 → reject.
+    expect(await estimateStopTravelByRoad(stopsAt(5))).toBeNull();
+  });
+
+  it('guards fewer than 2 stops without calling the network', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await estimateStopTravelByRoad([])).toEqual([]);
+    expect(await estimateStopTravelByRoad([[0, 0]])).toEqual([0]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

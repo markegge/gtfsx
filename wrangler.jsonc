@@ -196,7 +196,7 @@
         "AUTH_EMAIL_FROM": "GTFS·X Staging <staging@gtfsx.com>",
         "OWNER_NOTIFY_EMAIL": "mark@eateggs.com",
         "WELCOME_REPLY_TO": "hello@gtfsx.com",
-        "OWNER_DIGEST_ENABLED": "true",
+        "OWNER_DIGEST_ENABLED": "false",
         "APP_ORIGIN": "https://staging.gtfsx.com",
         "FEEDS_ORIGIN": "https://staging-feeds.gtfsx.com",
         "IMAGES_ORIGIN": "https://staging-img.gtfsx.com",

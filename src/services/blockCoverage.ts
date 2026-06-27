@@ -1,18 +1,17 @@
 /**
- * EXACT census-block-level Coverage tabulation (proof-of-concept, Montana only).
+ * EXACT census-block-level Coverage tabulation (nationwide: 50 states + DC).
  *
  * The default Coverage path (coverageAnalysis.ts) pins each ACS block group to
  * its parent tract's centroid and apportions population via overlapping discs —
- * effectively tract-resolution geometry. For Montana we instead load a
- * FlatGeobuf of one POINT per census block (built by
- * demand-dots/build_coverage_blocks.py, served from R2 at /_coverage/mt.fgb)
- * carrying EXACT integer attributes, and tabulate the blocks whose centroid
- * falls inside the transit walkshed. That gives precise population / jobs /
- * equity counts instead of an apportioned estimate, and adds block-level LODES
- * jobs (which the disc method could not provide).
+ * effectively tract-resolution geometry. Instead we load a FlatGeobuf of one
+ * POINT per census block (built by demand-dots/coverage-pipeline/, served from
+ * R2 at /_coverage/us.fgb) carrying EXACT integer attributes, and tabulate the
+ * blocks whose centroid falls inside the transit walkshed. That gives precise
+ * population / jobs / equity counts instead of an apportioned estimate, and adds
+ * block-level LODES jobs (which the disc method could not provide).
  *
- * Region gating lives with the caller: only Montana feeds (state FIPS 30) use
- * this path; every other feed keeps the unchanged block-group/disc method.
+ * Region gating lives with the caller: US feeds (50 states + DC) use this path;
+ * territories / non-US feeds keep the unchanged block-group/disc method.
  */
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
 import union from '@turf/union';
@@ -22,29 +21,38 @@ import type { Feature, Polygon, MultiPolygon } from 'geojson';
 import type { Stop } from '../types/gtfs';
 import type { CoverageResult } from './coverageAnalysis';
 
-/** Montana state FIPS — the only region with a published block-level layer. */
-export const MONTANA_FIPS = '30';
-
-/** Approximate Montana lat/lon bounding box, for a centroid-based fallback gate
- *  when a FIPS lookup is unavailable. */
-const MT_BOUNDS = { minLon: -116.1, minLat: 44.3, maxLon: -104.0, maxLat: 49.1 };
+/**
+ * FIPS codes for the 50 states + DC — the geographies in the nationwide
+ * `coverage/us.fgb` layer (the offline build excludes territories by default).
+ * A feed in any of these uses the exact block layer; anything else (territories,
+ * outside the US) falls back to the block-group estimate.
+ */
+const US_STATE_FIPS = new Set([
+  '01', '02', '04', '05', '06', '08', '09', '10', '11', '12', '13', '15', '16',
+  '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29',
+  '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42',
+  '44', '45', '46', '47', '48', '49', '50', '51', '53', '54', '55', '56',
+]);
 
 /**
  * The block region key for a state FIPS, or null when no block-level layer
- * exists for that state. Today only Montana ('30' → 'mt').
+ * exists. Nationwide: the single `us` layer covers all 50 states + DC.
  */
 export function regionForState(stateFips: string): string | null {
-  return stateFips === MONTANA_FIPS ? 'mt' : null;
+  return US_STATE_FIPS.has(stateFips) ? 'us' : null;
 }
 
-/** True when a lat/lon falls inside the Montana bounding box (fallback gate). */
-export function isInMontana(lat: number, lon: number): boolean {
-  return (
-    lon >= MT_BOUNDS.minLon &&
-    lon <= MT_BOUNDS.maxLon &&
-    lat >= MT_BOUNDS.minLat &&
-    lat <= MT_BOUNDS.maxLat
-  );
+/**
+ * Coarse bounds for the 50 states (contiguous US + Alaska + Hawaii) — a cheap
+ * gate for the per-stop jobs fetch when a FIPS lookup isn't handy. The .fgb
+ * bbox query is exact, so this only avoids fetching the layer for stops clearly
+ * outside the US.
+ */
+export function isInUS(lat: number, lon: number): boolean {
+  if (lat >= 24 && lat <= 50 && lon >= -125 && lon <= -66.5) return true; // CONUS
+  if (lat >= 51 && lat <= 72 && lon >= -180 && lon <= -129) return true; // Alaska
+  if (lat >= 18 && lat <= 23 && lon >= -161 && lon <= -154) return true; // Hawaii
+  return false;
 }
 
 /** One census block: its internal-point centroid plus the EXACT .fgb attributes. */

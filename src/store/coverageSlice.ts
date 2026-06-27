@@ -9,7 +9,7 @@ export interface CoverageData {
   routeResults: { routeId: string; result: CoverageResult }[];
   bufferGeoJSON: GeoJSON.FeatureCollection;
   /** EXACT census-block-level system tabulation, present only for block-level
-   *  POC regions (Montana). When set, the System Summary + demographic profile
+   *  regions (US: 50 states + DC). When set, the System Summary + demographic profile
    *  + per-route breakdown + CSV all render from the exact block counts (with a
    *  jobs count) instead of the block-group estimate. */
   blockResult?: BlockCoverageResult;

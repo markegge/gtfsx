@@ -3,7 +3,7 @@ import type { Feature, Polygon } from 'geojson';
 import type { Stop } from '../../types/gtfs';
 import {
   regionForState,
-  isInMontana,
+  isInUS,
   bboxFromStops,
   unionWalkshedPolygons,
   tabulateBlocks,
@@ -44,16 +44,21 @@ function stop(id: string, lon: number, lat: number): Stop {
   return { stop_id: id, stop_name: id, stop_lat: lat, stop_lon: lon, location_type: 0, wheelchair_boarding: 0 };
 }
 
-describe('regionForState / isInMontana', () => {
-  it('maps Montana FIPS 30 to the mt block region, others to null', () => {
-    expect(regionForState('30')).toBe('mt');
-    expect(regionForState('06')).toBeNull();
-    expect(regionForState('16')).toBeNull();
+describe('regionForState / isInUS', () => {
+  it('maps the 50 states + DC to the us block region, territories/unknown to null', () => {
+    expect(regionForState('30')).toBe('us'); // Montana
+    expect(regionForState('06')).toBe('us'); // California
+    expect(regionForState('11')).toBe('us'); // DC
+    expect(regionForState('72')).toBeNull(); // Puerto Rico (territory, not in us.fgb)
+    expect(regionForState('99')).toBeNull(); // unknown
   });
 
-  it('bounds-checks Montana coordinates', () => {
-    expect(isInMontana(46.6, -111.9)).toBe(true); // Helena
-    expect(isInMontana(37.8, -122.2)).toBe(false); // Oakland, CA
+  it('bounds-checks US coordinates (CONUS + AK + HI)', () => {
+    expect(isInUS(46.6, -111.9)).toBe(true); // Helena, MT
+    expect(isInUS(37.8, -122.2)).toBe(true); // Oakland, CA
+    expect(isInUS(61.2, -149.9)).toBe(true); // Anchorage, AK
+    expect(isInUS(21.3, -157.8)).toBe(true); // Honolulu, HI
+    expect(isInUS(51.5, -0.13)).toBe(false); // London
   });
 });
 

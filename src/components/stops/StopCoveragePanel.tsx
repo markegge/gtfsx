@@ -5,7 +5,7 @@ import type { Feature } from 'geojson';
 import { useStore } from '../../store';
 import { calculateCoverage, demographicShares, baselineShares, generateBufferGeoJSON } from '../../services/coverageAnalysis';
 import { fetchCensusData, lookupFips, type BlockGroupData } from '../../services/demographics';
-import { isInMontana, bboxFromStops, loadBlocksInBbox, unionWalkshedPolygons, tabulateBlocks } from '../../services/blockCoverage';
+import { isInUS, bboxFromStops, loadBlocksInBbox, unionWalkshedPolygons, tabulateBlocks } from '../../services/blockCoverage';
 import { directionName } from '../../utils/constants';
 
 // Module-level cache so navigating between stops in the same county doesn't
@@ -169,12 +169,12 @@ export function StopCoveragePanel() {
 
   // Block-level jobs within THIS stop's buffer. Jobs aren't in the
   // block-group/disc method, so they come from the exact census-block layer
-  // (POC: Montana only). When available we show Jobs in place of Workers.
-  // Best-effort: non-MT stops, a missing layer in local dev, or a fetch error
-  // leave jobs null and the panel keeps showing Workers.
+  // (nationwide `us` layer). When available we show Jobs in place of Workers.
+  // Best-effort: stops outside the US, a missing layer in local dev, or a fetch
+  // error leave jobs null and the panel keeps showing Workers.
   const [stopJobs, setStopJobs] = useState<number | null>(null);
   useEffect(() => {
-    if (!stop || !isInMontana(stop.stop_lat, stop.stop_lon)) {
+    if (!stop || !isInUS(stop.stop_lat, stop.stop_lon)) {
       setStopJobs(null);
       return;
     }
@@ -186,7 +186,7 @@ export function StopCoveragePanel() {
           if (!cancelled) setStopJobs(null);
           return;
         }
-        const blocks = await loadBlocksInBbox('mt', bbox);
+        const blocks = await loadBlocksInBbox('us', bbox);
         const bufferFc = generateBufferGeoJSON([stop], bufferMiles);
         const features = bufferFc.features as Feature[];
         const poly = unionWalkshedPolygons(features);

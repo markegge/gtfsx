@@ -326,7 +326,7 @@ export function CoveragePanel() {
         features: allFeatures,
       };
 
-      // Block-level POC (Montana only): tabulate EXACT census blocks whose
+      // Block-level (US: 50 states + DC): tabulate EXACT census blocks whose
       // centroid falls inside the system walkshed (union of the per-route
       // buffers / isochrones). Best-effort: any failure (layer not deployed in
       // local dev, fetch/parse error) silently falls back to the block-group
@@ -384,9 +384,9 @@ export function CoveragePanel() {
     walkMode,
   ]);
 
-  // In a block-level POC region (Montana) the System Summary + demographic
-  // profile render from the EXACT census-block tabulation; everywhere else they
-  // render from the block-group estimate. `summary` is whichever is in effect.
+  // In a block-level region (US: 50 states + DC) the System Summary +
+  // demographic profile render from the EXACT census-block tabulation;
+  // elsewhere from the block-group estimate. `summary` is whichever is in effect.
   const block = coverageData?.blockResult ?? null;
   const summary = block ?? coverageData?.systemResult ?? null;
 
@@ -524,8 +524,8 @@ export function CoveragePanel() {
 
           {block && (
             <p className="text-[10px] text-teal leading-relaxed">
-              Exact analysis: counts come from individual census blocks whose center is inside the
-              walkshed (Montana). Other regions use a block-group estimate.
+              Exact analysis: counts come from the individual census blocks whose center falls
+              inside the walkshed.
             </p>
           )}
 

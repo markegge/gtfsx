@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
     <title>Demographic coverage — GTFS·X</title>
-    <meta name="description" content="Population, households, and workers within walking distance of GTFS stops, computed from US Census ACS data. Per-route and system-wide figures." />
+    <meta name="description" content="Population, households, workers, jobs, and equity demographics within walking distance of GTFS stops, tallied at the census-block level from US Census ACS, decennial, and LEHD/LODES data. Per-route and system-wide figures." />
     <link rel="canonical" href="https://www.gtfsx.com/docs/demographic-coverage/" />
     <meta property="og:title" content="Demographic coverage — GTFS·X" />
-    <meta property="og:description" content="Population, households, and workers served by a GTFS feed, using US Census ACS data and a configurable walk-distance buffer." />
+    <meta property="og:description" content="Population, households, workers, jobs, and equity demographics served by a GTFS feed, tallied at the census-block level from US Census ACS, decennial, and LEHD/LODES data." />
     <meta property="og:type" content="article" />
     <meta property="og:url" content="https://www.gtfsx.com/docs/demographic-coverage/" />
     <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
@@ -62,7 +62,7 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "headline": "Demographic coverage — GTFS·X",
-  "description": "Population, households, and workers within walking distance of GTFS stops, computed from US Census ACS data. Per-route and system-wide figures.",
+  "description": "Population, households, workers, jobs, and equity demographics within walking distance of GTFS stops, tallied at the census-block level from US Census ACS, decennial, and LEHD/LODES data. Per-route and system-wide figures.",
   "image": "https://www.gtfsx.com/og-default.png",
   "author": {
     "@type": "Organization",
@@ -78,7 +78,7 @@
     }
   },
   "datePublished": "2026-05-01",
-  "dateModified": "2026-05-22",
+  "dateModified": "2026-06-27",
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": "https://www.gtfsx.com/docs/demographic-coverage/"
@@ -104,17 +104,18 @@
     <main>
       <div class="crumbs"><a href="/docs/">Docs</a> · Analysis tools · Demographic coverage</div>
       <h1>Demographic coverage <span class="tier-badge agency">Agency</span></h1>
-      <p class="lede">Population, households, and workers within walking distance of your stops, computed from US Census ACS data. Per-route and system-wide figures suitable for a grant narrative ("17,400 residents and 9,200 jobs are within a quarter-mile of the proposed Route 5 alignment") or for sanity-checking a service alternative.</p>
+      <p class="lede">Population, households, workers, jobs, and equity demographics within walking distance of your stops, tallied at the individual census-block level from US Census data. Per-route and system-wide figures suitable for a grant narrative ("33,600 residents and 32,000 jobs are within a quarter-mile of the network") or for sanity-checking a service alternative.</p>
       <p><strong>The system-level summary is free on every plan.</strong> The per-route coverage breakdown is an Agency feature.</p>
 
       <figure>
-        <img src="/assets/docs/demographic-coverage-hero.png" alt="Coverage panel in GTFS·X showing population, household, and worker totals for Sunny Valley, with the buffer overlay rendered on the map." loading="lazy" />
-        <figcaption>Coverage analysis on the Sunny Valley feed. System totals (population, households, workers) at top; per-route breakdown below; coverage polygons overlaid on the map.</figcaption>
+        <img src="/assets/docs/demographic-coverage-hero.png" alt="Coverage panel in GTFS·X showing population, household, worker, high-propensity rider, and job totals for Sunny Valley, plus an equity profile, with the walkshed buffer rendered on the map." loading="lazy" />
+        <figcaption>Coverage analysis on the Sunny Valley feed. System totals (population, households, workers, high-propensity riders, and jobs) tallied from the exact census blocks inside the walkshed, with the equity profile against the county baseline below and the buffer overlaid on the map.</figcaption>
       </figure>
 
       <h2 id="what-it-is">What it is</h2>
-      <p>The Coverage panel reports three figures for the area within walking distance of your transit network: <strong>population</strong>, <strong>households</strong>, and <strong>workers</strong>. The figures come from the most recent five-year American Community Survey (currently the 2022 5-year release, ACS B01003, B25001, and B08301 respectively) and are apportioned to your service area by overlapping a buffer around each stop with the Census block groups it touches.</p>
-      <p>It's the answer to the most-asked question in a service-planning meeting — "how many people does this route reach?" — without firing up a desktop GIS or pulling Census tables by hand. Run it on your existing network to anchor a discussion; run it on a proposed alternative to support a recommendation.</p>
+      <p>The Coverage panel reports, for the area within walking distance of your transit network: <strong>population</strong>, <strong>households</strong>, <strong>workers</strong>, <strong>high-propensity riders</strong>, and <strong>jobs</strong>. Alongside the totals it shows an <strong>equity profile</strong> (minority, low-income, zero-vehicle, senior, and youth shares) compared against the county baseline, and a <strong>Download CSV</strong> of every figure.</p>
+      <p>The counts are exact rather than approximate: GTFS·X tallies the individual US census blocks whose center falls inside the walkshed. Block population comes from the 2020 decennial count, American Community Survey demographics are apportioned down to each block by population, and jobs are workplace counts from the Census LEHD program. It works for any feed in the 50 states plus DC.</p>
+      <p>It answers the most-asked question in a service-planning meeting ("how many people does this route reach?") without firing up a desktop GIS or pulling Census tables by hand. Run it on your existing network to anchor a discussion, or on a proposed alternative to support a recommendation.</p>
 
       <h2 id="when-to-use-it">When to use it</h2>
       <ul>
@@ -127,25 +128,31 @@
       <h2 id="how-to-use-it">How to use it in GTFS·X</h2>
       <ol>
         <li>Open the feed in the editor and click <strong>Coverage</strong> in the left sidebar.</li>
-        <li>Click <strong>Analyze Coverage</strong>. The tool fetches the Census block groups that intersect your service area and computes the buffered overlap. First run for a region takes several seconds; results cache locally.</li>
-        <li>Read the system summary card: population, households, workers, and the count of block groups touched, with the buffer distance noted.</li>
-        <li>Scroll the per-route breakdown to see how each route contributes. A route that adds few unique residents relative to its operating cost is worth asking questions about (and the <a href="/docs/cost-estimation/">Cost estimation</a> panel will give you the other half of that ratio).</li>
+        <li>Click <strong>Analyze Coverage</strong>. GTFS·X loads the census blocks around your stops and tallies the ones inside the walkshed. The first run for a region takes a few seconds; results cache locally.</li>
+        <li>Read the system summary: population, households, workers, high-propensity riders, and jobs, with the count of census blocks covered noted underneath.</li>
+        <li>Below it, the <strong>demographic profile</strong> compares the covered area's equity shares against the county baseline (a ratio above 1.0 means the served area over-represents that group).</li>
+        <li>Scroll the per-route breakdown to see how each route contributes, then use <strong>Download CSV</strong> to export every figure (system, county baseline, and per route) for a report. Pair a route's coverage with the <a href="/docs/cost-estimation/">Cost estimation</a> panel for a service-per-dollar view.</li>
+        <li>Agency-plan users can switch on <strong>street-network walksheds</strong> for walk-distance reach instead of a straight-line buffer.</li>
       </ol>
 
       <h2 id="methodology">Methodology</h2>
-      <p>The tool buffers each stop, intersects the buffer with the Census block groups it overlaps, and apportions block-group demographics by the overlap fraction.</p>
+      <p>GTFS·X counts the individual US census blocks whose center point falls inside the walkshed, then sums each block's attributes. Counting real blocks rather than approximating with overlap math is what makes the figures exact.</p>
       <ul>
-        <li><strong>Buffer distance.</strong> Quarter-mile (1,320 ft) for bus, ferry, cable car, gondola, and funicular routes; half-mile (2,640 ft) for tram, subway, and rail. These match the conventional walking-distance assumptions used in transit-planning practice. Per-stop buffer overrides aren't supported today.</li>
-        <li><strong>Block-group geometry.</strong> Each block group is modeled as a disc with a half-mile radius centered on the tract centroid. This is a deliberate simplification — actual block-group polygons would be more precise but materially slower to compute in the browser — and is best understood as a reasonable approximation for dense and suburban areas. Sparse rural block groups may be over-counted; if your service area has fewer than ~50 block groups, validate the result against a polygon-aware tool.</li>
-        <li><strong>System-wide aggregation.</strong> For each block group, the tool takes the <em>maximum</em> overlap fraction across all routes (not the sum) before computing population. That means a block group covered by three routes counts once, not three times — the system-wide figure is a union count, not a sum of per-route counts. (Per-route figures, by contrast, are pure per-route — adding them up will over-count.)</li>
-        <li><strong>ACS variables.</strong> <code>B01003_001E</code> for total population, <code>B25001_001E</code> for total housing units (used as a proxy for households), <code>B08301_001E</code> for total workers 16 and over. Vintage: ACS 2022 5-year. If your agency's adopted methodology requires a different vintage, the figure won't be directly comparable — cite the vintage in any document.</li>
+        <li><strong>Walkshed.</strong> By default, a straight-line buffer around each stop: quarter-mile (1,320 ft) for bus, ferry, cable car, gondola, and funicular routes; half-mile (2,640 ft) for tram, subway, and rail. These match the conventional walking-distance assumptions used in transit-planning practice. Agency-plan users can switch to <strong>street-network walksheds</strong>, which follow the actual pedestrian network (and can size each stop's reach by its service frequency) instead of a circle.</li>
+        <li><strong>Census blocks, not block groups.</strong> A census block is the Bureau's smallest geography, often a single city block. GTFS·X loads a nationwide layer of every block's internal point and tallies the blocks inside the walkshed, so coverage tracks your stop placement closely instead of being smeared across a half-mile disc. (An earlier version of this tool approximated block groups as discs on tract centroids; the block-level method replaces it.)</li>
+        <li><strong>Data sources.</strong> Block geometry and 2020 population come from the Census <strong>TIGER/Line</strong> block file (TABBLOCK20). Demographic detail comes from the <strong>American Community Survey</strong> 5-year estimates (2022 release), published at the block-group level and apportioned down to each block in proportion to its 2020 population (a standard dasymetric step). Jobs come from the Census <strong>LEHD/LODES</strong> program, which already reports employment at the block level.</li>
+        <li><strong>What each figure measures.</strong> <em>Population</em> (ACS <code>B01003</code>), <em>households</em> (occupied households, ACS <code>B25044</code>), and <em>workers</em> (employed residents counted where they live, ACS <code>B08301</code>) are residence-based. <em>Jobs</em> are workplace-based, from LODES. <em>High-propensity riders</em> estimates the residents most likely to use transit: renters, people in zero-vehicle households, and adults 18 to 24, combined and scaled to discount the overlap between those groups. The <em>equity profile</em> reports the minority, low-income, zero-vehicle, senior, and youth shares of the covered area against the surrounding county.</li>
+        <li><strong>System vs. per-route.</strong> The system summary counts each block once even when several routes reach it (a union, not a sum). Per-route figures are pure per-route, so adding them up will over-count blocks served by more than one route.</li>
+        <li><strong>Coverage area.</strong> The exact block layer spans the 50 states plus DC. A feed outside that (a US territory, or outside the country) automatically falls back to the older block-group estimate, and the panel labels which method produced each figure.</li>
       </ul>
 
       <h2 id="limits">Limits</h2>
       <ul>
-        <li>The buffer-around-a-stop assumption treats stop placement as the unit of access. It doesn't model walk-network geometry, intersections, or topography. A stop on the wrong side of a freeway with no underpass will still count as covering everything within a quarter-mile.</li>
-        <li>"Workers" is the residential count — people who live in the buffer and work somewhere. For "jobs in the buffer" (a different demographic, often more useful for downtown coverage), see the Demand Dots layer described in <a href="/docs/rider-propensity/">Rider propensity</a>, which incorporates LEHD workplace data.</li>
-        <li>The tool surfaces totals only. For Title VI–style demographic comparisons (minority vs non-minority, low-income vs non-low-income), see the <a href="/docs/title-vi-analysis/">Title VI analysis</a> page.</li>
+        <li>The default straight-line buffer treats stop placement as the unit of access; it doesn't model walk-network geometry, intersections, or topography. A stop on the wrong side of a freeway with no underpass still counts as covering everything within the buffer. The Agency-plan street-network walkshed addresses this by following the real pedestrian network.</li>
+        <li>ACS demographics are apportioned to blocks in proportion to each block's population, which assumes they're distributed evenly within a block group. This is far more accurate than a land-area split, but it remains an estimate at the block level for everything except the raw population and job counts (which are measured directly).</li>
+        <li>"Workers" and "jobs" measure different things and are both reported: workers are employed residents counted where they live; jobs are counted where the work is (so a downtown with few residents but many jobs shows a low worker count and a high job count).</li>
+        <li>Figures use the ACS 2022 5-year vintage and 2020 decennial block geometry. If your agency's adopted methodology requires a different vintage, cite the one used in any document.</li>
+        <li>The on-screen equity profile is a quick coverage-vs-county comparison. For a formal Title VI service-equity analysis (disparate-impact and disproportionate-burden tests), see the <a href="/docs/title-vi-analysis/">Title VI analysis</a> page.</li>
       </ul>
 
       <div class="see-also">

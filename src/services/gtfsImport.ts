@@ -273,7 +273,10 @@ export function mergeImportIntoStore(
     store.addShape({ ...shape, shape_id: pfx(shape.shape_id) });
   }
 
-  // Append route-stop associations (batch)
+  // Append route-stop associations (batch). shape_id MUST be prefixed to match
+  // the imported trips' + shapes' prefixed shape_id — otherwise the timetable's
+  // orderedStops (which filters routeStops by the trips' shape_id) finds nothing
+  // and shows "Add stops to this route first" despite the trips existing.
   const s2 = useStore.getState();
   s2.setRouteStops([
     ...s2.routeStops,
@@ -281,6 +284,7 @@ export function mergeImportIntoStore(
       ...rs,
       route_id: pfx(rs.route_id),
       stop_id:  remapStopId(rs.stop_id),
+      shape_id: rs.shape_id ? pfx(rs.shape_id) : rs.shape_id,
     })),
   ]);
 

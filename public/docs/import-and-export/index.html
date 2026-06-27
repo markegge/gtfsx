@@ -92,6 +92,17 @@
       </ul>
       <p>After import, the editor loads the feed and you can edit it. Subsequent export produces a ZIP that's structurally identical for the parts the editor manages, with the non-managed files preserved verbatim.</p>
 
+      <h3 id="import-routes">Import individual routes from another of your feeds</h3>
+      <p>You don't have to import a whole feed. With a project already open, you can pull a few routes (with their stops, shapes, trips, and service calendars) from any of your other GTFS·X feeds into the current one. This is the fast way to reuse a route you've already built.</p>
+      <ol>
+        <li>Open the feed you want to add the routes <em>to</em> (your current project).</li>
+        <li>Click <strong>Import</strong> in the top bar. The dialog title reads <strong>Import GTFS feed or routes</strong> when a project is loaded.</li>
+        <li>Switch to the <strong>Routes from my feeds</strong> tab (available when you're signed in), then pick one of your feeds (published or draft).</li>
+        <li>Choose <strong>Import selected routes</strong>, tick the routes you want, and click <strong>Import N routes</strong>.</li>
+      </ol>
+      <p>The selected routes merge into your open project. IDs are automatically prefixed if they would collide; stops are matched to your existing stops by name and location where they line up; and a service calendar is reused when its weekly day-pattern matches one you already have (for example an imported Mon&ndash;Fri service folds into your existing Weekdays). Your other feed is never modified, and the whole import is one undoable step.</p>
+      <p>To import an entire feed instead, use <strong>Replace project</strong> (or import from a ZIP, URL, or the public catalog on the other tabs).</p>
+
       <h2 id="round-trip">Round-trip behavior</h2>
       <p>The principle: nothing that came in goes out missing or mangled. Specifically:</p>
       <ul>

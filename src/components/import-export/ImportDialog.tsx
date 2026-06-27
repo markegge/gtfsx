@@ -450,7 +450,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
                 }
                 disabled:opacity-40 disabled:cursor-not-allowed`}
             >
-              Add to current project
+              Import selected routes
             </button>
           </div>
 
@@ -513,7 +513,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
                 disabled={selectedRouteIds.size === 0}
                 className="flex-1 px-4 py-2.5 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {`Add ${selectedRouteIds.size} route${selectedRouteIds.size !== 1 ? 's' : ''}`}
+                {`Import ${selectedRouteIds.size} route${selectedRouteIds.size !== 1 ? 's' : ''}`}
               </button>
             )}
           </div>
@@ -526,7 +526,9 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-3">Import GTFS Feed</h3>
+        <h3 className="font-heading font-bold text-lg text-dark-brown mb-3">
+          {useStore.getState().routes.length > 0 ? 'Import GTFS feed or routes' : 'Import GTFS feed'}
+        </h3>
 
         {/* Source switcher */}
         <div className="flex gap-1 p-1 bg-cream rounded-lg mb-4">
@@ -557,7 +559,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialo
               className={`flex-1 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors
                 ${source === 'myfeeds' ? 'bg-white text-dark-brown shadow-sm' : 'text-warm-gray hover:text-dark-brown'}`}
             >
-              My feeds
+              Routes from my feeds
             </button>
           )}
         </div>

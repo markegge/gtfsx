@@ -55,13 +55,18 @@ interface ImportDialogProps {
    * org-owned project. Defaults to the editor's "Open in Editor" → onClose. */
   onComplete?: () => void | Promise<void>;
   completeLabel?: string;
+  /** Seeds which source tab the dialog opens on. Defaults to 'upload' (today's
+   * behavior). Set to 'myfeeds' to open straight on the "Routes from my feeds"
+   * tab — used by the Routes-panel "Import from another feed" entry point so the
+   * cross-feed route import is discoverable where users build routes. */
+  initialSource?: 'upload' | 'myfeeds';
 }
 
-export function ImportDialog({ onClose, onComplete, completeLabel }: ImportDialogProps) {
+export function ImportDialog({ onClose, onComplete, completeLabel, initialSource = 'upload' }: ImportDialogProps) {
   // Only signed-in users have feeds of their own to import from, so the
   // "My feeds" source tab is gated on an authenticated session.
   const currentUser = useStore((s) => s.currentUser);
-  const [source, setSource] = useState<ImportSource>('upload');
+  const [source, setSource] = useState<ImportSource>(initialSource);
   const [dragging, setDragging] = useState(false);
   const [parsing, setParsing] = useState(false);
   // Live parse phase from the worker (e.g. "Parsing stop times…"), shown in

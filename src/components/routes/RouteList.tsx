@@ -17,6 +17,12 @@ export function RouteList() {
     hiddenRouteTypes, toggleRouteType,
   } = useStore();
   const flexZones = useStore((s) => s.flexZones);
+  // Signed-in users can pull routes from their other feeds. Surface that entry
+  // point here (not only behind the top-bar Import button) so cross-feed route
+  // import is discoverable where routes are built. The dialog lives in TopBar,
+  // so we request it through the UI store seeded to the "my feeds" tab.
+  const currentUser = useStore((s) => s.currentUser);
+  const requestImportDialog = useStore((s) => s.requestImportDialog);
 
   // Quick text filter (short name / long name / description).
   const [text, setText] = useState('');
@@ -247,6 +253,18 @@ export function RouteList() {
           >
             + Add Route
           </button>
+
+          {/* Import routes from another of your feeds. Signed-in only (anon
+              users have no feeds of their own). Opens the Import dialog straight
+              on the "Routes from my feeds" tab. */}
+          {currentUser && (
+            <button
+              onClick={() => requestImportDialog('myfeeds')}
+              className="w-full mt-2 flex items-center gap-1.5 px-3 py-2 border-2 border-dashed border-sand rounded-lg text-sm font-semibold text-warm-gray hover:border-coral hover:text-coral hover:bg-coral-light transition-colors"
+            >
+              + Import from another feed
+            </button>
+          )}
 
           <FlexRouteSection filterText={text} />
         </>

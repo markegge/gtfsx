@@ -20,6 +20,11 @@ export { RoleBadge } from './UserMenu';
 export function TopBar() {
   const { projectName, setProjectName, lastSavedAt, isDirty } = useStore();
   const currentUser = useStore((s) => s.currentUser);
+  // Other panels (e.g. the Routes panel's "Import from another feed" button)
+  // can't reach this component's local showImport state, so they request the
+  // dialog through the UI store. Consume that here to open + seed the source tab.
+  const importDialogSource = useStore((s) => s.importDialogSource);
+  const clearImportDialogRequest = useStore((s) => s.clearImportDialogRequest);
   const activeServerProjectId = useStore((s) => s.activeServerProjectId);
   const feedsProjects = useStore((s) => s.feedsProjects);
   const upsertFeedProject = useStore((s) => s.upsertFeedProject);
@@ -242,7 +247,12 @@ export function TopBar() {
         </div>
       </div>
 
-      {showImport && <ImportDialog onClose={() => setShowImport(false)} />}
+      {(showImport || importDialogSource !== null) && (
+        <ImportDialog
+          initialSource={importDialogSource ?? 'upload'}
+          onClose={() => { setShowImport(false); clearImportDialogRequest(); }}
+        />
+      )}
       {showExport && <ExportDialog onClose={() => setShowExport(false)} />}
       {showSaveAs && <SaveAsDialog onClose={() => setShowSaveAs(false)} />}
 

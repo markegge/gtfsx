@@ -94,6 +94,14 @@ export interface UISlice {
    *  reload (intentionally session-scoped, not durable). */
   selectedHolidayNames: string[];
   routeDeleteConfirmId: string | null;
+  /** Cross-component request to open the top-bar Import dialog on a specific
+   *  source tab. The dialog lives in TopBar with local open state that other
+   *  panels (e.g. the Routes panel's "Import from another feed" button) can't
+   *  reach, so they set this flag and TopBar opens + renders the dialog seeded
+   *  to this source, clearing the flag on close. null = no request pending. */
+  importDialogSource: 'upload' | 'myfeeds' | null;
+  requestImportDialog: (source: 'upload' | 'myfeeds') => void;
+  clearImportDialogRequest: () => void;
   /** Active publish/hosting-intent upgrade toast (nudge "a"). Set when a
    *  logged-in free user exports a feed; rendered by ProUpgradeToast in the
    *  editor shell. Survives the ExportDialog closing because it lives here, not
@@ -198,6 +206,9 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     'Christmas Day',
   ],
   routeDeleteConfirmId: null,
+  importDialogSource: null,
+  requestImportDialog: (source) => set((state) => { state.importDialogSource = source; }),
+  clearImportDialogRequest: () => set((state) => { state.importDialogSource = null; }),
   proNudgeToast: null,
   setProNudgeToast: (toast) => set((state) => { state.proNudgeToast = toast; }),
   toggleRouteVisibility: (routeId) => set((state) => {

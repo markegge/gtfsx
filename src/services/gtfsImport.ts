@@ -2,6 +2,7 @@
 // inspectGtfsZip) lives in gtfsParse.ts so it can run in a Web Worker; we
 // re-export it here so existing import sites keep importing from one place.
 import { useStore } from '../store';
+import { loadingFeed } from '../store/history';
 import type { AdvancedFeature } from '../store/featuresSlice';
 import {
   importGtfsZip,
@@ -42,6 +43,12 @@ export function parseGtfsInWorker(
 }
 
 export function loadImportIntoStore(data: Awaited<ReturnType<typeof importGtfsZip>>) {
+  // Loading a different feed must not be undoable across the boundary (#49):
+  // suppress history capture during the bulk load, then reset both stacks.
+  loadingFeed(() => applyImportToStore(data));
+}
+
+function applyImportToStore(data: Awaited<ReturnType<typeof importGtfsZip>>) {
   const store = useStore.getState();
   // Reset UI selection / editing / visibility state so stale references to
   // routes/stops/shapes from the previous project don't linger across a

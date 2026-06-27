@@ -13,13 +13,15 @@ const MapView = lazy(() => import('../map/MapView').then((m) => ({ default: m.Ma
 import { RouteDeleteDialog } from '../routes/RouteDeleteDialog';
 import { FloatingHelp } from './FloatingHelp';
 import { ProUpgradeToast } from '../billing/ProUpgradeToast';
+import { HistoryToast } from './HistoryToast';
+import { undo, redo } from '../../store/history';
 import { useStore } from '../../store';
 import { trackEditorLoaded } from '../../services/trackBeacon';
 
 function useRailKeyboardShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Skip when typing in form fields.
+      // Skip when typing in form fields — never steal undo/redo from inputs.
       const target = e.target as HTMLElement | null;
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
       if (target?.isContentEditable) return;
@@ -29,6 +31,20 @@ function useRailKeyboardShortcuts() {
         e.preventDefault();
         const { sidebarSection, rightRailOpen, setRightRailOpen } = useStore.getState();
         if (sidebarSection) setRightRailOpen(!rightRailOpen);
+        return;
+      }
+
+      // Undo / redo (#49): Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z (and Ctrl+Y on
+      // Windows). `e.key` lowercases regardless of Shift, so compare in lower.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        redo();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -72,6 +88,7 @@ export function AppShell() {
       </div>
       <RouteDeleteDialog />
       <ProUpgradeToast />
+      <HistoryToast />
     </div>
   );
 }

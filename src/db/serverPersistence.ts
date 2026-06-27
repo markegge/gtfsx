@@ -6,6 +6,7 @@ import {
 } from '../services/projectsApi';
 import { db } from './dexie';
 import { backfillRouteStopShapeIds } from '../services/routeStopMigration';
+import { loadingFeed } from '../store/history';
 
 // Editor state that round-trips through the server snapshot. Notably excludes
 // projectId and projectName: those are project-level metadata served by
@@ -107,6 +108,13 @@ export function resetStoreEntities() {
 }
 
 export function applySnapshotToStore(snapshot: Record<string, unknown>) {
+  // Loading a snapshot (server load, snapshot restore, variant switch) replaces
+  // the whole feed — suppress undo capture and reset history so undo/redo can't
+  // cross the boundary (#49).
+  loadingFeed(() => applySnapshotToStoreInner(snapshot));
+}
+
+function applySnapshotToStoreInner(snapshot: Record<string, unknown>) {
   const state = useStore.getState();
 
   // Reset UI selection / editing state (mirrors loadImportIntoStore behaviour).

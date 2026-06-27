@@ -11,6 +11,7 @@ import { saveProjectNow } from '../../db/serverPersistence';
 import { backendEnabled } from '../../utils/featureFlags';
 import { AppBrand } from './AppBrand';
 import { VariantSwitcher } from '../variants/VariantSwitcher';
+import { UndoRedoControls } from './UndoRedoControls';
 import { UserMenu, UserMenuItems } from './UserMenu';
 
 // Re-export RoleBadge for callers that imported it from TopBar previously.
@@ -152,6 +153,10 @@ export function TopBar() {
             {saveError}
           </span>
         )}
+
+        {/* Undo / redo (#49) — editor history. Self-disables when the
+            respective stack is empty. */}
+        <UndoRedoControls />
 
         <div className="flex-1" />
 

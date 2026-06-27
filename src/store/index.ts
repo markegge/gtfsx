@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { immer } from 'zustand/middleware/immer';
+import { immerWithHistory } from './historyMiddleware';
+import { bindHistory } from './history';
 import { createAgencySlice, type AgencySlice } from './agencySlice';
 import { createCalendarSlice, type CalendarSlice } from './calendarSlice';
 import { createRouteSlice, type RouteSlice } from './routeSlice';
@@ -56,7 +57,7 @@ export type AppStore = AgencySlice &
 // Casting through `any` is the canonical Zustand-with-slices workaround.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export const useStore = create<AppStore>()(
-  immer((...a) => ({
+  immerWithHistory((...a) => ({
     ...(createAgencySlice as any)(...a),
     ...(createCalendarSlice as any)(...a),
     ...(createRouteSlice as any)(...a),
@@ -83,6 +84,16 @@ export const useStore = create<AppStore>()(
   }))
 );
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+// Wire the undo/redo history to the live store. The history module applies
+// inverse/forward patches through these (it deliberately doesn't import the
+// store directly, to stay independently testable and cycle-free).
+bindHistory({
+  getState: () => useStore.getState() as unknown as Record<string, unknown>,
+  // History only ever applies a complete, patched state with replace=true.
+  setState: (next, replace) =>
+    useStore.setState(next as unknown as AppStore, replace),
+});
 
 // Expose store and test runner for testing/debugging
 if (typeof window !== 'undefined') {

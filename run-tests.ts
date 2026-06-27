@@ -26,6 +26,7 @@ import {
   type FeedSlice,
 } from './src/services/stopAnalysis';
 import { useStore } from './src/store';
+import { undo, redo, resetHistory, historyDepths } from './src/store/history';
 import { getUSHolidaysForYear, getUSHolidaysInRange } from './src/utils/holidays';
 import { pointInPolygon } from './src/utils/geometry';
 import { stopsInsidePolygon } from './src/components/fares/fareZoneHelpers';
@@ -1242,6 +1243,44 @@ async function main() {
   ] });
   assert('draw-shape: unrelated untagged shape is not listed for the route',
     !deriveRouteShapeIds('DR', s().trips, s().routeStops, s().shapes).includes('UNREL'));
+
+  // Undo / redo edit history (#49). Patch-based history over the store: a feed
+  // edit is undoable + redoable, rapid same-target edits coalesce into one step,
+  // and loading a different feed resets the stack (no cross-feed undo).
+  console.log('\nPhase 25: undo / redo edit history (#49)');
+  const hstop = (id: string, lat = 45, lon = -111): Stop => ({
+    stop_id: id, stop_name: id, stop_lat: lat, stop_lon: lon,
+    location_type: 0, wheelchair_boarding: 0,
+  });
+
+  s().setStops([hstop('H1')]);
+  resetHistory();
+  assert('history: starts empty after reset', historyDepths().undo === 0);
+  s().updateStop('H1', { stop_name: 'Renamed' });
+  assert('history: an edit is recorded', historyDepths().undo === 1);
+  assert('history: edit applied', s().stops.find(x => x.stop_id === 'H1')?.stop_name === 'Renamed');
+  undo();
+  assert('history: undo reverts the edit', s().stops.find(x => x.stop_id === 'H1')?.stop_name === 'H1');
+  redo();
+  assert('history: redo re-applies the edit', s().stops.find(x => x.stop_id === 'H1')?.stop_name === 'Renamed');
+
+  s().setStops([hstop('H2')]);
+  resetHistory();
+  s().updateStop('H2', { stop_lat: 45.1 });
+  s().updateStop('H2', { stop_lat: 45.2 });
+  assert('history: rapid same-target edits coalesce into one step', historyDepths().undo === 1);
+  undo();
+  assert('history: one undo reverts the whole coalesced gesture',
+    s().stops.find(x => x.stop_id === 'H2')?.stop_lat === 45);
+
+  s().setStops([hstop('H3')]);
+  resetHistory();
+  s().updateStop('H3', { stop_name: 'changed' });
+  assert('history: pre-import edit recorded', historyDepths().undo === 1);
+  const reimportForHistory = await importGtfsZip(zipFile);
+  loadImportIntoStore(reimportForHistory);
+  assert('history: importing a feed resets the stack', historyDepths().undo === 0);
+  assert('history: cannot undo across a feed load', undo() === null);
 
   // ---- SUMMARY ----
   console.log(`\n${'='.repeat(50)}`);

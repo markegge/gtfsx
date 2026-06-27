@@ -199,6 +199,18 @@ Advanced GTFS features clutter the editor for small agencies that don't use them
 - ✅ Import seeds the settings from the feed's contents; gated nav sections (and the Transfers tab) hide/show accordingly.
 - 🔲 Emitting header-only empty files on export for enabled-but-empty features (full bare-zip round-trip of the on-state) — deferred; needs import-side file-manifest detection and trips validator "empty file" notices.
 
+### 1.10 Undo / redo (edit history)
+
+Session-scoped undo/redo over feed-data edits, so destructive or hard-to-reverse operations (move a stop, reroute/snap a shape, retime a trip, delete an entity, bulk fills, "estimate times" overwrites) have an escape hatch.
+
+- ✅ **Patch-based history** — the store's Immer middleware is wrapped (`src/store/historyMiddleware.ts`) so every recipe `set` captures Immer inverse-patches; undo applies the inverse, redo re-applies the forward patch (`src/store/history.ts`). Patches (not full snapshots) keep memory bounded by the size of each change, not the size of the feed.
+- ✅ **Feed-data only** — agencies, stops, routes, trips, stop_times, shapes, calendars, fares (v1 + v2), transfers, frequencies, levels/pathways and flex zones are undoable (`HISTORY_KEYS`). Ephemeral UI state (selection, panels, map mode, hover), feed variants, validation results, feature toggles and project metadata never enter the history.
+- ✅ **Coalescing** — rapid same-target fine-grained edits (a stop drag's many position writes, typing in a field) within a short window collapse into one undo step.
+- ✅ **Bounded depth** — the stack is capped (oldest dropped past the limit) so large feeds can't balloon memory.
+- ✅ **Feed-boundary reset** — importing or opening a different feed (or switching a variant / restoring a snapshot) resets the history so undo can't cross feed boundaries.
+- ✅ **Affordances** — undo/redo buttons in the editor top bar (disabled when the respective stack is empty, with tooltips), keyboard shortcuts **Cmd/Ctrl+Z** / **Cmd/Ctrl+Shift+Z** (suppressed while focus is in a text input/textarea/contenteditable), and a short toast naming the reverted/re-applied action.
+- ✅ **Session-scoped** — nothing extra is persisted; the Dexie auto-save layer remains the durability source of truth (an undo is autosaved like any other edit).
+
 ---
 
 ## 2. Analysis and route development

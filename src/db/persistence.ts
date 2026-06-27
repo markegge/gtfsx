@@ -1,5 +1,6 @@
 import { db } from './dexie';
 import { useStore } from '../store';
+import { loadingFeed } from '../store/history';
 import type { StopTime, Shape, RouteStop, Trip } from '../types/gtfs';
 import { backfillRouteStopShapeIds } from '../services/routeStopMigration';
 
@@ -121,61 +122,65 @@ export async function loadProject(projectId: string) {
   // snapshot still carries.
   const stopTimes = bulk?.stopTimes ?? snapshot.stopTimes;
   const shapes = bulk?.shapes ?? snapshot.shapes;
-  const state = useStore.getState();
+  // Loading a different feed must not be undoable across the boundary (#49):
+  // suppress history capture during the bulk apply, then reset both stacks.
+  loadingFeed(() => {
+    const state = useStore.getState();
 
-  if (snapshot.agencies) state.setAgencies(snapshot.agencies);
-  if (snapshot.calendars) state.setCalendars(snapshot.calendars);
-  if (snapshot.calendarDates) state.setCalendarDates(snapshot.calendarDates);
-  if (snapshot.routes) state.setRoutes(snapshot.routes);
-  if (snapshot.routeStops) {
-    // Backfill shape_id on stops saved before per-shape keying (shared with the
-    // server load path so the two can't drift — see routeStopMigration).
-    state.setRouteStops(
-      backfillRouteStopShapeIds(snapshot.routeStops as RouteStop[], (snapshot.trips ?? []) as Trip[]),
+    if (snapshot.agencies) state.setAgencies(snapshot.agencies);
+    if (snapshot.calendars) state.setCalendars(snapshot.calendars);
+    if (snapshot.calendarDates) state.setCalendarDates(snapshot.calendarDates);
+    if (snapshot.routes) state.setRoutes(snapshot.routes);
+    if (snapshot.routeStops) {
+      // Backfill shape_id on stops saved before per-shape keying (shared with the
+      // server load path so the two can't drift — see routeStopMigration).
+      state.setRouteStops(
+        backfillRouteStopShapeIds(snapshot.routeStops as RouteStop[], (snapshot.trips ?? []) as Trip[]),
+      );
+    }
+    if (snapshot.stops) state.setStops(snapshot.stops);
+    if (snapshot.trips) state.setTrips(snapshot.trips);
+    if (stopTimes) state.setStopTimes(stopTimes);
+    if (shapes) state.setShapes(shapes);
+    if (snapshot.feedInfo !== undefined) state.setFeedInfo(snapshot.feedInfo);
+    if (snapshot.fareAttributes) state.setFareAttributes(snapshot.fareAttributes);
+    if (snapshot.fareRules) state.setFareRules(snapshot.fareRules);
+    if (snapshot.fareAreas) state.setFareAreas(snapshot.fareAreas);
+    if (snapshot.stopAreas) state.setStopAreas(snapshot.stopAreas);
+    if (snapshot.fareNetworks) state.setFareNetworks(snapshot.fareNetworks);
+    if (snapshot.routeNetworks) state.setRouteNetworks(snapshot.routeNetworks);
+    if (snapshot.timeframes) state.setTimeframes(snapshot.timeframes);
+    if (snapshot.riderCategories) state.setRiderCategories(snapshot.riderCategories);
+    if (snapshot.fareMedia) state.setFareMedia(snapshot.fareMedia);
+    if (snapshot.fareProducts) state.setFareProducts(snapshot.fareProducts);
+    if (snapshot.fareLegRules) state.setFareLegRules(snapshot.fareLegRules);
+    if (snapshot.fareTransferRules) state.setFareTransferRules(snapshot.fareTransferRules);
+    if (snapshot.frequencies) state.setFrequencies(snapshot.frequencies);
+    if (snapshot.levels) state.setLevels(snapshot.levels);
+    if (snapshot.pathways) state.setPathways(snapshot.pathways);
+    if (snapshot.flexZones) state.setFlexZones(snapshot.flexZones);
+    if (snapshot.featureSettings) state.setFeatureSettings(snapshot.featureSettings);
+    // Per-feed dismissed validation rules. Set unconditionally (not `if present`)
+    // so switching between drafts in one session can't leak feed A's dismissals
+    // into a feed B whose snapshot predates this key — a brand-new/older feed
+    // shows the warning again.
+    state.setDismissedValidations(
+      Array.isArray(snapshot.dismissedValidations) ? snapshot.dismissedValidations : [],
     );
-  }
-  if (snapshot.stops) state.setStops(snapshot.stops);
-  if (snapshot.trips) state.setTrips(snapshot.trips);
-  if (stopTimes) state.setStopTimes(stopTimes);
-  if (shapes) state.setShapes(shapes);
-  if (snapshot.feedInfo !== undefined) state.setFeedInfo(snapshot.feedInfo);
-  if (snapshot.fareAttributes) state.setFareAttributes(snapshot.fareAttributes);
-  if (snapshot.fareRules) state.setFareRules(snapshot.fareRules);
-  if (snapshot.fareAreas) state.setFareAreas(snapshot.fareAreas);
-  if (snapshot.stopAreas) state.setStopAreas(snapshot.stopAreas);
-  if (snapshot.fareNetworks) state.setFareNetworks(snapshot.fareNetworks);
-  if (snapshot.routeNetworks) state.setRouteNetworks(snapshot.routeNetworks);
-  if (snapshot.timeframes) state.setTimeframes(snapshot.timeframes);
-  if (snapshot.riderCategories) state.setRiderCategories(snapshot.riderCategories);
-  if (snapshot.fareMedia) state.setFareMedia(snapshot.fareMedia);
-  if (snapshot.fareProducts) state.setFareProducts(snapshot.fareProducts);
-  if (snapshot.fareLegRules) state.setFareLegRules(snapshot.fareLegRules);
-  if (snapshot.fareTransferRules) state.setFareTransferRules(snapshot.fareTransferRules);
-  if (snapshot.frequencies) state.setFrequencies(snapshot.frequencies);
-  if (snapshot.levels) state.setLevels(snapshot.levels);
-  if (snapshot.pathways) state.setPathways(snapshot.pathways);
-  if (snapshot.flexZones) state.setFlexZones(snapshot.flexZones);
-  if (snapshot.featureSettings) state.setFeatureSettings(snapshot.featureSettings);
-  // Per-feed dismissed validation rules. Set unconditionally (not `if present`)
-  // so switching between drafts in one session can't leak feed A's dismissals
-  // into a feed B whose snapshot predates this key — a brand-new/older feed
-  // shows the warning again.
-  state.setDismissedValidations(
-    Array.isArray(snapshot.dismissedValidations) ? snapshot.dismissedValidations : [],
-  );
-  // Older local snapshots may still carry a `visibilitySets` key (the removed
-  // "Scenarios" feature); it's intentionally ignored.
-  if (snapshot.projectName) state.setProjectName(snapshot.projectName);
-  if (snapshot.projectId) state.setProjectId(snapshot.projectId);
+    // Older local snapshots may still carry a `visibilitySets` key (the removed
+    // "Scenarios" feature); it's intentionally ignored.
+    if (snapshot.projectName) state.setProjectName(snapshot.projectName);
+    if (snapshot.projectId) state.setProjectId(snapshot.projectId);
 
-  // Seed the bulk-write trackers to the just-loaded references so the next
-  // autosave doesn't needlessly rewrite stop_times/shapes we only just read.
-  const loaded = useStore.getState();
-  lastBulkProjectId = projectId;
-  lastSavedStopTimes = loaded.stopTimes;
-  lastSavedShapes = loaded.shapes;
+    // Seed the bulk-write trackers to the just-loaded references so the next
+    // autosave doesn't needlessly rewrite stop_times/shapes we only just read.
+    const loaded = useStore.getState();
+    lastBulkProjectId = projectId;
+    lastSavedStopTimes = loaded.stopTimes;
+    lastSavedShapes = loaded.shapes;
 
-  state.markSaved();
+    state.markSaved();
+  });
   return true;
 }
 

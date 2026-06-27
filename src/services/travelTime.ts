@@ -10,9 +10,7 @@
  *
  * See docs/REQUIREMENTS — "Estimate travel times" — and snapToRoad.ts.
  */
-import nearestPointOnLine from '@turf/nearest-point-on-line';
 import distance from '@turf/distance';
-import { lineString, point } from '@turf/helpers';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 // Map Matching allows 100 coords/request. Downsample below that (keeping first
@@ -71,14 +69,65 @@ export async function estimateStopTravelSeconds(
 }
 
 /**
+ * Fraction (0..1) of the closest point on segment a→b to point p, using a
+ * local equirectangular projection around `a`. Clamped to the segment.
+ */
+function projectFraction(a: LngLat, b: LngLat, p: LngLat): number {
+  const kx = Math.cos((a[1] * Math.PI) / 180); // longitude-degree scale at this latitude
+  const ax = a[0] * kx, ay = a[1];
+  const dx = b[0] * kx - ax, dy = b[1] - ay;
+  const segSq = dx * dx + dy * dy;
+  if (segSq === 0) return 0;
+  const t = ((p[0] * kx - ax) * dx + (p[1] - ay) * dy) / segSq;
+  return Math.min(1, Math.max(0, t));
+}
+
+function lerp(a: LngLat, b: LngLat, t: number): LngLat {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+}
+
+/** Cumulative driving seconds at a given along-line location (km). */
+function durationAtLocation(
+  loc: number,
+  cumDist: number[],
+  cumDur: number[],
+  durations: number[],
+): number {
+  const lastV = cumDist.length - 1;
+  if (lastV < 1 || loc <= 0) return cumDur[0] ?? 0;
+  if (loc >= cumDist[lastV]) return cumDur[Math.min(cumDur.length - 1, lastV)] ?? 0;
+  let idx = 0;
+  for (let i = 0; i < lastV; i++) {
+    if (loc >= cumDist[i] && loc <= cumDist[i + 1]) { idx = i; break; }
+  }
+  if (idx >= durations.length) idx = Math.max(0, durations.length - 1);
+  const segStart = cumDist[idx] ?? 0;
+  const segEnd = cumDist[idx + 1] ?? segStart;
+  const frac = segEnd > segStart ? Math.min(1, Math.max(0, (loc - segStart) / (segEnd - segStart))) : 0;
+  return (cumDur[idx] ?? 0) + frac * (durations[idx] ?? 0);
+}
+
+/**
  * Pure projection step (exported for testing): given a matched path, its
- * per-segment durations, and the stops, returns cumulative seconds at each stop.
+ * per-segment durations, and the stops *in input/sequence order*, returns
+ * cumulative seconds at each stop.
+ *
+ * Projection honors sequence order: each stop is matched to the nearest point
+ * on the line *at or after* the previous stop's along-line location (a running
+ * "min location" that only advances). So a stop physically near the shape's
+ * start but placed late in the sequence resolves to a LATER along-line position
+ * (a late time) rather than an early one, an out-and-back shape resolves a
+ * midpoint stop to the correct pass, and the returned cumulative seconds are
+ * NON-DECREASING in input order. (The old code projected each stop onto the
+ * GLOBAL nearest point independently, which ignored sequence order.)
  */
 export function cumulativeTravelAtStops(
   coords: LngLat[],
   durations: number[],
   stopCoords: LngLat[],
 ): number[] {
+  if (coords.length < 2) return stopCoords.map(() => 0);
+
   // Cumulative distance (km) and duration (s) at each matched vertex.
   const cumDist: number[] = [0];
   for (let i = 1; i < coords.length; i++) {
@@ -86,17 +135,36 @@ export function cumulativeTravelAtStops(
   }
   const cumDur: number[] = [0];
   for (let i = 0; i < durations.length; i++) cumDur.push(cumDur[i] + durations[i]);
+  const totalLen = cumDist[cumDist.length - 1];
 
-  const line = lineString(coords);
+  let minLoc = 0; // km along the line; only advances forward across stops
   return stopCoords.map((sc) => {
-    const npl = nearestPointOnLine(line, point(sc), { units: 'kilometers' });
-    const loc = npl.properties.location ?? 0; // km along the line
-    let idx = npl.properties.index ?? 0;       // segment index
-    if (idx >= durations.length) idx = Math.max(0, durations.length - 1);
-    const segStart = cumDist[idx] ?? 0;
-    const segEnd = cumDist[idx + 1] ?? segStart;
-    const frac = segEnd > segStart ? Math.min(1, Math.max(0, (loc - segStart) / (segEnd - segStart))) : 0;
-    return (cumDur[idx] ?? 0) + frac * (durations[idx] ?? 0);
+    let bestDist = Infinity;
+    let bestLoc = minLoc; // default if nothing qualifies: clamp to running min
+    let found = false;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const segStartLoc = cumDist[i];
+      const segEndLoc = cumDist[i + 1];
+      if (segEndLoc <= minLoc) continue; // segment is entirely before the running min
+      const segLen = segEndLoc - segStartLoc;
+      let t = projectFraction(coords[i], coords[i + 1], sc);
+      let loc = segStartLoc + t * segLen;
+      if (loc < minLoc) {
+        // Closest point on this segment falls before the running min → clamp to
+        // the start of this segment's still-qualifying portion.
+        loc = minLoc;
+        t = segLen > 0 ? (minLoc - segStartLoc) / segLen : 0;
+      }
+      const d = distance(sc, lerp(coords[i], coords[i + 1], t), { units: 'kilometers' });
+      if (d < bestDist) {
+        bestDist = d;
+        bestLoc = loc;
+        found = true;
+      }
+    }
+    if (!found) bestLoc = Math.max(minLoc, totalLen); // only the line's end qualifies
+    minLoc = bestLoc; // advance the running min so later stops can't go backward
+    return durationAtLocation(bestLoc, cumDist, cumDur, durations);
   });
 }
 

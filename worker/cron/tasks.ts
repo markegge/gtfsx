@@ -13,6 +13,7 @@ import { deleteProjectBlobs } from '../projects/r2';
 import { performPublish } from '../publication/performPublish';
 import { requirePublishAccess } from '../billing/middleware';
 import type { OwnerType } from '../projects/quotas';
+import { sendOwnerDigest, type OwnerDigestMetrics } from '../email';
 
 export const DELETE_GRACE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -289,6 +290,91 @@ async function scalarCount(env: Env, sql: string, ...binds: unknown[]): Promise<
     console.warn(`[metrics] scalar count failed for ${sql.slice(0, 60)}:`, err);
     return 0;
   }
+}
+
+// ─── Daily owner digest ─────────────────────────────────────────────────────
+//
+// Replaces the per-signup owner BCC with a once-a-day summary email. Fired by a
+// dedicated daily cron (see worker/cron/index.ts). Three headline numbers over
+// the trailing 24h, chosen to match the Admin dashboard's definitions exactly so
+// the digest and the dashboard never disagree:
+//
+//   a) new sign-ups   = user rows with created_at >= now-24h
+//                       (Admin computeStats → `signups`).
+//   b) active users   = COUNT(DISTINCT session.user_id) with last_used_at >=
+//                       now-24h (Admin `activeUsers.last24h`).
+//   c) new paid subs  = subscription rows with created_at >= now-24h. The
+//                       subscription table only ever holds Stripe-backed paid
+//                       plans; created_at is stamped once on first insert and is
+//                       NOT touched on later webhook upserts (verified against
+//                       worker/billing/webhooks.ts ON CONFLICT clause).
+//
+// Plus two cheap running totals (all-time users, currently active/trialing paid
+// subs) for at-a-glance context.
+
+/** Format the trailing-24h window in UTC, e.g. "Jun 26 → Jun 27, 2026 (UTC)". */
+function digestWindowLabel(now: number): string {
+  const fmt = (t: number) =>
+    new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const year = new Date(now).getUTCFullYear();
+  return `${fmt(now - 24 * 60 * 60 * 1000)} → ${fmt(now)}, ${year} (UTC)`;
+}
+
+export async function computeOwnerDigest(env: Env): Promise<OwnerDigestMetrics> {
+  const now = Date.now();
+  const d24h = now - 24 * 60 * 60 * 1000;
+
+  const [signups24h, activeUsers24h, newPaidSubs24h, totalUsers, activePaidSubs] = await Promise.all([
+    scalarCount(env, `SELECT COUNT(*) AS n FROM user WHERE created_at >= ?`, d24h),
+    scalarCount(env, `SELECT COUNT(DISTINCT user_id) AS n FROM session WHERE last_used_at >= ?`, d24h),
+    scalarCount(env, `SELECT COUNT(*) AS n FROM subscription WHERE created_at >= ?`, d24h),
+    scalarCount(env, `SELECT COUNT(*) AS n FROM user`),
+    scalarCount(
+      env,
+      `SELECT COUNT(*) AS n FROM subscription WHERE status IN ('active', 'trialing')`,
+    ),
+  ]);
+
+  return {
+    signups24h,
+    activeUsers24h,
+    newPaidSubs24h,
+    totalUsers,
+    activePaidSubs,
+    windowLabel: digestWindowLabel(now),
+  };
+}
+
+export interface OwnerDigestResult {
+  sent: boolean;
+  reason?: string;
+  metrics?: OwnerDigestMetrics;
+}
+
+/**
+ * Compute the trailing-24h metrics and email them to the owner. Gated by
+ * `OWNER_DIGEST_ENABLED` (kill switch; any value other than the literal
+ * "false" leaves it on) and the recipient `OWNER_DIGEST_EMAIL`, which falls
+ * back to `OWNER_NOTIFY_EMAIL` (the same inbox the paid-upgrade notice uses).
+ * Best-effort: the caller logs but never rethrows.
+ */
+export async function runOwnerDigest(env: Env): Promise<OwnerDigestResult> {
+  if (env.OWNER_DIGEST_ENABLED === 'false') {
+    return { sent: false, reason: 'disabled' };
+  }
+  const to = env.OWNER_DIGEST_EMAIL || env.OWNER_NOTIFY_EMAIL;
+  if (!to) {
+    return { sent: false, reason: 'no-recipient' };
+  }
+
+  const metrics = await computeOwnerDigest(env);
+  await sendOwnerDigest(env, to, metrics);
+  console.log(
+    `[cron:owner-digest] sent to ${to} — signups=${metrics.signups24h} ` +
+      `active=${metrics.activeUsers24h} newPaid=${metrics.newPaidSubs24h} ` +
+      `(totals: users=${metrics.totalUsers} activePaid=${metrics.activePaidSubs})`,
+  );
+  return { sent: true, metrics };
 }
 
 // ─── Scheduled publish (BE-77) ──────────────────────────────────────────────

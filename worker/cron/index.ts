@@ -1,5 +1,5 @@
 import type { Env } from '../env';
-import { reapDeletedUsers, summarizeWeeklyMetrics, expireEnterpriseGrants, publishDueSchedules } from './tasks';
+import { reapDeletedUsers, summarizeWeeklyMetrics, expireEnterpriseGrants, publishDueSchedules, runOwnerDigest } from './tasks';
 import { uploadPendingConversions } from '../marketing/ads/oci';
 
 // Scheduled worker entry point. Invoked from worker/index.ts#scheduled().
@@ -33,6 +33,19 @@ export async function runScheduled(
       console.log('[cron:oci]', JSON.stringify(result));
     } catch (err) {
       console.error('[cron:oci] failed', err);
+    }
+    return;
+  }
+
+  // 13:00 UTC daily (~07:00 MT in MDT / 06:00 in MST) — owner daily digest.
+  // Replaces the per-signup owner BCC with one summary email. Gated by
+  // OWNER_DIGEST_ENABLED + OWNER_DIGEST_EMAIL (see runOwnerDigest).
+  if (event.cron === '0 13 * * *') {
+    try {
+      const result = await runOwnerDigest(env);
+      console.log('[cron:owner-digest]', JSON.stringify({ sent: result.sent, reason: result.reason }));
+    } catch (err) {
+      console.error('[cron:owner-digest] failed', err);
     }
     return;
   }

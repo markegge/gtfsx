@@ -299,7 +299,7 @@ describe('auth /google', () => {
     expect(googleCreds).toHaveLength(1);
   });
 
-  it('new OAuth user gets exactly one welcome email with reply_to + bcc', async () => {
+  it('new OAuth user gets exactly one welcome email with reply_to and NO owner bcc', async () => {
     g = mockGoogle({ sub: 'g-welcome-1', email: 'gwelcome@example.com', email_verified: true, name: 'G Welcome' });
     const client = makeClient();
     const { state } = await startFlow(client);
@@ -311,7 +311,8 @@ describe('auth /google', () => {
     expect(welcomes).toHaveLength(1);
     expect(welcomes[0].to).toBe('gwelcome@example.com');
     expect(welcomes[0].reply_to).toBe('hello@gtfsx.com');
-    expect(welcomes[0].bcc).toBe('mark@gtfsx.com');
+    // Owner is no longer BCC'd per-signup — replaced by the daily owner digest.
+    expect(welcomes[0].bcc).toBeUndefined();
   });
 
   it('existing user linking Google gets NO welcome email', async () => {

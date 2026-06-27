@@ -80,11 +80,15 @@
   ],
   "vars": {
     "AUTH_EMAIL_FROM": "GTFS·X <noreply@gtfsx.com>",
+    // Owner inbox: paid-subscriber notice + daily-digest fallback recipient.
     "OWNER_NOTIFY_EMAIL": "mark@eateggs.com",
-    // Welcome email (Campaign A activation): reply-to is a monitored inbox; bcc
-    // copies the owner on every activation. See worker/email/sendWelcomeEmail.
+    // Welcome email (Campaign A activation): reply-to is a monitored inbox. The
+    // owner is no longer BCC'd here — replaced by the daily owner digest below.
     "WELCOME_REPLY_TO": "hello@gtfsx.com",
-    "WELCOME_BCC": "mark@gtfsx.com",
+    // Daily owner digest (replaces the per-signup BCC). "false" disables it;
+    // recipient defaults to OWNER_NOTIFY_EMAIL (override with OWNER_DIGEST_EMAIL).
+    // Fires on the "0 13 * * *" cron. See worker/cron + worker/email/sendOwnerDigest.
+    "OWNER_DIGEST_ENABLED": "true",
     "APP_ORIGIN": "https://www.gtfsx.com",
     "FEEDS_ORIGIN": "https://feeds.gtfsx.com",
     // Dedicated host for user-uploaded forum images. New uploads return
@@ -155,8 +159,10 @@
   //                 metrics rollup + enterprise-grant expiry.
   //   "0 9 * * *" — 09:00 UTC daily (03:00 MT during MDT, 02:00 MT during
   //                 MST): Google Ads Offline Conversion Import.
+  //   "0 13 * * *" — 13:00 UTC daily (~07:00 MT in MDT / 06:00 in MST): owner
+  //                 daily digest (sign-ups / active users / new paid subs).
   "triggers": {
-    "crons": ["*/15 * * * *", "0 3 * * *", "0 9 * * *"]
+    "crons": ["*/15 * * * *", "0 3 * * *", "0 9 * * *", "0 13 * * *"]
   },
   // ─── Staging environment ───────────────────────────────────────────────────
   // `wrangler deploy --env staging` deploys a separate Worker
@@ -190,7 +196,7 @@
         "AUTH_EMAIL_FROM": "GTFS·X Staging <staging@gtfsx.com>",
         "OWNER_NOTIFY_EMAIL": "mark@eateggs.com",
         "WELCOME_REPLY_TO": "hello@gtfsx.com",
-        "WELCOME_BCC": "mark@gtfsx.com",
+        "OWNER_DIGEST_ENABLED": "true",
         "APP_ORIGIN": "https://staging.gtfsx.com",
         "FEEDS_ORIGIN": "https://staging-feeds.gtfsx.com",
         "IMAGES_ORIGIN": "https://staging-img.gtfsx.com",

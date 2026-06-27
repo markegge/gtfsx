@@ -19,7 +19,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
 import { PatternSelector } from '../ui/ShapePatternSelector';
-import { computeShapePatterns } from '../ui/shapePatterns';
+import { computeShapePatterns, activeStopsShapeId } from '../ui/shapePatterns';
 import { directionName } from '../../utils/constants';
 import type { Stop } from '../../types/gtfs';
 
@@ -138,13 +138,10 @@ export function RouteStopsTab() {
   const setCreatingStop = useStore((s) => s.setCreatingStop);
   const directionId = useStore((s) => s.stopPlacementDirection);
   const setDirectionId = useStore((s) => s.setStopPlacementDirection);
-  const setShapeDirection = useStore((s) => s.setShapeDirection);
   const setStopPlacementShapeId = useStore((s) => s.setStopPlacementShapeId);
   // Store-backed so "Edit Stops" on a shape row can focus a specific shape.
   const selectedPatternShapeId = useStore((s) => s.stopsPanelShapeId);
   const setSelectedPatternShapeId = useStore((s) => s.setStopsPanelShapeId);
-  // Pending direction flip awaiting the "invert stop order?" choice.
-  const [invertPrompt, setInvertPrompt] = useState<{ newDir: 0 | 1 } | null>(null);
 
   // Distinct shape patterns for this route. At 3+, the two-way Direction
   // toggle can't represent them, so we swap in the shared pattern dropdown
@@ -154,10 +151,7 @@ export function RouteStopsTab() {
   // Ignore a selection that isn't in the current route's patterns (e.g. left
   // over from another route) — fall back to the pattern for the active
   // direction. Avoids resetting state in an effect.
-  const effectiveShapeId =
-    selectedPatternShapeId && patterns.some((p) => p.shapeId === selectedPatternShapeId)
-      ? selectedPatternShapeId
-      : (patterns.find((p) => p.directionId === directionId)?.shapeId ?? null);
+  const effectiveShapeId = activeStopsShapeId(patterns, selectedPatternShapeId, directionId);
 
   // While the Stops tab is open, the next placed stop attaches to the selected
   // shape (so it snaps to the right one even when out-and-back shapes overlap).
@@ -247,27 +241,6 @@ export function RouteStopsTab() {
     reorderRouteStops(routeId, directionId, newOrder, effectiveShapeId ?? undefined);
   };
 
-  // The selected shape's current direction (shapes "own" a direction).
-  const shapeDirection: 0 | 1 = patterns.find((p) => p.shapeId === effectiveShapeId)?.directionId ?? directionId;
-
-  const handleToggleDirection = (newDir: 0 | 1) => {
-    if (!effectiveShapeId || newDir === shapeDirection) return;
-    // If the shape already has stops, ask whether to reverse their order.
-    if (orderedRouteStops.length > 0) {
-      setInvertPrompt({ newDir });
-    } else {
-      setShapeDirection(effectiveShapeId, newDir);
-      setDirectionId(newDir);
-    }
-  };
-
-  const applyDirectionFlip = (invert: boolean) => {
-    if (!invertPrompt || !effectiveShapeId) return;
-    setShapeDirection(effectiveShapeId, invertPrompt.newDir, { invertStops: invert });
-    setDirectionId(invertPrompt.newDir);
-    setInvertPrompt(null);
-  };
-
   // Build the assignment-filtered candidate set for the "Add existing" dropdown.
   // 'unassigned'      → stops not assigned to ANY route via route_stops.
   // 'route:<id>'      → stops on a specific OTHER route (any direction).
@@ -309,6 +282,9 @@ export function RouteStopsTab() {
           its own stop list (per-shape). Routes with no shapes fall back to a
           plain direction dropdown. */}
       <div className="mb-3">
+        <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
+          Direction
+        </label>
         {patterns.length >= 1 ? (
           <PatternSelector
             patterns={patterns}
@@ -332,36 +308,6 @@ export function RouteStopsTab() {
           </select>
         )}
       </div>
-
-      {/* The selected shape's direction. Flipping it offers to invert the stop
-          order — the draw → duplicate → flip-to-inbound workflow. */}
-      {effectiveShapeId && (
-        <div className="mb-3 flex items-center gap-2">
-          <span className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide">
-            Assigned Direction
-          </span>
-          <div className="flex rounded-md border border-sand overflow-hidden">
-            <button
-              onClick={() => handleToggleDirection(0)}
-              title={directionName(route, 0)}
-              className={`px-2 py-0.5 text-[11px] font-semibold transition-colors ${
-                shapeDirection === 0 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'
-              }`}
-            >
-              Out
-            </button>
-            <button
-              onClick={() => handleToggleDirection(1)}
-              title={directionName(route, 1)}
-              className={`px-2 py-0.5 text-[11px] font-semibold transition-colors border-l border-sand ${
-                shapeDirection === 1 ? 'bg-coral text-white' : 'bg-white text-warm-gray hover:text-dark-brown'
-              }`}
-            >
-              In
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Add stops to this route+direction */}
       <div className="mb-3 space-y-2">
@@ -546,43 +492,6 @@ export function RouteStopsTab() {
           </div>
         );
       })()}
-
-      {/* Invert-stop-order prompt when flipping a shape's direction */}
-      {invertPrompt && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="absolute inset-0 bg-black/20" onClick={() => setInvertPrompt(null)} />
-          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-sm mx-4">
-            <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
-              Invert stop order?
-            </h3>
-            <p className="text-sm text-warm-gray mb-4">
-              Switching this shape to {directionName(route, invertPrompt.newDir)} with{' '}
-              {orderedRouteStops.length} stop{orderedRouteStops.length === 1 ? '' : 's'}. Reverse
-              their order so it reads end-to-start?
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => applyDirectionFlip(false)}
-                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
-              >
-                Keep order
-              </button>
-              <button
-                onClick={() => applyDirectionFlip(true)}
-                className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors"
-              >
-                Invert order
-              </button>
-            </div>
-            <button
-              onClick={() => setInvertPrompt(null)}
-              className="w-full mt-2 px-3 py-1.5 text-xs text-warm-gray hover:text-dark-brown"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Jump to the timetable for this route (mirror of RouteTripsTab) so you
           can go straight from ordering stops to setting their times. */}

@@ -47,3 +47,22 @@ export function computeShapePatterns(
     .map(([shapeId, directionId]) => ({ shapeId, directionId }))
     .sort((a, b) => a.directionId - b.directionId || a.shapeId.localeCompare(b.shapeId));
 }
+
+/**
+ * The shape the Routes > Stops subpanel is currently editing. A pinned
+ * selection (e.g. "Edit Stops" on a specific shape row) wins while it's still
+ * one of the route's patterns; otherwise it follows the active direction, so
+ * changing the Direction dropdown moves the active shape — and the map
+ * highlight, which keys off this same shape. Null when the route has no
+ * shaped patterns.
+ */
+export function activeStopsShapeId(
+  patterns: ShapePattern[],
+  selectedShapeId: string | null,
+  directionId: 0 | 1,
+): string | null {
+  if (selectedShapeId && patterns.some((p) => p.shapeId === selectedShapeId)) {
+    return selectedShapeId;
+  }
+  return patterns.find((p) => p.directionId === directionId)?.shapeId ?? null;
+}

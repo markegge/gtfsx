@@ -1,0 +1,7 @@
+# Build artifacts and caches — never commit data.
+.venv/
+__pycache__/
+cache/
+states/
+*.fgb
+*.log

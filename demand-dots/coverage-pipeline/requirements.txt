@@ -1,0 +1,12 @@
+# Pinned to the versions verified in demand-dots/.venv (Python 3.12).
+# pyogrio ships GDAL inside its wheel, so it can read/write FlatGeobuf with NO
+# system GDAL install. geopandas uses pyogrio as its IO engine (no Fiona needed).
+# pip resolves the transitive deps (certifi, urllib3, idna, charset-normalizer,
+# python-dateutil, tzdata, packaging) automatically.
+geopandas==1.1.3
+pandas==3.0.2
+numpy==2.4.4
+requests==2.33.1
+shapely==2.1.2
+pyogrio==0.12.1
+pyproj==3.7.2

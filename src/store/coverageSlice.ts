@@ -1,12 +1,18 @@
 import type { StateCreator } from 'zustand';
 import type { BlockGroupData } from '../services/demographics';
 import type { CoverageResult } from '../services/coverageAnalysis';
+import type { BlockCoverageResult } from '../services/blockCoverage';
 
 export interface CoverageData {
   blockGroups: BlockGroupData[];
   systemResult: CoverageResult;
   routeResults: { routeId: string; result: CoverageResult }[];
   bufferGeoJSON: GeoJSON.FeatureCollection;
+  /** EXACT census-block-level system tabulation, present only for block-level
+   *  POC regions (Montana). When set, the System Summary + demographic profile
+   *  render from this (with a jobs count) instead of the block-group estimate;
+   *  the per-route breakdown stays on the block-group method. */
+  blockResult?: BlockCoverageResult;
   /** Walkshed geometry used: straight-line buffer (default) or, for paid users,
    *  a Mapbox street-network isochrone. In network mode `auto` true means each
    *  stop's walk-time was chosen by its service frequency (10 min when frequent,

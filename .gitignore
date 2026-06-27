@@ -43,6 +43,7 @@ docs/archive/
 demand-dots/cache/
 demand-dots/.venv/
 demand-dots/dots_*.geojson
+demand-dots/__pycache__/
 tiles/*.ldjson
 tiles/*.pmtiles
 tiles/*.mbtiles
@@ -61,3 +62,4 @@ test/
 *.sw?
 .claude/
 CLAUDE.md
+tiles/coverage/*.fgb

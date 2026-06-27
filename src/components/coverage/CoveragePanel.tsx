@@ -32,6 +32,14 @@ import {
   FREQUENT_HEADWAY_MAX_MIN,
   type WalkMode,
 } from '../../services/networkWalkshed';
+import {
+  regionForState,
+  bboxFromStops,
+  loadBlocksInBbox,
+  unionWalkshedPolygons,
+  tabulateBlocks,
+  type BlockCoverageResult,
+} from '../../services/blockCoverage';
 
 function formatNumber(n: number): string {
   return n.toLocaleString();
@@ -304,11 +312,32 @@ export function CoveragePanel() {
         features: allFeatures,
       };
 
+      // Block-level POC (Montana only): tabulate EXACT census blocks whose
+      // centroid falls inside the system walkshed (union of the per-route
+      // buffers / isochrones). Best-effort: any failure (layer not deployed in
+      // local dev, fetch/parse error) silently falls back to the block-group
+      // estimate so the panel still renders normally.
+      let blockResult: BlockCoverageResult | undefined;
+      const region = regionForState(stateFips);
+      if (region) {
+        try {
+          const bbox = bboxFromStops(stops);
+          if (bbox) {
+            const blocks = await loadBlocksInBbox(region, bbox);
+            const walkshedPoly = unionWalkshedPolygons(allFeatures);
+            blockResult = tabulateBlocks(blocks, walkshedPoly, allFeatures);
+          }
+        } catch (err) {
+          console.warn('Block-level coverage unavailable; using block-group estimate.', err);
+        }
+      }
+
       setCoverageData({
         blockGroups,
         systemResult,
         routeResults,
         bufferGeoJSON,
+        blockResult,
         walkshed: walkshedByRoute
           ? walkMode === 'auto'
             ? { mode: 'network', auto: true, minutes: null }
@@ -330,6 +359,12 @@ export function CoveragePanel() {
     canUseWalksheds,
     walkMode,
   ]);
+
+  // In a block-level POC region (Montana) the System Summary + demographic
+  // profile render from the EXACT census-block tabulation; everywhere else they
+  // render from the block-group estimate. `summary` is whichever is in effect.
+  const block = coverageData?.blockResult ?? null;
+  const summary = block ?? coverageData?.systemResult ?? null;
 
   if (stops.length === 0) {
     return totalRouteCount > 0 && visibleRouteCount === 0 ? (
@@ -398,7 +433,7 @@ export function CoveragePanel() {
         </div>
       )}
 
-      {coverageData && !isFetchingCoverage && (
+      {coverageData && summary && !isFetchingCoverage && (
         <>
           {/* System summary */}
           <div className="bg-teal-light rounded-lg p-3 space-y-2">
@@ -421,19 +456,33 @@ export function CoveragePanel() {
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <SummaryCard label="Population" value={coverageData.systemResult.totalPopulation} />
-              <SummaryCard label="Households" value={coverageData.systemResult.totalHouseholds} />
-              <SummaryCard label="Workers" value={coverageData.systemResult.totalWorkers} />
+              <SummaryCard label="Population" value={summary.totalPopulation} />
+              <SummaryCard label="Households" value={summary.totalHouseholds} />
+              <SummaryCard label="Workers" value={summary.totalWorkers} />
               <SummaryCard
                 label="High-propensity riders"
-                value={coverageData.systemResult.totalHighPropensityRiders}
+                value={summary.totalHighPropensityRiders}
                 info="Residents most likely to use transit: renters, people in zero-vehicle households, and adults 18 to 24, combined and scaled to reduce double-counting. Same model as the orange demand dots."
               />
+              {block && (
+                <SummaryCard
+                  label="Jobs"
+                  value={block.totalJobs}
+                  info="Jobs located inside the walkshed, counted at the workplace (LODES, census-block level). Only available in the exact block-level analysis."
+                />
+              )}
             </div>
-            <p className="text-[11px] text-warm-gray">
-              {coverageData.systemResult.coveredBlockGroupIds.length} of{' '}
-              {coverageData.blockGroups.length} block groups covered
-            </p>
+            {block ? (
+              <p className="text-[11px] text-warm-gray">
+                {formatNumber(block.blocksCovered)} of {formatNumber(block.blocksTotal)} census blocks
+                covered (block-level, exact)
+              </p>
+            ) : (
+              <p className="text-[11px] text-warm-gray">
+                {coverageData.systemResult.coveredBlockGroupIds.length} of{' '}
+                {coverageData.blockGroups.length} block groups covered (estimate)
+              </p>
+            )}
           </div>
 
           {/* Definitions for the less-obvious counts. */}
@@ -444,12 +493,21 @@ export function CoveragePanel() {
             likely to use transit (renters, people in zero-vehicle households, and adults 18 to 24,
             combined and scaled to reduce double-counting), the same model as the demand dots.{' '}
             <span className="font-semibold text-dark-brown">Jobs</span> (the orange demand dots) are
-            counted at the workplace (LODES) and are not summed into the walkshed here.
+            counted at the workplace (LODES){block
+              ? ' and are summed inside the walkshed in this exact block-level analysis.'
+              : ' and are not summed into the walkshed here.'}
           </p>
+
+          {block && (
+            <p className="text-[10px] text-teal leading-relaxed">
+              Exact analysis: counts come from individual census blocks whose center is inside the
+              walkshed (Montana). Other regions use a block-group estimate.
+            </p>
+          )}
 
           {/* Demographic profile — coverage vs. county baseline */}
           <DemographicProfile
-            coverage={demographicShares(coverageData.systemResult)}
+            coverage={demographicShares(summary)}
             baseline={baselineShares(coverageData.blockGroups)}
           />
 

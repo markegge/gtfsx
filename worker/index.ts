@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, AppContext } from './env';
 import { TILE_RE, serveTile } from './legacy/tiles';
+import { COVERAGE_RE, serveCoverage } from './legacy/coverage';
 import { handleSearch, handleProxy } from './legacy/imports';
 import { sessionMiddleware, requireClientHeader } from './auth/middleware';
 import { readSessionCookie, resolveSession } from './auth/session';
@@ -213,6 +214,18 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext):
         return await serveTile(request, ctx, env, archive, Number(zStr), Number(xStr), Number(yStr));
       } catch (err) {
         return new Response(`Tile error: ${(err as Error).message}`, { status: 500 });
+      }
+    }
+
+    // Block-level Coverage FlatGeobuf, streamed from R2 with HTTP Range support
+    // (the FlatGeobuf JS client reads it via ranged requests). Same R2 bucket as
+    // the demand tiles; sits outside Hono for the same perf/regex reasons.
+    const coverageMatch = url.pathname.match(COVERAGE_RE);
+    if (coverageMatch) {
+      try {
+        return await serveCoverage(request, env, coverageMatch[1]);
+      } catch (err) {
+        return new Response(`Coverage error: ${(err as Error).message}`, { status: 500 });
       }
     }
 

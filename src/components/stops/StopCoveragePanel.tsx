@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import distance from '@turf/distance';
 import { point } from '@turf/helpers';
+import type { Feature } from 'geojson';
 import { useStore } from '../../store';
-import { calculateCoverage, demographicShares, baselineShares } from '../../services/coverageAnalysis';
+import { calculateCoverage, demographicShares, baselineShares, generateBufferGeoJSON } from '../../services/coverageAnalysis';
 import { fetchCensusData, lookupFips, type BlockGroupData } from '../../services/demographics';
+import { isInMontana, bboxFromStops, loadBlocksInBbox, unionWalkshedPolygons, tabulateBlocks } from '../../services/blockCoverage';
 import { directionName } from '../../utils/constants';
 
 // Module-level cache so navigating between stops in the same county doesn't
@@ -165,6 +167,40 @@ export function StopCoveragePanel() {
     })();
   }, [stop, coverageData, localBlockGroups]);
 
+  // Block-level jobs within THIS stop's buffer. Jobs aren't in the
+  // block-group/disc method, so they come from the exact census-block layer
+  // (POC: Montana only). When available we show Jobs in place of Workers.
+  // Best-effort: non-MT stops, a missing layer in local dev, or a fetch error
+  // leave jobs null and the panel keeps showing Workers.
+  const [stopJobs, setStopJobs] = useState<number | null>(null);
+  useEffect(() => {
+    if (!stop || !isInMontana(stop.stop_lat, stop.stop_lon)) {
+      setStopJobs(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const bbox = bboxFromStops([stop]);
+        if (!bbox) {
+          if (!cancelled) setStopJobs(null);
+          return;
+        }
+        const blocks = await loadBlocksInBbox('mt', bbox);
+        const bufferFc = generateBufferGeoJSON([stop], bufferMiles);
+        const features = bufferFc.features as Feature[];
+        const poly = unionWalkshedPolygons(features);
+        const result = tabulateBlocks(blocks, poly, features);
+        if (!cancelled) setStopJobs(result.totalJobs);
+      } catch {
+        if (!cancelled) setStopJobs(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [stop, bufferMiles]);
+
   const coverageResult = useMemo(() => {
     if (!stop || !blockGroups) return null;
     return calculateCoverage([stop], blockGroups, bufferMiles);
@@ -288,15 +324,18 @@ export function StopCoveragePanel() {
               </div>
             </div>
             <div>
-              <div className="text-[10px] text-warm-gray uppercase tracking-wide mb-0.5">Workers</div>
+              <div className="text-[10px] text-warm-gray uppercase tracking-wide mb-0.5">
+                {stopJobs != null ? 'Jobs' : 'Workers'}
+              </div>
               <div className="text-sm font-heading font-bold text-dark-brown tabular-nums">
-                {fmtNum(coverageResult.totalWorkers)}
+                {fmtNum(stopJobs != null ? stopJobs : coverageResult.totalWorkers)}
               </div>
             </div>
           </div>
         ) : null}
         <p className="mt-1.5 text-[10px] text-warm-gray">
           Estimated reach within a {bufferMiles === 0.25 ? '1/4-mile' : '1/2-mile'} straight-line buffer of this stop. Block-group apportionment uses the same circle-overlap method as the system Coverage panel.
+          {stopJobs != null && ' Jobs are workplace counts (LODES, census-block level) inside the buffer.'}
         </p>
 
         {shares && baseline && coverageResult && coverageResult.totalPopulation > 0 && (

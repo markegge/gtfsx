@@ -201,13 +201,28 @@ def fetch_block_group_full_state(state_fips: str) -> pd.DataFrame:
     params = {
         "get": ",".join(ACS_ALL_VARS),
         "for": "block group:*",
-        "in": f"state:{state_fips} county:* tract:*",
+        # Wildcard COUNTY only — block-group queries reject `county:* tract:*`
+        # together. The tract still comes back as a column in the response.
+        # Mirrors the proven demand-dots build_dots.py.
+        "in": f"state:{state_fips} county:*",
     }
     key = _census_key()
-    if key:
-        params["key"] = key
+    if not key:
+        raise RuntimeError(
+            "CENSUS_API_KEY is required for the Census data API. Get a free key at "
+            "https://api.census.gov/data/key_signup.html, then `export CENSUS_API_KEY=...` "
+            "(or put CENSUS_API_KEY=... in a .env beside this script)."
+        )
+    params["key"] = key
     resp = requests.get(ACS_DATASET, params=params)
     resp.raise_for_status()
+    # A missing/invalid key or bad geography returns an HTML error page (200 OK,
+    # text/html), not JSON. Surface that clearly instead of a deep JSONDecodeError.
+    if "json" not in resp.headers.get("content-type", "").lower():
+        first = " ".join(resp.text.split())[:200]
+        raise RuntimeError(
+            f"Census API returned non-JSON (check CENSUS_API_KEY and the variable list). Got: {first}"
+        )
     data = resp.json()
     df = pd.DataFrame(data[1:], columns=data[0])
     df["GEOID"] = df["state"] + df["county"] + df["tract"] + df["block group"]

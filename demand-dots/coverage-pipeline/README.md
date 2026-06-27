@@ -54,17 +54,19 @@ pip install -r requirements.txt
 required** to write/read FlatGeobuf. (The optional faster merge path uses the
 `ogr2ogr` CLI if you happen to have GDAL installed — see *Merge backends*.)
 
-### Census API key (recommended)
+### Census API key (REQUIRED)
 
-Set a free Census key to avoid rate-limiting during the download-heavy first run:
+The Census data API now **rejects keyless requests** with an HTML "Missing Key"
+page (not JSON), so a key is required — get a free one instantly:
 
 ```bash
 export CENSUS_API_KEY=xxxxxxxx   # https://api.census.gov/data/key_signup.html
 ```
 
-If unset, the builder also looks for `CENSUS_API_KEY` / `VITE_CENSUS_API_KEY` in
-a `.env` file in this folder or a parent (so it just works inside the gtfsx
-repo). Without any key it still runs, but slower and rate-limited.
+The builder also looks for `CENSUS_API_KEY` / `VITE_CENSUS_API_KEY` in a `.env`
+file in this folder or a parent (so it just works inside the gtfsx repo, which
+already has one). On a standalone box you MUST export it — otherwise the build
+fails fast with a clear message pointing here.
 
 ---
 

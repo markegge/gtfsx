@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { activeStopsShapeId, type ShapePattern } from '../shapePatterns';
+import { activeStopsShapeId, computeShapePatterns, type ShapePattern } from '../shapePatterns';
 
 // activeStopsShapeId resolves which shape the Routes > Stops subpanel is
 // editing. The map highlight keys off the same value (via stopPlacementShapeId),
@@ -42,5 +42,39 @@ describe('activeStopsShapeId', () => {
   it('returns null when the route has no shaped patterns', () => {
     expect(activeStopsShapeId([], null, 0)).toBeNull();
     expect(activeStopsShapeId([], 'whatever', 1)).toBeNull();
+  });
+});
+
+// Regression (Mark, 2026-06-27): drawing a second shape ("Navy Inbound") left it
+// out of the Stops subpanel "Assign to" dropdown, so you couldn't place its
+// first stop (chicken-and-egg). A freshly drawn shape is linked to its route
+// only via shape._route_id until it has a trip or route_stop.
+describe('computeShapePatterns — freshly drawn shapes', () => {
+  const shape = (id: string, routeId?: string) =>
+    ({ shape_id: id, points: [], _route_id: routeId }) as never;
+
+  it('includes a just-drawn shape (shape._route_id) with no trips or stops', () => {
+    expect(computeShapePatterns('R', [], [], [shape('s1', 'R')])).toEqual([
+      { shapeId: 's1', directionId: 0 },
+    ]);
+  });
+
+  it('gives a drawn shape the direction not used by a real pattern', () => {
+    const trips = [{ trip_id: 't', route_id: 'R', shape_id: 'out', direction_id: 0 }] as never;
+    expect(computeShapePatterns('R', trips, [], [shape('out', 'R'), shape('in', 'R')])).toEqual([
+      { shapeId: 'out', directionId: 0 },
+      { shapeId: 'in', directionId: 1 },
+    ]);
+  });
+
+  it('assigns two freshly drawn shapes to directions 0 then 1', () => {
+    expect(computeShapePatterns('R', [], [], [shape('a', 'R'), shape('b', 'R')])).toEqual([
+      { shapeId: 'a', directionId: 0 },
+      { shapeId: 'b', directionId: 1 },
+    ]);
+  });
+
+  it('ignores a drawn shape belonging to another route', () => {
+    expect(computeShapePatterns('R', [], [], [shape('x', 'OTHER')])).toEqual([]);
   });
 });

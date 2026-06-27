@@ -78,7 +78,10 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
   // After parsing
   const [parsedData, setParsedData] = useState<ImportData | null>(null);
   const [fileName, setFileName] = useState('');
-  const [mode, setMode] = useState<ImportMode>('replace');
+  // The "Import from another feed" entry point (initialSource 'myfeeds') is
+  // always a route import, so default straight to merge and skip the
+  // replace-vs-merge choice on the options screen (below).
+  const [mode, setMode] = useState<ImportMode>(initialSource === 'myfeeds' ? 'merge' : 'replace');
   const [selectedRouteIds, setSelectedRouteIds] = useState<Set<string>>(new Set());
 
   // Warnings from parsing
@@ -424,7 +427,9 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
     return (
       <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={onClose}>
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-          <h3 className="font-heading font-bold text-lg text-dark-brown mb-1">Import Options</h3>
+          <h3 className="font-heading font-bold text-lg text-dark-brown mb-1">
+            {initialSource === 'myfeeds' ? 'Import routes' : 'Import Options'}
+          </h3>
           <p className="text-xs text-warm-gray mb-4">{fileName}.zip — {parsedData.routes.length} route{parsedData.routes.length !== 1 ? 's' : ''}</p>
 
           {importWarnings.length > 0 && (
@@ -433,7 +438,10 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
             </div>
           )}
 
-          {/* Mode selection */}
+          {/* Mode selection. Hidden for the "Import from another feed" flow —
+              that entry is always a route merge, so we skip the replace-vs-merge
+              choice and go straight to the route picker. */}
+          {initialSource !== 'myfeeds' && (
           <div className="flex gap-2 mb-4">
             <button
               onClick={() => {
@@ -458,6 +466,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
               Import selected routes
             </button>
           </div>
+          )}
 
           {/* Route list (merge mode) */}
           {mode === 'merge' && (

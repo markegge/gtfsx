@@ -427,6 +427,7 @@ export function CoveragePanel() {
               <SummaryCard
                 label="High-propensity riders"
                 value={coverageData.systemResult.totalHighPropensityRiders}
+                info="Residents most likely to use transit: renters, people in zero-vehicle households, and adults 18 to 24, combined and scaled to reduce double-counting. Same model as the orange demand dots."
               />
             </div>
             <p className="text-[11px] text-warm-gray">
@@ -630,11 +631,23 @@ function DemographicProfile({ coverage, baseline }: { coverage: DemographicShare
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: number }) {
+function SummaryCard({ label, value, info }: { label: string; value: number; info?: string }) {
   return (
     <div className="text-center">
       <p className="font-heading font-bold text-lg text-dark-brown">{formatNumber(value)}</p>
-      <p className="text-[11px] text-warm-gray">{label}</p>
+      <p className="text-[11px] text-warm-gray inline-flex items-center justify-center gap-0.5">
+        {label}
+        {info && (
+          <span
+            title={info}
+            aria-label={info}
+            role="img"
+            className="text-warm-gray/80 hover:text-teal cursor-help leading-none"
+          >
+            ⓘ
+          </span>
+        )}
+      </p>
     </div>
   );
 }

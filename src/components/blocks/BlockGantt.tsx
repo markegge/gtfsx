@@ -34,6 +34,10 @@ interface BarInfo {
   startSec: number;
   endSec: number;
   overlap: boolean;
+  /** Trip direction (0/1) — shown as a → / ← arrow so an out-and-back block is
+   *  readable (both legs are the same route color/label otherwise). */
+  directionId?: 0 | 1;
+  headsign?: string;
 }
 
 /** A draggable trip bar positioned on the time track. */
@@ -42,14 +46,22 @@ function TripBar({ bar, axisStart, onClick }: { bar: BarInfo; axisStart: number;
   const left = ((bar.startSec - axisStart) / 3600) * PX_PER_HOUR;
   const width = Math.max(14, ((bar.endSec - bar.startSec) / 3600) * PX_PER_HOUR);
   const txt = readableText(bar.color);
+  // → outbound (dir 0), ← inbound (dir 1) — so both legs of an out-and-back
+  // block are distinguishable (same route → same color/label otherwise).
+  const arrow = bar.directionId === 0 ? '→' : bar.directionId === 1 ? '←' : '';
+  const dirNote = bar.headsign
+    ? ` · ${bar.headsign}`
+    : bar.directionId != null
+      ? ` · dir ${bar.directionId}`
+      : '';
   return (
     <button
       ref={setNodeRef}
       {...listeners}
       {...attributes}
       onClick={onClick}
-      title={`${bar.label} · ${hhmm(bar.startSec)}–${hhmm(bar.endSec)}${bar.overlap ? ' · OVERLAP' : ''}`}
-      className={`absolute top-1.5 h-7 rounded-md px-1.5 text-[10px] font-bold flex items-center overflow-hidden whitespace-nowrap shadow-sm ${
+      title={`${bar.label}${dirNote} · ${hhmm(bar.startSec)}–${hhmm(bar.endSec)}${bar.overlap ? ' · OVERLAP' : ''}`}
+      className={`absolute top-1.5 h-7 rounded-md px-1.5 text-[10px] font-bold flex items-center gap-0.5 overflow-hidden whitespace-nowrap shadow-sm ${
         bar.overlap ? 'ring-2 ring-red-500' : ''
       } ${isDragging ? 'opacity-80 z-50 cursor-grabbing' : 'cursor-grab'}`}
       style={{
@@ -58,7 +70,8 @@ function TripBar({ bar, axisStart, onClick }: { bar: BarInfo; axisStart: number;
         transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
       }}
     >
-      {bar.label}
+      {arrow && <span className="opacity-90 shrink-0" aria-hidden>{arrow}</span>}
+      <span className="overflow-hidden text-ellipsis">{bar.label}</span>
     </button>
   );
 }
@@ -155,6 +168,8 @@ export function BlockGantt() {
         startSec: sp.startSec,
         endSec: sp.endSec,
         overlap: overlapTripIds.has(t.trip_id),
+        directionId: t.direction_id,
+        headsign: t.trip_headsign,
       };
       const g = groups.get(key);
       if (g) g.push(bar); else groups.set(key, [bar]);

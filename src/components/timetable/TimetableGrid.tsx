@@ -394,7 +394,12 @@ export function TimetableGrid() {
   const getFirstDisplayedTime = useCallback((tripId: string) => {
     for (const col of orderedStops) {
       const st = findStopTime(tripId, col.seq);
-      if (st?.arrival_time) return st.arrival_time;
+      // Prefer departure (the trip's start at the origin), fall back to arrival.
+      // The first stop often has only a departure_time (no arrival on the origin),
+      // so checking arrival alone would skip it and return a later timepoint's
+      // arrival — e.g. seeding the Estimate "Start time" with the wrong stop.
+      const t = st?.departure_time || st?.arrival_time;
+      if (t) return t;
     }
     return '';
   }, [orderedStops, findStopTime]);

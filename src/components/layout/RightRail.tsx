@@ -310,6 +310,7 @@ function StopEditHeader() {
   // Going back from the Stops panel just clears the edit state.
   const goBack = () => {
     setEditingStopId(null);
+    selectStop(null);
     if (fromRouteContext) setRouteDetailTab('stops');
   };
 
@@ -338,7 +339,7 @@ function StopEditHeader() {
                 </button>
                 <span className="opacity-50">›</span>
                 <button
-                  onClick={() => { setEditingStopId(null); setRouteDetailTab('stops'); }}
+                  onClick={() => { setEditingStopId(null); selectStop(null); setRouteDetailTab('stops'); }}
                   className="hover:text-coral transition-colors"
                 >
                   Stops

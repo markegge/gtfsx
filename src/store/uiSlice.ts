@@ -68,6 +68,7 @@ export interface UISlice {
   mapStopFilter: { matched: string[] } | null;
   snapToRoad: boolean;
   hiddenRouteIds: string[];
+  hiddenStopIds: string[];
   // route_type values toggled OFF in the Routes panel's type filter. Empty =
   // no filter (all types shown). Routes of a hidden type are dimmed on the map.
   hiddenRouteTypes: number[];
@@ -110,6 +111,8 @@ export interface UISlice {
   setProNudgeToast: (toast: { action: ProIntentAction } | null) => void;
   toggleRouteVisibility: (routeId: string) => void;
   setHiddenRouteIds: (ids: string[]) => void;
+  toggleStopVisibility: (stopId: string) => void;
+  setHiddenStopIds: (ids: string[]) => void;
   toggleRouteType: (routeType: number) => void;
   toggleShapeVisibility: (shapeId: string) => void;
   setSidebarSection: (section: SidebarSection | null) => void;
@@ -182,6 +185,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   mapStopFilter: null,
   snapToRoad: true,
   hiddenRouteIds: [],
+  hiddenStopIds: [],
   hiddenRouteTypes: [],
   hiddenShapeIds: [],
   // Default width is set responsively in App init based on viewport — 96 for
@@ -217,6 +221,12 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     else state.hiddenRouteIds.splice(idx, 1);
   }),
   setHiddenRouteIds: (ids) => set((state) => { state.hiddenRouteIds = ids; }),
+  toggleStopVisibility: (stopId) => set((state) => {
+    const idx = state.hiddenStopIds.indexOf(stopId);
+    if (idx === -1) state.hiddenStopIds.push(stopId);
+    else state.hiddenStopIds.splice(idx, 1);
+  }),
+  setHiddenStopIds: (ids) => set((state) => { state.hiddenStopIds = ids; }),
   toggleRouteType: (routeType) => set((state) => {
     const idx = state.hiddenRouteTypes.indexOf(routeType);
     if (idx === -1) state.hiddenRouteTypes.push(routeType);

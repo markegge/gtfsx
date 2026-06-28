@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Papa from 'papaparse';
 import { useStore } from '../../store';
-import type { WheelchairFill } from '../../store/stopSlice';
 import { EmptyState } from '../ui/EmptyState';
 import { AuthButton } from '../auth/AuthButton';
 import { useVisibleFeed } from '../../hooks/useVisibleFeed';
@@ -20,17 +19,6 @@ import {
 } from '../../services/stopAnalysis';
 
 type MapOverlayKind = 'balancing' | 'intensity' | 'accessibility' | null;
-
-// Bulk-fill options for wheelchair_boarding (GTFS values 0/1/2). Labelled per
-// the spec — 0 is "no information", not "unknown" — for the gap-fill context.
-const WHEELCHAIR_FILL_OPTIONS = [
-  { value: 0, label: '0 — No information' },
-  { value: 1, label: '1 — Accessible' },
-  { value: 2, label: '2 — Not accessible' },
-] as const;
-const WHEELCHAIR_FILL_LABEL: Record<number, string> = {
-  0: 'No information', 1: 'Accessible', 2: 'Not accessible',
-};
 
 function fmtFt(ft: number | null): string {
   if (ft == null) return '—';
@@ -172,15 +160,9 @@ export function StopAnalysisPanel() {
   const setStopAnalysisOverlay = useStore((s) => s.setStopAnalysisOverlay);
   const setBottomPanelOpen = useStore((s) => s.setBottomPanelOpen);
   const setBottomPanelTab = useStore((s) => s.setBottomPanelTab);
-  const fillMissingWheelchairBoarding = useStore((s) => s.fillMissingWheelchairBoarding);
-  const restoreWheelchairBoarding = useStore((s) => s.restoreWheelchairBoarding);
 
   // Candidate pending a remove confirmation (destructive: edits stop_times).
   const [removeTarget, setRemoveTarget] = useState<BalancingCandidate | null>(null);
-
-  // Bulk wheelchair_boarding fill: chosen value + the last fill's undo snapshot.
-  const [wcFillValue, setWcFillValue] = useState<number>(1); // default → Accessible
-  const [wcUndo, setWcUndo] = useState<{ entries: WheelchairFill[]; value: number } | null>(null);
 
   const feed: FeedSlice = useMemo(
     () => ({ stops, routes, routeStops, trips, stopTimes, calendars, calendarDates }),
@@ -475,69 +457,8 @@ export function StopAnalysisPanel() {
           <button
             onClick={() => { setBottomPanelTab('validation'); setBottomPanelOpen(true); }}
             className="text-teal font-semibold hover:underline"
-          >Validation</button>{' '}panel.
+          >Validation</button>{' '}panel — use the one-click Fix there to bulk-set all missing stops.
         </p>
-
-        {/* Bulk-fill: set a default on every board point still missing a value.
-            Only the missing ones are touched — populated stops are never
-            overwritten (the store action re-checks each stop). */}
-        {accessibility.gapCount > 0 && (
-          <div className="bg-cream rounded-lg p-2.5 space-y-2">
-            <div className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide">
-              Fill missing values
-            </div>
-            <p className="text-[10px] text-warm-gray">
-              Sets <code>wheelchair_boarding</code> on the {accessibility.gapCount.toLocaleString()}{' '}
-              board point{accessibility.gapCount === 1 ? '' : 's'} without one. Stops that already
-              have a value are left as-is.
-            </p>
-            <div className="flex gap-2">
-              <select
-                value={wcFillValue}
-                onChange={(e) => setWcFillValue(Number(e.target.value))}
-                className="flex-1 min-w-0 px-2 py-1 border border-sand rounded-md text-xs bg-white focus:outline-none focus:border-coral"
-              >
-                {WHEELCHAIR_FILL_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-              <button
-                onClick={() => {
-                  const entries = fillMissingWheelchairBoarding(accessibility.gapStopIds, wcFillValue);
-                  if (entries.length) setWcUndo({ entries, value: wcFillValue });
-                }}
-                className="px-3 py-1 rounded-md text-xs font-semibold bg-teal text-white hover:bg-teal/90 transition-colors whitespace-nowrap shrink-0"
-              >
-                Apply to {accessibility.gapCount.toLocaleString()} stop{accessibility.gapCount === 1 ? '' : 's'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Undo lives outside the gap>0 block so it survives the count dropping
-            to 0 after an Accessible/Not-accessible fill. */}
-        {wcUndo && (
-          <div className="flex items-center gap-2 bg-teal-light rounded-md px-2.5 py-1.5 text-[11px] text-dark-brown">
-            <span className="flex-1">
-              Set {wcUndo.entries.length.toLocaleString()} stop{wcUndo.entries.length === 1 ? '' : 's'}{' '}
-              to "{WHEELCHAIR_FILL_LABEL[wcUndo.value] ?? wcUndo.value}".
-            </span>
-            <button
-              onClick={() => { restoreWheelchairBoarding(wcUndo.entries); setWcUndo(null); }}
-              className="text-coral font-semibold hover:underline shrink-0"
-            >
-              Undo
-            </button>
-            <button
-              onClick={() => setWcUndo(null)}
-              className="text-warm-gray hover:text-dark-brown shrink-0"
-              title="Dismiss"
-              aria-label="Dismiss"
-            >
-              ✕
-            </button>
-          </div>
-        )}
 
         {accessibility.gapCount > 0 ? (
           <>

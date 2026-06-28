@@ -155,11 +155,13 @@ export function runValidation(state: AppStore): ValidationMessage[] {
   ).length;
   if (boardPoints.length > 0 && missingWheelchair > 0) {
     const pct = Math.round((missingWheelchair / boardPoints.length) * 100);
-    messages.push(msg(
+    const wcMsg = msg(
       'warning',
-      `${missingWheelchair} of ${boardPoints.length} stops (${pct}%) are missing wheelchair_boarding — riders see "no accessibility information." Populate it in Stop Analysis → Accessibility.`,
+      `${missingWheelchair} of ${boardPoints.length} stops (${pct}%) are missing wheelchair_boarding — riders see "no accessibility information." Use the one-click fix to set all missing stops to 0 (no info), or update individually in Stop Analysis → Accessibility.`,
       'stop',
-    ));
+    );
+    wcMsg.fix = { id: 'fill-missing-wheelchair' };
+    messages.push(wcMsg);
   }
 
   // Trip checks (using pre-built indexes — O(n) not O(n²))
@@ -168,7 +170,9 @@ export function runValidation(state: AppStore): ValidationMessage[] {
       messages.push(msg('error', `Trip "${t.trip_id}" references non-existent route "${t.route_id}"`, 'trip', t.trip_id));
     }
     if (!serviceIdSet.has(t.service_id)) {
-      messages.push(msg('warning', `Trip "${t.trip_id}" references non-existent calendar "${t.service_id}"`, 'trip', t.trip_id));
+      const m = msg('warning', `Trip "${t.trip_id}" references non-existent calendar "${t.service_id}"`, 'trip', t.trip_id);
+      m.fix = { id: 'remove-orphan-trips' };
+      messages.push(m);
     }
     if (!stopTimesByTrip.has(t.trip_id)) {
       messages.push(msg('warning', `Trip "${t.trip_id}" has no stop times`, 'trip', t.trip_id));
@@ -337,7 +341,9 @@ export function runValidation(state: AppStore): ValidationMessage[] {
   if (state.stopTimes.length > 0) {
     for (const s of state.stops) {
       if (!usedStopIds.has(s.stop_id)) {
-        messages.push(msg('warning', `Stop "${s.stop_name || s.stop_id}" is not used by any trip`, 'stop', s.stop_id));
+        const m = msg('warning', `Stop "${s.stop_name || s.stop_id}" is not used by any trip`, 'stop', s.stop_id);
+        m.fix = { id: 'delete-unused-stop' };
+        messages.push(m);
       }
     }
   }

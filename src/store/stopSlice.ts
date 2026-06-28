@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { Stop, Transfer } from '../types/gtfs';
+import type { Stop, StopTime, RouteStop, Transfer } from '../types/gtfs';
 import type { TripSlice } from './tripSlice';
 import type { RouteSlice } from './routeSlice';
 import { generateId } from '../services/idGenerator';
@@ -9,6 +9,18 @@ import { generateId } from '../services/idGenerator';
 export interface WheelchairFill {
   stop_id: string;
   prev: number;
+}
+
+/**
+ * Snapshot returned by removeStopWithSnapshot so the deletion can be undone.
+ * Captures the stop row itself plus every cascaded row that removeStop drops
+ * (stop_times, route_stops, transfers).
+ */
+export interface StopRemovalSnapshot {
+  stop: Stop | undefined;
+  stopTimes: StopTime[];
+  routeStops: RouteStop[];
+  transfers: Transfer[];
 }
 
 export interface StopSlice {
@@ -30,6 +42,13 @@ export interface StopSlice {
   /** Revert a fillMissingWheelchairBoarding using its returned snapshot
    *  (unconditional set — restores exactly what those stops had before). */
   restoreWheelchairBoarding: (entries: WheelchairFill[]) => void;
+  /** Delete a stop and cascade into stop_times, route_stops, and transfers,
+   *  capturing a snapshot of every removed row so the deletion can be undone.
+   *  Returns the snapshot; call restoreStop(snapshot) to reverse it. */
+  removeStopWithSnapshot: (stop_id: string) => StopRemovalSnapshot;
+  /** Revert a removeStopWithSnapshot: restores the stop and all cascaded rows
+   *  that were removed. No-op if snapshot.stop is undefined (stop wasn't found). */
+  restoreStop: (snapshot: StopRemovalSnapshot) => void;
   setStops: (stops: Stop[]) => void;
 }
 
@@ -98,6 +117,45 @@ export const createStopSlice: StateCreator<StopSlice, [['zustand/immer', never]]
     for (const s of state.stops) {
       const prev = prevById.get(s.stop_id);
       if (prev !== undefined) s.wheelchair_boarding = prev;
+    }
+  }),
+  removeStopWithSnapshot: (stop_id) => {
+    const snapshot: StopRemovalSnapshot = {
+      stop: undefined, stopTimes: [], routeStops: [], transfers: [],
+    };
+    set((state) => {
+      // Capture a clean (pre-mutation) view of the store via get() so we store
+      // plain objects rather than immer draft proxies.
+      const cur = get() as unknown as CrossSliceState;
+      snapshot.stop = cur.stops.find((s) => s.stop_id === stop_id);
+      if (!snapshot.stop) return;
+      snapshot.stopTimes = cur.stopTimes.filter((st) => st.stop_id === stop_id);
+      snapshot.routeStops = cur.routeStops.filter((rs) => rs.stop_id === stop_id);
+      snapshot.transfers = (cur.transfers ?? []).filter(
+        (t) => t.from_stop_id === stop_id || t.to_stop_id === stop_id,
+      );
+      // Mutate draft — mirrors removeStop's cascade exactly.
+      state.stops = state.stops.filter((s) => s.stop_id !== stop_id);
+      (state as CrossSliceState).stopTimes = cur.stopTimes.filter((st) => st.stop_id !== stop_id);
+      (state as CrossSliceState).routeStops = cur.routeStops.filter((rs) => rs.stop_id !== stop_id);
+      const cross = state as CrossSliceState;
+      if (cross.transfers) {
+        cross.transfers = (cur.transfers ?? []).filter(
+          (t) => t.from_stop_id !== stop_id && t.to_stop_id !== stop_id,
+        );
+      }
+    });
+    return snapshot;
+  },
+  restoreStop: (snapshot) => set((state) => {
+    if (!snapshot.stop) return;
+    const cur = get() as unknown as CrossSliceState;
+    state.stops.push(snapshot.stop);
+    (state as CrossSliceState).stopTimes = [...cur.stopTimes, ...snapshot.stopTimes];
+    (state as CrossSliceState).routeStops = [...cur.routeStops, ...snapshot.routeStops];
+    const cross = state as CrossSliceState;
+    if (cross.transfers) {
+      cross.transfers = [...(cur.transfers ?? []), ...snapshot.transfers];
     }
   }),
   setStops: (stops) => set((state) => { state.stops = stops; }),

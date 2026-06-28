@@ -12,13 +12,6 @@
 // action returns a data snapshot of what it changed, and a paired restore action
 // reverses it. Here `apply` wraps that into a generic `{ changed, label, undo }`
 // so the panel stays fix-agnostic.
-//
-// FOLLOW-UP: the Stop Analysis accessibility bulk-fill (wheelchair_boarding) is
-// a natural second entry — it already has the store action + undo snapshot. It
-// is intentionally NOT migrated here yet (its UI lives in StopAnalysisPanel and
-// is keyed off a stop-id set, not a single ValidationMessage). When migrating,
-// add a `fill-missing-wheelchair` id + a fix whose apply reads the gap stop ids,
-// and have the validation panel's accessibility warning carry that fix id.
 import type { ValidationFixId, ValidationMessage } from '../types/ui';
 import { useStore } from '../store';
 
@@ -63,6 +56,83 @@ const FIXES: Record<ValidationFixId, ValidationFix> = {
           ? `Filled trip-edge time${snapshot.length === 1 ? '' : 's'} on trip "${tripId}".`
           : 'Nothing to fix on this trip.',
         undo: () => useStore.getState().restoreTripEdgeTimes(snapshot),
+      };
+    },
+  },
+
+  'fill-missing-wheelchair': {
+    id: 'fill-missing-wheelchair',
+    label: 'Fix',
+    description:
+      'Sets wheelchair_boarding to 0 ("no information available") on every board-point '
+      + 'stop that is missing a value. Per the GTFS spec, 0 is the safe, non-asserting '
+      + 'default — it signals that the agency has not yet filed this stop\'s accessibility '
+      + 'status, rather than claiming it is accessible or inaccessible. Visit Stop Analysis '
+      + '→ Accessibility to update individual stops to 1 (accessible) or 2 (not accessible). '
+      + 'You can undo this.',
+    apply: (_message) => {
+      // This fix is aggregate (one warning covers all missing stops), so we
+      // recompute the gap stop ids from the store rather than reading entity_id.
+      const state = useStore.getState();
+      const boardPoints = state.stops.filter((s) => (s.location_type ?? 0) === 0);
+      const gapIds = boardPoints
+        .filter((s) => s.wheelchair_boarding !== 1 && s.wheelchair_boarding !== 2)
+        .map((s) => s.stop_id);
+      const snapshot = state.fillMissingWheelchairBoarding(gapIds, 0);
+      const n = snapshot.length;
+      return {
+        fixId: 'fill-missing-wheelchair',
+        changed: n > 0,
+        label: n > 0
+          ? `Set wheelchair_boarding=0 (no info) on ${n} stop${n === 1 ? '' : 's'}.`
+          : 'Nothing to fill — all stops already have wheelchair_boarding set.',
+        undo: () => useStore.getState().restoreWheelchairBoarding(snapshot),
+      };
+    },
+  },
+
+  'remove-orphan-trips': {
+    id: 'remove-orphan-trips',
+    label: 'Fix',
+    description:
+      'Removes this trip (and its stop_times and any frequency windows) because its '
+      + 'service_id does not match any calendar. The trip cannot run without a '
+      + 'calendar — delete it or reassign it to a valid service_id first. You can undo this.',
+    apply: (message) => {
+      const tripId = message.entity_id ?? '';
+      const snapshot = useStore.getState().removeTripWithSnapshot(tripId);
+      const stCount = snapshot.stopTimes.length;
+      const fqCount = snapshot.frequencies.length;
+      return {
+        fixId: 'remove-orphan-trips',
+        changed: snapshot.trip !== undefined,
+        label: snapshot.trip
+          ? `Removed orphan trip "${tripId}" (${stCount} stop time${stCount === 1 ? '' : 's'}`
+            + `${fqCount > 0 ? `, ${fqCount} frequency window${fqCount === 1 ? '' : 's'}` : ''}).`
+          : `Trip "${tripId}" not found — nothing removed.`,
+        undo: () => useStore.getState().restoreTrip(snapshot),
+      };
+    },
+  },
+
+  'delete-unused-stop': {
+    id: 'delete-unused-stop',
+    label: 'Fix',
+    description:
+      'Deletes this stop because no trip serves it (no stop_times reference it). '
+      + 'Also removes any orphaned route_stops and transfers that reference it. '
+      + 'You can undo this.',
+    apply: (message) => {
+      const stopId = message.entity_id ?? '';
+      const snapshot = useStore.getState().removeStopWithSnapshot(stopId);
+      const name = snapshot.stop?.stop_name || stopId;
+      return {
+        fixId: 'delete-unused-stop',
+        changed: snapshot.stop !== undefined,
+        label: snapshot.stop
+          ? `Deleted unused stop "${name}".`
+          : `Stop "${stopId}" not found — nothing deleted.`,
+        undo: () => useStore.getState().restoreStop(snapshot),
       };
     },
   },

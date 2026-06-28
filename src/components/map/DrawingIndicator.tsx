@@ -142,8 +142,9 @@ function PlaceStopDialog() {
       taken.add(directionId);
       usedDirs.set(routeId, taken);
       const routeName = route.route_short_name || route.route_long_name || route.route_id;
-      // Prefer the shape's own name; fall back to "{route} — {direction}".
-      const label = shape._name?.trim() || `${routeName} — ${directionName(route, directionId)}`;
+      // Keep the route prefix (this dropdown spans every route); use the shape's
+      // own name in place of the direction when it has one.
+      const label = `${routeName} — ${shape._name?.trim() || directionName(route, directionId)}`;
       out.push({ key: k, routeId, directionId, label, color: route.route_color });
     }
     return out;

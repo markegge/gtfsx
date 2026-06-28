@@ -74,17 +74,13 @@ export function AccessIsochroneLayer() {
     <>
       {fills && fills.features.length > 0 && (
         <Source id="access-isochrone" type="geojson" data={fills}>
-          {/* One uniform hue; nested translucent fills stack toward the origin. */}
+          {/* One uniform hue; nested translucent fills stack toward the origin,
+              so the reachable area deepens with proximity. No outlines — the
+              stepped saturation alone reads the time bands. */}
           <Layer
             id="access-isochrone-fill"
             type="fill"
-            paint={{ 'fill-color': ACCESS_FILL_COLOR, 'fill-opacity': 0.18 }}
-          />
-          {/* Crisp per-band outline in the stepped saturation ramp. */}
-          <Layer
-            id="access-isochrone-outline"
-            type="line"
-            paint={{ 'line-color': ['get', 'color'], 'line-width': 2.2, 'line-opacity': 0.9 }}
+            paint={{ 'fill-color': ACCESS_FILL_COLOR, 'fill-opacity': 0.2 }}
           />
         </Source>
       )}

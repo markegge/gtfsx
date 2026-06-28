@@ -20,6 +20,7 @@ export type FeatureKey =
   | 'brand_color'
   | 'service_alerts'
   | 'variants'
+  | 'geojson_export'
   | 'phone_support';
 
 // Pricing v3 (Jun 2026): demand dots are free for all; cost/coverage split into a
@@ -43,6 +44,7 @@ export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
   brand_color:         ['pro', 'agency', 'enterprise'],
   service_alerts:      ['agency', 'enterprise'],
   variants:            ['agency', 'enterprise'],
+  geojson_export:      ['pro', 'agency', 'enterprise'],
   phone_support:       ['agency', 'enterprise'],
 };
 
@@ -142,5 +144,9 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   phone_support: {
     title: 'Phone support with SLA',
     description: 'Direct phone line + 24-hour response SLA, available on Agency and Enterprise plans.',
+  },
+  geojson_export: {
+    title: 'GeoJSON export',
+    description: 'Export your route shapes and stops as a GeoJSON FeatureCollection — drop them straight into QGIS, ArcGIS, Mapbox, or any GIS tool.',
   },
 };

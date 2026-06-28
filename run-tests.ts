@@ -21,7 +21,7 @@ import { importGtfsZip, loadImportIntoStore } from './src/services/gtfsImport';
 import { exportGtfsZip } from './src/services/gtfsExport';
 import { runValidation } from './src/services/validation';
 import { groupValidationMessages } from './src/services/validationGrouping';
-import { applyValidationFixBatch } from './src/services/validationFixes';
+import { applyValidationFixBatch, applyWheelchairFill } from './src/services/validationFixes';
 import type { StopTime } from './src/types/gtfs';
 import {
   computeStopSpacing, computeBalancingCandidates, computeServiceIntensity,
@@ -1372,6 +1372,18 @@ async function main() {
     // (Number.isFinite(undefined) = false → stored as 0). After undo WC1 gets 0.
     wcResult!.undo();
     assert('27a: undo runs; WC2 still = 1', s().stops.find((x) => x.stop_id === 'WC2')?.wheelchair_boarding === 1);
+
+    // 27a (picker): the validation panel's value picker calls applyWheelchairFill
+    // with the chosen value. Filling 1 (accessible) records the status AND clears
+    // the warning (unlike the 0-fill above). WC2 (already 1) is left alone.
+    const wcPick = applyWheelchairFill(1);
+    assert('27a-picker: fills the gap stop', wcPick.changed === true);
+    assert('27a-picker: WC1 now = 1 (accessible)', s().stops.find((x) => x.stop_id === 'WC1')?.wheelchair_boarding === 1);
+    const wcAfterPick = runValidation(s()).filter((m) => m.message.includes('missing wheelchair_boarding'));
+    assert('27a-picker: warning clears after filling 1', wcAfterPick.length === 0, wcAfterPick.map((m) => m.message).join('; '));
+    wcPick.undo();
+    assert('27a-picker: undo restores WC1 to no-info (flagged again)',
+      runValidation(s()).filter((m) => m.message.includes('missing wheelchair_boarding')).length === 1);
 
     // ── 27b: remove-orphan-trips ──────────────────────────────────────────────
     // ORPHAN_T references GHOST_SVC which has no calendar. The fix removes it

@@ -157,7 +157,7 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     const pct = Math.round((missingWheelchair / boardPoints.length) * 100);
     const wcMsg = msg(
       'warning',
-      `${missingWheelchair} of ${boardPoints.length} stops (${pct}%) are missing wheelchair_boarding — riders see "no accessibility information." Use the one-click fix to set all missing stops to 0 (no info), or update individually in Stop Analysis → Accessibility.`,
+      `${missingWheelchair} of ${boardPoints.length} stops (${pct}%) are missing wheelchair_boarding — riders see "no accessibility information." Open the Fix recipe to pick a value (accessible / not accessible / no info) and fill them all, or set stops individually in Stop Analysis → Accessibility.`,
       'stop',
     );
     wcMsg.fix = { id: 'fill-missing-wheelchair' };

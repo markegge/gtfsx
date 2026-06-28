@@ -64,31 +64,15 @@ const FIXES: Record<ValidationFixId, ValidationFix> = {
     id: 'fill-missing-wheelchair',
     label: 'Fix',
     description:
-      'Sets wheelchair_boarding to 0 ("no information available") on every board-point '
-      + 'stop that is missing a value. Per the GTFS spec, 0 is the safe, non-asserting '
-      + 'default — it signals that the agency has not yet filed this stop\'s accessibility '
-      + 'status, rather than claiming it is accessible or inaccessible. Visit Stop Analysis '
-      + '→ Accessibility to update individual stops to 1 (accessible) or 2 (not accessible). '
-      + 'You can undo this.',
-    apply: (_message) => {
-      // This fix is aggregate (one warning covers all missing stops), so we
-      // recompute the gap stop ids from the store rather than reading entity_id.
-      const state = useStore.getState();
-      const boardPoints = state.stops.filter((s) => (s.location_type ?? 0) === 0);
-      const gapIds = boardPoints
-        .filter((s) => s.wheelchair_boarding !== 1 && s.wheelchair_boarding !== 2)
-        .map((s) => s.stop_id);
-      const snapshot = state.fillMissingWheelchairBoarding(gapIds, 0);
-      const n = snapshot.length;
-      return {
-        fixId: 'fill-missing-wheelchair',
-        changed: n > 0,
-        label: n > 0
-          ? `Set wheelchair_boarding=0 (no info) on ${n} stop${n === 1 ? '' : 's'}.`
-          : 'Nothing to fill — all stops already have wheelchair_boarding set.',
-        undo: () => useStore.getState().restoreWheelchairBoarding(snapshot),
-      };
-    },
+      'Fill wheelchair_boarding on every board point that is missing a value. Choose '
+      + 'which value to apply: 1 (accessible) or 2 (not accessible) records the status '
+      + 'and clears the warning; 0 (no information) marks the stops reviewed without '
+      + 'asserting a status. You can undo this.',
+    // The validation panel renders a VALUE PICKER for this fix and calls
+    // applyWheelchairFill(value) directly. This generic apply is the fallback
+    // (e.g. the batch path): it fills 0 = "no information", the non-asserting
+    // default.
+    apply: () => applyWheelchairFill(0),
   },
 
   'remove-orphan-trips': {
@@ -142,6 +126,46 @@ const FIXES: Record<ValidationFixId, ValidationFix> = {
  *  e.g. a message persisted with an id this build no longer ships). */
 export function getValidationFix(id: ValidationFixId): ValidationFix | undefined {
   return FIXES[id];
+}
+
+/** Board-point stops (location_type 0) missing an authoritative
+ *  wheelchair_boarding value — 0 OR absent both read as "no information". */
+function wheelchairGapStopIds(): string[] {
+  return useStore.getState().stops
+    .filter((s) => (s.location_type ?? 0) === 0)
+    .filter((s) => s.wheelchair_boarding !== 1 && s.wheelchair_boarding !== 2)
+    .map((s) => s.stop_id);
+}
+
+export const WHEELCHAIR_VALUE_LABEL: Record<number, string> = {
+  0: 'no info',
+  1: 'accessible',
+  2: 'not accessible',
+};
+
+/** Count of board points that would be filled (for the picker's button label). */
+export function wheelchairGapCount(): number {
+  return wheelchairGapStopIds().length;
+}
+
+/** Fill every board point missing wheelchair_boarding with `value` (0/1/2), for
+ *  the Validation panel's wheelchair fix-recipe value picker. Returns a
+ *  ValidationFixResult so the panel's undo toast reverses it. Note: filling 0
+ *  ("no info") does not clear the validator warning (GTFS treats blank and 0
+ *  identically); 1 or 2 does. */
+export function applyWheelchairFill(value: number): ValidationFixResult {
+  const ids = wheelchairGapStopIds();
+  const snapshot = useStore.getState().fillMissingWheelchairBoarding(ids, value);
+  const n = snapshot.length;
+  const label = WHEELCHAIR_VALUE_LABEL[value] ?? String(value);
+  return {
+    fixId: 'fill-missing-wheelchair',
+    changed: n > 0,
+    label: n > 0
+      ? `Set wheelchair_boarding = ${value} (${label}) on ${n} stop${n === 1 ? '' : 's'}.`
+      : 'Nothing to fill — all board points already have a value.',
+    undo: () => useStore.getState().restoreWheelchairBoarding(snapshot),
+  };
 }
 
 /** Apply the fix a message carries, if any. Returns the undo result, or null

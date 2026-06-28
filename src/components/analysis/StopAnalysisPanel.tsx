@@ -457,7 +457,7 @@ export function StopAnalysisPanel() {
           <button
             onClick={() => { setBottomPanelTab('validation'); setBottomPanelOpen(true); }}
             className="text-teal font-semibold hover:underline"
-          >Validation</button>{' '}panel — use the one-click Fix there to bulk-set all missing stops.
+          >Validation</button>{' '}panel — open its Fix recipe to pick a value and fill all missing stops at once.
         </p>
 
         {accessibility.gapCount > 0 ? (

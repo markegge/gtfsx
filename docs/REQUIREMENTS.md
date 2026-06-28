@@ -291,6 +291,15 @@ Fork the feed into editable variants and compare their cost against a baseline (
 - ✅ **Feed-state diff** (`feedDiff.ts`, pure, E1) — `diffFeedState(a,b)`: added/removed/changed per entity + headline deltas (Δ revenue-hours, peak vehicles, trips, weekly/annual cost via `calculateSystemStats`) + a per-route changeset.
 - ✅ **Compare-to-baseline UI** (`VariantCompareDialog`) — KPI delta strip + per-route changeset. Closes the long-planned "Scenario comparison" (§2.4).
 
+### 2.8 Transit access isochrones
+
+Schedule-based travel-time reach: from an origin pin, where can a rider go on the network in N minutes (walk access + wait + in-vehicle + routed walk egress), with the population/jobs/equity reachable inside each contour. Agency-gated (`access_isochrones` feature key, lockstep in `planConfig.ts` + `worker/billing/plans.ts`). See [`/docs/access-isochrones/`](https://www.gtfsx.com/docs/access-isochrones/).
+
+- ✅ **RAPTOR router** (`services/accessIsochrone/raptor.ts`) — in-browser earliest-arrival over `stop_times`; route patterns by stop sequence, per-round boarding snapshot, `frequencies.txt` expansion, service-day filtering. 30 unit tests.
+- ✅ **Orchestrator** (`services/accessIsochrone/orchestrator.ts`) — straight-line walk access seeds RAPTOR; per-budget egress drawn as **routed street-network walksheds** (Mapbox isochrones via `walkshedForStops`, same engine as §2.2 network walksheds); opportunities apportioned through `coverageFromWalkshed`.
+- ✅ **UI** (`AccessIsochronePanel` + `AccessIsochroneLayer`) — origin pin (`place_access_origin` map mode, draggable), budget/departure/service-day/walk controls, nested single-hue stepped-saturation contours with on-map time labels, per-ring population/jobs/equity readout. `accessIsochroneSlice`.
+- Phase-2 deferred (per #40): departure-window averaging, scenario before/after diff, per-tract accessibility surface, block-level LODES jobs, PNG/CSV export, Web Worker offload.
+
 ---
 
 ## 3. Account, organization & billing

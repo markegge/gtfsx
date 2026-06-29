@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/build-docs-search-index.mjs && tsc -b && vite build",
+    "build": "node scripts/build-docs-search-index.mjs && node scripts/build-sitemap.mjs && tsc -b && vite build",
     "build:docs-index": "node scripts/build-docs-search-index.mjs",
+    "build:sitemap": "node scripts/build-sitemap.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

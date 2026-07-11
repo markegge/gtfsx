@@ -106,7 +106,7 @@
       <tbody><tr>
       <td><strong>Cost</strong></td>
       <td>Free</td>
-      <td>Free editor; $49/mo Pro, $500/yr hosted publishing, $199/mo Team</td>
+      <td>Free editor; Planner (hosted publishing + planning analyses) at $299/mo or $2,988/yr</td>
       </tr>
       <tr>
       <td><strong>Format</strong></td>
@@ -136,17 +136,17 @@
       <tr>
       <td><strong>Hosted publishing</strong></td>
       <td>No — agency self-hosts the zip</td>
-      <td>Optional — $500/yr managed stable URL with monitoring</td>
+      <td>Optional — managed stable URL with monitoring, included in the Planner plan</td>
       </tr>
       <tr>
       <td><strong>Cost / Title VI / coverage analyses</strong></td>
       <td>No</td>
-      <td>Yes (paid tiers)</td>
+      <td>Yes (Planner plan)</td>
       </tr>
       <tr>
       <td><strong>Multi-user collaboration</strong></td>
       <td>No — Excel file sharing</td>
-      <td>Yes (Team tier)</td>
+      <td>Yes (Planner plan)</td>
       </tr>
       <tr>
       <td><strong>Support model</strong></td>
@@ -165,7 +165,7 @@
       <li><strong>Map-based editing</strong>. Drawing a route by snapping to roads on a map is faster than typing latitude/longitude into a spreadsheet. For an agency with 20+ routes or with curvy alignments, the time savings is hours per feed update.</li>
       <li><strong>GTFS-Flex</strong>. RTAP GTFS Builder doesn&#39;t support GTFS-Flex. If you operate demand-response, microtransit, or deviated fixed-route and want it discoverable in the trip planner ecosystem, you need a tool that can author Flex zones, stop groups, and booking rules. GTFS·X does this; RTAP doesn&#39;t.</li>
       <li><strong>Continuous validation</strong>. The validator runs against your edits as you make them in GTFS·X. Errors surface inline with jump-to-entity links, and you can&#39;t export a feed that won&#39;t pass the canonical validator. RTAP validates at export — if you&#39;ve made an error somewhere, you find out after you&#39;ve built ten unrelated changes.</li>
-      <li><strong>Analyses for grant reporting and Title VI</strong>. Cost estimation, demographic coverage by route, and Title VI service-equity analysis are built into the editor at the Pro and Team tiers. These are the deliverables that justify &quot;we should have a real tool&quot; for many agencies — once you&#39;ve spent two weeks pulling ACS data and writing a Title VI memo by hand, paying $199/mo for a tool that does it automatically is an obvious trade.</li>
+      <li><strong>Analyses for grant reporting and Title VI</strong>. Cost estimation, demographic coverage by route, and Title VI service-equity analysis are built into the editor with the Planner plan. These are the deliverables that justify &quot;we should have a real tool&quot; for many agencies — once you&#39;ve spent two weeks pulling ACS data and writing a Title VI memo by hand, paying $299/mo for a tool that does it automatically is an obvious trade.</li>
       </ul>
       <h2>Which one fits your agency?</h2>
       <p>Choose <strong>RTAP GTFS Builder</strong> if you:</p>
@@ -191,7 +191,7 @@
       <p><strong>&quot;Will my feed look different in trip planners if I switch?&quot;</strong> No. Both tools produce standards-compliant GTFS that the canonical validator accepts. Trip planners can&#39;t tell which tool produced the feed; they just consume the data.</p>
       <h2>FAQ</h2>
       <p><strong>Is GTFS·X really free?</strong>
-      Yes — the editor and export are free for anyone, no signup. Paid tiers ($49/mo, $199/mo, $500/yr hosted) add feed management, analyses, and hosted publishing.</p>
+      Yes — the editor and export are free for anyone, no signup. The Planner plan ($299/mo or $2,988/yr) adds feed management, hosted publishing, and the planning analyses. <a href="/book-demo?src=compare_rtap">Book a 30-minute demo</a> to see it on your own feed.</p>
       <p><strong>Can I use both tools?</strong>
       Yes. Some agencies use RTAP for fixed-route and GTFS·X for Flex. The two tools produce compatible output if you&#39;re careful about agency_id and feed merging.</p>
       <p><strong>What if my IT department won&#39;t approve a third-party cloud tool?</strong>
@@ -284,5 +284,33 @@ footer.gx-footer .gx-mono { font-family: "JetBrains Mono", ui-monospace, "SF Mon
       })();
     </script>
       <script src="/assets/site-nav.js"></script>
+    <script>
+      (function () {
+        // Minimal first-party gclid capture + /book-demo carry-through.
+        // Same sessionStorage key as the site beacon; no cookies.
+        var GK = 'gb_track_gclid';
+        function get() { try { return sessionStorage.getItem(GK); } catch (_) { return null; } }
+        try {
+          if (get() === null) {
+            var raw = new URLSearchParams(location.search).get('gclid');
+            if (raw) { raw = raw.trim().slice(0, 256); if (raw) sessionStorage.setItem(GK, raw); }
+          }
+        } catch (_) {}
+        document.addEventListener('click', function (e) {
+          var t = e.target, a = null;
+          while (t && t !== document.body) {
+            if (t.tagName === 'A') { a = t; break; }
+            t = t.parentNode;
+          }
+          if (!a) return;
+          var href = a.getAttribute('href') || '';
+          if (href.indexOf('/book-demo') !== 0) return;
+          var g = get();
+          if (!g) { try { g = new URLSearchParams(location.search).get('gclid'); } catch (_) {} }
+          if (!g || href.indexOf('gclid=') !== -1) return;
+          a.setAttribute('href', href + (href.indexOf('?') === -1 ? '?' : '&') + 'gclid=' + encodeURIComponent(g));
+        }, { capture: true, passive: true });
+      })();
+    </script>
 </body>
 </html>

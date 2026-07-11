@@ -99,7 +99,7 @@
       <p>This is the headline difference. With GTFS·X you land on the page, edit, validate, and export a valid GTFS feed without creating an account. Accounts only become necessary if you want feed management — saving across sessions, hosted publishing, multi-user collaboration. Spare requires you to submit a form, wait for access, then start.</p>
       <p>For a transit director evaluating tools on a Tuesday afternoon, &quot;click and start&quot; beats &quot;submit a form and wait&quot; every time. The first version of a Flex zone takes about 90 seconds in GTFS·X starting from a cold browser. In Spare, you can&#39;t time it because you can&#39;t start until you&#39;ve cleared the signup gate.</p>
       <h3>2. GTFS·X has flat, transparent pricing. Spare&#39;s Flex Builder is bundled into enterprise pricing.</h3>
-      <p>GTFS·X pricing is on the <a href="/pricing/">pricing page</a>. Editor: free, anonymous, no signup. Pro tier (cost estimation, demographic coverage): $49/month. Hosted publishing (stable feed URL with monitoring): $500/year. Team tier (Title VI, propensity, multi-user): $199/month.</p>
+      <p>GTFS·X pricing is on the <a href="/pricing/">pricing page</a>. Editor: free, anonymous, no signup. Planner (hosted publishing with a stable feed URL and monitoring, cost estimation, demographic coverage, Title VI, multi-user): $299/month or $2,988/year. Prefer a walkthrough? <a href="/book-demo?src=compare_spare">Book a 30-minute demo</a>.</p>
       <p>Spare&#39;s Flex Builder is technically free, but it&#39;s part of the Spare platform, which is enterprise-quoted. There&#39;s no public price for the broader platform that the Flex Builder is a wedge for. For a small agency that has to clear procurement, &quot;transparent flat price under $5k/year&quot; beats &quot;schedule a call with sales&quot; both for the speed of the procurement decision and for the political ease of the decision.</p>
       <h3>3. GTFS·X does fixed-route + Flex + hosted publishing in one tool. Spare&#39;s Flex Builder is Flex-only.</h3>
       <p>Most rural and small-urban agencies that need to author Flex also need to author fixed-route. The realistic workflow is: take an existing fixed-route feed, add Flex zones, export the combined feed, publish at a stable URL.</p>
@@ -117,8 +117,8 @@
       <ul>
       <li><strong>You want to try the tool before signing anything.</strong> GTFS·X removes every step between &quot;I&#39;m curious&quot; and &quot;I have a valid feed exported.&quot; If your decision process includes &quot;let me see if this works for our service&quot; before procurement, GTFS·X works for that. Spare doesn&#39;t — you have to register first.</li>
       <li><strong>Your service is fixed-route + Flex, not Flex-only.</strong> This is the majority of small US rural and small-urban operators. One tool for both is a meaningful workflow win.</li>
-      <li><strong>You need transparent pricing that fits a small-agency procurement.</strong> $49/month or $500/year are inside the small-purchase signature authority of most general managers. Spare&#39;s enterprise quote is not.</li>
-      <li><strong>You want hosted publishing without signing on for a broader platform.</strong> GTFS·X hosted publishing is $500/yr standalone — feed URL, monitoring, draft preview links, embeddable rider mini-site. Spare&#39;s hosted publishing comes with the rest of the Spare platform.</li>
+      <li><strong>You need transparent pricing that fits a small-agency procurement.</strong> $2,988/year is inside the small-purchase signature authority of most general managers. Spare&#39;s enterprise quote is not.</li>
+      <li><strong>You want hosted publishing without signing on for a broader platform.</strong> GTFS·X hosted publishing comes with the Planner plan — feed URL, monitoring, draft preview links, embeddable rider mini-site — with no operations platform attached. Spare&#39;s hosted publishing comes with the rest of the Spare platform.</li>
       </ul>
       <h2>What about validator quality?</h2>
       <p>Both tools produce GTFS-Flex output that passes the canonical MobilityData validator. Spare contributed materially to early Flex tooling and validator alignment; their output is high-quality. GTFS·X validates continuously as you author and blocks export on errors. From the consumer side (trip planners), the output is indistinguishable.</p>
@@ -219,5 +219,33 @@ footer.gx-footer .gx-mono { font-family: "JetBrains Mono", ui-monospace, "SF Mon
       })();
     </script>
       <script src="/assets/site-nav.js"></script>
+    <script>
+      (function () {
+        // Minimal first-party gclid capture + /book-demo carry-through.
+        // Same sessionStorage key as the site beacon; no cookies.
+        var GK = 'gb_track_gclid';
+        function get() { try { return sessionStorage.getItem(GK); } catch (_) { return null; } }
+        try {
+          if (get() === null) {
+            var raw = new URLSearchParams(location.search).get('gclid');
+            if (raw) { raw = raw.trim().slice(0, 256); if (raw) sessionStorage.setItem(GK, raw); }
+          }
+        } catch (_) {}
+        document.addEventListener('click', function (e) {
+          var t = e.target, a = null;
+          while (t && t !== document.body) {
+            if (t.tagName === 'A') { a = t; break; }
+            t = t.parentNode;
+          }
+          if (!a) return;
+          var href = a.getAttribute('href') || '';
+          if (href.indexOf('/book-demo') !== 0) return;
+          var g = get();
+          if (!g) { try { g = new URLSearchParams(location.search).get('gclid'); } catch (_) {} }
+          if (!g || href.indexOf('gclid=') !== -1) return;
+          a.setAttribute('href', href + (href.indexOf('?') === -1 ? '?' : '&') + 'gclid=' + encodeURIComponent(g));
+        }, { capture: true, passive: true });
+      })();
+    </script>
 </body>
 </html>

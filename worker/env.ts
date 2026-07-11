@@ -77,6 +77,12 @@ export interface Env {
   // Get from Goals → Summary → click the action → URL contains the ID.
   GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED?: string;
   GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW?: string;
+  // demo_request (GET /book-demo → booking-page redirect). Unlike the two
+  // above, this one is optional even when OCI is otherwise configured:
+  // leaving it unset keeps the live feed_exported/paywall_view uploads
+  // running while the new conversion action is created in the Ads UI —
+  // demo_request rows simply stay pending until it's set.
+  GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST?: string;
 }
 
 // Hono context variables populated by middleware. Typed as a module augmentation

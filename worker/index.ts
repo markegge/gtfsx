@@ -10,6 +10,7 @@ import { apiRouter } from './api';
 import { feedsHandler, forumImageOnlyHandler } from './publication/feeds';
 import { maybeRenderForumPage } from './forum/dispatcher';
 import { maybeRenderMarketingPage } from './marketing/ssr';
+import { handleBookDemo } from './marketing/bookDemo';
 import { serveSitemap } from './forum/sitemap';
 import { errorDetail } from './util/redact';
 
@@ -246,6 +247,17 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext):
       if (target) {
         return Response.redirect(`${url.origin}${target}${url.search}`, 301);
       }
+    }
+
+    // Demo-booking funnel: /book-demo?src=<placement>&gclid=... records a
+    // first-party demo_request conversion event, then 302s to the booking
+    // page. The handler never throws — insert errors are swallowed inside so
+    // the redirect always happens. See worker/marketing/bookDemo.ts.
+    if (
+      request.method === 'GET' &&
+      (url.pathname === '/book-demo' || url.pathname === '/book-demo/')
+    ) {
+      return handleBookDemo(request, env);
     }
 
     // Marketing routes that are otherwise live React pages (/pricing, /demo)

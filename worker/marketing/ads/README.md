@@ -1,7 +1,8 @@
 # Google Ads Offline Conversion Import (OCI)
 
 Server-side conversion uploader that pushes gclid-stamped events from the
-`event` table (`feed_exported`, `paywall_view`) to Google Ads via the
+`event` table (`feed_exported`, `paywall_view`, `demo_request`) to Google Ads
+via the
 [uploadClickConversions](https://developers.google.com/google-ads/api/docs/conversions/upload-clicks)
 endpoint. Cookieless replacement for the standard `gtag.js` conversion pixel.
 
@@ -91,15 +92,54 @@ does not expire unless you revoke it manually.
 
 ### 4. Conversion action IDs
 
-Both conversion actions already exist (created 2026-05-26 in the Ads UI):
+Three conversion actions map to the three uploaded event kinds:
 
-| Name | Category | What to fetch |
-|---|---|---|
-| `feed_exported` | Converted lead | numeric ID |
-| `paywall_view` | Qualified lead | numeric ID |
+| Name | Category | Event kind | Status |
+|---|---|---|---|
+| `feed_exported` | Converted lead | `feed_exported` | exists (created 2026-05-26) |
+| `paywall_view` | Qualified lead | `paywall_view` | exists (created 2026-05-26) |
+| `demo_request` | Book appointment | `demo_request` (GET `/book-demo`) | **Mark must create — steps below** |
 
 Get each ID by: Goals → Summary → click the action → look at the URL,
 which contains `&ctId=NNNNNNNNNNN`. That number is the conversion action ID.
+
+#### Creating the `demo_request` conversion action (one-time, Ads UI)
+
+1. In Google Ads (`mark@eateggs.com`): **Goals → Conversions → Summary →
+   "+ New conversion action"**.
+2. Choose **Import** → **CRMs, files, or other data sources** →
+   **Track conversions from clicks** → Continue. (This is the same import
+   type as the two existing actions — the uploader sends the click's gclid,
+   not a website tag.)
+3. Settings:
+   - **Goal and action optimization:** Book appointment (or Submit lead
+     form — any lead-type category works; the name is what matters for
+     humans, the numeric ID is what the uploader uses).
+   - **Conversion name:** `demo_request` — keep it identical to the event
+     kind so the Ads UI, the admin status page, and the D1 rows all speak
+     the same name.
+   - **Value:** *Don't use a value.* (The uploader deliberately omits
+     `conversion_value`; a value here would flip the action to value-based
+     mode.)
+   - **Count:** One. (A visitor who clicks the booking link twice is still
+     one demo request.)
+   - **Click-through conversion window:** 90 days (matches the uploader's
+     gclid TTL).
+4. Save, then fetch the numeric ID: Goals → Summary → click `demo_request`
+   → copy the `&ctId=NNNNNNNNNNN` number from the URL.
+5. Store it (prod, and staging if desired):
+
+   ```bash
+   wrangler secret put GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST   # numeric ID
+   ```
+
+**Until this secret is set, `demo_request` uploads are OFF but everything
+else keeps working**: unlike the two original action IDs, this one is
+optional in `readOciConfig`, so the live `feed_exported`/`paywall_view`
+uploads are unaffected. Pending `demo_request` rows accumulate (visible on
+`/api/admin/events/oci-status`, which shows a yellow note while the secret
+is missing) and upload on the first cron run after it's set — rows older
+than 90 days are expired, same as the other kinds.
 
 ### 5. Store everything as Worker secrets
 
@@ -112,6 +152,7 @@ wrangler secret put GOOGLE_ADS_REFRESH_TOKEN
 wrangler secret put GOOGLE_ADS_CUSTOMER_ID            # <your-customer-id> (no hyphens)
 wrangler secret put GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED   # numeric ID
 wrangler secret put GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW    # numeric ID
+wrangler secret put GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST    # numeric ID (optional — see §4)
 ```
 
 The cron triggers automatically at 09:00 UTC the next day. To smoke-test

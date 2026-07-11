@@ -488,7 +488,7 @@ export function OrgSettingsPage() {
 
         <PaywallOverlay
           feature="org_logo"
-          currentPlan={(matchingOrg as { plan?: 'free' | 'pro' | 'agency' | 'enterprise' } | null)?.plan ?? 'free'}
+          currentPlan={(matchingOrg as { plan?: 'free' | 'agency' | 'enterprise' } | null)?.plan ?? 'free'}
           preview={false}
         >
           <BrandingSection
@@ -573,7 +573,7 @@ export function OrgSettingsPage() {
                       onClick={() => navigate(`/pricing?ownerType=org&ownerId=${matchingOrg.id}`)}
                       disabled={!billingEnabled}
                     >
-                      Upgrade to Agency
+                      Upgrade to Planner
                     </AuthButton>
                   )}
                 </div>

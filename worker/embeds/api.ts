@@ -7,7 +7,7 @@
 // Like the HTML embeds, this reads ONLY from the canonical published snapshot
 // (loadEmbedFeed), is read-only, edge-cached, version-id (snapshot) ETagged,
 // and CORS-open (`Access-Control-Allow-Origin: *`) so any browser/tool can call
-// it cross-origin. It is gated behind the same `embeds` Pro+ entitlement: an
+// it cross-origin. It is gated behind the same `embeds` Planner+ entitlement: an
 // owner whose plan lacks `embeds` serves 403 here (the JSON API is a paid
 // integrator surface), mirroring the EmbedPanel paywall.
 //
@@ -98,7 +98,7 @@ async function serve(
   // Same paywall as the HTML EmbedPanel — the JSON API is a paid integrator
   // surface. Owners without `embeds` (free tier) get a 403, not their data.
   if (!planHasFeature(feed.ownerPlan, 'embeds')) {
-    return apiError(403, 'plan_required', 'The JSON API requires a Pro plan or higher.');
+    return apiError(403, 'plan_required', 'The JSON API requires the Planner plan or higher.');
   }
 
   const etag = `"${feed.snapshotId}${etagSuffix ? `-${etagSuffix}` : '-api'}"`;

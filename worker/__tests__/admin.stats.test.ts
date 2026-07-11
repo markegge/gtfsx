@@ -121,16 +121,14 @@ describe('/api/admin/stats', () => {
         ulid(), email, status, plan, Date.now(), Date.now(),
       );
     await mk('free@example.com', 'free');
-    await mk('pro@example.com', 'pro');
     await mk('agency@example.com', 'agency');
     await mk('ent@example.com', 'enterprise');
-    await mk('gone@example.com', 'pro', 'deleted_soft'); // excluded from the breakdown
+    await mk('gone@example.com', 'agency', 'deleted_soft'); // excluded from the breakdown
 
     const res = await client.get('/api/admin/stats');
     const body = (await res.json()) as Stats;
     expect(body.usersByPlan.free).toBe(1);
-    expect(body.usersByPlan.pro).toBe(1); // deleted pro not counted
-    expect(body.usersByPlan.agency).toBe(2); // agency@ + the staff user
+    expect(body.usersByPlan.agency).toBe(2); // agency@ + the staff user; deleted agency not counted
     expect(body.usersByPlan.enterprise).toBe(1);
   });
 

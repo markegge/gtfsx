@@ -1,6 +1,6 @@
 // Pro-intent instrumentation + in-app upgrade-nudge gating.
 //
-// When a logged-in FREE user reaches a Pro-gated moment of value (exports a
+// When a logged-in FREE user reaches a paid-gated moment of value (exports a
 // feed, hits the saved-feed cap, opens the rider-site / embed gate) we do two
 // things: (1) show a one-time, dismissible nudge toward /pricing, and (2) fire
 // a best-effort, first-party POST recording the intent so the warm-cohort
@@ -26,32 +26,32 @@ export function nudgeStorageKey(action: ProIntentAction): string {
   return `${NUDGE_KEY_PREFIX}${action}`;
 }
 
-// Approved nudge copy (kept verbatim from the handoff). The em dash in
-// `publish_intent` is intentional and signed off; do not "AI-de-dash" it.
+// Approved nudge copy (retargeted to the Planner tier, Jul 2026). The em dash
+// in `publish_intent` is intentional and signed off; do not "AI-de-dash" it.
 export const PRO_NUDGE_COPY: Record<
   ProIntentAction,
   { message: string; cta: string; feature: string }
 > = {
   publish_intent: {
     message:
-      'Want this feed to live at a stable, auto-updating URL — and show up in Google/Apple/Transit? Get these features by upgrading to Pro.',
-    cta: 'See Pro',
+      'Want this feed to live at a stable, auto-updating URL — and show up in Google/Apple/Transit? Get these features by upgrading.',
+    cta: 'Upgrade',
     feature: 'managed_publishing',
   },
   feed_cap: {
-    message: 'Free saves 3 feeds. Pro saves unlimited and hosts them.',
+    message: 'Free saves 3 feeds. Planner saves unlimited and hosts them.',
     cta: 'Upgrade',
     feature: 'managed_publishing',
   },
   mini_site: {
-    message: 'The embeddable rider site is a Pro feature.',
-    cta: 'See Pro',
+    message: 'The embeddable rider site is a Planner feature.',
+    cta: 'Upgrade',
     feature: 'embeds',
   },
 };
 
 // A logged-in user with no paid plan. `plan` is optional on the user record;
-// treat missing or 'free' as free. Anyone on pro/agency/enterprise is excluded.
+// treat missing or 'free' as free. Anyone on agency/enterprise is excluded.
 export function isFreePlan(plan: Plan | null | undefined): boolean {
   return plan == null || plan === 'free';
 }
@@ -85,7 +85,7 @@ export function nudgeEligible(opts: {
 }
 
 // Whether the account-menu "Upgrade" entry should be shown: logged-in free
-// users only (hidden for pro/agency/enterprise and for logged-out visitors).
+// users only (hidden for agency/enterprise and for logged-out visitors).
 export function shouldShowUpgradeEntry(
   loggedIn: boolean,
   plan: Plan | null | undefined,

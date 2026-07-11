@@ -257,7 +257,7 @@ export function BottomPanel() {
               feature="embeds"
               currentPlan={editorPlan}
               fill
-              title="The embeddable rider site is a Pro feature"
+              title="The embeddable rider site is a Planner feature"
               description="Host a rider-facing mini-site and copy-paste embeds (schedules, route maps, stop times) on any website."
               exampleHref="https://feeds.gtfsx.com/svt-demo/"
               exampleLabel="See a live example mini-site"

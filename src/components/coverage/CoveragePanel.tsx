@@ -596,7 +596,7 @@ function WalkshedModeControl({
       <Link
         to="/pricing?feature=network_walksheds"
         className="flex w-full items-center gap-2 rounded-lg border border-sand bg-cream px-3 py-2 text-xs font-semibold text-warm-gray transition-colors hover:border-teal hover:text-teal"
-        title="Replace the straight-line buffer with real walking-time isochrones — an Agency plan feature"
+        title="Replace the straight-line buffer with real walking-time isochrones — a Planner plan feature"
       >
         <span aria-hidden>🚶</span>
         <span>Network walksheds (street distance)</span>

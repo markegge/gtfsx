@@ -67,8 +67,8 @@ describe('/pricing and /demo SSR', () => {
     // Each priced tier should still emit an Offer so the rich result shows
     // pricing — Enterprise is intentionally omitted (no fixed price).
     expect(html).toContain('"@type":"Offer"');
-    expect(html).toContain('"name":"Pro"');
-    expect(html).toContain('"name":"Agency"');
+    expect(html).toContain('"name":"Editor"');
+    expect(html).toContain('"name":"Planner"');
   });
 
   it('strips the homepage-only SEO H1 so /pricing has a single page-topic H1', async () => {

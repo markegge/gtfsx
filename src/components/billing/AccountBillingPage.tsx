@@ -12,6 +12,7 @@ import {
 } from '../../services/billingApi';
 import { ApiError } from '../../services/authApi';
 import { billingEnabled } from '../../utils/featureFlags';
+import { planDisplayName } from './planConfig';
 import { TestModeBanner } from './TestModeBanner';
 
 function formatDate(ms: number | null | undefined): string {
@@ -176,7 +177,9 @@ export function AccountBillingPage() {
             <span>
               {confirmingPlan
                 ? 'Thanks — Stripe confirms payment. Waiting for the subscription to activate…'
-                : `You’re now on ${state?.plan ?? 'your new'} plan.`}
+                : state
+                  ? `You’re now on the ${planDisplayName(state.plan)} plan.`
+                  : 'You’re now on your new plan.'}
             </span>
           </div>
         )}

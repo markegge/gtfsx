@@ -47,8 +47,8 @@ export interface Env {
   GOOGLE_CLIENT_SECRET?: string;
 
   // Stripe Price IDs (from scripts/setup-stripe.ts). Empty until billing wired in.
-  STRIPE_PRICE_PRO_MONTHLY?: string;
-  STRIPE_PRICE_PRO_ANNUAL?: string;
+  // NOTE: the TEAM_* names are deliberate legacy — they point at the Planner
+  // (internal plan id 'agency') prices. Do not rename.
   STRIPE_PRICE_TEAM_MONTHLY?: string;
   STRIPE_PRICE_TEAM_ANNUAL?: string;
   STRIPE_PORTAL_CONFIG_ID?: string;
@@ -95,7 +95,7 @@ export interface AuthedUser {
   staff: boolean;
   // Personal-workspace plan + status, mirrored from user.plan / user.plan_status.
   // Updated by Stripe webhooks. Used for client-side paywall gating.
-  plan: 'free' | 'pro' | 'agency' | 'enterprise';
+  plan: 'free' | 'agency' | 'enterprise';
   planStatus: 'active' | 'past_due' | 'canceled' | 'trialing';
 }
 

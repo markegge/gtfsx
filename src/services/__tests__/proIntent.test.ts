@@ -130,8 +130,8 @@ describe('fireProNudge — shows once per trigger, then stays dismissed', () => 
 });
 
 describe('fireProNudge — eligibility gate (logged-in free users only)', () => {
-  it('does not fire for paid plans (pro / agency / enterprise)', () => {
-    for (const plan of ['pro', 'agency', 'enterprise'] as Plan[]) {
+  it('does not fire for paid plans (agency / enterprise)', () => {
+    for (const plan of ['agency', 'enterprise'] as Plan[]) {
       expect(fireProNudge({ loggedIn: true, plan, action: 'feed_cap' })).toBe(false);
     }
     expect(fetchMock).not.toHaveBeenCalled();
@@ -149,7 +149,6 @@ describe('isFreePlan', () => {
     expect(isFreePlan('free')).toBe(true);
     expect(isFreePlan(null)).toBe(true);
     expect(isFreePlan(undefined)).toBe(true);
-    expect(isFreePlan('pro')).toBe(false);
     expect(isFreePlan('agency')).toBe(false);
     expect(isFreePlan('enterprise')).toBe(false);
   });
@@ -163,7 +162,7 @@ describe('shouldShowUpgradeEntry — account-menu Upgrade visibility', () => {
   });
 
   it('hides for logged-in paid users', () => {
-    for (const plan of ['pro', 'agency', 'enterprise'] as Plan[]) {
+    for (const plan of ['agency', 'enterprise'] as Plan[]) {
       expect(shouldShowUpgradeEntry(true, plan)).toBe(false);
     }
   });

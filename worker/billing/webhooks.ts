@@ -177,6 +177,12 @@ function planFromSubscription(env: Env, sub: Stripe.Subscription): Plan | null {
   // on every event and works without the product object being expanded.
   const basePlan = planFromPriceId(env, item.price.id);
   if (basePlan && isPlan(basePlan)) return basePlan;
+  // Unknown price id (e.g. a retired tier's price, or a price created outside
+  // the setup script). Warn and return null — the caller skips the sync
+  // rather than corrupting the cached plan.
+  console.warn(
+    `[billing] subscription ${sub.id} has unrecognized price id ${item.price.id}; ignoring`,
+  );
   return null;
 }
 
@@ -195,7 +201,7 @@ async function handleCheckoutSessionCompleted(env: Env, session: Stripe.Checkout
   // and carries the target plan + customer email in metadata. Best-effort: a
   // failed notification must never fail the webhook (Stripe would retry).
   const targetPlan = session.metadata?.target_plan;
-  if (targetPlan === 'pro' || targetPlan === 'agency') {
+  if (targetPlan === 'agency') {
     try {
       await sendUpgradeNotification(env, {
         plan: targetPlan,
@@ -458,9 +464,8 @@ async function handleInvoicePaymentFailed(env: Env, invoice: Stripe.Invoice): Pr
 // Stripe fires customer.subscription.trial_will_end ~3 days before a trial
 // ends. Email the user who initiated the checkout (captured in subscription
 // metadata at checkout time) so they have a concrete heads-up + a path to
-// either keep Agency, switch to Pro, or cancel. Idempotency is handled by
-// the outer stripe_event row insert — duplicate deliveries skip the
-// dispatcher entirely.
+// either keep the plan or cancel. Idempotency is handled by the outer
+// stripe_event row insert — duplicate deliveries skip the dispatcher entirely.
 async function handleTrialWillEnd(env: Env, sub: Stripe.Subscription): Promise<void> {
   const trialEndUnix = sub.trial_end;
   if (!trialEndUnix) return; // Defensive — Stripe only fires this for trials.
@@ -515,7 +520,6 @@ async function handleTrialWillEnd(env: Env, sub: Stripe.Subscription): Promise<v
       trialEndDate,
       monthlyPriceLabel,
       manageLink,
-      switchToProLink: `${env.APP_ORIGIN}/pricing#pro`,
     });
   } catch (err) {
     console.error(`[billing] trial_will_end email failed for ${sub.id}:`, err);

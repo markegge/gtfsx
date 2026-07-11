@@ -64,20 +64,18 @@ function pricingSeo(env: Env): MarketingSeo {
     // price, and including it as a price-less Offer would re-trigger the
     // "missing price" warning for no marketing value.
     offers: [
-      offer('Free', 0, 'Edit and export GTFS feeds at no cost.'),
-      offer('Pro', 49, 'Host and publish feeds — stable URLs, rider-facing embeds, Mobility Database submission.'),
-      offer('Agency', 299, 'Plan routes and service as a team — route-level coverage, cost, Title VI, white-label rider site, and GTFS-Realtime Service Alerts.'),
+      offer('Editor', 0, 'Create, edit, validate, and export GTFS feeds — free.'),
+      offer('Planner', 299, 'The service-planning suite for transit agencies — managed publishing and hosting, route-level coverage, cost, Title VI, white-label rider site, and GTFS-Realtime Service Alerts. 14-day free trial.'),
     ],
   });
   const body = `
     <nav class="breadcrumb"><a href="/">GTFS·X</a> › Pricing</nav>
     <h1>GTFS·X Pricing</h1>
-    <p class="lede">Free editor, forever. Pro adds managed publishing at a stable URL. Agency adds the full transit-planning suite — demographic coverage, cost estimation, and Title VI equity analysis — at roughly one-sixth the price of Remix.</p>
+    <p class="lede">Free editor, forever. Planner — the service-planning suite for transit agencies — adds managed publishing at a stable URL plus demographic coverage, cost estimation, and Title VI equity analysis, at roughly one-sixth the price of Remix.</p>
     <ul class="tiers">
-      <li><strong>Free — $0.</strong> Create, edit, validate, and export GTFS feeds in your browser. Up to 3 saved feeds in the cloud, GTFS ZIP export, GTFS-Flex authoring, a nationwide demand-propensity map, community support.</li>
-      <li><strong>Pro — $49/mo.</strong> Host and publish feeds. Unlimited saved feeds, feed publication and hosting, a rider-facing schedule mini-site, and feed submission to Google Maps, the Mobility Database, and more.</li>
-      <li><strong>Agency — $299/mo.</strong> Plan routes and service as a team. Unlimited saved feeds, route operating cost estimates, demographic coverage, Title VI equity analysis, GTFS-Realtime Service Alerts authoring, a fully white-labeled rider site, unlimited team members, cross-org membership for consultants. <a href="/planning">See all planning features →</a></li>
-      <li><strong>Enterprise — custom.</strong> For state DOTs, RTAP networks, and large consortiums. Custom feed/seat limits, unlimited managed publishing, phone + email support with SLA.</li>
+      <li><strong>Editor — $0.</strong> Create, edit, validate, and export GTFS feeds in your browser. Up to 3 saved feeds in the cloud, GTFS ZIP and GeoJSON export, GTFS-Flex authoring, a nationwide demand-propensity map, community support.</li>
+      <li><strong>Planner — $299/mo ($2,988/yr).</strong> The service-planning suite for transit agencies, with a 14-day free trial. Unlimited saved feeds, feed publication and hosting, a rider-facing schedule mini-site, feed submission to Google Maps and the Mobility Database, route operating cost estimates, demographic coverage, Title VI equity analysis, GTFS-Realtime Service Alerts authoring, a fully white-labeled rider site, unlimited team members, and cross-org membership for consultants. <a href="/planning">See all planning features →</a></li>
+      <li><strong>Enterprise — custom.</strong> Multi-agency subscriptions for consultants and state DOTs. Custom feed/seat limits, unlimited managed publishing, phone + email support with SLA.</li>
     </ul>
     <p><a href="mailto:hello@gtfsx.com?subject=GTFS%C2%B7X%20%E2%80%94%20Fix%20my%20feed">Fix my feed for me</a> — prefer a done-for-you service? We can build or repair your GTFS feed.</p>
     <h2>How GTFS·X compares</h2>
@@ -90,9 +88,9 @@ function pricingSeo(env: Env): MarketingSeo {
     <p><a href="/">Open the editor</a> · <a href="/about/">About GTFS·X</a></p>
   `;
   return {
-    title: 'GTFS·X Pricing — Free Editor, Pro Publishing, Agency Planning',
+    title: 'GTFS·X Pricing — Free GTFS Editor, Planner Suite for Transit Agencies',
     description:
-      'GTFS·X pricing: free editor forever; Pro at $49/mo for hosting and publishing feeds; Agency at $299/mo for the full route-planning suite; Enterprise for DOTs and consortiums.',
+      'GTFS·X pricing: the GTFS editor is free forever; Planner at $299/mo adds publishing, hosting, and the full service-planning suite for transit agencies; Enterprise offers multi-agency subscriptions for consultants and state DOTs.',
     canonicalUrl,
     jsonLd,
     body,

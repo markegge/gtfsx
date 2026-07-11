@@ -12,7 +12,7 @@ import {
   type EmailCapture,
 } from './_setup';
 
-async function loggedInClient(email: string, plan: 'free' | 'pro' = 'free'): Promise<TestClient> {
+async function loggedInClient(email: string, plan: 'free' | 'agency' = 'free'): Promise<TestClient> {
   const user = await seedUser({ email, plan });
   const client = makeClient();
   const res = await client.post('/auth/login', { email: user.email, password: user.password });

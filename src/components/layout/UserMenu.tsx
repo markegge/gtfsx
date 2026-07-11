@@ -100,7 +100,7 @@ export function UserMenuItems({ onClose }: { onClose?: () => void } = {}) {
         <div className="text-xs text-warm-gray truncate">{currentUser.email}</div>
       </div>
 
-      {/* Upgrade entry — logged-in free users only (hidden for pro/agency/
+      {/* Upgrade entry — logged-in free users only (hidden for agency/
           enterprise). Gives a free user who decides to pay a one-click path to
           /pricing instead of hunting through Billing. */}
       {shouldShowUpgradeEntry(true, currentUser.plan) && (
@@ -109,7 +109,7 @@ export function UserMenuItems({ onClose }: { onClose?: () => void } = {}) {
             onClick={() => go('/pricing')}
             className="w-full text-left px-3 py-2 mb-1 rounded-md bg-coral-light text-coral hover:bg-coral hover:text-white transition-colors flex items-center justify-between gap-2"
           >
-            <span className="text-sm font-heading font-bold">Upgrade to Pro</span>
+            <span className="text-sm font-heading font-bold">Upgrade</span>
             <span aria-hidden>→</span>
           </button>
           <div className="border-t border-sand my-1" />
@@ -162,11 +162,11 @@ export function UserMenuItems({ onClose }: { onClose?: () => void } = {}) {
         <button
           onClick={() => go('/pricing?feature=org_workspace')}
           className="w-full text-left px-3 py-1.5 rounded-md text-sm text-coral hover:bg-cream transition-colors flex items-center justify-between gap-2"
-          title="Organizations are an Agency plan feature"
+          title="Organizations are a Planner plan feature"
         >
           <span>+ Create organization…</span>
           <span className="text-[10px] font-bold uppercase tracking-wide bg-cream text-warm-gray px-1.5 py-0.5 rounded border border-sand">
-            Agency
+            Planner
           </span>
         </button>
       )}

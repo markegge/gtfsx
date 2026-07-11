@@ -20,7 +20,7 @@ import { ulid } from 'ulidx';
 
 async function loggedInClient(
   email: string,
-  plan: 'free' | 'pro' | 'agency' | 'enterprise' = 'agency',
+  plan: 'free' | 'agency' | 'enterprise' = 'agency',
 ): Promise<{ client: TestClient; userId: string }> {
   const user = await seedUser({ email: email.toLowerCase(), plan });
   const client = makeClient();

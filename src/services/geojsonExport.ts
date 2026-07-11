@@ -4,8 +4,8 @@
 // This is a convenience GIS export, NOT a GTFS round-trip: it only carries
 // geometry + a few labelling attributes, and it's geometry-only, so it works
 // even when the feed has validation errors that would block a GTFS .zip export.
-// Gated to Pro+ via the `geojson_export` feature (see planConfig.ts); the
-// download happens entirely client-side.
+// Free on every plan via the `geojson_export` feature (see planConfig.ts);
+// the download happens entirely client-side.
 
 import type { Feature, FeatureCollection, GeoJsonProperties, LineString, Point } from 'geojson';
 import type { Route, RouteStop, Shape, Stop, Trip } from '../types/gtfs';

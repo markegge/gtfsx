@@ -39,17 +39,18 @@ import { TalkToSalesModal } from './TalkToSalesModal';
 const FALLBACK_PLANS: PlanCatalogEntry[] = [
   {
     plan: 'free',
-    displayName: 'Edit',
+    displayName: 'Editor',
     monthlyPriceUsd: 0,
     annualPriceUsd: 0,
     perSeat: false,
-    tagline: 'Create, edit, validate, and export GTFS feeds — in your browser.',
+    tagline: 'Create, edit, validate, and export GTFS feeds — free.',
     features: [
       'Create and edit routes, stops, trips, and schedules on a live map',
       'Add GTFS-Flex zones and booking rules to any feed',
       'Validate against the GTFS spec as you work',
       'Import an existing feed or start from scratch — no signup required',
       'Export a spec-clean GTFS .zip and host it anywhere',
+      'GeoJSON export of routes and stops (GIS-ready)',
       'Up to 3 saved feeds in the cloud',
       'Nationwide demand-propensity map',
       'System-level cost and coverage summary',
@@ -57,29 +58,16 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
     ],
   },
   {
-    plan: 'pro',
-    displayName: 'Pro',
-    monthlyPriceUsd: 49,
-    annualPriceUsd: 468,
-    perSeat: false,
-    tagline: 'Host and publish feeds.',
-    features: [
-      'Fast, free GTFS·X editor',
-      'Feed publication and hosting',
-      'Rider-facing schedule mini-site',
-      'Feed submission (Google Maps, Mobility Database, etc.)',
-      'Unlimited saved feeds',
-      'Email support',
-    ],
-  },
-  {
     plan: 'agency',
-    displayName: 'Agency',
+    displayName: 'Planner',
     monthlyPriceUsd: 299,
     annualPriceUsd: 2988,
     perSeat: false,
-    tagline: 'Plan routes and service as a team.',
+    tagline: 'The service-planning suite for transit agencies.',
     features: [
+      'Feed publication and hosting at a stable URL',
+      'Rider-facing schedule mini-site and embeds',
+      'Feed submission (Google Maps, Mobility Database, etc.)',
       'Team workspace: your whole org owns and manages feeds together',
       'Cross-org access for consultants and partners',
       'Service scenario comparison',
@@ -87,7 +75,7 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
       'Demographic coverage and Title VI equity analysis',
       'GTFS-Realtime Service Alerts',
       'White-labeled rider site',
-      'Everything in Pro',
+      'Unlimited saved feeds',
       'Phone + email support',
     ],
     detailsHref: '/planning',
@@ -99,21 +87,30 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
     monthlyPriceUsd: null,
     annualPriceUsd: null,
     perSeat: false,
-    tagline: 'For state DOTs, MPOs, or consortiums.',
+    tagline: 'Multi-agency subscriptions for consultants and state DOTs.',
     features: [
-      'Agency-tier access for every agency in your jurisdiction.',
+      'Planner-tier access for every agency in your portfolio.',
     ],
   },
 ];
 
 const POPULAR_PLAN: Plan = 'agency';
 
-// Agency card: two named pillars. Hardcoded here so the grouping is preserved
+// Planner card: named pillars. Hardcoded here so the grouping is preserved
 // regardless of whether features come from the live catalog or the fallback.
-// Entitlement source: org_workspace + cross_org_member + org_logo (Agency+,
-// worker/billing/plans.ts); unlimited members = flat rate, no per-seat gate
+// Entitlement source: managed_publishing/embeds + org_workspace +
+// cross_org_member + org_logo (Agency+ internally, worker/billing/plans.ts);
+// unlimited members = flat rate, no per-seat gate
 // (worker/billing/middleware.ts requireOrgSeatAvailable).
 const AGENCY_FEATURE_GROUPS = [
+  {
+    heading: 'Publish and host',
+    items: [
+      'Feed publication and hosting at a stable URL',
+      'Rider-facing schedule mini-site and embeds',
+      'Feed submission (Google Maps, Mobility Database, etc.)',
+    ],
+  },
   {
     heading: 'Built for teams',
     items: [
@@ -132,9 +129,9 @@ const AGENCY_FEATURE_GROUPS = [
     ],
   },
 ] as const;
-// Items shown below the two pillar groups (secondary, no heading label).
+// Items shown below the pillar groups (secondary, no heading label).
 const AGENCY_TRAILING_FEATURES = [
-  'Everything in Pro',
+  'Unlimited saved feeds',
   'Phone + email support',
 ] as const;
 
@@ -195,7 +192,7 @@ export function PricingPage() {
   );
 
   // Each paid card has its own monthly/annual toggle so users can compare
-  // (e.g. Pro monthly vs Agency annual) side-by-side. Keyed by plan id;
+  // monthly vs annual side-by-side. Keyed by plan id;
   // defaults to monthly, or to the deep-linked interval when present.
   const [intervals, setIntervals] = useState<Record<string, 'month' | 'year'>>(() =>
     directIntervalParam && directPlanParam
@@ -242,14 +239,14 @@ export function PricingPage() {
   const currentPlan: Plan = (currentUser?.plan as Plan | undefined) ?? 'free';
   const onPaidPlan = currentPlan !== 'free' && currentPlan !== 'enterprise';
 
-  // Orgs the user can administer — eligible to host an Agency subscription.
+  // Orgs the user can administer — eligible to host a Planner subscription.
   const adminOrgs: OrgSummary[] = useMemo(
     () => userOrgs.filter((o) => roleAtLeast(o.role, 'admin')),
     [userOrgs],
   );
 
   // If the caller pinned an org owner (e.g. from /orgs/:slug/billing), require
-  // Agency checkout to target that org; otherwise fall back to the user's first
+  // Planner checkout to target that org; otherwise fall back to the user's first
   // admin org, or the org-create flow.
   const presetOrg = useMemo(() => {
     if (presetOwnerType !== 'org' || !presetOwnerId) return null;
@@ -298,7 +295,7 @@ export function PricingPage() {
 
   // Kick off Stripe Checkout. Owner mapping is enforced server-side too, but we
   // resolve it here so the redirect happens in a single round-trip.
-  async function startPaidCheckout(plan: 'pro' | 'agency', interval: 'month' | 'year', orgId?: string) {
+  async function startPaidCheckout(plan: 'agency', interval: 'month' | 'year', orgId?: string) {
     if (!currentUser) {
       // Logged-out users go straight to sign-up, carrying the plan so they land
       // back here for checkout after verifying their email.
@@ -313,12 +310,12 @@ export function PricingPage() {
     setError(null);
     setPendingPlan(plan);
     try {
-      const ownerType: 'user' | 'org' = plan === 'agency' ? 'org' : 'user';
-      const ownerId = ownerType === 'org' ? (orgId ?? '') : currentUser.id;
-      if (ownerType === 'org' && !ownerId) {
+      // Planner (internal id 'agency') is always billed to an organization.
+      const ownerId = orgId ?? '';
+      if (!ownerId) {
         throw new Error('No organization selected.');
       }
-      const result = await startCheckout({ ownerType, ownerId, plan, interval });
+      const result = await startCheckout({ ownerType: 'org', ownerId, plan, interval });
       window.location.href = result.url;
     } catch (e) {
       setError(e instanceof ApiError ? e.message : (e as Error)?.message ?? 'Could not start checkout.');
@@ -372,31 +369,27 @@ export function PricingPage() {
       setTalkToSalesOpen(true);
       return;
     }
-    if (plan === 'agency') {
-      // Prefer a pinned org, then the user's existing admin org, else prompt to
-      // create one.
-      const orgId = presetOrg?.id ?? adminOrgs[0]?.id;
-      if (orgId) {
-        void startPaidCheckout('agency', interval, orgId);
-      } else {
-        const defaultName = `${currentUser?.displayName ?? 'My'} Transit`;
-        setTeamOrgPrompt({ name: defaultName, slug: slugifyOrgName(defaultName), interval });
-      }
-      return;
+    // Planner (internal id 'agency'): prefer a pinned org, then the user's
+    // existing admin org, else prompt to create one.
+    const orgId = presetOrg?.id ?? adminOrgs[0]?.id;
+    if (orgId) {
+      void startPaidCheckout('agency', interval, orgId);
+    } else {
+      const defaultName = `${currentUser?.displayName ?? 'My'} Transit`;
+      setTeamOrgPrompt({ name: defaultName, slug: slugifyOrgName(defaultName), interval });
     }
-    void startPaidCheckout('pro', interval);
   }
 
   // Auto-checkout after a deep-link / post-verify return (e.g.
-  // /pricing?plan=pro&interval=year). Waits for auth + orgs, fires once, and
-  // skips if the user is already on the requested plan. Agency still funnels
+  // /pricing?plan=agency&interval=year). Waits for auth + orgs, fires once, and
+  // skips if the user is already on the requested plan. Planner still funnels
   // through the org picker / create form via handlePick.
   useEffect(() => {
     if (autoTriggered) return;
     if (!authChecked || !currentUser) return;
     if (!orgsLoaded) return;
     if (!directPlanParam) return;
-    if (directPlanParam !== 'pro' && directPlanParam !== 'agency') {
+    if (directPlanParam !== 'agency') {
       setAutoTriggered(true);
       return;
     }
@@ -412,7 +405,7 @@ export function PricingPage() {
 
   // Submit handler for the inline "Create your organization" form. Creates the
   // org first (plan stays 'free' until the Stripe webhook flips it to 'agency'
-  // after Checkout completes), then starts Agency checkout against the new org.
+  // after Checkout completes), then starts Planner checkout against the new org.
   async function handleCreateOrgAndCheckout() {
     if (!teamOrgPrompt) return;
     const name = teamOrgPrompt.name.trim();
@@ -443,12 +436,12 @@ export function PricingPage() {
     }
   }
 
-  // ─── Agency org-create sub-step ───────────────────────────────────────────
+  // ─── Planner org-create sub-step ──────────────────────────────────────────
   if (teamOrgPrompt) {
     return (
       <AuthLayout
         title="Name your organization"
-        subtitle="Agency subscriptions are billed to an organization. We'll create it now and route the subscription to it."
+        subtitle="Planner subscriptions are billed to an organization. We'll create it now and route the subscription to it."
       >
         <div className="space-y-4">
           <TestModeBanner />
@@ -528,7 +521,7 @@ export function PricingPage() {
         <TestModeBanner />
         {!checkoutContext && (
           <div className="text-sm text-warm-gray">
-            The editor and GTFS-Flex authoring are always free. Pro adds hosting and publishing; Agency adds the full route-planning suite.
+            The editor and GTFS-Flex authoring are always free. Planner adds hosting, publishing, and the full route-planning suite for transit agencies.
           </div>
         )}
 
@@ -538,8 +531,8 @@ export function PricingPage() {
           </div>
         )}
 
-        {/* Free / Pro / Agency — three-up grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {/* Editor / Planner — two-up grid */}
+        <div className="grid gap-4 md:grid-cols-2">
           {orderedCards.map((p) => {
             const isFree = p.plan === 'free';
             const isCurrent = Boolean(currentUser) && p.plan === currentPlan;
@@ -588,7 +581,7 @@ export function PricingPage() {
                   {label.sub && (
                     <p className="mt-0.5 text-xs text-warm-gray">{label.sub}</p>
                   )}
-                  {/* Agency tier ships with a 14-day trial; show it inline so
+                  {/* Planner ships with a 14-day trial; show it inline so
                       the price doesn't look like a hard commitment. */}
                   {popular && (
                     <p className="mt-1 text-xs font-semibold text-coral">14-day free trial · cancel anytime</p>
@@ -717,11 +710,11 @@ export function PricingPage() {
             {/* Name + tagline */}
             <div className="md:w-48 shrink-0">
               <h3 className="font-heading text-lg font-bold text-dark-brown">{enterprise.displayName}</h3>
-              <p className="mt-1 text-xs text-warm-gray">For state DOTs, MPOs, or consortiums.</p>
+              <p className="mt-1 text-xs text-warm-gray">Multi-agency subscriptions for consultants and state DOTs.</p>
             </div>
             {/* Feature line */}
             <div className="flex-1 text-sm text-brown">
-              Agency-tier access for every agency in your jurisdiction.
+              Planner-tier access for every agency in your portfolio.
             </div>
             {/* CTA */}
             <div className="shrink-0">

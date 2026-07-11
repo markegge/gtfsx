@@ -96,9 +96,9 @@ apiRouter.get('/me/usage', requireAuth, async (c) => {
   return c.json({ user: userUsage });
 });
 
-// Record a Pro-intent signal — fired when a free user reaches for a Pro-gated
-// action (publish, 4th saved feed, mini-site/embed, MobilityDatabase submit) or
-// starts Stripe checkout. THE hottest warm-lead signal; surfaced (ranked) by
+// Record a pro-intent signal (legacy name; now "paid intent") — fired when a
+// free user reaches for a paid-gated action (publish, 4th saved feed,
+// mini-site/embed, MobilityDatabase submit) or starts Stripe checkout. THE hottest warm-lead signal; surfaced (ranked) by
 // GET /api/admin/warm-cohort.csv. Inherits the global X-GB-Client CSRF +
 // rate-limit middleware. Cheap and idempotency-free on purpose — multiple fires
 // per user are expected and fine. We record it here in authenticated D1

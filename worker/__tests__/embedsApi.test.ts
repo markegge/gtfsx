@@ -236,7 +236,7 @@ describe('JSON API (feeds.*/<slug>/api/v1)', () => {
   });
 
   it('returns 403 when the feed owner lacks the embeds entitlement', async () => {
-    // Publish as a paid user (publishing itself is Pro+), then downgrade the
+    // Publish as a paid user (publishing itself is Agency+), then downgrade the
     // owner to free in the DB. The JSON API resolves the owner plan live at
     // serve time, so the now-free owner's data is gated off.
     const { client, userId } = await loggedInClient('api-free@example.com');

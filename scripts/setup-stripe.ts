@@ -66,24 +66,20 @@ interface ProductSpec {
   metadata: Record<string, string>;
 }
 
+// Pricing v4 (Jul 2026): the Pro tier ('gtfsb_pro') is retired — removed here
+// so a re-run never recreates it. Archive the live Pro product + prices in the
+// Stripe dashboard separately.
 const PRODUCTS: ProductSpec[] = [
   {
-    id: 'gtfsb_pro',
-    name: 'GTFS·X Pro',
-    description:
-      'For individual transit agencies and small operators. Save up to 10 feeds, publish 1 feed to a stable URL, plus demographic coverage and cost estimation analysis.',
-    metadata: { app_id: 'gtfsb_pro', tier: 'pro' },
-  },
-  {
     // Internal product id stays 'gtfsb_team' so existing subscriptions and the
-    // price lookup keys continue to resolve. Customer-facing name was renamed
-    // Team → Agency in the May-2026 pricing v2 — receipts and portal copy
-    // pick up the new name from the Product.name field. The tier metadata now
-    // matches the worker's internal plan id ('agency').
+    // price lookup keys continue to resolve. Customer-facing name renamed
+    // Team → Agency (May 2026, pricing v2) → Planner (Jul 2026, pricing v4) —
+    // receipts and portal copy pick up the new name from the Product.name
+    // field. The tier metadata matches the worker's internal plan id ('agency').
     id: 'gtfsb_team',
-    name: 'GTFS·X Agency',
+    name: 'GTFS·X Planner',
     description:
-      'For transit agencies and consultants planning routes and service. Unlimited saved feeds, publish up to 5, the full planning suite (demographic coverage, cost estimation, Title VI, ridership propensity), unlimited team members in your organization, and cross-org membership for consultants serving multiple clients.',
+      'The service-planning suite for transit agencies. Feed publishing and hosting, unlimited saved feeds, the full planning suite (demographic coverage, cost estimation, Title VI, ridership propensity), unlimited team members in your organization, and cross-org membership for consultants serving multiple clients.',
     metadata: { app_id: 'gtfsb_team', tier: 'agency' },
   },
   {
@@ -140,8 +136,6 @@ interface PriceSpec {
 // existing subscribers continue to bill at the old amount, and point the env
 // vars at the new IDs so all new checkouts go through the v2 prices.
 const PRICES: PriceSpec[] = [
-  { lookupKey: 'gtfsb_pro_monthly',     productId: 'gtfsb_pro',  envName: 'STRIPE_PRICE_PRO_MONTHLY',  unitAmount: 4900,   interval: 'month' },
-  { lookupKey: 'gtfsb_pro_annual',      productId: 'gtfsb_pro',  envName: 'STRIPE_PRICE_PRO_ANNUAL',   unitAmount: 49900,  interval: 'year'  },
   { lookupKey: 'gtfsb_team_monthly_v2', productId: 'gtfsb_team', envName: 'STRIPE_PRICE_TEAM_MONTHLY', unitAmount: 29900,  interval: 'month' },
   { lookupKey: 'gtfsb_team_annual_v2',  productId: 'gtfsb_team', envName: 'STRIPE_PRICE_TEAM_ANNUAL',  unitAmount: 249900, interval: 'year'  },
 ];
@@ -175,7 +169,6 @@ console.log('Customer Portal:');
 const existingConfigs = await stripe.billingPortal.configurations.list({ limit: 20 });
 const ourConfig = existingConfigs.data.find((c) => c.metadata?.app_id === `gtfsb_default_${liveMode ? 'live' : 'test'}`);
 
-const proPrices = PRICES.filter((p) => p.productId === 'gtfsb_pro').map((p) => priceIds[p.envName]);
 const teamPrices = PRICES.filter((p) => p.productId === 'gtfsb_team').map((p) => priceIds[p.envName]);
 
 const portalFeatures: Stripe.BillingPortal.ConfigurationCreateParams.Features = {
@@ -207,7 +200,6 @@ const portalFeatures: Stripe.BillingPortal.ConfigurationCreateParams.Features = 
     default_allowed_updates: ['price'],
     proration_behavior: 'create_prorations',
     products: [
-      { product: 'gtfsb_pro', prices: proPrices },
       { product: 'gtfsb_team', prices: teamPrices },
     ],
   },

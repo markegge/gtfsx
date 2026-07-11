@@ -1,10 +1,10 @@
 // Regression guards for the 2026-06 checkout outage (handoffs/fix-stripe-checkout.md):
 //   1. A raw Stripe error message can embed our secret key verbatim
 //      ("Expired API Key provided: sk_live_…") — it must NEVER reach the browser.
-//   2. The Pro/Agency price IDs must resolve so checkout hands Stripe a valid
-//      line item (a missing price ID was a silent failure mode).
+//   2. The Planner (internal id 'agency') price IDs must resolve so checkout
+//      hands Stripe a valid line item (a missing price ID was a silent failure mode).
 //
-// The end-to-end "a real Stripe Checkout page renders for Pro + Agency" check is
+// The end-to-end "a real Stripe Checkout page renders for Planner" check is
 // done manually with the live/test key per the handoff's "Done = verified" — it
 // needs a real Stripe secret, which (by design) isn't in the test bindings.
 
@@ -39,21 +39,22 @@ describe('billing checkout — Stripe error hygiene', () => {
 
 describe('billing checkout — price resolution', () => {
   const env = {
-    STRIPE_PRICE_PRO_MONTHLY: 'price_pro_m',
-    STRIPE_PRICE_PRO_ANNUAL: 'price_pro_a',
     STRIPE_PRICE_TEAM_MONTHLY: 'price_agency_m',
     STRIPE_PRICE_TEAM_ANNUAL: 'price_agency_a',
   } as unknown as Parameters<typeof resolvePriceId>[0];
 
-  it('resolves the configured Pro + Agency price IDs for both intervals', () => {
-    expect(resolvePriceId(env, 'pro', 'month')).toBe('price_pro_m');
-    expect(resolvePriceId(env, 'pro', 'year')).toBe('price_pro_a');
+  it('resolves the configured Planner (agency) price IDs for both intervals', () => {
     expect(resolvePriceId(env, 'agency', 'month')).toBe('price_agency_m');
     expect(resolvePriceId(env, 'agency', 'year')).toBe('price_agency_a');
   });
 
   it('throws (rather than handing Stripe an empty price) when a price ID is unset', () => {
     const empty = {} as unknown as Parameters<typeof resolvePriceId>[0];
-    expect(() => resolvePriceId(empty, 'pro', 'month')).toThrow();
+    expect(() => resolvePriceId(empty, 'agency', 'month')).toThrow();
+  });
+
+  it('throws for plans with no self-serve price (free / enterprise)', () => {
+    expect(() => resolvePriceId(env, 'free', 'month')).toThrow();
+    expect(() => resolvePriceId(env, 'enterprise', 'year')).toThrow();
   });
 });

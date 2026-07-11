@@ -6,7 +6,6 @@ export interface AuthedUser {
   staff: boolean;
   plan?:
     | 'free'
-    | 'pro'
     | 'agency'
     | 'enterprise';
   planStatus?: 'active' | 'past_due' | 'canceled' | 'trialing';

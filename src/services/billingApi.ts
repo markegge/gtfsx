@@ -4,7 +4,6 @@ import { ApiError, type ApiErrorCode } from './authApi';
 
 export type Plan =
   | 'free'
-  | 'pro'
   | 'agency'
   | 'enterprise';
 
@@ -50,7 +49,7 @@ export interface OwnerBillingState {
 export interface CheckoutInput {
   ownerType: 'user' | 'org';
   ownerId: string;
-  plan: 'pro' | 'agency';
+  plan: 'agency';
   interval: Interval;
 }
 

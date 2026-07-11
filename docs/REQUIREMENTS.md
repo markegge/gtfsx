@@ -10,7 +10,7 @@ GTFS·X is a web application for creating, editing, analysing, and publishing GT
 |---|---|
 | **Editor (anonymous, IndexedDB-only)** | Live in production at https://www.gtfsx.com. Two-rail layout (responsive left nav + configuration right rail). Mobile-responsive editor layout shipped (Phase 1 + Phase 2): all editing and analysis panels reachable at phone width; panel opens full-screen; bottom bar surfaces Timetable/Visualization/Validation. Map drawing and vertex drag remain mouse-optimized (touch-draw on roadmap). |
 | **Backend (auth, projects, orgs, publication, embeds, billing, forum)** | **Live in production since 2026-05-15** with live-mode Stripe billing — `BACKEND_ENABLED=true`, `BILLING_ENABLED=true`. (Originally disabled 2026-05-08 after a premature launch; re-enabled 2026-05-15.) Staging is parked — manual rehearsal only. |
-| **Plans** | Free / Pro / Agency / Enterprise, self-serve via Stripe Checkout. See [§3.7](#37-billing-and-subscription-plans). |
+| **Plans** | Free ("Editor") / Agency ("Planner") / Enterprise, self-serve via Stripe Checkout. See [§3.7](#37-billing-and-subscription-plans). |
 | **Source of truth** | `main` — every push auto-deploys to production via Cloudflare Workers Builds. |
 
 If you are picking this project up cold: read this overview, then [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md) §5 for the live operational picture, then the section below that matches the area you're working in.
@@ -241,7 +241,7 @@ Apportioned **buffer coverage** — for the system, each route, or a single stop
 - ✅ `CoveragePanel` (system + per-route) with covered population/household/worker totals plus a **demographic profile** table reporting five equity shares (minority, low-income, zero-vehicle, senior, youth) as coverage-vs-county-baseline ratios.
 - ✅ Per-stop Coverage tab (`StopCoveragePanel`) — distance to adjacent stops on each route, plus this stop's own buffer demographics and equity shares.
 - ✅ Map overlay shading the covered block-group buffers.
-- ✅ **Network-distance walksheds (Agency+)** — `network_walksheds` feature key (Agency/Enterprise, lockstep in `planConfig.ts` + `worker/billing/plans.ts`). The Coverage panel offers a "Network walksheds (street distance)" toggle + walk-time picker (5/10/15 min ≈ ¼/½/¾ mi); free/Pro users see a disabled control with the standard upgrade link. When on, `networkWalkshed.ts` fetches a Mapbox **walking Isochrone** per distinct stop (deduped by rounded coord, in-memory cached, capped at 200 requests/analysis), unions them with `@turf/union`, and apportions block groups against the polygon (ring-sampled circle–polygon overlap) through the **same** `coverageFromFractions` summation — so demographics update identically, just with tighter geometry. Graceful fallback to the straight-line buffer (with a notice) on API error/timeout or over the request cap; the result records which geometry was used so headers/labels stay honest.
+- ✅ **Network-distance walksheds (Agency+)** — `network_walksheds` feature key (Agency/Enterprise, lockstep in `planConfig.ts` + `worker/billing/plans.ts`). The Coverage panel offers a "Network walksheds (street distance)" toggle + walk-time picker (5/10/15 min ≈ ¼/½/¾ mi); free users see a disabled control with the standard upgrade link. When on, `networkWalkshed.ts` fetches a Mapbox **walking Isochrone** per distinct stop (deduped by rounded coord, in-memory cached, capped at 200 requests/analysis), unions them with `@turf/union`, and apportions block groups against the polygon (ring-sampled circle–polygon overlap) through the **same** `coverageFromFractions` summation — so demographics update identically, just with tighter geometry. Graceful fallback to the straight-line buffer (with a notice) on API error/timeout or over the request cap; the result records which geometry was used so headers/labels stay honest.
 
 ### 2.3 Title VI equity analysis
 
@@ -344,8 +344,7 @@ The backend tier is implemented as a single Cloudflare Worker that also serves t
   | Plan | Saved projects | Snapshots / project | Max ZIP | Published feeds |
   |---|---|---|---|---|
   | Free | 3 | 5 | 20 MB | 0 |
-  | Pro | 10 | 25 | 50 MB | 1 |
-  | Agency | unlimited | 50 | 100 MB | unlimited |
+  | Agency ("Planner") | unlimited | 50 | 100 MB | unlimited |
   | Enterprise | unlimited | 200 | 200 MB | unlimited |
 
 - ✅ Per-IP + per-email rate limits on auth endpoints.
@@ -377,17 +376,17 @@ The backend tier is implemented as a single Cloudflare Worker that also serves t
 Self-serve subscriptions via Stripe — live in production since 2026-05-15
 (`worker/billing/*`, `src/components/billing/*`; gated by `BILLING_ENABLED`).
 
-- ✅ Four tiers — **Free / Pro / Agency / Enterprise** (internal plan ids `free` / `pro` / `agency` / `enterprise`; `agency` was `team` before the pricing-v2 rename, migration 0017):
-  - **Free** $0 — editor + up to 3 cloud-saved feeds; **demand-propensity map + system-level cost & coverage summaries** + a live demo mini-site preview; no publishing. (Pricing v3.)
-  - **Pro** $49/mo · $499/yr — Premium Feed Management (hosting, publishing, rider-facing embeds + mini-site *with the "Powered by GTFS·X" badge*).
-  - **Agency** $299/mo · $2,499/yr — adds the **route-level** planning suite (per-route cost & coverage, Title VI) + org workspaces + unlimited feeds + GTFS-Realtime Service Alerts authoring (§4.5) + **white-label embeds** (`embed_remove_badge` — removes the GTFS·X badge) + custom domain + phone support; 14-day free trial (card up front).
-  - **Enterprise** — custom (talk to sales).
+- ✅ Three tiers — **Free ("Editor") / Agency ("Planner") / Enterprise** (internal plan ids `free` / `agency` / `enterprise`; `agency` was `team` before the pricing-v2 rename, migration 0017; the **Pro tier was retired in pricing v4, 2026-07** — zero subscribers, no migration needed; Stripe env vars stay `STRIPE_PRICE_TEAM_*`):
+  - **Free ("Editor")** $0 — editor + up to 3 cloud-saved feeds; **demand-propensity map + system-level cost & coverage summaries** + GeoJSON export + a live demo mini-site preview; no publishing.
+  - **Agency ("Planner")** $299/mo · $2,988/yr — the service-planning suite for transit agencies: Premium Feed Management (hosting, publishing, rider-facing embeds + mini-site), the **route-level** planning suite (per-route cost & coverage, Title VI), org workspaces, unlimited feeds, GTFS-Realtime Service Alerts authoring (§4.5), **white-label embeds** (`embed_remove_badge`), custom domain, brand color, phone support; 14-day free trial (card up front).
+  - **Enterprise** — custom (talk to sales): multi-agency subscriptions for consultants and state DOTs.
 - ✅ Stripe Checkout upgrade flow (`/upgrade`; per-card monthly/annual toggle, defaults to annual).
 - ✅ Stripe customer portal for managing / cancelling; 30-day prorated-refund policy.
 - ✅ Webhooks (`/api/billing/webhooks/stripe`) sync subscription state → D1 `subscription` + cached `plan`/status on `user` / `organization`.
 - ✅ Server-side feature gating via `requireOwnerFeature` (e.g. `managed_publishing`, `draft_links`, `analysis_basic`, `analysis_title_vi`, `org_workspace`, `org_logo`, `brand_color`, `service_alerts`, `embed_remove_badge`); `PaywallOverlay` is the client surface. `service_alerts` + `phone_support` → Agency + Enterprise.
-- ✅ **Pricing v3 (2026-06) feature reallocation** (code-config, no migration): demand dots (`analysis_propensity`) are free for everyone incl. anonymous; the cost & coverage panels split into a free **system-level** summary and a paywalled **route-level** breakdown (`analysis_basic`, Agency+); embeds stay Pro+ but only Agency+ removes the badge (`embed_remove_badge`); the free embed paywall links to the demo mini-site; `phone_support` → Agency+.
-- ✅ Org workspaces are an Agency+ feature — Free/Pro users are routed to `/upgrade` rather than creating empty orgs.
+- ✅ **Pricing v3 (2026-06) feature reallocation** (code-config, no migration): demand dots (`analysis_propensity`) are free for everyone incl. anonymous; the cost & coverage panels split into a free **system-level** summary and a paywalled **route-level** breakdown (`analysis_basic`, Agency+); the free embed paywall links to the demo mini-site; `phone_support` → Agency+.
+- ✅ **Pricing v4 (2026-07): Pro retired** (code-config, no migration — zero Pro subscribers). Everything formerly Pro+ (`managed_publishing`, `draft_links`, `mobility_db_submit`, `embeds`, `snapshot_history`, `brand_color`) is now Agency+; `geojson_export` dropped to **all plans incl. free**. Display rename shipped alongside: free → "Editor", agency → "Planner", enterprise → "Enterprise".
+- ✅ Org workspaces are an Agency+ feature — Free users are routed to `/pricing` rather than creating empty orgs.
 - ✅ Plan catalog served from the worker, with an in-SPA fallback for the public `/pricing` page; done-for-you services (fix / build a feed) advertised there via a scoping-call booking + email (not a billed product).
 - Pricing history (the Team→Agency rename + the v2 price change) is preserved in the archived `PRICING_RESTRUCTURE.md`.
 

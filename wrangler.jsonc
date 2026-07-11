@@ -111,8 +111,6 @@
     // on 2026-05-26 — see docs/PRICING_RESTRUCTURE.md. v1 prices stay active
     // in Stripe so existing $199 subscribers keep their original billing. The
     // STRIPE_PRICE_TEAM_* var names below intentionally keep the old word.
-    "STRIPE_PRICE_PRO_MONTHLY": "price_1TXTFcJHDvzBbFH9B1BaGXCH",
-    "STRIPE_PRICE_PRO_ANNUAL": "price_1Thu0FJHDvzBbFH9qCxCnS2f",
     "STRIPE_PRICE_TEAM_MONTHLY": "price_1TbRauJHDvzBbFH9a7IfPEfq",
     "STRIPE_PRICE_TEAM_ANNUAL": "price_1Thu0FJHDvzBbFH9nngOQDOe",
     "STRIPE_PORTAL_CONFIG_ID": "bpc_1TXTFdJHDvzBbFH9qciNWCsV",
@@ -204,8 +202,6 @@
         "BILLING_ENABLED": "true",
         "HARD_LIMITS": "false",
         "MAPBOX_TOKEN": "pk.eyJ1IjoibWFya2VnZ2UiLCJhIjoiY21wYjlrdnhlMDRuZjJzb21mMXQwZTJlaSJ9.qCTIAgzwRD4nt6F2YA4OuQ",
-        "STRIPE_PRICE_PRO_MONTHLY": "price_1TVzRAJThEbTJMIVZjGyn24F",
-        "STRIPE_PRICE_PRO_ANNUAL": "price_1TVzRBJThEbTJMIVu3BX60VV",
         "STRIPE_PRICE_TEAM_MONTHLY": "price_1TbQW1JThEbTJMIV2YHbLXuf",
         "STRIPE_PRICE_TEAM_ANNUAL": "price_1TbQW2JThEbTJMIVPs4ya76m",
         "STRIPE_PORTAL_CONFIG_ID": "bpc_1TVzRDJThEbTJMIVVFsRoSaM",

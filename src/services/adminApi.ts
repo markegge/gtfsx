@@ -11,7 +11,7 @@ export interface AdminStats {
     deleted_soft: number;
   };
   // Non-deleted users by subscription tier ('agency' = Agency tier).
-  usersByPlan: { free: number; pro: number; agency: number; enterprise: number };
+  usersByPlan: { free: number; agency: number; enterprise: number };
   organizations: { total: number };
   projects: { total: number; byOwnerType: { user: number; org: number } };
   snapshots: { total: number };
@@ -24,7 +24,7 @@ export interface AdminStats {
   };
 }
 
-export type Plan = 'free' | 'pro' | 'agency' | 'enterprise';
+export type Plan = 'free' | 'agency' | 'enterprise';
 export type PlanStatus = 'active' | 'past_due' | 'canceled' | 'trialing';
 
 /** Plans a staff member can comp-grant (no Stripe). */

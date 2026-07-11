@@ -10,7 +10,6 @@ export interface OrgSummary {
   role: OrgRole;
   plan?:
     | 'free'
-    | 'pro'
     | 'agency'
     | 'enterprise';
   planStatus?: 'active' | 'past_due' | 'canceled' | 'trialing';

@@ -163,8 +163,8 @@ export async function sendInvitationEmail(
 
 /**
  * Trial-ending reminder. Fired from the Stripe `customer.subscription.
- * trial_will_end` webhook (~3 days before trial end). Two CTAs: keep the
- * Agency plan (no action needed) or switch to Pro (link to /pricing).
+ * trial_will_end` webhook (~3 days before trial end). One CTA: manage (keep
+ * or cancel) the Planner subscription before the card is charged.
  */
 export async function sendTrialEndingEmail(
   env: Env,
@@ -176,44 +176,38 @@ export async function sendTrialEndingEmail(
     monthlyPriceLabel: string;
     /** App URL for managing the subscription (Stripe portal or org billing page). */
     manageLink: string;
-    /** App URL for switching to Pro (typically /pricing#pro). */
-    switchToProLink: string;
   },
 ): Promise<void> {
   const date = escapeHtml(opts.trialEndDate);
   const price = escapeHtml(opts.monthlyPriceLabel);
   const manage = escapeHtml(opts.manageLink);
-  const pro = escapeHtml(opts.switchToProLink);
   await send(env, {
     to,
-    subject: `Your GTFS·X Agency trial ends ${opts.trialEndDate}`,
+    subject: `Your GTFS·X Planner trial ends ${opts.trialEndDate}`,
     html: wrap(`
-      <p>Your 14-day Agency trial ends on <strong>${date}</strong>. The card on file will be charged ${price} on that date unless you change plans or cancel before then.</p>
+      <p>Your 14-day Planner trial ends on <strong>${date}</strong>. The card on file will be charged ${price} on that date unless you cancel before then.</p>
       <p style="margin: 18px 0;"><a href="${manage}" style="display: inline-block; background: #8a5a3b; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none;">Manage subscription</a></p>
-      <p>Don't need the full planning suite? You can switch to the Pro plan ($49/mo) instead — keeps your published feeds and embeds, drops the planning analyses:</p>
-      <p style="margin: 12px 0;"><a href="${pro}" style="color: #8a5a3b;">Switch to Pro →</a></p>
-      <p style="color: #666; font-size: 13px;">Or do nothing and stay on Agency. Either is fine.</p>
+      <p style="color: #666; font-size: 13px;">Or do nothing and stay on Planner. Either is fine.</p>
     `),
     text:
-      `Your 14-day Agency trial ends on ${opts.trialEndDate}.\n\n` +
-      `The card on file will be charged ${opts.monthlyPriceLabel} on that date unless you change plans or cancel before then.\n\n` +
-      `Manage your subscription: ${opts.manageLink}\n` +
-      `Switch to Pro ($49/mo): ${opts.switchToProLink}\n\n` +
-      `Or do nothing and stay on Agency. Either is fine.`,
+      `Your 14-day Planner trial ends on ${opts.trialEndDate}.\n\n` +
+      `The card on file will be charged ${opts.monthlyPriceLabel} on that date unless you cancel before then.\n\n` +
+      `Manage your subscription: ${opts.manageLink}\n\n` +
+      `Or do nothing and stay on Planner. Either is fine.`,
   });
 }
 
 // Internal notification to the GTFS·X owner inbox whenever someone subscribes to
-// a paid plan (Pro/Agency). Fired best-effort from the checkout webhook; no-op
+// a paid plan (Planner). Fired best-effort from the checkout webhook; no-op
 // when OWNER_NOTIFY_EMAIL isn't configured. Does NOT fire for comp/manual grants
 // (those never go through Stripe checkout).
 export async function sendUpgradeNotification(
   env: Env,
-  opts: { plan: 'pro' | 'agency'; ownerType: string; email: string; amountTotal: number | null },
+  opts: { plan: 'agency'; ownerType: string; email: string; amountTotal: number | null },
 ): Promise<void> {
   const to = env.OWNER_NOTIFY_EMAIL;
   if (!to) return;
-  const planLabel = opts.plan === 'agency' ? 'Agency' : 'Pro';
+  const planLabel = 'Planner';
   const email = escapeHtml(opts.email);
   const billedTo = opts.ownerType === 'org' ? 'an organization' : 'a user';
   const amount = opts.amountTotal != null ? `$${(opts.amountTotal / 100).toFixed(2)}` : '—';
@@ -275,7 +269,7 @@ export async function sendOwnerDigest(
       <table style="width: 100%; border-collapse: collapse;">
         ${row('New sign-ups', m.signups24h, 'accounts created')}
         ${row('Active users', m.activeUsers24h, 'distinct sessions used')}
-        ${row('New paid subscriptions', m.newPaidSubs24h, 'Pro / Agency')}
+        ${row('New paid subscriptions', m.newPaidSubs24h, 'Planner / Enterprise')}
       </table>
       <p style="color: #666; font-size: 13px; margin: 18px 0 0;">
         Running totals: <strong>${m.totalUsers.toLocaleString('en-US')}</strong> users ·

@@ -92,7 +92,7 @@ delivered once.
 
 | Entity | Purpose |
 |---|---|
-| `user` | One row per person; email is the identifier. `staff=1` grants `/admin`. `plan` ∈ `free`/`pro`/`agency`/`enterprise`. |
+| `user` | One row per person; email is the identifier. `staff=1` grants `/admin`. `plan` ∈ `free`/`agency`/`enterprise` (Pro retired in pricing v4, 2026-07). |
 | `credential` | Auth material (password hash or OAuth identity); a user may have several. |
 | `session` | Active login (HTTP-only cookie scoped to the editor origin). |
 | `auth_token` | Single-use hashed tokens: `verify_email`, `magic_link`, `password_reset`, `invitation`. |

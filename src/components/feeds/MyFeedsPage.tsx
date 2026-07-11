@@ -29,7 +29,7 @@ import { generateId } from '../../services/idGenerator';
 
 // Free plan saves 3 feeds (server PLAN_QUOTAS.free.projects). Creating a 4th is
 // allowed in prod (the cap is soft, HARD_LIMITS=false) but is the moment to sell
-// Pro. Mirrors the "Free saves 3 feeds" copy.
+// Planner. Mirrors the "Free saves 3 feeds" copy.
 const FREE_FEED_CAP = 3;
 
 function formatDate(ms: number | null | undefined): string {
@@ -223,7 +223,7 @@ export function MyFeedsPage() {
               <span>
                 Feeds used: <strong>{feedsQuotaWarning}</strong>.
                 {ownerPlan === 'free'
-                  ? ' Free saves 3 feeds. Pro saves unlimited and hosts them.'
+                  ? ' Free saves 3 feeds. Planner saves unlimited and hosts them.'
                   : ' Archive or delete feeds to free space, or upgrade for higher limits.'}
               </span>
               <a
@@ -678,7 +678,7 @@ function CreateFeedDialog({
           action: 'feed_cap',
           source: 'create_feed_dialog',
         });
-        setError('Free saves 3 feeds. Pro saves unlimited and hosts them.');
+        setError('Free saves 3 feeds. Planner saves unlimited and hosts them.');
       } else {
         setError(apiErr ? apiErr.message : 'Create failed');
       }

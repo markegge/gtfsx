@@ -7,7 +7,7 @@ import { makeClient, type TestClient } from './_client';
 import { applyMigrations, gzip, resetDb, seedUser, env, type SeededUser } from './_setup';
 import { publishDueSchedules } from '../cron/tasks';
 
-async function loggedIn(email: string, plan?: 'free' | 'pro' | 'agency' | 'enterprise'): Promise<{ client: TestClient; user: SeededUser }> {
+async function loggedIn(email: string, plan?: 'free' | 'agency' | 'enterprise'): Promise<{ client: TestClient; user: SeededUser }> {
   const user = await seedUser({ email, plan });
   const client = makeClient();
   await client.post('/auth/login', { email: user.email, password: user.password });

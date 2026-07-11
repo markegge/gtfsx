@@ -345,7 +345,6 @@ export function PlanPill({
 }) {
   const styles: Record<AdminUserRow['plan'], string> = {
     free: 'bg-cream text-warm-gray border border-sand',
-    pro: 'bg-coral-light text-coral',
     agency: 'bg-teal-light text-teal',
     enterprise: 'bg-dark-brown text-white',
   };

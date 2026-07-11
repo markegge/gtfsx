@@ -28,13 +28,13 @@ describe('recordCheckoutStarted (GH #68 funnel signal)', () => {
     const user = await seedUser({ email: 'checkout1@example.com', plan: 'free' });
 
     const before = Date.now();
-    await recordCheckoutStarted(env as unknown as Env, user.id, 'pro', 'month');
+    await recordCheckoutStarted(env as unknown as Env, user.id, 'agency', 'month');
     const after = Date.now();
 
     const rows = await dbAll<ProIntentRow>(`SELECT * FROM pro_intent`);
     expect(rows.length).toBe(1);
     expect(rows[0].action).toBe('checkout_started');
-    expect(rows[0].source).toBe('pro_month');
+    expect(rows[0].source).toBe('agency_month');
     expect(rows[0].user_id).toBe(user.id);
     expect(rows[0].ts).toBeGreaterThanOrEqual(before);
     expect(rows[0].ts).toBeLessThanOrEqual(after);
@@ -58,7 +58,7 @@ describe('recordCheckoutStarted (GH #68 funnel signal)', () => {
     } as unknown as Env;
 
     await expect(
-      recordCheckoutStarted(badEnv, 'someuser', 'pro', 'month'),
+      recordCheckoutStarted(badEnv, 'someuser', 'agency', 'month'),
     ).resolves.toBeUndefined();
   });
 });

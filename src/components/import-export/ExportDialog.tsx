@@ -25,8 +25,9 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
     () => state.projectName.replace(/\s+/g, '_').toLowerCase()
   );
 
-  // GeoJSON export is gated to Pro+ (geojson_export feature). Free users see the
-  // button with a lock; clicking routes them to /pricing for that feature.
+  // GeoJSON export is free on every plan (geojson_export feature) — the gate
+  // below stays for safety if the matrix ever changes; a locked user is routed
+  // to /pricing for the feature.
   const plan = useEditorPlan();
   const canGeoExport = planHasFeature(plan, 'geojson_export');
   const geoTargetPlan = planDisplayName(cheapestPlanFor('geojson_export'));
@@ -95,7 +96,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
       trackFeedExported();
       // Publish/hosting-intent nudge: a free user just produced the artifact —
       // exactly the moment to offer stable hosting. Shows a one-time toast and
-      // records the pro-intent signal (no-op for pro/agency and logged-out).
+      // records the pro-intent signal (no-op for paid plans and logged-out).
       fireNudge('publish_intent', 'export_zip');
       // Update project name to match exported filename
       if (fileName.trim() && fileName.trim() !== state.projectName.replace(/\s+/g, '_').toLowerCase()) {
@@ -107,9 +108,9 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
     }
   };
 
-  // GeoJSON export (Pro+). Free users are routed to /pricing for the feature
-  // instead of downloading. Geometry-only, so it's allowed even when the feed
-  // has validation errors that would block the GTFS .zip.
+  // GeoJSON export (free on every plan). A plan without the feature is routed
+  // to /pricing instead of downloading. Geometry-only, so it's allowed even
+  // when the feed has validation errors that would block the GTFS .zip.
   const handleExportGeoJSON = () => {
     const s = useStore.getState();
     if (!canGeoExport) {
@@ -284,8 +285,8 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
             </button>
           </div>
           {/* Subtle secondary export — routes + stops as a GeoJSON FeatureCollection
-              for GIS (Pro+). Geometry-only, so it's allowed even with validation
-              errors. Kept understated below the primary actions. */}
+              for GIS (free on every plan). Geometry-only, so it's allowed even with
+              validation errors. Kept understated below the primary actions. */}
           <button
             onClick={handleExportGeoJSON}
             disabled={exporting || !hasGeoGeometry}

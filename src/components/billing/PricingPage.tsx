@@ -43,12 +43,12 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
     monthlyPriceUsd: 0,
     annualPriceUsd: 0,
     perSeat: false,
-    tagline: 'Create, edit, validate, and export GTFS feeds — free.',
+    tagline: 'Create, edit, validate, and export GTFS feeds—free.',
     features: [
       'Create and edit routes, stops, trips, and schedules on a live map',
       'Add GTFS-Flex zones and booking rules to any feed',
       'Validate against the GTFS spec as you work',
-      'Import an existing feed or start from scratch — no signup required',
+      'Import an existing feed or start from scratch—no signup required',
       'Export a spec-clean GTFS .zip and host it anywhere',
       'GeoJSON export of routes and stops (GIS-ready)',
       'Up to 3 saved feeds in the cloud',
@@ -65,18 +65,11 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
     perSeat: false,
     tagline: 'The service-planning suite for transit agencies.',
     features: [
-      'Feed publication and hosting at a stable URL',
-      'Rider-facing schedule mini-site and embeds',
-      'Feed submission (Google Maps, Mobility Database, etc.)',
-      'Team workspace: your whole org owns and manages feeds together',
-      'Cross-org access for consultants and partners',
-      'Service scenario comparison',
       'Route operating cost estimates',
-      'Demographic coverage and Title VI equity analysis',
-      'GTFS-Realtime Service Alerts',
-      'White-labeled rider site',
-      'Unlimited saved feeds',
-      'Phone + email support',
+      'Demographic coverage & Title VI equity analysis',
+      'Scenario comparison',
+      'Hosted publishing: stable feed URL, rider mini-site & embeds',
+      'Unlimited feeds & team workspaces',
     ],
     detailsHref: '/planning',
     detailsLabel: 'See all planning features →',
@@ -87,52 +80,26 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
     monthlyPriceUsd: null,
     annualPriceUsd: null,
     perSeat: false,
-    tagline: 'Multi-agency subscriptions for consultants and state DOTs.',
+    tagline: 'Multi-agency subscriptions for consultants and state DOTs',
     features: [
-      'Planner-tier access for every agency in your portfolio.',
+      'Everything in Planner',
+      'Multi-agency feed portfolios',
+      'Higher limits and SLA',
+      'Contract via PO or invoice',
     ],
   },
 ];
 
 const POPULAR_PLAN: Plan = 'agency';
 
-// Planner card: named pillars. Hardcoded here so the grouping is preserved
-// regardless of whether features come from the live catalog or the fallback.
-// Entitlement source: managed_publishing/embeds + org_workspace +
-// cross_org_member + org_logo (Agency+ internally, worker/billing/plans.ts);
-// unlimited members = flat rate, no per-seat gate
-// (worker/billing/middleware.ts requireOrgSeatAvailable).
-const AGENCY_FEATURE_GROUPS = [
-  {
-    heading: 'Publish and host',
-    items: [
-      'Feed publication and hosting at a stable URL',
-      'Rider-facing schedule mini-site and embeds',
-      'Feed submission (Google Maps, Mobility Database, etc.)',
-    ],
-  },
-  {
-    heading: 'Built for teams',
-    items: [
-      'Team workspace: your whole org owns and manages feeds together',
-      'Cross-org access for consultants and partners',
-    ],
-  },
-  {
-    heading: 'Route planning suite',
-    items: [
-      'Service scenario comparison',
-      'Route operating cost estimates',
-      'Demographic coverage and Title VI equity analysis',
-      'GTFS-Realtime Service Alerts',
-      'White-labeled rider site',
-    ],
-  },
-] as const;
-// Items shown below the pillar groups (secondary, no heading label).
-const AGENCY_TRAILING_FEATURES = [
-  'Unlimited saved feeds',
-  'Phone + email support',
+// Enterprise card bullets are display-only and fixed here (the live catalog's
+// enterprise entry carries longer sales copy meant for /docs/pricing) so the
+// card stays short regardless of catalog contents.
+const ENTERPRISE_FEATURES = [
+  'Everything in Planner',
+  'Multi-agency feed portfolios',
+  'Higher limits and SLA',
+  'Contract via PO or invoice',
 ] as const;
 
 const ENTERPRISE_MAIL =
@@ -261,7 +228,7 @@ export function PricingPage() {
   );
   const free = plans.find((p) => p.plan === 'free') ?? FALLBACK_PLANS[0];
   const enterprise = plans.find((p) => p.plan === 'enterprise') ?? FALLBACK_PLANS.at(-1)!;
-  const orderedCards = [free, ...selfServePlans];
+  const orderedCards = [free, ...selfServePlans, enterprise];
 
   function priceLabel(
     p: PlanCatalogEntry,
@@ -269,7 +236,7 @@ export function PricingPage() {
   ): { amount: string; per: string; sub: string | null } {
     const monthly = p.monthlyPriceUsd;
     const annual = p.annualPriceUsd;
-    if (monthly === null || annual === null) return { amount: 'Custom', per: '', sub: null };
+    if (monthly === null || annual === null) return { amount: 'Call us', per: '', sub: null };
     if (monthly === 0 && annual === 0) return { amount: 'Free Forever', per: '', sub: null };
     if (interval === 'month') {
       return {
@@ -502,7 +469,7 @@ export function PricingPage() {
   // ─── Header copy ──────────────────────────────────────────────────────────
   const isWelcome = source === 'welcome';
   const pageTitle = (() => {
-    if (isWelcome) return 'Welcome — pick your plan';
+    if (isWelcome) return 'Welcome—pick your plan';
     if (featureParam || onPaidPlan) return 'Choose your plan';
     return 'Pricing';
   })();
@@ -510,7 +477,7 @@ export function PricingPage() {
     if (featureParam && FEATURE_COPY[featureParam]) {
       return `Unlocks ${FEATURE_COPY[featureParam].title.toLowerCase()}: ${FEATURE_COPY[featureParam].description}`;
     }
-    if (isWelcome) return 'Your email is verified. Pick the plan that fits — you can always change later.';
+    if (isWelcome) return 'Your email is verified. Pick the plan that fits—you can always change later.';
     if (onPaidPlan) return `You're on ${planDisplayName(currentPlan)}. Compare tiers or change your plan below.`;
     return 'The fast, free GTFS editor. Paid plans add Premium Feed Management and Route Planning Features.';
   })();
@@ -531,8 +498,8 @@ export function PricingPage() {
           </div>
         )}
 
-        {/* Editor / Planner — two-up grid */}
-        <div className="grid gap-4 md:grid-cols-2">
+        {/* Editor / Planner / Enterprise—three-up grid */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {orderedCards.map((p) => {
             const isFree = p.plan === 'free';
             const isCurrent = Boolean(currentUser) && p.plan === currentPlan;
@@ -603,51 +570,28 @@ export function PricingPage() {
                     </div>
                   )}
                 </div>
-                {p.plan === 'agency' ? (
-                  <div className="mt-4 text-sm text-brown flex-1">
-                    {AGENCY_FEATURE_GROUPS.map((group, gi) => (
-                      <div key={group.heading} className={gi > 0 ? 'mt-3' : ''}>
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-warm-gray mb-1.5">
-                          {group.heading}
-                        </p>
-                        <ul className="space-y-1.5">
-                          {group.items.map((item) => (
-                            <li key={item} className="flex items-start gap-2">
-                              <span className="mt-0.5 text-teal">✓</span>
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                    <ul className="space-y-1.5 mt-1.5">
-                      {AGENCY_TRAILING_FEATURES.map((f) => (
-                        <li key={f} className="flex items-start gap-2">
-                          <span className="mt-0.5 text-teal">✓</span>
-                          <span>{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <ul className="mt-4 space-y-2 text-sm text-brown flex-1">
-                    {p.features.map((f) => (
+                <div className="mt-4 flex-1 text-sm text-brown">
+                  {p.plan === 'agency' && (
+                    <p className="mb-2 font-semibold text-dark-brown">Everything in Editor, plus:</p>
+                  )}
+                  <ul className="space-y-2">
+                    {(p.plan === 'enterprise' ? ENTERPRISE_FEATURES : p.features).map((f) => (
                       <li key={f} className="flex items-start gap-2">
                         <span className="mt-0.5 text-teal">✓</span>
                         <span>{f}</span>
                       </li>
                     ))}
                   </ul>
-                )}
-                {p.detailsHref && (
-                  // Static content page (e.g. /planning) — full navigation, not an SPA route.
-                  <a
-                    href={p.detailsHref}
-                    className="mt-1 inline-block text-sm font-semibold text-teal hover:underline"
-                  >
-                    {p.detailsLabel ?? 'Learn more →'}
-                  </a>
-                )}
+                  {p.detailsHref && (
+                    // Static content page (e.g. /planning)—full navigation, not an SPA route.
+                    <a
+                      href={p.detailsHref}
+                      className="mt-2.5 inline-block text-sm font-semibold text-teal hover:underline"
+                    >
+                      {p.detailsLabel ?? 'Learn more →'}
+                    </a>
+                  )}
+                </div>
                 <div className="mt-5">
                   {isCurrent ? (
                     <Link
@@ -678,6 +622,17 @@ export function PricingPage() {
                         Create free account
                       </Link>
                     )
+                  ) : p.plan === 'enterprise' ? (
+                    // Sales-led: opens the TalkToSalesModal for logged-in and
+                    // logged-out visitors alike (handlePick fires the
+                    // pricing_talk_to_sales_open CTA event).
+                    <AuthButton
+                      fullWidth
+                      variant="secondary"
+                      onClick={() => handlePick('enterprise', cardInterval)}
+                    >
+                      Talk to sales
+                    </AuthButton>
                   ) : currentUser ? (
                     <AuthButton
                       fullWidth
@@ -704,34 +659,6 @@ export function PricingPage() {
           })}
         </div>
 
-        {/* Enterprise — full-width horizontal banner card */}
-        <div className="relative rounded-2xl border border-sand bg-cream p-5">
-          <div className="flex flex-col gap-5 md:flex-row md:items-center md:gap-8">
-            {/* Name + tagline */}
-            <div className="md:w-48 shrink-0">
-              <h3 className="font-heading text-lg font-bold text-dark-brown">{enterprise.displayName}</h3>
-              <p className="mt-1 text-xs text-warm-gray">Multi-agency subscriptions for consultants and state DOTs.</p>
-            </div>
-            {/* Feature line */}
-            <div className="flex-1 text-sm text-brown">
-              Planner-tier access for every agency in your portfolio.
-            </div>
-            {/* CTA */}
-            <div className="shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  trackCtaClick('pricing_talk_to_sales_open');
-                  setTalkToSalesOpen(true);
-                }}
-                className="rounded-lg border border-sand bg-cream px-6 py-2.5 font-heading text-sm font-bold text-brown hover:border-coral hover:text-coral"
-              >
-                Talk to sales
-              </button>
-            </div>
-          </div>
-        </div>
-
         <div className="text-center">
           <a
             href="/docs/pricing/"
@@ -744,7 +671,7 @@ export function PricingPage() {
         {!serverBillingEnabled && (
           <div className="rounded-xl border border-gold bg-gold-light/40 p-4 text-sm text-amber-900">
             Billing is not yet enabled in this environment. Paid checkout will open as soon as we flip
-            the switch — you can still create a free account and explore the editor today.
+            the switch—you can still create a free account and explore the editor today.
           </div>
         )}
 
@@ -754,7 +681,7 @@ export function PricingPage() {
               to={onPaidPlan ? '/account/billing' : '/feeds'}
               className="text-sm text-warm-gray hover:text-coral"
             >
-              {onPaidPlan ? '← Back to billing settings' : 'Decide later — take me to the editor →'}
+              {onPaidPlan ? '← Back to billing settings' : 'Decide later—take me to the editor →'}
             </Link>
           </div>
         ) : (
@@ -830,7 +757,7 @@ export function PricingPage() {
                 >
                   Vector &amp; Vertex
                 </a>
-                ) — AICP-certified transit planner, GTFS·X founder.
+                )—AICP-certified transit planner, GTFS·X founder.
               </p>
             </section>
 
@@ -851,7 +778,7 @@ export function PricingPage() {
                     q: "What's included in Premium Feed Management?",
                     a: (
                       <p className="mt-2 text-sm text-warm-gray">
-                        We host your feed at <code>feeds.gtfsx.com/&lt;slug&gt;/gtfs.zip</code> — a stable
+                        We host your feed at <code>feeds.gtfsx.com/&lt;slug&gt;/gtfs.zip</code>—a stable
                         URL you can hand to the Mobility Database, riders, or regulators. We also generate a
                         rider-facing mini-site, embed widgets you can drop on your own website, draft preview
                         links for stakeholder review, and validation + expiry monitoring.
@@ -886,21 +813,21 @@ export function PricingPage() {
                           className="block rounded-2xl border border-sand bg-white p-4 hover:border-coral"
                         >
                           <div className="font-heading text-sm font-bold text-dark-brown">vs. Trillium (Optibus)</div>
-                          <p className="mt-1 text-xs text-warm-gray">Managed GTFS service vs. self-serve editor — cost, control, fit.</p>
+                          <p className="mt-1 text-xs text-warm-gray">Managed GTFS service vs. self-serve editor—cost, control, fit.</p>
                         </Link>
                         <Link
                           to="/compare/remix/"
                           className="block rounded-2xl border border-sand bg-white p-4 hover:border-coral"
                         >
                           <div className="font-heading text-sm font-bold text-dark-brown">vs. Remix by Via</div>
-                          <p className="mt-1 text-xs text-warm-gray">Network planning suite vs. GTFS-first tool — where each one fits.</p>
+                          <p className="mt-1 text-xs text-warm-gray">Network planning suite vs. GTFS-first tool—where each one fits.</p>
                         </Link>
                         <Link
                           to="/compare/gtfs-builder-rtap/"
                           className="block rounded-2xl border border-sand bg-white p-4 hover:border-coral"
                         >
                           <div className="font-heading text-sm font-bold text-dark-brown">vs. National RTAP GTFS Builder</div>
-                          <p className="mt-1 text-xs text-warm-gray">Free spreadsheet builder vs. map-based editor — when to use which.</p>
+                          <p className="mt-1 text-xs text-warm-gray">Free spreadsheet builder vs. map-based editor—when to use which.</p>
                         </Link>
                         <Link
                           to="/compare/spare-flex-builder/"

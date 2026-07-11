@@ -216,7 +216,7 @@ describe('Editor / Planner / Enterprise lineup (2026-07 pricing overhaul)', () =
     // Right panel: demo-first, subscribe as the secondary text link.
     expect(html).toContain('href="/book-demo?src=home_panel"');
     expect(html).toContain('Book a 30-min demo');
-    expect(html).toContain('or subscribe — $2,988/yr');
+    expect(html).toContain('or subscribe · $2,988/yr');
     // Pricing teaser: 3 cards, Planner is the featured one.
     expect(html).toContain('href="/book-demo?src=home_pricing"');
     expect(html).toContain('href="/book-demo?src=home_enterprise"');

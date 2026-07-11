@@ -49,6 +49,8 @@
       .lede { font-size: 1.15rem; color:var(--muted); }
       .tier-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; vertical-align:middle; }
       .tier-badge.pro { background:#FBEEDF; color:#9A4F00; border:1px solid #F0D1A0; }
+      .tier-badge.planner,
+
       .tier-badge.agency { background:#EADFFD; color:#5B2E91; border:1px solid #C9B1F0; }
       .tier-badge.enterprise { background:#DCE9FA; color:#1F4D88; border:1px solid #A8C0E2; }
       a { color: var(--accent); }
@@ -116,7 +118,7 @@
     </header>
     <main>
       <div class="crumbs"><a href="/docs/">Docs</a> · Publishing &amp; distribution · Hosted publishing</div>
-      <h1>Hosted publishing <span class="tier-badge pro">Pro</span></h1>
+      <h1>Hosted publishing <span class="tier-badge planner">Planner</span></h1>
       <p class="lede">Publish your feed to a stable URL at <code>feeds.gtfsx.com/&lt;slug&gt;/gtfs.zip</code>. That URL is what you hand to Google Transit, the Mobility Database, trip planners, and your own riders — and it keeps working when you re-publish.</p>
 
       <h2 id="what-it-is">What it is</h2>
@@ -131,7 +133,7 @@
       <p>The current-publication section also gives you a <strong>"Copy editor link"</strong> button (alongside "Open in editor"). That link opens the published feed straight in the GTFS·X editor — no account needed — so a colleague can review or tweak the live feed in one click. It's the same share pattern as a draft review link, but it tracks the canonical published version.</p>
 
       <h2 id="how-to-publish">How to publish a feed</h2>
-      <p>Open the feed in the editor and click <strong>Share &amp; Publish</strong> in the footer (next to Timetable / Service Summary / Validation). The publish flow needs a signed-in account on the Pro or Agency plan — anonymous drafts can be exported as ZIP but not hosted.</p>
+      <p>Open the feed in the editor and click <strong>Share &amp; Publish</strong> in the footer (next to Timetable / Service Summary / Validation). The publish flow needs a signed-in account on the Planner plan — anonymous drafts can be exported as ZIP but not hosted.</p>
       <ol>
         <li><strong>Pick a slug.</strong> The default is derived from the feed name (e.g. "Sunny Valley Transit" → <code>sunny-valley-transit</code>). You can edit it before the first publish: lowercase letters, digits, and hyphens, up to 63 characters, must start with a letter or digit. The slug is the part of the URL that doesn't change between updates, so pick something a regulator wouldn't be embarrassed by.</li>
         <li><strong>Confirm what's included.</strong> Publishing snapshots the current state of the project: every file the editor would produce on Export GTFS goes into the published ZIP. Validation errors block publishing; warnings don't.</li>
@@ -152,7 +154,7 @@
       <ul>
         <li><strong>It fires within about 15 minutes of the time you pick.</strong> A background job checks every quarter-hour, so "2:00 AM" means "at the first check at or after 2:00 AM," not to the second.</li>
         <li><strong>One pending schedule per feed.</strong> Scheduling again replaces the previous one, and <strong>Cancel</strong> clears it. The pending schedule and its Cancel button appear in the Share &amp; Publish tab.</li>
-        <li><strong>Same gate as publishing now.</strong> Validation errors block scheduling just as they block an immediate publish, and it's a paid feature (Pro or Agency).</li>
+        <li><strong>Same gate as publishing now.</strong> Validation errors block scheduling just as they block an immediate publish, and it's a Planner feature.</li>
         <li><strong>Failures surface, they don't publish silently.</strong> If the publish can't run when the time comes — for example the plan was downgraded in the meantime — the schedule is marked failed with the reason shown in the panel, and the currently-published feed is left untouched.</li>
       </ul>
 
@@ -172,12 +174,11 @@
       <p>You only have to do each of these once. After that the catalogs poll your URL on their own.</p>
 
       <h2 id="tier-limits">Tier limits and pricing</h2>
-      <p>Hosted publishing is part of the Pro and Agency plans:</p>
+      <p>Hosted publishing is part of the Planner plan:</p>
       <ul>
-        <li><strong>Free</strong> — no published feeds. You can still export a GTFS ZIP and host it yourself; the editor doesn't care where the feed lives.</li>
-        <li><strong>Pro ($49/mo)</strong> — one published feed per account, plus the mini-site and embeds tied to that feed.</li>
-        <li><strong>Agency ($299/mo)</strong> — unlimited published feeds, useful if you operate multiple services under one administrative roof (a county transit authority running a fixed-route system and a separate microtransit service, for example) or manage feeds for several client agencies.</li>
-        <li><strong>Enterprise</strong> — uncapped, with custom seat and feed limits; pricing on application.</li>
+        <li><strong>Editor (free)</strong> — no published feeds. You can still export a GTFS ZIP and host it yourself; the editor doesn't care where the feed lives.</li>
+        <li><strong>Planner ($299/mo or $2,988/yr)</strong> — unlimited published feeds, plus the mini-site and embeds tied to each feed. Useful if you operate multiple services under one administrative roof (a county transit authority running a fixed-route system and a separate microtransit service, for example) or manage feeds for several client agencies.</li>
+        <li><strong>Enterprise</strong> — multi-agency subscriptions for consultants and state DOTs; uncapped, with custom seat and feed limits; pricing on application.</li>
       </ul>
       <p>See <a href="/pricing/">pricing</a> for the full feature comparison.</p>
 

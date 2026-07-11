@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
     <title>GTFS Editor — Build, Validate, and Publish GTFS Feeds | GTFS·X</title>
-    <meta name="description" content="Free, browser-based GTFS editor. Build routes, stops, schedules, and GTFS-Flex zones on a map. Continuous validation. No signup. Pro hosting from $49/mo." />
+    <meta name="description" content="Free, browser-based GTFS editor. Build routes, stops, schedules, and GTFS-Flex zones on a map. Continuous validation. No signup. Hosted publishing available." />
     <link rel="canonical" href="https://www.gtfsx.com/lp/gtfs-editor/" />
     <meta property="og:title" content="GTFS Editor — Build, Validate, and Publish GTFS Feeds" />
     <meta property="og:description" content="Free, browser-based GTFS editor. Continuous validation. GTFS-Flex support. No signup." />
@@ -106,15 +106,15 @@
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "name": "GTFS·X",
-  "description": "Browser-based GTFS feed editor with continuous validation, GTFS-Flex authoring, and optional Pro hosting at a canonical URL.",
+  "description": "Browser-based GTFS feed editor with continuous validation, GTFS-Flex authoring, and optional hosted publishing at a canonical URL.",
   "brand": { "@type": "Brand", "name": "GTFS·X" },
   "url": "https://www.gtfsx.com/lp/gtfs-editor/",
   "applicationCategory": "BusinessApplication",
   "operatingSystem": "Web",
   "image": "https://www.gtfsx.com/og-default.png",
   "offers": [
-    { "@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "USD", "description": "Edit, validate, and export GTFS feeds in the browser." },
-    { "@type": "Offer", "name": "Pro", "price": "49", "priceCurrency": "USD", "description": "Host and publish at a canonical URL; snapshot history; Mobility Database submission." }
+    { "@type": "Offer", "name": "Editor", "price": "0", "priceCurrency": "USD", "description": "Edit, validate, and export GTFS feeds in the browser." },
+    { "@type": "Offer", "name": "Planner", "price": "299", "priceCurrency": "USD", "description": "Host and publish at a canonical URL; snapshot history; Mobility Database submission; the service-planning suite." }
   ]
 }
     </script>
@@ -134,9 +134,9 @@
   "@context": "https://schema.org",
   "@type": "FAQPage",
   "mainEntity": [
-    { "@type": "Question", "name": "Is it really free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes — the editor is free forever. You only pay if you want hosted publishing, snapshot history, or the Agency-tier planning features." } },
-    { "@type": "Question", "name": "Do I need to sign up?", "acceptedAnswer": { "@type": "Answer", "text": "No. You can build, validate, and export a feed without an account. Sign up only if you want to sync across devices or use Pro features." } },
-    { "@type": "Question", "name": "What's the difference between Free and Pro?", "acceptedAnswer": { "@type": "Answer", "text": "Free = unlimited editing, validation, and export to .zip. Pro adds hosted publishing (your feed at a canonical URL), snapshot history, and Mobility Database submission." } },
+    { "@type": "Question", "name": "Is it really free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes — the editor is free forever. You only pay if you want the Planner plan: hosted publishing, snapshot history, and the service-planning suite." } },
+    { "@type": "Question", "name": "Do I need to sign up?", "acceptedAnswer": { "@type": "Answer", "text": "No. You can build, validate, and export a feed without an account. Sign up only if you want to sync across devices or use paid features." } },
+    { "@type": "Question", "name": "What's the difference between the free Editor and Planner?", "acceptedAnswer": { "@type": "Answer", "text": "The Editor is free: unlimited editing, validation, and export to .zip. Planner — the service-planning suite for transit agencies — adds hosted publishing (your feed at a canonical URL), snapshot history, Mobility Database submission, and the planning analyses." } },
     { "@type": "Question", "name": "Can I import an existing feed?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Drag a .zip into the editor. We parse routes, stops, calendars, fares, and shapes." } },
     { "@type": "Question", "name": "Does GTFS-Flex really work?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Polygon zones, booking rules, stop groups, and the full Flex extension. See the GTFS-Flex guide at /learn/gtfs-flex/ for a walkthrough." } },
     { "@type": "Question", "name": "What if my feed has problems?", "acceptedAnswer": { "@type": "Answer", "text": "The validator catches structural and reference errors as you edit. For specific issues, see the validation docs at /docs/validation/." } }
@@ -162,7 +162,7 @@
       <section class="hero">
         <div class="inner">
           <h1>Build, validate, and publish your GTFS feed in your browser</h1>
-          <p class="subhead">Free editor. No signup. GTFS-Flex support built in. Pro hosting available.</p>
+          <p class="subhead">Free editor. No signup. GTFS-Flex support built in. Hosted publishing available.</p>
           <div class="cta-row">
             <a href="https://www.gtfsx.com/" class="btn-primary" data-cta="lp_editor_primary_cta">Open the editor →</a>
           </div>
@@ -217,7 +217,7 @@
               <span class="icon" aria-hidden="true">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
               </span>
-              <h3>Pro hosting (from $49/mo)</h3>
+              <h3>Hosted publishing (Planner plan)</h3>
               <p>Publish to a canonical URL. Skip the SFTP. Snapshot history. Submit to the Mobility Database in one click.</p>
             </div>
           </div>
@@ -245,15 +245,15 @@
           <h2>FAQ</h2>
           <details>
             <summary>Is it really free?</summary>
-            <div>Yes — the editor is free forever. You only pay if you want hosted publishing, snapshot history, or the Agency-tier planning features.</div>
+            <div>Yes — the editor is free forever. You only pay if you want the Planner plan: hosted publishing, snapshot history, and the service-planning suite.</div>
           </details>
           <details>
             <summary>Do I need to sign up?</summary>
-            <div>No. You can build, validate, and export a feed without an account. Sign up only if you want to sync across devices or use Pro features.</div>
+            <div>No. You can build, validate, and export a feed without an account. Sign up only if you want to sync across devices or use paid features.</div>
           </details>
           <details>
-            <summary>What's the difference between Free and Pro?</summary>
-            <div>Free = unlimited editing, validation, and export to <code>.zip</code>. Pro adds hosted publishing (your feed at a canonical URL), snapshot history, and Mobility Database submission.</div>
+            <summary>What's the difference between the free Editor and Planner?</summary>
+            <div>The Editor is free: unlimited editing, validation, and export to <code>.zip</code>. Planner — the service-planning suite for transit agencies — adds hosted publishing (your feed at a canonical URL), snapshot history, Mobility Database submission, and the planning analyses.</div>
           </details>
           <details>
             <summary>Can I import an existing feed?</summary>

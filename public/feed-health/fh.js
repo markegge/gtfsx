@@ -10,8 +10,8 @@
   // (used to preview the agency table UI before real per-state data ships)
   const DEMO_AGENCIES = new URLSearchParams(location.search).has("demo-agencies");
 
-  // Statewide-program consult link (same Fantastical link used elsewhere on the site).
-  const CONSULT_URL = "https://fantastical.app/markegge/gtfsx-feed-consult";
+  // Statewide-program demo-booking link (tracked redirect to the founder's calendar).
+  const CONSULT_URL = "/book-demo?src=feed_health";
 
   // ---- Colour scale (matches FHMap.jsx) ----
   const GAP_STOPS = ["#FBE4D8", "#F4B393", "#E8734A", "#C9491F"];

@@ -30,6 +30,7 @@ h3 { font-size: 1.1rem; margin-top: 1.6rem; }
 .tier-badge.pro { background:#FBEEDF; color:#9A4F00; border:1px solid #F0D1A0; }
 .tier-badge.team { background:#EADFFD; color:#5B2E91; border:1px solid #C9B1F0; }
 .tier-badge.agency { background:#EADFFD; color:#5B2E91; border:1px solid #C9B1F0; }
+.tier-badge.planner { background:#EADFFD; color:#5B2E91; border:1px solid #C9B1F0; }
 .tier-badge.enterprise { background:#DCE9FA; color:#1F4D88; border:1px solid #A8C0E2; }
 a { color: var(--accent); }
 ul, ol { padding-left: 1.2rem; }

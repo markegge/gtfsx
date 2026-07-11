@@ -97,7 +97,7 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   },
   embed_remove_badge: {
     title: 'Remove the GTFS·X badge',
-    description: 'Serve your embeds and mini-site white-label — without the “Powered by GTFS·X” badge.',
+    description: 'Serve your embeds and mini-site white-label, without the “Powered by GTFS·X” badge.',
   },
   snapshot_history: {
     title: 'Named snapshots',
@@ -105,7 +105,7 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   },
   analysis_basic: {
     title: 'Route-level coverage and cost analysis',
-    description: 'System-level summaries are free. Unlock the per-route breakdown — coverage and operating cost route by route — with the Planner suite.',
+    description: 'System-level summaries are free. Unlock the per-route breakdown (coverage and operating cost, route by route) with the Planner suite.',
   },
   analysis_title_vi: {
     title: 'Title VI equity analysis',
@@ -117,7 +117,7 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   },
   network_walksheds: {
     title: 'Street-network walksheds',
-    description: 'Swap the straight-line ¼–½ mi coverage buffer for real walking-time isochrones — coverage and demographics that respect rivers, freeways, and the actual street grid.',
+    description: 'Swap the straight-line ¼–½ mi coverage buffer for real walking-time isochrones: coverage and demographics that respect rivers, freeways, and the actual street grid.',
   },
   org_workspace: {
     title: 'Team workspace',
@@ -125,7 +125,7 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   },
   cross_org_member: {
     title: 'Cross-org membership',
-    description: 'Built for consultants — work in multiple client orgs from one Planner subscription, without the client orgs paying for your seat.',
+    description: 'Built for consultants: work in multiple client orgs from one Planner subscription, without the client orgs paying for your seat.',
   },
   org_logo: {
     title: 'Custom organization logo',
@@ -137,7 +137,7 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   },
   service_alerts: {
     title: 'Service Alerts authoring',
-    description: 'Publish GTFS-Realtime Service Alerts — detours, delays, and stop closures — to a live feed Google, Apple, and transit apps consume, without republishing your schedule.',
+    description: 'Publish GTFS-Realtime Service Alerts (detours, delays, and stop closures) to a live feed Google, Apple, and transit apps consume, without republishing your schedule.',
   },
   variants: {
     title: 'Feed variants',
@@ -149,10 +149,10 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   },
   geojson_export: {
     title: 'GeoJSON export',
-    description: 'Export your route shapes and stops as a GeoJSON FeatureCollection — drop them straight into QGIS, ArcGIS, Mapbox, or any GIS tool.',
+    description: 'Export your route shapes and stops as a GeoJSON FeatureCollection. Drop them straight into QGIS, ArcGIS, Mapbox, or any GIS tool.',
   },
   access_isochrones: {
     title: 'Transit access isochrones',
-    description: 'Drop a pin and see where a rider can reach on your network in 15 / 30 / 45 minutes — combining walk access, wait, and in-vehicle time — with the population, jobs, and equity populations inside each contour.',
+    description: 'Drop a pin and see where a rider can reach on your network in 15 / 30 / 45 minutes (combining walk access, wait, and in-vehicle time), with the population, jobs, and equity populations inside each contour.',
   },
 };

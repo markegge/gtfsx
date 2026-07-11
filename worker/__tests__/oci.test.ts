@@ -27,6 +27,7 @@ const SECRETS = {
   GOOGLE_ADS_CUSTOMER_ID: '1001841562',
   GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED: '111111',
   GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW: '222222',
+  GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST: '333333',
 };
 
 function withSecrets(): void {
@@ -121,6 +122,16 @@ describe('OCI: readOciConfig', () => {
     expect(cfg!.customerId).toBe('1001841562');
     expect(cfg!.conversionActions.feed_exported).toBe('111111');
     expect(cfg!.conversionActions.paywall_view).toBe('222222');
+    expect(cfg!.conversionActions.demo_request).toBe('333333');
+  });
+
+  it('demo_request action is optional: config still valid without it', () => {
+    withSecrets();
+    delete (testEnv as unknown as Record<string, unknown>).GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST;
+    const cfg = readOciConfig(testEnv);
+    expect(cfg).not.toBeNull();
+    expect(cfg!.conversionActions.feed_exported).toBe('111111');
+    expect(cfg!.conversionActions.demo_request).toBeUndefined();
   });
 });
 
@@ -341,6 +352,68 @@ describe('OCI: uploadPendingConversions', () => {
     expect(row!.oci_uploaded_at).toBe(-1);
     expect(row!.oci_attempts).toBe(3);
     expect(row!.oci_last_error).toBe('still bad');
+  });
+
+  it('uploads demo_request rows against the demo conversion action', async () => {
+    withSecrets();
+    const demoId = await seedEvent({ gclid: 'gDemo', kind: 'demo_request', ts: FIXED_NOW - 1000 });
+
+    const fetchMock = stubFetch(({ url, init }) => {
+      if (url.includes('oauth2.googleapis.com')) return oauthResponse();
+      if (url.includes('uploadClickConversions')) {
+        const body = JSON.parse(String(init?.body ?? '{}'));
+        expect(body.conversions).toHaveLength(1);
+        expect(body.conversions[0].gclid).toBe('gDemo');
+        expect(body.conversions[0].conversion_action).toBe(
+          'customers/1001841562/conversionActions/333333',
+        );
+        return adsSuccessResponse(1);
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now });
+    expect(result.attempted).toBe(1);
+    expect(result.uploaded).toBe(1);
+
+    const row = await dbGet<{ oci_uploaded_at: number | null }>(`SELECT oci_uploaded_at FROM event WHERE id = ?`, demoId);
+    expect(row!.oci_uploaded_at).toBe(FIXED_NOW);
+  });
+
+  it('demo action unset: demo_request rows stay pending, other kinds still upload, stale demo rows expire', async () => {
+    withSecrets();
+    delete (testEnv as unknown as Record<string, unknown>).GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST;
+    const ninetyOneDays = 91 * 24 * 60 * 60 * 1000;
+    const feedId = await seedEvent({ gclid: 'gFeed', kind: 'feed_exported', ts: FIXED_NOW - 2000 });
+    const demoId = await seedEvent({ gclid: 'gDemo', kind: 'demo_request', ts: FIXED_NOW - 1000 });
+    const staleDemoId = await seedEvent({ gclid: 'gDemoOld', kind: 'demo_request', ts: FIXED_NOW - ninetyOneDays });
+
+    const fetchMock = stubFetch(({ url, init }) => {
+      if (url.includes('oauth2.googleapis.com')) return oauthResponse();
+      if (url.includes('uploadClickConversions')) {
+        const body = JSON.parse(String(init?.body ?? '{}'));
+        // Only the feed_exported row goes up — demo_request is unconfigured.
+        expect(body.conversions).toHaveLength(1);
+        expect(body.conversions[0].gclid).toBe('gFeed');
+        return adsSuccessResponse(1);
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now });
+    expect(result.attempted).toBe(1);
+    expect(result.uploaded).toBe(1);
+    expect(result.skippedExpired).toBe(1); // stale demo row expired even while unconfigured
+
+    const feed = await dbGet<{ oci_uploaded_at: number | null }>(`SELECT oci_uploaded_at FROM event WHERE id = ?`, feedId);
+    const demo = await dbGet<{ oci_uploaded_at: number | null }>(`SELECT oci_uploaded_at FROM event WHERE id = ?`, demoId);
+    const stale = await dbGet<{ oci_uploaded_at: number | null; oci_last_error: string | null }>(
+      `SELECT oci_uploaded_at, oci_last_error FROM event WHERE id = ?`, staleDemoId,
+    );
+    expect(feed!.oci_uploaded_at).toBe(FIXED_NOW);
+    expect(demo!.oci_uploaded_at).toBeNull(); // pending until the action is configured
+    expect(stale!.oci_uploaded_at).toBe(-1);
+    expect(stale!.oci_last_error).toMatch(/expired/i);
   });
 
   it('idempotent: a second run does not re-upload already-uploaded rows', async () => {

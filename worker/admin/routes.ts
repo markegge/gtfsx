@@ -1443,11 +1443,14 @@ adminRouter.get('/events/oci-status', async (c) => {
   const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
 
   // Pending: in-window, gclid set, never uploaded, not flagged failed.
+  // Keep the kind list in sync with ALL_UPLOAD_KINDS in
+  // worker/marketing/ads/oci.ts — demo_request shows here even while its
+  // conversion action is unconfigured, so pending rows stay visible.
   const pendingRes = await c.env.DB.prepare(
     `SELECT kind, COUNT(*) AS n FROM event
       WHERE gclid IS NOT NULL
         AND oci_uploaded_at IS NULL
-        AND kind IN ('feed_exported', 'paywall_view')
+        AND kind IN ('feed_exported', 'paywall_view', 'demo_request')
         AND ts > ?
       GROUP BY kind`,
   ).bind(ninetyDaysAgo).all<OciPendingRow>();
@@ -1483,6 +1486,9 @@ adminRouter.get('/events/oci-status', async (c) => {
     && !!c.env.GOOGLE_ADS_CUSTOMER_ID
     && !!c.env.GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED
     && !!c.env.GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW;
+  // demo_request's action is optional (see readOciConfig) — surface its
+  // absence as a note rather than flipping the whole page to "not configured".
+  const demoActionPresent = !!c.env.GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST;
 
   const pending = pendingRes.results ?? [];
   const uploaded = uploadedRes.results ?? [];
@@ -1508,9 +1514,14 @@ adminRouter.get('/events/oci-status', async (c) => {
         + `<td style="font-family:monospace;font-size:12px;">${escapeHtml(r.oci_last_error ?? '')}</td>`
         + `</tr>`).join('\n');
 
-  const cfgBanner = cfgPresent
+  const demoNote = cfgPresent && !demoActionPresent
+    ? `<p class="lead" style="color:#856404;background:#fff3cd;padding:8px 12px;border-radius:4px;"><code>demo_request</code> uploads are <strong>off</strong>: set <code>GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST</code> after creating the conversion action — see <code>worker/marketing/ads/README.md</code>. Pending <code>demo_request</code> rows wait until then.</p>`
+    : '';
+
+  const cfgBanner = (cfgPresent
     ? `<p class="lead" style="color:#155724;background:#d4edda;padding:8px 12px;border-radius:4px;">OCI is configured — daily cron at 09:00 UTC.</p>`
-    : `<p class="lead" style="color:#721c24;background:#f8d7da;padding:8px 12px;border-radius:4px;">OCI is <strong>not configured</strong>. Set the GOOGLE_ADS_* secrets — see <code>worker/marketing/ads/README.md</code>.</p>`;
+    : `<p class="lead" style="color:#721c24;background:#f8d7da;padding:8px 12px;border-radius:4px;">OCI is <strong>not configured</strong>. Set the GOOGLE_ADS_* secrets — see <code>worker/marketing/ads/README.md</code>.</p>`)
+    + demoNote;
 
   const html = `<!doctype html>
 <html lang="en">
@@ -1538,7 +1549,7 @@ adminRouter.get('/events/oci-status', async (c) => {
 </head>
 <body>
   <h1>Google Ads OCI status</h1>
-  <p class="lead">Daily uploader pushes gclid-stamped <code>feed_exported</code> and <code>paywall_view</code> events to Google Ads — see <code>worker/marketing/ads/oci.ts</code>.</p>
+  <p class="lead">Daily uploader pushes gclid-stamped <code>feed_exported</code>, <code>paywall_view</code>, and <code>demo_request</code> events to Google Ads — see <code>worker/marketing/ads/oci.ts</code>.</p>
   ${cfgBanner}
 
   <div class="cards">

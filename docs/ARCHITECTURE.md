@@ -160,6 +160,7 @@ origin. This list is the source of truth.
 | `POST /api/billing/checkout` · `/portal` · `POST /api/billing/webhooks/stripe` · `GET /api/billing/me` · catalog | Stripe checkout/portal/webhooks; plan + usage |
 | `GET /community/*`, `/api/forum/*` | Forum SSR pages + forum JSON API (threads/posts/upvotes/subscriptions/search/profile/uploads) |
 | `POST /api/events/track` | Cookieless page-view/funnel beacon (no auth; CSRF + rate-limited; captures `?ref=`/`gclid`) |
+| `GET /book-demo` | Demo-booking tracking redirect (no auth): logs `demo_request` event (`?src=` placement label + `gclid`, bot UAs skipped) then 302 → Fantastical booking page; `demo_request` uploads to Google Ads via the OCI cron |
 | `GET /api/admin/*` | Staff operator console (404 to non-staff): stats, users, orgs, audit, events summary, ads attribution |
 
 ### Feeds origin (no auth)

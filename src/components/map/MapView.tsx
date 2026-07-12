@@ -18,7 +18,7 @@ import { StopAnalysisLayer } from './StopAnalysisLayer';
 import { FlexLayer } from '../flex/FlexLayer';
 import { DemandDotsLayer } from './DemandDotsLayer';
 import { MapLayerControls } from './MapLayerControls';
-import { createFlexZoneWithRoute } from '../flex/flexHelpers';
+import { createFlexZoneWithRoute, nextFlexZoneName } from '../flex/flexHelpers';
 import { shapeEditLabel } from './shapeEditLabel';
 import { stopsInsidePolygon, stopsInPolygonTurf } from '../fares/fareZoneHelpers';
 import type { MapStyleId } from './MapLayerControls';
@@ -142,6 +142,9 @@ export function MapView() {
   const [simplifyShapes, setSimplifyShapes] = useState(false);
   // Stop move state (for didDragStop compat with click handler)
   const didDragStopRef = useRef(false);
+  // Deadline (performance.now()) until which the trailing click of the
+  // double-click that closed a drawing is swallowed. See the effect below.
+  const suppressTailClickUntilRef = useRef(0);
 
   // Compute initial view from stops or shapes. Recompute only when the
   // "any data?" boolean flips — avoids re-running on every stop edit.
@@ -293,6 +296,41 @@ export function MapView() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', handleKeyUp, true);
+    };
+  }, []);
+
+  // Swallow the trailing click of the double-click that closes a drawing.
+  //
+  // mapbox-gl-draw ends a polygon/line on whichever click lands on the shape's
+  // first or last vertex — which, for the usual "double-click to close", is the
+  // *first* click of the pair. draw.create fires there, we commit the geometry
+  // and drop the draw feature, and Draw drops into simple_select. The second
+  // click of the pair then arrives at simple_select and is hit-tested against
+  // the vertices of the feature we just removed — they're still on screen,
+  // because Draw defers its re-render to the next animation frame — so
+  // simple_select tries to enter direct_select for a feature that no longer
+  // exists ("You must provide a featureId to enter direct_select mode").
+  //
+  // Only the tail of a double-click is dropped (detail >= 2, on the map canvas,
+  // within the double-click window of a completed drawing); ordinary clicks and
+  // the browser's own dblclick event are untouched. Capture on window so Mapbox
+  // never sees mousedown/mouseup and can't be left mid-drag.
+  useEffect(() => {
+    const onTailClick = (e: MouseEvent) => {
+      if (e.detail < 2) return;
+      if (performance.now() > suppressTailClickUntilRef.current) return;
+      const target = e.target;
+      if (!(target instanceof Element) || !target.closest('.mapboxgl-canvas-container')) return;
+      if (e.type === 'click') suppressTailClickUntilRef.current = 0;
+      e.stopPropagation();
+    };
+    window.addEventListener('mousedown', onTailClick, true);
+    window.addEventListener('mouseup', onTailClick, true);
+    window.addEventListener('click', onTailClick, true);
+    return () => {
+      window.removeEventListener('mousedown', onTailClick, true);
+      window.removeEventListener('mouseup', onTailClick, true);
+      window.removeEventListener('click', onTailClick, true);
     };
   }, []);
 
@@ -684,6 +722,10 @@ export function MapView() {
     const feature = e.features[0];
     if (!feature) return;
 
+    // The drawing just closed — if that was the first click of a double-click,
+    // the second one is still coming. 500ms is the browser's double-click window.
+    suppressTailClickUntilRef.current = performance.now() + 500;
+
     const currentState = useStore.getState();
 
     // Flex zone drawn. Two cases:
@@ -706,10 +748,9 @@ export function MapView() {
         delete window.__flexAddPolygonZoneId;
       } else {
         const geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [feature] };
-        const zoneNum = currentState.flexZones.length + 1;
         createFlexZoneWithRoute({
           id: `flex-zone-${Date.now()}`,
-          name: `Zone ${zoneNum}`,
+          name: nextFlexZoneName(currentState.flexZones),
           bufferMiles: 0,
           geojson,
         });

@@ -6,7 +6,10 @@ import { EmptyState } from '../ui/EmptyState';
 import type { FlexZone } from '../../store/flexSlice';
 import { flexZoneShape } from '../../store/flexSlice';
 import { FlexZoneDetails } from './FlexZoneDetails';
-import { createFlexZoneWithRoute, deleteFlexZoneWithRoute } from './flexHelpers';
+import { FlexBoundaryImport } from './FlexBoundaryImport';
+import {
+  createFlexZoneWithRoute, deleteFlexZoneWithRoute, flexRouteNames, nextFlexZoneName,
+} from './flexHelpers';
 import { gtfsTimeToSeconds, secondsToGtfsTime } from '../../utils/time';
 
 const DEFAULT_FLEX_BUFFER_MILES = 0.75;
@@ -25,8 +28,6 @@ function describeFlexZoneShape(zone: FlexZone): string {
     default: return 'empty — add geometry';
   }
 }
-
-let zoneCounter = 1;
 
 function generateServiceArea(
   shapes: ReturnType<typeof useStore.getState>['shapes'],
@@ -118,7 +119,7 @@ function computeBufferedServiceSpan(
 
 export function FlexEditor() {
   const {
-    shapes, routes, trips, stopTimes, hiddenRouteIds,
+    shapes, routes, trips, stops, stopTimes, hiddenRouteIds,
     flexZones, updateFlexZone, updateRoute,
     mapMode, setMapMode, editingFlexZoneId, setEditingFlexZoneId,
   } = useStore();
@@ -141,10 +142,7 @@ export function FlexEditor() {
     if (!next || next === zone.name) return;
     updateFlexZone(zone.id, { name: next });
     if (zone.routeId && routes.some((r) => r.route_id === zone.routeId)) {
-      updateRoute(zone.routeId, {
-        route_short_name: next,
-        route_long_name: `${next} (Flex)`,
-      });
+      updateRoute(zone.routeId, flexRouteNames(next));
     }
   };
   // Persists only for the current session — the ref is re-initialized on reload.
@@ -191,7 +189,7 @@ export function FlexEditor() {
       const span = computeBufferedServiceSpan(shapes, routes, trips, stopTimes, hiddenRouteIds);
       createFlexZoneWithRoute({
         id: `flex-zone-${Date.now()}`,
-        name: `Service Area ${zoneCounter++}`,
+        name: nextFlexZoneName(useStore.getState().flexZones),
         bufferMiles,
         geojson,
         ...(span ? { pickupWindowStart: span.start, pickupWindowEnd: span.end } : {}),
@@ -210,11 +208,10 @@ export function FlexEditor() {
   const handleCreateGroup = useCallback(() => {
     // Create an empty stop-group zone. User fills in stops via the zone's
     // Details panel, which expands below the new row.
-    const zoneNum = useStore.getState().flexZones.length + 1;
     const zoneId = `flex-group-${Date.now()}`;
     createFlexZoneWithRoute({
       id: zoneId,
-      name: `Stop Group ${zoneNum}`,
+      name: nextFlexZoneName(useStore.getState().flexZones),
       bufferMiles: 0,
       geojson: { type: 'FeatureCollection', features: [] },
       stopIds: [],
@@ -300,7 +297,7 @@ export function FlexEditor() {
                     : 'bg-cream border-sand'
                   }`}
               >
-                <div className="flex items-center gap-2 px-3 py-2">
+                <div className="group flex items-center gap-2 px-3 py-2">
                   <span
                     className="w-3 h-3 rounded-sm shrink-0 border border-purple-300"
                     style={{ backgroundColor: 'rgba(124,58,237,0.2)' }}
@@ -327,10 +324,16 @@ export function FlexEditor() {
                           setNameDraft(zone.name);
                           setRenamingZoneId(zone.id);
                         }}
-                        className="text-sm font-medium text-dark-brown truncate w-full text-left hover:text-purple transition-colors"
+                        className="flex items-center gap-1 w-full text-left text-sm font-medium text-dark-brown hover:text-purple transition-colors"
                         title="Rename service area"
                       >
-                        {zone.name}
+                        <span className="truncate">{zone.name}</span>
+                        <span
+                          aria-hidden
+                          className="shrink-0 text-[11px] text-warm-gray opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          ✎
+                        </span>
                       </button>
                     )}
                     <p className="text-[11px] text-warm-gray">
@@ -388,7 +391,7 @@ export function FlexEditor() {
           <EmptyState
             icon="📍"
             title="No service areas yet"
-            description="Draw a zone on the map or generate one from your fixed routes."
+            description="Draw a zone on the map, import a GeoJSON boundary, or generate one from your fixed routes."
           />
         )
       )}
@@ -424,13 +427,21 @@ export function FlexEditor() {
               <span>✏</span> Draw Zone on Map
             </button>
 
-            {/* Create stop group */}
-            <button
-              onClick={() => { handleCreateGroup(); setShowCreatePanel(false); }}
-              className="w-full px-3 py-2 bg-white border border-purple text-purple rounded-lg text-xs font-heading font-bold hover:bg-purple-50 transition-colors flex items-center justify-center gap-2"
-            >
-              <span>•••</span> Create Stop Group
-            </button>
+            {/* Create stop group — needs stops to group, so on a feed with none
+                it's disabled with the same inline "how to enable" line the
+                buffer path uses, rather than opening an empty stop picker. */}
+            <div>
+              <button
+                onClick={() => { handleCreateGroup(); setShowCreatePanel(false); }}
+                disabled={stops.length === 0}
+                className="w-full px-3 py-2 bg-white border border-purple text-purple rounded-lg text-xs font-heading font-bold hover:bg-purple-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+              >
+                <span>•••</span> Create Stop Group
+              </button>
+              {stops.length === 0 && (
+                <p className="text-[11px] text-warm-gray mt-1">Add stops to the feed to enable.</p>
+              )}
+            </div>
 
             {/* Auto-generate from fixed routes */}
             <div className="bg-white border border-sand rounded-lg p-3 space-y-2">
@@ -467,6 +478,14 @@ export function FlexEditor() {
                 <p className="text-[11px] text-warm-gray">Draw route shapes on the map to enable.</p>
               )}
             </div>
+
+            {/* Import an existing boundary */}
+            <FlexBoundaryImport
+              onImported={(zoneId) => {
+                setExpandedZoneId(zoneId);
+                setShowCreatePanel(false);
+              }}
+            />
           </div>
         )
       )}

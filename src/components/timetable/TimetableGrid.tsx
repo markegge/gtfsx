@@ -11,6 +11,8 @@ import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
 import { estimateStopTravelByRoad, layoutStopTimes } from '../../services/travelTime';
 import { GenerateServiceForm } from './GenerateServiceForm';
 import { RuntimeEditor } from './RuntimeEditor';
+import { FlexTimetablePanel } from './FlexTimetablePanel';
+import { findFlexZoneForRoute, isFlexRoute } from './flexRouteMatch';
 
 function generateTripName(routeName: string, departureTime: string, serviceIndex: number): string {
   const prefix = (routeName || 'trip').replace(/\s+/g, '').slice(0, 4).toLowerCase();
@@ -50,6 +52,12 @@ export function TimetableGrid() {
   // Flag-stop / continuous pickup-drop-off is an advanced, niche feature; the
   // per-stop ⚑ override only appears when this feature is enabled for the feed.
   const showContinuous = useStore((s) => featureEnabled(s, 'continuousStops'));
+
+  // A demand-response route's trip is synthesized at export time, so it has no
+  // trips or route_stops here. Detect it and swap the fixed-route grid for a
+  // read-only explainer instead of the misleading "add stops first" empty state.
+  const flexZones = useStore((s) => s.flexZones);
+  const demandResponseOn = useStore((s) => featureEnabled(s, 'demandResponse'));
 
   // Direction toggle state — synced to store so RouteLayer can read it
   const directionId = useStore((s) => s.timetableDirectionId);
@@ -596,6 +604,17 @@ export function TimetableGrid() {
     );
   }
 
+  if (demandResponseOn && isFlexRoute(route, flexZones, routes)) {
+    return (
+      <div className="p-2 flex flex-col min-h-0 flex-1">
+        <div className="shrink-0 mb-2 px-2">
+          <RouteSelect routes={routes} selectedRouteId={selectedRouteId} onChange={selectRoute} />
+        </div>
+        <FlexTimetablePanel route={route} zone={findFlexZoneForRoute(route, flexZones, routes)} />
+      </div>
+    );
+  }
+
   const hasStops = orderedStops.length > 0;
 
   return (
@@ -604,17 +623,7 @@ export function TimetableGrid() {
       <div className="shrink-0 mb-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex items-center gap-2 px-2 min-w-max">
           {/* Route selector */}
-          <select
-            value={selectedRouteId || ''}
-            onChange={(e) => selectRoute(e.target.value || null)}
-            className="px-2 py-1 border border-sand rounded-md text-xs font-semibold bg-cream focus:outline-none focus:border-coral"
-          >
-            {routes.map((r) => (
-              <option key={r.route_id} value={r.route_id}>
-                {r.route_short_name || r.route_long_name || r.route_id}
-              </option>
-            ))}
-          </select>
+          <RouteSelect routes={routes} selectedRouteId={selectedRouteId} onChange={selectRoute} />
           {/* Service pattern */}
           {calendars.length > 0 && (
             <select
@@ -1638,6 +1647,30 @@ function TripIdCell({ tripId, allTripIds, onRename }: {
 
 /** Direction dropdown for routes with no shapes yet (in-progress feeds).
  *  Routes that have shapes use the shape-based PatternSelector instead. */
+function RouteSelect({
+  routes,
+  selectedRouteId,
+  onChange,
+}: {
+  routes: Route[];
+  selectedRouteId: string | null;
+  onChange: (routeId: string | null) => void;
+}) {
+  return (
+    <select
+      value={selectedRouteId || ''}
+      onChange={(e) => onChange(e.target.value || null)}
+      className="px-2 py-1 border border-sand rounded-md text-xs font-semibold bg-cream focus:outline-none focus:border-coral"
+    >
+      {routes.map((r) => (
+        <option key={r.route_id} value={r.route_id}>
+          {r.route_short_name || r.route_long_name || r.route_id}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function DirectionSelect({
   directionId,
   onChange,

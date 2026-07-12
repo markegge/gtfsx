@@ -3,6 +3,7 @@ import { Source, Layer } from 'react-map-gl/mapbox';
 import { featureCollection } from '@turf/helpers';
 import { useStore } from '../../store';
 import { featureEnabled } from '../../store/featuresSlice';
+import { findFlexZoneRoute } from './flexHelpers';
 
 const DEFAULT_FLEX_COLOR = '#7C3AED';
 
@@ -24,32 +25,19 @@ export function FlexLayer() {
   const combinedGeojson = useMemo(() => {
     // Exclude the zone currently being edited in draw (draw renders it instead)
     // and any zone whose associated route is hidden via the routes pane.
-    // Link first by explicit zone.routeId; fall back to matching zone.name
-    // against route_short_name / route_long_name, since legacy zones and
-    // some import paths leave routeId unset.
+    // findFlexZoneRoute pairs by explicit zone.routeId, falling back to the
+    // legacy name match for zones (older feeds, some import paths) that leave
+    // routeId unset.
     const hiddenSet = new Set(hiddenRouteIds);
-    const hiddenNameSet = new Set<string>();
-    for (const r of routes) {
-      if (!hiddenSet.has(r.route_id)) continue;
-      const short = (r.route_short_name || '').trim();
-      const long = (r.route_long_name || '').trim();
-      if (short) hiddenNameSet.add(short);
-      if (long) hiddenNameSet.add(long);
-    }
-    const isHidden = (z: typeof flexZones[number]): boolean => {
-      if (z.routeId && hiddenSet.has(z.routeId)) return true;
-      const name = (z.name || '').trim();
-      if (name && hiddenNameSet.has(name)) return true;
-      return false;
-    };
-    const zones = flexZones.filter(
-      (z) => z.id !== editingFlexZoneId && !isHidden(z),
-    );
+    const zoneRoutes = new Map(flexZones.map((z) => [z.id, findFlexZoneRoute(routes, z)]));
+    const zones = flexZones.filter((z) => {
+      if (z.id === editingFlexZoneId) return false;
+      const route = zoneRoutes.get(z.id);
+      return !route || !hiddenSet.has(route.route_id);
+    });
     if (zones.length === 0) return featureCollection([]) as GeoJSON.FeatureCollection;
-    const routesById = new Map(routes.map((r) => [r.route_id, r]));
     const allFeatures = zones.flatMap((z) => {
-      const route = z.routeId ? routesById.get(z.routeId) : undefined;
-      const color = resolveFlexColor(route?.route_color);
+      const color = resolveFlexColor(zoneRoutes.get(z.id)?.route_color);
       return z.geojson.features.map((f) => ({
         ...f,
         properties: {

@@ -13,19 +13,7 @@
 import { backfillRouteStopShapeIds } from './routeStopMigration';
 import { fetchWorkingState, listProjects, type ProjectSummary } from './projectsApi';
 import type { ImportData } from './gtfsImport';
-import type { BuilderSignals } from './gtfsParse';
 import type { RouteStop, Trip } from '../types/gtfs';
-
-// This path reconstructs ImportData from a stored working-state snapshot, not
-// a zip parse, so there's no raw CSV text to inspect for the RTAP/GTFS-Builder
-// structural tells (BOM, header-only shapes.txt, …) — all false, same spirit
-// as `warnings: []` below ("nothing was parsed"). detectRtapFeed treats an
-// all-false/absent signal as "no basis to say so," never a false claim.
-const NOT_PARSED_BUILDER_SIGNALS: BuilderSignals = {
-  hasUtf8Bom: false,
-  shapesFileHeaderOnly: false,
-  emitsAllOptionalColumns: false,
-};
 
 export interface MyFeedItem {
   id: string;
@@ -117,7 +105,6 @@ export function workingStateToImportData(snapshot: Record<string, unknown>): Imp
     fareTransferRules: asArray(snapshot.fareTransferRules),
     flexZones: asArray(snapshot.flexZones),
     warnings: [],
-    builderSignals: NOT_PARSED_BUILDER_SIGNALS,
   };
 }
 

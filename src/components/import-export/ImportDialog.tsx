@@ -7,7 +7,6 @@ import { MyFeedsSource } from './MyFeedsSource';
 import { resolveMyFeedImportData, type MyFeedItem } from '../../services/myFeedsImport';
 import { feedNeedsShapes } from '../../services/shapesFromStops';
 import { detectRtapFeed } from '../../services/rtapDetect';
-import type { BuilderSignals } from '../../services/gtfsParse';
 import { ShapesFromStopsDialog } from '../shapes/ShapesFromStopsDialog';
 
 type ImportSource = 'upload' | 'url' | 'catalog' | 'myfeeds';
@@ -95,7 +94,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
   // (expensive, main-thread-blocking) parse so the user can back out instead
   // of hanging/crashing the tab.
   const [pendingLarge, setPendingLarge] = useState<
-    { file: File; info: Awaited<ReturnType<typeof inspectGtfsZip>> } | null
+    { file: File; info: Awaited<ReturnType<typeof inspectGtfsZip>>; sourceUrl: string | null } | null
   >(null);
 
   // Success state
@@ -108,11 +107,14 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
   // reachable later from the Validation panel, so nothing is lost.
   const [shapesOfferDismissed, setShapesOfferDismissed] = useState(false);
   const [showShapesDialog, setShowShapesDialog] = useState(false);
-  // Structural export-tool signals captured at parse time (see BuilderSignals
-  // in gtfsParse.ts). Stashed here rather than read off parsedData at render
-  // time because the empty-project fast-import path never sets parsedData —
-  // doReplaceImport is called directly with the freshly parsed data instead.
-  const [importBuilderSignals, setImportBuilderSignals] = useState<BuilderSignals | null>(null);
+  // Where this import actually came from, when we know it: the pasted URL for
+  // the "From URL" source, or the catalog feed's producer/hosted URL for
+  // "Search Catalog". null for a plain ZIP upload or a "My feeds" import
+  // (nothing external to point at). This is detectRtapFeed's primary signal —
+  // a feed fetched from rapid.nationalrtap.org is RTAP-provenanced regardless
+  // of what its bytes say; a bare upload of the exact same bytes is not
+  // knowable as RTAP at all, and the copy is written to admit that honestly.
+  const [importSourceUrl, setImportSourceUrl] = useState<string | null>(null);
 
   // Async completion state (only used when onComplete is provided).
   const [completing, setCompleting] = useState(false);
@@ -150,16 +152,24 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
       stops: data.stops.length,
       trips: data.trips.length,
     });
-    setImportBuilderSignals(data.builderSignals);
   }, []);
 
   /** Hand a fully-resolved feed (from any source — zip parse or a "My feeds"
    * working-state fetch) to the import UI: surface warnings, then either
    * replace immediately (empty project) or open the route-picker so the user
    * chooses what to merge into the current project. Never mutates the store
-   * itself except via doReplaceImport's explicit replace. */
-  const presentImportData = useCallback((data: ImportData, name: string) => {
+   * itself except via doReplaceImport's explicit replace.
+   *
+   * `sourceUrl` is where this feed is actually known to have come from (the
+   * pasted URL / catalog producer URL), or null for a plain upload / "My
+   * feeds" import where there's nothing external to point at. Stashed in
+   * component state here (rather than threaded through ImportData) because
+   * it's provenance about THIS import action, not a property of the parsed
+   * feed itself — it survives untouched whether we replace immediately or the
+   * user lands on the mode-selection screen first. */
+  const presentImportData = useCallback((data: ImportData, name: string, sourceUrl: string | null = null) => {
     setImportWarnings(data.warnings);
+    setImportSourceUrl(sourceUrl);
     // If the project is empty, skip the options screen and import immediately
     if (useStore.getState().routes.length === 0) {
       doReplaceImport(data, name);
@@ -173,7 +183,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
 
   // The actual (expensive) parse. Always reached via parseFile so every entry
   // point — upload, URL, catalog — goes through the size pre-flight first.
-  const runParse = useCallback(async (file: File) => {
+  const runParse = useCallback(async (file: File, sourceUrl: string | null = null) => {
     setParsing(true);
     setProgress(null);
     setError(null);
@@ -182,7 +192,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
         setProgress(rows ? `${phase} ${rows.toLocaleString()} rows` : phase),
       );
       const name = file.name.replace(/\.zip$/i, '');
-      presentImportData(data, name);
+      presentImportData(data, name, sourceUrl);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to parse GTFS feed');
     } finally {
@@ -191,7 +201,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
     }
   }, [presentImportData]);
 
-  const parseFile = useCallback(async (file: File) => {
+  const parseFile = useCallback(async (file: File, sourceUrl: string | null = null) => {
     setError(null);
     // Cheap pre-flight: if stop_times is large, gate behind a confirmation
     // instead of charging into a parse that can hang or crash the tab. If the
@@ -199,20 +209,20 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
     try {
       const info = await inspectGtfsZip(file);
       if (info.isLarge) {
-        setPendingLarge({ file, info });
+        setPendingLarge({ file, info, sourceUrl });
         return;
       }
     } catch {
       /* ignore — proceed to the normal parse path */
     }
-    await runParse(file);
+    await runParse(file, sourceUrl);
   }, [runParse]);
 
   const proceedWithLarge = useCallback(() => {
     if (!pendingLarge) return;
-    const { file } = pendingLarge;
+    const { file, sourceUrl } = pendingLarge;
     setPendingLarge(null);
-    runParse(file);
+    runParse(file, sourceUrl);
   }, [pendingLarge, runParse]);
 
   const cancelLarge = useCallback(() => {
@@ -241,7 +251,13 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
     if (!r.ok) throw new Error(`Download failed: ${r.status} ${await r.text()}`);
     const blob = await r.blob();
     const file = new File([blob], `${fileNameStem}.zip`, { type: 'application/zip' });
-    await parseFile(file);
+    // Prefer the producer's own URL (where the feed was actually published) for
+    // RTAP provenance detection — an RTAP-built feed catalogued by Mobility
+    // Database is still DOWNLOADED from MDB's own storage, not
+    // rapid.nationalrtap.org, so hosted_url alone would never match. Fall back
+    // to hosted_url if there's no producer URL; worse case it just doesn't
+    // match nationalrtap.org, same as passing nothing at all.
+    await parseFile(file, feed.source_info?.producer_url ?? url);
   }, [parseFile]);
 
   // "My feeds" import: resolve the selected feed — published OR draft — from its
@@ -257,7 +273,8 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
     if (data.routes.length === 0) {
       throw new Error('That feed has no routes to import yet.');
     }
-    presentImportData(data, feed.name || feed.slug);
+    // No external URL for an internal project reference.
+    presentImportData(data, feed.name || feed.slug, null);
   }, [presentImportData]);
 
   const handleUrlFetch = useCallback(async () => {
@@ -290,7 +307,9 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
       const stem =
         trimmed.split('/').pop()?.replace(/\.zip$/i, '') || 'imported-feed';
       const file = new File([blob], `${stem}.zip`, { type: 'application/zip' });
-      await parseFile(file);
+      // The URL the user pasted IS the feed's actual source — the strongest
+      // provenance signal we have.
+      await parseFile(file, trimmed);
     } catch (e) {
       setError((e as Error).message || 'Failed to fetch feed.');
     } finally {
@@ -344,7 +363,6 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
         stops: selStopIds.size,
         trips: selTripIds.size,
       });
-      setImportBuilderSignals(parsedData.builderSignals);
     }
   };
 
@@ -367,12 +385,13 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
     // writes the imported feed's metadata into the store, only its routes. The
     // "project was empty" fast-import path skips parsedData entirely, so fall
     // back to the store, which a full replace populated from this same feed.
-    // importBuilderSignals has no store fallback (the store doesn't retain
-    // it) — it's stashed in state at import time for exactly this read.
+    // importSourceUrl has no store fallback (it's provenance about this import
+    // action, not a store field) — it's stashed in state at import time (see
+    // presentImportData) for exactly this read.
     const rtap = detectRtapFeed(
       parsedData?.feedInfo ?? storeState.feedInfo,
       parsedData?.agencies ?? storeState.agencies,
-      importBuilderSignals,
+      importSourceUrl,
     );
 
     return (
@@ -409,11 +428,16 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
                 <p className="text-xs text-amber-700 leading-relaxed">
                   {/* Lead with the observed fact in every case; the RTAP line is
                       additional color, worded to match how sure we actually are.
-                      High confidence = an explicit "National RTAP" self-mention,
-                      so it's fine to name RTAP outright. Low confidence is a
-                      structural-only match (BOM + empty shapes.txt + full
-                      optional-column set) that isn't provably RTAP specifically,
-                      so it's phrased as a likeness, never an assertion. */}
+                      High confidence = fetched from a nationalrtap.org URL, or an
+                      explicit "National RTAP" self-mention in the feed's own
+                      metadata — either way it's fine to name RTAP outright. Low
+                      confidence is a bare "rtap"/"gtfs builder" string mention,
+                      which is common enough as a false positive that it's phrased
+                      as a likeness, never an assertion. A plain ZIP upload with
+                      no self-identifying string makes NO RTAP claim at all — we
+                      genuinely can't tell RTAP provenance from bytes alone (see
+                      rtapDetect.ts's TODO for why the content fingerprint we
+                      tried first was abandoned). */}
                   {rtap.isRtap && rtap.confidence === 'high' && (
                     <>This looks like a National RTAP GTFS Builder feed: that tool ships shapes.txt empty by default. </>
                   )}

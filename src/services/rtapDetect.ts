@@ -3,39 +3,38 @@
 // Excel-based tool widely used by rural/tribal transit agencies to produce
 // their first GTFS feed).
 //
-// TODO(rtap-fingerprint): CONFIRMED against a real sample (Skyline Bus / Big
-// Sky MT, National RTAP GTFS Builder export, pulled 2026-07-12 from
-// rapid.nationalrtap.org):
-//   - The feed contains NO literal "rtap" string anywhere (agency.txt,
-//     feed_info.txt, ids) — it is entirely agency-branded. A pure string
-//     match on "rtap"/"National RTAP" MISSES real exports; see below for why
-//     the string checks are kept anyway.
-//   - shapes.txt is PRESENT with a header row but ZERO data rows (the tool
-//     omits geometry by leaving the file empty, not by leaving the file out).
-//     trips.txt has a shape_id column with every value blank.
-//   - Every .txt file starts with a UTF-8 BOM (EF BB BF) — an Excel-export
-//     tell. PapaParse strips this from parsed field names, so it can only be
-//     captured from the raw pre-parse text (done in gtfsParse.ts; see
-//     BuilderSignals there).
-//   - routes/stops/stop_times/trips.txt all carry a fixed, full set of
-//     optional columns (route_desc, route_sort_order, stop_desc, zone_id,
-//     platform_code, stop_headsign, continuous_pickup/drop_off, timepoint,
-//     block_id, wheelchair_accessible, bikes_allowed, …) as headers whether
-//     populated or not — consistent with a spreadsheet template.
-// STILL OPEN (only one sample in hand — don't over-index on it):
-//   - Is the BOM + empty-shapes + full-column-set combination distinctive to
-//     THIS tool, or common to Excel-based GTFS builders generally (there are
-//     several)? We can't tell from n=1. Treat the structural match as "looks
-//     like a spreadsheet/GTFS-Builder-style export," never as "is RTAP."
-//   - Column ORDER and any id-naming convention weren't compared against a
-//     second sample — don't add an order-sensitive check without one.
-//   - Whether feed_publisher_name/url or agency_url ever DOES contain an
-//     RTAP self-identification in some other agency's export (the Skyline
-//     sample didn't, but a different agency's data-entry habits might).
-// Get a second real sample before tightening or loosening any of this.
+// TODO(rtap-fingerprint): MEASURED against 251 real RTAP feeds + a 115-feed
+// non-RTAP control (catalog: gtfsx/handoffs/Feed Health Data/ntd_feed_health.csv;
+// every RTAP feed in the set is published under rapid.nationalrtap.org),
+// 2026-07. We previously shipped a content-based structural fingerprint (BOM +
+// header-only shapes.txt + a fixed full optional-column set, fit to a single
+// sample feed) — IT FAILED BADLY and was removed:
+//   - Sensitivity on the 96 RTAP feeds that actually needed shapes: 3/96 (3.1%).
+//   - has_bom:            RTAP 52/251 (21%)  |  control 8/115  (7%)
+//   - shapes_header_only: RTAP 94/251 (37%)  |  control 4/115  (3%)
+//   - all_optional_cols:  RTAP 43/251 (17%)  |  control 38/115 (33%)  ← ANTI-CORRELATED
+//     (ordinary feeds emit the full optional-column set TWICE as often as RTAP
+//     feeds do — mainly because platform_code is absent from 79% of RTAP
+//     exports. This signal points the WRONG WAY, it doesn't just fail to fire.)
+//   - Precision was perfect (0/115 false positives), but a 3%-recall detector
+//     built on one anti-correlated signal isn't worth keeping. The original
+//     sample (Skyline Bus / Big Sky MT) was 1 of only 3 feeds in 251 where all
+//     three structural signals happened to align — we overfit to n=1.
+// DO NOT re-add a content/structural fingerprint without measuring it against
+// a real multi-hundred-feed sample first. The lesson of the above isn't "try a
+// different combination of columns," it's "feed *content* doesn't reliably
+// distinguish GTFS Builder output from an ordinary small-agency feed."
+//
+// THE SIGNAL THAT ACTUALLY WORKS: every RTAP-built feed we've seen is
+// published at rapid.nationalrtap.org (or, for some older feeds,
+// demopro.nationalrtap.org) — that's a fact about PROVENANCE, not content, so
+// it's exact rather than inferred. See detectRtapFeed's sourceUrl param.
+// Known, accepted gap: a feed downloaded from that URL and then re-uploaded as
+// a bare ZIP (no URL in hand) is indistinguishable from any other feed at the
+// byte level — we do NOT claim RTAP in that case, and that's the honest answer
+// given what's actually knowable from the file alone.
 
 import type { FeedInfo, Agency } from '../types/gtfs';
-import type { BuilderSignals } from './gtfsParse';
 
 export interface RtapSignals {
   isRtap: boolean;
@@ -46,37 +45,60 @@ export interface RtapSignals {
 
 const NO_SIGNALS: RtapSignals = { isRtap: false, confidence: 'low', signals: [] };
 
+/** True when `hostname` is nationalrtap.org itself or any subdomain of it
+ *  (rapid., demopro., …). Compares the parsed URL host, not a raw substring
+ *  match, so a lookalike like "nationalrtap.org.evil.com" or
+ *  "notnationalrtap.org" can't spoof it. */
+function isNationalRtapHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return h === 'nationalrtap.org' || h.endsWith('.nationalrtap.org');
+}
+
 /**
- * Best-effort RTAP / "GTFS Builder"-style export detector. Combines two very
- * different kinds of evidence:
- *   1. An explicit textual self-identification ("National RTAP" / a
- *      nationalrtap.org URL) — unambiguous when present, but per the real
- *      sample above, RARELY present. High confidence.
- *   2. The structural signature confirmed on that same real sample (BOM on
- *      every core file + header-only shapes.txt + a fixed full set of
- *      optional columns). This identifies "looks like a spreadsheet/GTFS-
- *      Builder-style export," which is NOT provably unique to National RTAP —
- *      only ever 'low' confidence, and only fires when ALL THREE structural
- *      signals line up together (any one alone is far too common to mean
- *      anything: plenty of ordinary feeds have a BOM, or omit shapes, or
- *      happen to populate a lot of optional columns).
- *
- * This is acceptable specifically BECAUSE detectRtapFeed is copy-only: it
+ * Best-effort RTAP feed detector, exact where we can be and silent otherwise:
+ *   1. sourceUrl (where this feed was actually fetched from, if known) hosted
+ *      on nationalrtap.org or a subdomain — PROVENANCE, not an inference. High
+ *      confidence. This is the primary signal; see the TODO above for why a
+ *      content fingerprint was tried and abandoned.
+ *   2. An explicit textual self-identification ("National RTAP" / a
+ *      nationalrtap.org URL) inside feed_info.txt/agency.txt — high confidence
+ *      when present, but rare in practice (real RTAP exports are typically
+ *      entirely agency-branded).
+ *   3. A bare "rtap" or "gtfs builder" mention — low confidence, since both
+ *      are generic enough to false-positive.
+ * No signal (in particular: a bare ZIP upload with no known source URL, and no
+ * self-identifying string) → isRtap:false. We do NOT guess from feed content;
+ * see the TODO for exactly why that failed. This function is copy-only: it
  * never gates whether the shapes-from-stops fix is offered (feedNeedsShapes
  * does that on its own, from actual geometry), only how the offer is worded.
- * Getting the "looks like RTAP" line wrong costs nothing but a slightly-off
- * sentence; it never blocks or mis-fires the actual repair.
+ * Getting this wrong costs nothing but a slightly-off sentence.
  *
- * PURE. Absence of any signal is the overwhelmingly common case and should
- * read as "no basis to say so," not "confirmed not RTAP."
+ * PURE. Absence of any signal is the overwhelmingly common case (and, for a
+ * plain file upload, the only honest answer) — it should read as "no basis to
+ * say so," not "confirmed not RTAP."
  */
 export function detectRtapFeed(
   feedInfo: FeedInfo | null | undefined,
   agencies: Agency[],
-  builderSignals?: BuilderSignals | null,
+  sourceUrl?: string | null,
 ): RtapSignals {
   const signals: string[] = [];
   let high = false;
+
+  // Provenance: where did this feed actually come from? Parsed via URL() so a
+  // query string or lookalike domain can't spoof the host match. An invalid/
+  // relative sourceUrl just means "unknown," not a crash.
+  if (sourceUrl) {
+    try {
+      const host = new URL(sourceUrl).hostname;
+      if (isNationalRtapHost(host)) {
+        signals.push(`fetched from ${host}`);
+        high = true;
+      }
+    } catch {
+      // Not a parseable absolute URL — no provenance signal, not an error.
+    }
+  }
 
   // Candidate free-text fields to scan. feed_info.txt is the most likely spot
   // for a tool/publisher stamp; agency.txt is included because a small agency
@@ -94,9 +116,7 @@ export function detectRtapFeed(
 
   // High-confidence: an exact "National RTAP" phrase, or a URL whose host is
   // (or clearly is) RTAP's own domain — these are unambiguous mentions of the
-  // organization itself, not just the acronym. Kept even though the one real
-  // sample we have doesn't trigger it: it costs nothing, and will fire on
-  // feeds from agencies (or a tool version) that DO self-identify.
+  // organization itself, not just the acronym.
   for (const { label, value } of nameFields) {
     if (value && /national\s*rtap/i.test(value)) {
       signals.push(`${label} mentions "National RTAP"`);
@@ -120,20 +140,6 @@ export function detectRtapFeed(
       } else if (value && /gtfs\s*builder/i.test(value)) {
         signals.push(`${label} mentions "GTFS Builder"`);
       }
-    }
-  }
-
-  // Structural fallback — the signature that actually fires on real RTAP
-  // exports, since they carry no self-identifying string at all. Requires
-  // ALL THREE signals together (see doc comment); never raises confidence
-  // above 'low'.
-  if (builderSignals) {
-    const { hasUtf8Bom, shapesFileHeaderOnly, emitsAllOptionalColumns } = builderSignals;
-    if (hasUtf8Bom && shapesFileHeaderOnly && emitsAllOptionalColumns) {
-      signals.push(
-        'structural match: UTF-8 BOM + header-only shapes.txt + full optional-column set ' +
-        '(looks like a spreadsheet/GTFS-Builder-style export; not provably RTAP specifically)',
-      );
     }
   }
 

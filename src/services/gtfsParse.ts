@@ -111,33 +111,6 @@ export async function inspectGtfsZip(file: File): Promise<{
  * `rows` is set during stop_times parsing — the long pole on big feeds. */
 export type ImportProgress = (p: { phase: string; rows?: number }) => void;
 
-/**
- * Structural export-tool tells captured while parsing, alongside the actual
- * GTFS data. These identify a spreadsheet/"GTFS Builder"-style export in
- * general, not National RTAP specifically — see rtapDetect.ts, which is the
- * only consumer and treats them as copy-only, low-confidence signal.
- *
- * Captured HERE rather than derived later because two of them need the raw
- * pre-parse file text: PapaParse strips the UTF-8 BOM from field names before
- * we ever see a parsed row, and "file absent" vs. "file present with a header
- * but zero data rows" can't be told apart from a parsed row count alone.
- */
-export interface BuilderSignals {
-  /** Every core GTFS file we could read (agency/routes/stops/trips/
-   *  stop_times.txt) starts with a UTF-8 BOM (EF BB BF) — a common tell for
-   *  a spreadsheet/Excel CSV export rather than a hand- or script-authored one. */
-  hasUtf8Bom: boolean;
-  /** shapes.txt is PRESENT but parses to zero data rows — the specific
-   *  "shapes left blank" shape this tool produces when the optional
-   *  draw-shapes step is skipped, as opposed to omitting the file entirely. */
-  shapesFileHeaderOnly: boolean;
-  /** routes.txt / stops.txt / stop_times.txt / trips.txt all carry a fixed
-   *  checklist of optional, rarely-populated GTFS columns as HEADERS, whether
-   *  or not any row actually uses them — consistent with a template that
-   *  always emits its full column set rather than only what's populated. */
-  emitsAllOptionalColumns: boolean;
-}
-
 export async function importGtfsZip(file: File, onProgress?: ImportProgress): Promise<{
   agencies: Agency[];
   calendars: Calendar[];
@@ -167,7 +140,6 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
   fareTransferRules: FareTransferRule[];
   flexZones: FlexZone[];
   warnings: string[];
-  builderSignals: BuilderSignals;
 }> {
   const report: ImportProgress = onProgress ?? (() => {});
   report({ phase: 'Reading archive…' });
@@ -927,30 +899,6 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
     }
   }
 
-  // ── Builder-export structural signals (see BuilderSignals doc comment) ────
-  // Read off the raw pre-parse text captured above — cheap (no re-read of the
-  // zip) and purely additive; nothing above this point changes.
-  const coreTexts = [agencyText, routesText, stopsText, tripsText, stopTimesText].filter(
-    (t): t is string => t !== null,
-  );
-  const hasUtf8Bom = coreTexts.length > 0 && coreTexts.every((t) => t.charCodeAt(0) === 0xfeff);
-  // shapesMap is empty both when shapes.txt is absent and when it's present
-  // but header-only; shapesText !== null is what tells those two apart.
-  const shapesFileHeaderOnly = shapesText !== null && shapesMap.size === 0;
-  const headerFields = (text: string | null): Set<string> =>
-    new Set(text ? (Papa.parse(text, { header: true, skipEmptyLines: true, preview: 1 }).meta.fields ?? []) : []);
-  const OPTIONAL_COLUMN_CHECKLIST: Array<[string | null, string[]]> = [
-    [routesText, ['route_desc', 'route_url', 'route_sort_order', 'continuous_pickup', 'continuous_drop_off']],
-    [stopsText, ['stop_desc', 'zone_id', 'stop_url', 'stop_timezone', 'platform_code']],
-    [stopTimesText, ['stop_headsign', 'pickup_type', 'drop_off_type', 'continuous_pickup', 'continuous_drop_off', 'timepoint']],
-    [tripsText, ['trip_headsign', 'block_id', 'wheelchair_accessible', 'bikes_allowed']],
-  ];
-  const emitsAllOptionalColumns = OPTIONAL_COLUMN_CHECKLIST.every(([text, cols]) => {
-    const fields = headerFields(text);
-    return cols.every((c) => fields.has(c));
-  });
-  const builderSignals: BuilderSignals = { hasUtf8Bom, shapesFileHeaderOnly, emitsAllOptionalColumns };
-
   return {
     agencies, calendars, calendarDates,
     routes: routesWithoutFlex, shapes, stops,
@@ -960,7 +908,7 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
     fareAreas, stopAreas, fareNetworks, routeNetworks,
     timeframes, riderCategories, fareMedia,
     fareProducts, fareLegRules, fareTransferRules,
-    flexZones, warnings, builderSignals,
+    flexZones, warnings,
   };
 }
 

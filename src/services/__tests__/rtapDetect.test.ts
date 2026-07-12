@@ -1,9 +1,12 @@
 // Detector is intentionally conservative (see the TODO in rtapDetect.ts) —
 // these tests pin down "no signal → isRtap:false" as much as the positive
-// matches, since silence is the overwhelmingly common case.
+// matches, since silence is the overwhelmingly common case. A prior content-
+// based structural fingerprint was measured against 251 real RTAP feeds and
+// removed (3% sensitivity, one signal anti-correlated) — see the TODO for the
+// numbers. Detection is now keyed on the source URL (provenance) plus the
+// pre-existing free-text string checks.
 import { describe, expect, it } from 'vitest';
 import { detectRtapFeed } from '../rtapDetect';
-import type { BuilderSignals } from '../gtfsParse';
 import type { FeedInfo, Agency } from '../../types/gtfs';
 
 const AGENCY = (overrides: Partial<Agency> = {}): Agency => ({
@@ -20,25 +23,6 @@ const FEED_INFO = (overrides: Partial<FeedInfo> = {}): FeedInfo => ({
   feed_lang: 'en-US',
   ...overrides,
 });
-
-// The exact structural signature confirmed against a real National RTAP GTFS
-// Builder export (Skyline Bus / Big Sky MT — see rtapDetect.ts TODO): every
-// core file BOM-prefixed, shapes.txt present but zero data rows, and the full
-// optional-column checklist present as headers.
-const RTAP_STRUCTURAL_SIGNATURE: BuilderSignals = {
-  hasUtf8Bom: true,
-  shapesFileHeaderOnly: true,
-  emitsAllOptionalColumns: true,
-};
-
-// Mirrors tests/fixtures/sample-gtfs-feed: no BOM, real shape geometry, and
-// several optional columns (zone_id, continuous_pickup/drop_off, …) absent
-// entirely rather than present-but-empty.
-const ORDINARY_STRUCTURAL_SIGNATURE: BuilderSignals = {
-  hasUtf8Bom: false,
-  shapesFileHeaderOnly: false,
-  emitsAllOptionalColumns: false,
-};
 
 describe('detectRtapFeed', () => {
   it('defaults to isRtap:false with no signals when nothing is RTAP-branded', () => {
@@ -58,7 +42,7 @@ describe('detectRtapFeed', () => {
     expect(result.signals.length).toBeGreaterThan(0);
   });
 
-  it('flags high confidence on a nationalrtap.org URL', () => {
+  it('flags high confidence on a nationalrtap.org URL in feed_publisher_url', () => {
     const result = detectRtapFeed(FEED_INFO({ feed_publisher_url: 'https://www.nationalrtap.org/gtfs' }), []);
     expect(result.isRtap).toBe(true);
     expect(result.confidence).toBe('high');
@@ -88,49 +72,70 @@ describe('detectRtapFeed', () => {
     expect(result.isRtap).toBe(false);
   });
 
-  // ── Structural signature (real RTAP sample had NO string mention at all) ──
-  describe('structural fallback', () => {
-    it('fires low confidence on the confirmed RTAP structural signature even with zero string mentions', () => {
-      // Mirrors the real Skyline Bus (Big Sky, MT) National RTAP GTFS Builder
-      // export: fully agency-branded feed_info/agency.txt, no "rtap" string
-      // anywhere, shapes.txt present-but-empty.
+  // ── sourceUrl provenance — the primary signal now that the content
+  // fingerprint has been retired (measured at 3% sensitivity; see the TODO) ──
+  describe('sourceUrl provenance', () => {
+    it('flags high confidence for a rapid.nationalrtap.org source URL', () => {
       const result = detectRtapFeed(
-        FEED_INFO({ feed_publisher_name: 'Skyline Bus', feed_publisher_url: 'https://skylinebus.com/' }),
-        [AGENCY({ agency_name: 'Skyline Bus', agency_url: 'https://skylinebus.com/' })],
-        RTAP_STRUCTURAL_SIGNATURE,
-      );
-      expect(result.isRtap).toBe(true);
-      expect(result.confidence).toBe('low');
-    });
-
-    it('does not fire on an ordinary feed\'s structural signature (negative control)', () => {
-      const result = detectRtapFeed(FEED_INFO(), [AGENCY()], ORDINARY_STRUCTURAL_SIGNATURE);
-      expect(result).toEqual({ isRtap: false, confidence: 'low', signals: [] });
-    });
-
-    it('does not fire when builderSignals is omitted entirely', () => {
-      const result = detectRtapFeed(FEED_INFO(), [AGENCY()]);
-      expect(result.isRtap).toBe(false);
-    });
-
-    it.each([
-      ['missing BOM', { hasUtf8Bom: false, shapesFileHeaderOnly: true, emitsAllOptionalColumns: true }],
-      ['missing header-only shapes.txt', { hasUtf8Bom: true, shapesFileHeaderOnly: false, emitsAllOptionalColumns: true }],
-      ['missing full optional-column set', { hasUtf8Bom: true, shapesFileHeaderOnly: true, emitsAllOptionalColumns: false }],
-    ])('requires all three structural signals together — %s alone does not fire', (_label, partial) => {
-      const result = detectRtapFeed(FEED_INFO(), [AGENCY()], partial as BuilderSignals);
-      expect(result.isRtap).toBe(false);
-    });
-
-    it('keeps high confidence when both a string match and the structural signature are present', () => {
-      const result = detectRtapFeed(
-        FEED_INFO({ feed_publisher_name: 'National RTAP' }),
-        [],
-        RTAP_STRUCTURAL_SIGNATURE,
+        FEED_INFO(),
+        [AGENCY()],
+        'http://rapid.nationalrtap.org/GTFSFileManagement/UserUploadFiles/11497/Skyline_GTFS.zip',
       );
       expect(result.isRtap).toBe(true);
       expect(result.confidence).toBe('high');
-      expect(result.signals.length).toBeGreaterThan(1);
+    });
+
+    it('flags high confidence for a demopro.nationalrtap.org source URL (older feeds)', () => {
+      const result = detectRtapFeed(FEED_INFO(), [AGENCY()], 'https://demopro.nationalrtap.org/some/feed.zip');
+      expect(result.isRtap).toBe(true);
+      expect(result.confidence).toBe('high');
+    });
+
+    it('flags high confidence for the bare apex domain', () => {
+      const result = detectRtapFeed(FEED_INFO(), [AGENCY()], 'https://nationalrtap.org/feed.zip');
+      expect(result.isRtap).toBe(true);
+      expect(result.confidence).toBe('high');
+    });
+
+    it('does NOT match a lookalike host that merely contains the domain as a substring', () => {
+      // Proves the host is parsed via URL(), not string-matched — a suffix
+      // like ".evil.com" after "nationalrtap.org" must not count.
+      const result = detectRtapFeed(FEED_INFO(), [AGENCY()], 'https://nationalrtap.org.evil.com/feed.zip');
+      expect(result.isRtap).toBe(false);
+    });
+
+    it('does NOT match a lookalike host that merely shares a suffix', () => {
+      // "notnationalrtap.org" is NOT a subdomain of nationalrtap.org.
+      const result = detectRtapFeed(FEED_INFO(), [AGENCY()], 'https://notnationalrtap.org/feed.zip');
+      expect(result.isRtap).toBe(false);
+    });
+
+    it('does not fire on an arbitrary, unrelated agency/hosting URL', () => {
+      const result = detectRtapFeed(FEED_INFO(), [AGENCY()], 'https://files.mobilitydatabase.org/some-feed.zip');
+      expect(result.isRtap).toBe(false);
+    });
+
+    it('does not throw and does not fire on a malformed/relative sourceUrl', () => {
+      expect(() => detectRtapFeed(FEED_INFO(), [AGENCY()], 'not-a-url')).not.toThrow();
+      expect(detectRtapFeed(FEED_INFO(), [AGENCY()], 'not-a-url').isRtap).toBe(false);
+    });
+
+    it('does not fire when sourceUrl is undefined/null and the feed carries no RTAP string', () => {
+      // This is the real Skyline Bus / Big Sky MT sample: an actual National
+      // RTAP GTFS Builder export that mentions "rtap" NOWHERE in its data. For
+      // a bare ZIP upload (no known source URL) this is the honest, correct
+      // answer — we cannot tell RTAP provenance from bytes alone.
+      const skylineFeedInfo = FEED_INFO({
+        feed_publisher_name: 'Skyline Bus',
+        feed_publisher_url: 'https://skylinebus.com/',
+      });
+      const skylineAgency = [AGENCY({ agency_name: 'Skyline Bus', agency_url: 'https://skylinebus.com/' })];
+      expect(detectRtapFeed(skylineFeedInfo, skylineAgency, undefined)).toEqual({
+        isRtap: false, confidence: 'low', signals: [],
+      });
+      expect(detectRtapFeed(skylineFeedInfo, skylineAgency, null)).toEqual({
+        isRtap: false, confidence: 'low', signals: [],
+      });
     });
   });
 });

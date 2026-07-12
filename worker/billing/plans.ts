@@ -103,11 +103,6 @@ export const PLAN_CATALOG: PlanCatalogEntry[] = [
       'Validate against the GTFS spec as you work',
       'Import an existing feed or start from scratch (no signup required)',
       'Export a spec-clean GTFS .zip and host it anywhere',
-      'GeoJSON export of routes and stops (GIS-ready)',
-      'Up to 3 saved feeds in the cloud',
-      'Nationwide demand-propensity map',
-      'System-level cost and coverage summary',
-      'Community support',
     ],
   },
   {

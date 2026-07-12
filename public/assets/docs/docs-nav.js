@@ -50,6 +50,7 @@
       pages: [
         { path: '/docs/cost-estimation/',      title: 'Cost Estimation' },
         { path: '/docs/demographic-coverage/', title: 'Demographic Coverage' },
+        { path: '/docs/access-isochrones/',    title: 'Transit Access Isochrones' },
         { path: '/docs/stop-analysis/',        title: 'Stop Analysis' },
         { path: '/docs/title-vi-analysis/',    title: 'Title VI Analysis' },
         { path: '/docs/scenario-analysis/',    title: 'Route Visibility' },

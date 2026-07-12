@@ -17,6 +17,7 @@ export type ErrorCode =
   | 'token_invalid'
   | 'token_expired'
   | 'rt_breakage'
+  | 'agency_id_churn'
   | 'bad_gateway'
   | 'payment_required'
   | 'internal';
@@ -48,6 +49,20 @@ export const tokenInvalid = () => new ApiError(400, 'token_invalid', 'Invalid or
 export const tokenExpired = () => new ApiError(400, 'token_expired', 'This link has expired — please request a new one');
 export const rtBreakage = (extra?: Record<string, unknown>) =>
   new ApiError(409, 'rt_breakage', 'Publishing this version will break your GTFS-Realtime feed', extra);
+// agency_id churn (C2). Unlike rt_breakage this fires for EVERY project, RT or
+// not: FTA's enhanced P-50 form crosswalks a published feed to its NTD ID by
+// agency_id, so dropping/renaming an agency_id silently breaks the NTD
+// crosswalk (and any consumer keyed on agency_id). Non-blocking — the caller
+// acknowledges with ignoreAgencyChurn.
+export const agencyIdChurn = (extra?: Record<string, unknown>) =>
+  new ApiError(
+    409,
+    'agency_id_churn',
+    'This snapshot removes or renames agency_id values that are in your published feed. ' +
+      "FTA's P-50 NTD crosswalk — and any consumer keyed on agency_id — is matched on those IDs " +
+      'and will break. Keep the existing agency_id values, or publish anyway to accept the churn.',
+    extra,
+  );
 export const badGateway = (msg = 'Upstream service error', extra?: Record<string, unknown>) =>
   new ApiError(502, 'bad_gateway', msg, extra);
 export const paymentRequired = (msg: string, extra?: Record<string, unknown>) =>

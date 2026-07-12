@@ -5,6 +5,7 @@
 // Supported routes:
 //   GET /<slug>/gtfs.zip               canonical published feed
 //   GET /<slug>/feed_info.json         sidecar metadata (BE-74)
+//   GET /<slug>/dmfr.json              DMFR v0.5.1 registry document (NTD crosswalk)
 //   GET /<slug>/draft/<token>.zip      unlisted review URL (BE-60)
 //   GET /robots.txt                    disallow everything (feeds aren't for crawling)
 //
@@ -17,6 +18,7 @@ import type { Env } from '../env';
 import { sha256Hex } from '../util/crypto';
 import { getFeedBlob, thumbnailKey, FALLBACK_THUMBNAIL_KEY, type ThumbnailSize } from '../projects/r2';
 import { ungzip } from './ungzip';
+import { buildDmfrDocument, stopCentroid } from './dmfr';
 import { renderRouteEmbed } from '../embeds/route';
 import { renderSystemMapEmbed } from '../embeds/systemMap';
 import { renderStopEmbed } from '../embeds/stop';
@@ -37,6 +39,10 @@ interface PublicationRow {
   slug: string; // from feed_project
   name: string;
   description: string | null;
+  // NTD ID projection written at publish time (migration 0024). String — NTD
+  // IDs have significant leading zeros.
+  ntd_id: string | null;
+  license_spdx: string | null;
   state_r2_key: string; // from feed_snapshot (for sidecar)
 }
 
@@ -86,7 +92,7 @@ function etagMatches(ifNoneMatch: string | null, etag: string): boolean {
 async function loadPublication(env: Env, slug: string): Promise<PublicationRow | null> {
   return env.DB.prepare(
     `SELECT pub.project_id, pub.snapshot_id, pub.published_at, pub.canonical_slug, pub.zip_r2_key,
-            p.slug, p.name, p.description,
+            p.slug, p.name, p.description, p.ntd_id, p.license_spdx,
             v.state_r2_key
        FROM publication pub
        JOIN feed_project p ON p.id = pub.project_id
@@ -169,6 +175,7 @@ export async function loadPublishedZipBytes(
 
 const CANONICAL_RE = /^\/([a-z0-9][a-z0-9-]*)\/gtfs\.zip$/;
 const FEED_INFO_RE = /^\/([a-z0-9][a-z0-9-]*)\/feed_info\.json$/;
+const DMFR_RE = /^\/([a-z0-9][a-z0-9-]*)\/dmfr\.json$/;
 const ALERTS_PB_RE = /^\/([a-z0-9][a-z0-9-]*)\/alerts\.pb$/;
 const ALERTS_JSON_RE = /^\/([a-z0-9][a-z0-9-]*)\/alerts\.json$/;
 const DRAFT_RE = /^\/([a-z0-9][a-z0-9-]*)\/draft\/([A-Za-z0-9_-]+)\.zip$/;
@@ -265,6 +272,10 @@ export async function feedsHandler(
   const info = url.pathname.match(FEED_INFO_RE);
   if (info) {
     return serveFeedInfo(env, info[1]);
+  }
+  const dmfr = url.pathname.match(DMFR_RE);
+  if (dmfr) {
+    return serveDmfr(env, dmfr[1]);
   }
   const alertsPb = url.pathname.match(ALERTS_PB_RE);
   if (alertsPb) {
@@ -528,16 +539,22 @@ async function serveFeedInfo(env: Env, slug: string): Promise<Response> {
   const description = pub.description ?? '';
   let feedStart: string | undefined;
   let feedEnd: string | undefined;
+  // The editor's feed state is the source of truth for ntdId; the feed_project
+  // column is a projection written at publish. Prefer the snapshot, fall back
+  // to the projection (e.g. a snapshot saved before ntdId existed).
+  let ntdId: string | null = pub.ntd_id;
   try {
     const stateObj = await getFeedBlob(env, pub.state_r2_key);
     if (stateObj) {
       const text = await ungzip(stateObj.body);
       const parsed = JSON.parse(text) as {
         feedInfo?: { feed_publisher_name?: string; feed_start_date?: string; feed_end_date?: string };
+        ntdId?: unknown;
       };
       if (parsed.feedInfo?.feed_publisher_name) feedTitle = parsed.feedInfo.feed_publisher_name;
       feedStart = parsed.feedInfo?.feed_start_date;
       feedEnd = parsed.feedInfo?.feed_end_date;
+      if (typeof parsed.ntdId === 'string' && parsed.ntdId.trim() !== '') ntdId = parsed.ntdId.trim();
     }
   } catch {
     // Best-effort — fall back to DB name/description.
@@ -563,7 +580,7 @@ async function serveFeedInfo(env: Env, slug: string): Promise<Response> {
   }
 
   const zipUrl = `${env.FEEDS_ORIGIN.replace(/\/$/, '')}/${pub.canonical_slug}/gtfs.zip`;
-  const body = {
+  const body: Record<string, unknown> = {
     feed_title: feedTitle,
     description,
     feed_start_date: feedStart,
@@ -574,12 +591,74 @@ async function serveFeedInfo(env: Env, slug: string): Promise<Response> {
     distribution,
     rt_feeds: (rtRows.results ?? []).map((r) => ({ kind: r.kind, url: r.url })),
   };
+  // Omit these keys entirely when unset — a consumer crosswalking feeds to NTD
+  // IDs should see "absent", not an explicit null.
+  if (ntdId) body.ntd_id = ntdId; // string; leading zeros intact
+  if (pub.license_spdx) body.license_spdx_identifier = pub.license_spdx;
 
   return new Response(JSON.stringify(body, null, 2), {
     status: 200,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+    },
+  });
+}
+
+// ─── dmfr.json (Distributed Mobility Feed Registry v0.5.1) ─────────────────────
+//
+// A registry-ready document a publisher can hand straight to Transitland / the
+// Mobility Database, carrying the FTA NTD crosswalk (operator.tags.us_ntd_id)
+// that the withdrawn "agency_id must equal the NTD ID" rule would have forced
+// into the feed itself. Document shape + the Onestop-ID judgment call are
+// documented in worker/publication/dmfr.ts.
+
+async function serveDmfr(env: Env, slug: string): Promise<Response> {
+  const pub = await loadPublication(env, slug);
+  if (!pub) return notFound();
+
+  let feedTitle = pub.name;
+  let ntdId: string | null = pub.ntd_id;
+  let centroid: { lat: number; lon: number } | null = null;
+  try {
+    const stateObj = await getFeedBlob(env, pub.state_r2_key);
+    if (stateObj) {
+      const text = await ungzip(stateObj.body);
+      const parsed = JSON.parse(text) as {
+        feedInfo?: { feed_publisher_name?: string };
+        ntdId?: unknown;
+        stops?: Array<{ stop_lat?: unknown; stop_lon?: unknown }>;
+      };
+      if (parsed.feedInfo?.feed_publisher_name) feedTitle = parsed.feedInfo.feed_publisher_name;
+      if (typeof parsed.ntdId === 'string' && parsed.ntdId.trim() !== '') ntdId = parsed.ntdId.trim();
+      centroid = stopCentroid(parsed.stops);
+    }
+  } catch {
+    // Best-effort — the DB name + projection are enough for a valid document.
+  }
+
+  const rtRows = await env.DB.prepare(`SELECT kind, url FROM project_rt_feed WHERE project_id = ?`)
+    .bind(pub.project_id)
+    .all<{ kind: string; url: string }>();
+
+  const doc = buildDmfrDocument({
+    slug: pub.canonical_slug,
+    feedsOrigin: env.FEEDS_ORIGIN,
+    feedTitle,
+    description: pub.description,
+    ntdId,
+    licenseSpdx: pub.license_spdx,
+    rtFeeds: rtRows.results ?? [],
+    centroid,
+  });
+
+  return new Response(JSON.stringify(doc, null, 2), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+      // Registry tooling and browser-based validators fetch this cross-origin.
+      'Access-Control-Allow-Origin': '*',
     },
   });
 }

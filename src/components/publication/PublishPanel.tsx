@@ -19,6 +19,20 @@ import { ApiError } from '../../services/authApi';
 import { exportGtfsZip } from '../../services/gtfsExport';
 import { applySnapshotToStore, buildSnapshot } from '../../db/serverPersistence';
 import { DraftLinksSection, toEditorDeepLink } from './DraftLinksPanel';
+import { NtdP50Panel } from './NtdP50Panel';
+
+// SPDX identifiers publishers actually use for open transit data. "Leave unset"
+// is a first-class choice — we never guess a license on someone's behalf.
+const LICENSE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '', label: 'Not specified' },
+  { value: 'CC0-1.0', label: 'CC0 1.0 — public domain dedication' },
+  { value: 'CC-BY-4.0', label: 'CC BY 4.0 — attribution' },
+  { value: 'ODbL-1.0', label: 'ODbL 1.0 — open database, share-alike' },
+];
+
+// NTD IDs are 1–5 digit strings; leading zeros are significant, so this is a
+// string test, never a numeric one.
+const NTD_ID_RE = /^[0-9]{1,5}$/;
 
 // Env-aware public feeds origin (mirrors EmbedPanel): staging publishes to
 // staging-feeds.gtfsx.com, prod to feeds.gtfsx.com. Used for the canonical-URL
@@ -81,6 +95,12 @@ interface RemovedIds {
   trips?: string[];
 }
 
+/** Acknowledgements the user has already given for this publish attempt. */
+interface IgnoreFlags {
+  ignoreRtBreakage?: boolean;
+  ignoreAgencyChurn?: boolean;
+}
+
 export function PublishPanel() {
   const projectId = useStore((s) => s.activeServerProjectId);
   const snapshotList = useStore((s) => s.snapshotList);
@@ -89,6 +109,11 @@ export function PublishPanel() {
   const currentPublication = useStore((s) => s.currentPublication);
   const setPublicationHistory = useStore((s) => s.setPublicationHistory);
   const setCurrentPublication = useStore((s) => s.setCurrentPublication);
+  // NTD ID lives in the editor's feed state (the source of truth) — the server
+  // column is only a projection written at publish. String, never a number.
+  const ntdId = useStore((s) => s.ntdId);
+  const setNtdId = useStore((s) => s.setNtdId);
+  const feedsProjects = useStore((s) => s.feedsProjects);
 
   const [loading, setLoading] = useState(false);
   const [banner, setBanner] = useState<Banner | null>(null);
@@ -96,13 +121,28 @@ export function PublishPanel() {
   const [ignoreWarnings, setIgnoreWarnings] = useState(false);
   const [busy, setBusy] = useState(false);
   const [unpublishConfirm, setUnpublishConfirm] = useState(false);
-  const [rtBreakage, setRtBreakage] = useState<{ removed: RemovedIds; snapshotId: string } | null>(
-    null,
-  );
+  const [rtBreakage, setRtBreakage] = useState<{
+    removed: RemovedIds;
+    snapshotId: string;
+    flags: IgnoreFlags;
+  } | null>(null);
+  const [agencyChurn, setAgencyChurn] = useState<{
+    agencies: string[];
+    snapshotId: string;
+    flags: IgnoreFlags;
+  } | null>(null);
   const [publishErrors, setPublishErrors] = useState<string[] | null>(null);
   const [scheduled, setScheduled] = useState<ScheduledPublishInfo | null>(null);
   const [scheduleMode, setScheduleMode] = useState(false);
   const [scheduleAt, setScheduleAt] = useState('');
+  // The license isn't editor feed-state (it describes the *publication*), so it
+  // is seeded from the server's project row rather than the store.
+  const activeProject = feedsProjects.find((p) => p.id === projectId) ?? null;
+  const serverLicense = activeProject?.licenseSpdx ?? '';
+  const [licenseSpdx, setLicenseSpdx] = useState(serverLicense);
+  useEffect(() => {
+    setLicenseSpdx(serverLicense);
+  }, [serverLicense]);
 
   const refresh = useCallback(async () => {
     if (!projectId) return;
@@ -146,32 +186,45 @@ export function PublishPanel() {
     );
   }
 
-  const handlePublish = async () => {
-    if (!selectedSnapshot || !projectId) return;
+  // One publish path for every entry point (fresh publish, "publish anyway"
+  // after an rt_breakage ack, "publish anyway" after an agency_id_churn ack).
+  // `flags` carries the acknowledgements accumulated so far, so acking one
+  // warning and then tripping the other keeps the first ack.
+  const doPublish = async (snapshotId: string, flags: IgnoreFlags, successMessage: string) => {
+    if (!projectId) return;
     setBusy(true);
     setBanner(null);
     setPublishErrors(null);
     setRtBreakage(null);
+    setAgencyChurn(null);
     try {
-      const zip = await renderSnapshotZip(projectId, selectedSnapshot.id);
+      const zip = await renderSnapshotZip(projectId, snapshotId);
       const result = await publishProject(projectId, {
-        snapshotId: selectedSnapshot.id,
-        ignoreWarnings: selectedSnapshot.validationWarnings > 0 ? ignoreWarnings : undefined,
+        snapshotId,
+        ignoreWarnings: ignoreWarnings || undefined,
+        ...flags,
+        // Project the feed's NTD ID + license onto the publication so
+        // feed_info.json and dmfr.json can carry the FTA NTD crosswalk.
+        ntdId: ntdId ?? null,
+        licenseSpdx: licenseSpdx || null,
         zip,
       });
       setBanner({
         kind: 'success',
-        message: 'Feed published.',
+        message: successMessage,
         url: result.publication.canonicalUrl,
       });
       setIgnoreWarnings(false);
       await refresh();
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.code === ('rt_breakage' as typeof err.code)) {
-          const removed = (err.extra?.removed ?? {}) as RemovedIds;
-          setRtBreakage({ removed, snapshotId: selectedSnapshot.id });
-        } else if (err.code === 'validation_failed') {
+        const code = err.code as string;
+        const removed = (err.extra?.removed ?? {}) as RemovedIds;
+        if (code === 'rt_breakage') {
+          setRtBreakage({ removed, snapshotId, flags });
+        } else if (code === 'agency_id_churn') {
+          setAgencyChurn({ agencies: removed.agencies ?? [], snapshotId, flags });
+        } else if (code === 'validation_failed') {
           const issues = (err.extra?.issues as unknown[]) ?? [];
           const errList: string[] = [err.message];
           if (Array.isArray(issues)) {
@@ -192,32 +245,27 @@ export function PublishPanel() {
     }
   };
 
+  const handlePublish = async () => {
+    if (!selectedSnapshot) return;
+    await doPublish(selectedSnapshot.id, {}, 'Feed published.');
+  };
+
   const handlePublishIgnoringRt = async () => {
-    if (!rtBreakage || !projectId) return;
-    const snapshotId = rtBreakage.snapshotId;
-    setBusy(true);
-    try {
-      const zip = await renderSnapshotZip(projectId, snapshotId);
-      const result = await publishProject(projectId, {
-        snapshotId,
-        ignoreWarnings: ignoreWarnings || undefined,
-        ignoreRtBreakage: true,
-        zip,
-      });
-      setRtBreakage(null);
-      setBanner({
-        kind: 'success',
-        message: 'Feed published. GTFS-RT breakage acknowledged.',
-        url: result.publication.canonicalUrl,
-      });
-      await refresh();
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Publish failed';
-      setBanner({ kind: 'error', message: msg });
-      setRtBreakage(null);
-    } finally {
-      setBusy(false);
-    }
+    if (!rtBreakage) return;
+    await doPublish(
+      rtBreakage.snapshotId,
+      { ...rtBreakage.flags, ignoreRtBreakage: true },
+      'Feed published. GTFS-RT breakage acknowledged.',
+    );
+  };
+
+  const handlePublishIgnoringChurn = async () => {
+    if (!agencyChurn) return;
+    await doPublish(
+      agencyChurn.snapshotId,
+      { ...agencyChurn.flags, ignoreAgencyChurn: true },
+      'Feed published. agency_id change acknowledged — update your NTD P-50 crosswalk.',
+    );
   };
 
   const handleUnpublish = async () => {
@@ -249,7 +297,14 @@ export function PublishPanel() {
         // If no stored ZIP for that snapshot, fall back to re-rendering + multipart.
         if (err instanceof ApiError && err.code === 'validation_failed') {
           const zip = await renderSnapshotZip(projectId, snapshotId);
-          result = await publishProject(projectId, { snapshotId, ignoreWarnings: true, zip });
+          // Restoring a previously-published snapshot is itself the
+          // acknowledgement — don't re-prompt for agency_id churn here.
+          result = await publishProject(projectId, {
+            snapshotId,
+            ignoreWarnings: true,
+            ignoreAgencyChurn: true,
+            zip,
+          });
         } else {
           throw err;
         }
@@ -325,9 +380,16 @@ export function PublishPanel() {
   };
 
   const currentPubSnapshotId = currentPublication?.snapshotId ?? null;
+  // The server rejects a malformed NTD ID (422); catch it here so the user
+  // isn't told about it only after a full ZIP render + upload.
+  const ntdIdInvalid = !!ntdId && !NTD_ID_RE.test(ntdId);
+  const canonicalUrl =
+    currentPublication?.canonicalUrl ??
+    (currentPublication && activeProject ? `${FEEDS_ORIGIN}/${activeProject.slug}/gtfs.zip` : null);
   const publishDisabled =
     !selectedSnapshot ||
     busy ||
+    ntdIdInvalid ||
     (selectedSnapshot.validationErrors ?? 0) > 0 ||
     selectedSnapshot.id === currentPubSnapshotId ||
     ((selectedSnapshot.validationWarnings ?? 0) > 0 && !ignoreWarnings);
@@ -460,6 +522,76 @@ export function PublishPanel() {
                 </div>
               )}
 
+              {/* Feed identity — travels with the publication into feed_info.json
+                  and the DMFR document (feeds.gtfsx.com/<slug>/dmfr.json), which
+                  is what carries the NTD crosswalk into Transitland / the
+                  Mobility Database. Both optional. */}
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label
+                    htmlFor="publish-ntd-id"
+                    className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1"
+                  >
+                    NTD ID <span className="normal-case font-normal">(optional)</span>
+                  </label>
+                  <input
+                    id="publish-ntd-id"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    maxLength={5}
+                    placeholder="e.g. 00123"
+                    value={ntdId ?? ''}
+                    onChange={(e) => setNtdId(e.target.value)}
+                    className={`w-full px-3 py-2 border-2 rounded-lg bg-cream text-sm text-dark-brown font-mono focus:outline-none focus:bg-white ${
+                      ntdIdInvalid ? 'border-red-300 focus:border-red-400' : 'border-sand focus:border-coral'
+                    }`}
+                  />
+                  {ntdIdInvalid ? (
+                    <p className="mt-1 text-[11px] text-red-600">
+                      NTD IDs are 1–5 digits. Keep any leading zeros — they're part of the ID.
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-warm-gray">
+                      US agencies: your five-digit National Transit Database ID. Look it up at{' '}
+                      <a
+                        href="https://www.transit.dot.gov/ntd"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-coral hover:underline"
+                      >
+                        transit.dot.gov/ntd
+                      </a>
+                      .
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="publish-license"
+                    className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1"
+                  >
+                    Feed license <span className="normal-case font-normal">(optional)</span>
+                  </label>
+                  <select
+                    id="publish-license"
+                    value={licenseSpdx}
+                    onChange={(e) => setLicenseSpdx(e.target.value)}
+                    className="w-full px-3 py-2 border-2 border-sand rounded-lg bg-cream text-sm text-dark-brown focus:outline-none focus:border-coral focus:bg-white"
+                  >
+                    {LICENSE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[11px] text-warm-gray">
+                    SPDX identifier. Published in your feed's metadata so reusers know the terms.
+                  </p>
+                </div>
+              </div>
+
               <label className="mt-4 flex items-center gap-2 text-xs text-dark-brown cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -504,6 +636,8 @@ export function PublishPanel() {
         </section>
 
         <DraftLinksSection projectId={projectId} snapshotList={snapshotList} setBanner={setBanner} />
+
+        {currentPublication && <NtdP50Panel canonicalUrl={canonicalUrl} />}
 
         <section className="bg-white border border-sand rounded-xl p-4">
           <h3 className="font-heading font-bold text-base text-dark-brown mb-3">
@@ -578,6 +712,15 @@ export function PublishPanel() {
           busy={busy}
           onCancel={() => setRtBreakage(null)}
           onConfirm={handlePublishIgnoringRt}
+        />
+      )}
+
+      {agencyChurn && (
+        <AgencyChurnModal
+          agencies={agencyChurn.agencies}
+          busy={busy}
+          onCancel={() => setAgencyChurn(null)}
+          onConfirm={handlePublishIgnoringChurn}
         />
       )}
 
@@ -822,6 +965,68 @@ function RtBreakageModal({
               </div>
             ) : null,
           )}
+        </div>
+        <div className="flex justify-end gap-2 mt-4">
+          <AuthButton variant="secondary" onClick={onCancel} disabled={busy}>
+            Cancel
+          </AuthButton>
+          <AuthButton variant="danger" onClick={onConfirm} disabled={busy}>
+            {busy ? 'Publishing…' : 'Publish anyway'}
+          </AuthButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// agency_id churn (409 agency_id_churn). Same acknowledge-and-proceed shape as
+// RtBreakageModal, but a different failure: FTA's P-50 form crosswalks a
+// published feed to its NTD ID by agency_id, so dropping or renaming one breaks
+// the NTD crosswalk even for feeds with no GTFS-Realtime at all.
+function AgencyChurnModal({
+  agencies,
+  onCancel,
+  onConfirm,
+  busy,
+}: {
+  agencies: string[];
+  onCancel: () => void;
+  onConfirm: () => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-50">
+      <div className="absolute inset-0 bg-black/20" onClick={onCancel} />
+      <div className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-lg mx-4">
+        <h3 className="font-heading font-bold text-lg text-dark-brown mb-2">
+          agency_id changed — this breaks your NTD crosswalk
+        </h3>
+        <p className="text-sm text-warm-gray mb-4">
+          These <code className="font-mono">agency_id</code> values are in your published feed but
+          not in the snapshot you're about to publish. FTA's enhanced P-50 form matches your feed to
+          your National Transit Database ID by <code className="font-mono">agency_id</code>, and any
+          downstream consumer keyed on it (trip planners, analytics, your own RT producer) will lose
+          the link too.
+        </p>
+        <p className="text-sm text-warm-gray mb-4">
+          The safe fix is to keep the existing <code className="font-mono">agency_id</code> values
+          and change <code className="font-mono">agency_name</code> instead. If the change is
+          intentional, publish anyway — then refile your P-50 with the new IDs.
+        </p>
+        <div className="max-h-48 overflow-auto bg-cream border border-sand rounded-md p-3 text-xs font-mono text-dark-brown">
+          <div className="font-heading font-bold text-warm-gray uppercase tracking-wide text-[10px] mb-1">
+            Removed agency_id ({agencies.length})
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {agencies.slice(0, 50).map((id) => (
+              <span key={id} className="bg-white px-1.5 py-0.5 rounded border border-sand">
+                {id}
+              </span>
+            ))}
+            {agencies.length > 50 && (
+              <span className="text-warm-gray">… and {agencies.length - 50} more</span>
+            )}
+          </div>
         </div>
         <div className="flex justify-end gap-2 mt-4">
           <AuthButton variant="secondary" onClick={onCancel} disabled={busy}>

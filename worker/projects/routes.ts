@@ -61,6 +61,11 @@ interface ProjectRow {
   updated_at: number;
   brand_primary_color: string | null;
   locked: number;
+  // NTD ID projection (migration 0024). The editor's feed state is the source
+  // of truth; this column is written at publish time. TEXT — NTD IDs are
+  // 5-digit strings with significant leading zeros, never numbers.
+  ntd_id: string | null;
+  license_spdx: string | null;
   thumbnail_version?: number | null;
 }
 
@@ -111,6 +116,9 @@ function shapeProject(row: ProjectRow) {
     updatedAt: row.updated_at,
     brandPrimaryColor: row.brand_primary_color,
     locked: row.locked === 1,
+    // Always a string (or null) — never parsed as a number.
+    ntdId: row.ntd_id ?? null,
+    licenseSpdx: row.license_spdx ?? null,
   };
 }
 
@@ -170,7 +178,8 @@ export async function requireOwnedProject(
   const row = await env.DB.prepare(
     `SELECT id, slug, name, description, owner_type, owner_id,
             working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
-            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked,
+            ntd_id, license_spdx
        FROM feed_project WHERE id = ?`,
   )
     .bind(projectId)
@@ -316,7 +325,8 @@ projectsRouter.post('/', async (c) => {
   const row = await c.env.DB.prepare(
     `SELECT id, slug, name, description, owner_type, owner_id,
             working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
-            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked,
+            ntd_id, license_spdx
        FROM feed_project WHERE id = ?`,
   )
     .bind(id)
@@ -512,7 +522,8 @@ projectsRouter.patch('/:id', async (c) => {
   const updated = await c.env.DB.prepare(
     `SELECT id, slug, name, description, owner_type, owner_id,
             working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
-            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked,
+            ntd_id, license_spdx
        FROM feed_project WHERE id = ?`,
   )
     .bind(current.id)
@@ -626,7 +637,8 @@ projectsRouter.post('/:id/transfer', async (c) => {
   const fresh = await c.env.DB.prepare(
     `SELECT id, slug, name, description, owner_type, owner_id,
             working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
-            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked,
+            ntd_id, license_spdx
        FROM feed_project WHERE id = ?`,
   )
     .bind(current.id)
@@ -718,7 +730,8 @@ projectsRouter.post('/:id/duplicate', async (c) => {
   const row = await c.env.DB.prepare(
     `SELECT id, slug, name, description, owner_type, owner_id,
             working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
-            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked,
+            ntd_id, license_spdx
        FROM feed_project WHERE id = ?`,
   )
     .bind(newId)
@@ -1206,7 +1219,8 @@ projectsRouter.post('/import', async (c) => {
     const row = await c.env.DB.prepare(
       `SELECT id, slug, name, description, owner_type, owner_id,
               working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
-              archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked
+              archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked,
+              ntd_id, license_spdx
          FROM feed_project WHERE id = ?`,
     )
       .bind(projectId)
@@ -1239,10 +1253,24 @@ function base64ToBytes(b64: string): Uint8Array {
 // PUBLICATION, DRAFT LINKS, CATALOGS, RT FEEDS — §5/§6 of BACKEND_REQUIREMENTS
 // ═══════════════════════════════════════════════════════════════════════════
 
+// NTD IDs are 5-digit STRINGS with significant leading zeros ("00123"). Accept
+// 1–5 digits as a string and never coerce through Number() — z.coerce/z.number
+// here would silently destroy the leading zeros. `null` clears the value;
+// omitting the key leaves whatever is already projected onto feed_project.
+const ntdIdField = z
+  .string()
+  .regex(/^[0-9]{1,5}$/, 'NTD ID must be 1–5 digits (leading zeros are significant)')
+  .nullable()
+  .optional();
+const licenseSpdxField = z.string().min(1).max(64).nullable().optional();
+
 const publishJsonSchema = z.object({
   snapshotId: z.string().min(1),
   ignoreWarnings: z.boolean().optional(),
   ignoreRtBreakage: z.boolean().optional(),
+  ignoreAgencyChurn: z.boolean().optional(),
+  ntdId: ntdIdField,
+  licenseSpdx: licenseSpdxField,
 });
 
 const schedulePublishSchema = z.object({
@@ -1348,6 +1376,11 @@ projectsRouter.post('/:id/publish', async (c) => {
   let snapshotId: string;
   let ignoreWarnings = false;
   let ignoreRtBreakage = false;
+  let ignoreAgencyChurn = false;
+  // `undefined` = not supplied (leave the existing projection alone);
+  // `null` = explicitly cleared.
+  let ntdId: string | null | undefined;
+  let licenseSpdx: string | null | undefined;
   let incomingZip: ArrayBuffer | null = null;
 
   if (contentType.includes('multipart/form-data')) {
@@ -1372,6 +1405,9 @@ projectsRouter.post('/:id/publish', async (c) => {
     snapshotId = metaResult.data.snapshotId;
     ignoreWarnings = metaResult.data.ignoreWarnings ?? false;
     ignoreRtBreakage = metaResult.data.ignoreRtBreakage ?? false;
+    ignoreAgencyChurn = metaResult.data.ignoreAgencyChurn ?? false;
+    ntdId = metaResult.data.ntdId;
+    licenseSpdx = metaResult.data.licenseSpdx;
     incomingZip = await (zipPart as Blob).arrayBuffer();
     if (incomingZip.byteLength === 0) throw validationFailed('Empty zip');
     enforceBlobSize(incomingZip.byteLength, projectQuotas.blobBytes);
@@ -1380,6 +1416,9 @@ projectsRouter.post('/:id/publish', async (c) => {
     snapshotId = body.snapshotId;
     ignoreWarnings = body.ignoreWarnings ?? false;
     ignoreRtBreakage = body.ignoreRtBreakage ?? false;
+    ignoreAgencyChurn = body.ignoreAgencyChurn ?? false;
+    ntdId = body.ntdId;
+    licenseSpdx = body.licenseSpdx;
   }
 
   const snapshot = await requireOwnedSnapshot(c.env, project.id, snapshotId);
@@ -1394,6 +1433,9 @@ projectsRouter.post('/:id/publish', async (c) => {
     existingPublication,
     ignoreWarnings,
     ignoreRtBreakage,
+    ignoreAgencyChurn,
+    ntdId,
+    licenseSpdx,
     actorUserId: user.id,
     incomingZip,
     feedsOrigin: c.env.FEEDS_ORIGIN,

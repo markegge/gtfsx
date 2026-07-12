@@ -9,12 +9,12 @@
 // function performs the publish itself, identically for both paths.
 import { ulid } from 'ulidx';
 import type { Env } from '../env';
-import { diffRemovedIds, isEmpty as rtReportEmpty } from './idStability';
+import { diffRemovedIds, isEmpty as rtReportEmpty, type RtBreakageReport } from './idStability';
 import { submitToCatalogs } from './submit';
 import { getFeedBlob, publicationZipKey, putFeedBlob } from '../projects/r2';
 import { loadFeedStateFromKey, maybeRegenerateThumbnail } from '../embeds/thumbnail';
 import { logAudit } from '../util/audit';
-import { validationFailed, notFound, rtBreakage } from '../util/errors';
+import { validationFailed, notFound, rtBreakage, agencyIdChurn } from '../util/errors';
 
 export interface PublishProject {
   id: string;
@@ -36,6 +36,17 @@ export interface PerformPublishInput {
   existingPublication: { snapshot_id: string } | null;
   ignoreWarnings?: boolean;
   ignoreRtBreakage?: boolean;
+  /** Acknowledges the agency_id-churn warning (C2). */
+  ignoreAgencyChurn?: boolean;
+  /**
+   * NTD ID / SPDX license to project onto `feed_project` as part of this
+   * publish. `undefined` leaves the existing projection untouched (the cron
+   * path never supplies them); `null` clears it.
+   *
+   * ntdId is a STRING — NTD IDs carry significant leading zeros ("00123").
+   */
+  ntdId?: string | null;
+  licenseSpdx?: string | null;
   /** Null for system/cron-initiated publishes. */
   actorUserId: string | null;
   /** Interactive multipart path supplies the freshly-rendered ZIP; the cron
@@ -59,6 +70,7 @@ export async function performPublish(env: Env, input: PerformPublishInput): Prom
   const { project, snapshot, existingPublication, actorUserId, incomingZip, feedsOrigin, runBackground } = input;
   const ignoreWarnings = input.ignoreWarnings ?? false;
   const ignoreRtBreakage = input.ignoreRtBreakage ?? false;
+  const ignoreAgencyChurn = input.ignoreAgencyChurn ?? false;
   const now = input.now ?? Date.now();
 
   // Validation gate: errors block publish unless ignoreWarnings=true.
@@ -69,35 +81,60 @@ export async function performPublish(env: Env, input: PerformPublishInput): Prom
     });
   }
 
-  // ID-stability check (BE-88): only when the project has externally-hosted RT
-  // feeds, there's an existing publication, and we're switching snapshots.
-  const rtCount = await env.DB.prepare(
-    `SELECT COUNT(*) AS n FROM project_rt_feed WHERE project_id = ? AND managed = 0`,
-  )
-    .bind(project.id)
-    .first<{ n: number }>();
-  if (
-    existingPublication &&
-    (rtCount?.n ?? 0) > 0 &&
-    existingPublication.snapshot_id !== snapshot.id &&
-    !ignoreRtBreakage
-  ) {
-    const prior = await env.DB.prepare(
-      `SELECT state_r2_key FROM feed_snapshot WHERE id = ? AND project_id = ?`,
+  // ─── ID-stability gates ─────────────────────────────────────────────────────
+  //
+  // Both gates read the SAME diff (old published state − new snapshot state),
+  // so we load and diff at most once per publish:
+  //
+  //   1. rt_breakage (BE-88) — the harder gate, and therefore checked first.
+  //      Only applies when the project has externally-hosted (managed=0) RT
+  //      feeds: dropping an agency/route/stop/trip id out from under someone
+  //      else's RT producer breaks it. Any removed id trips it.
+  //
+  //   2. agency_id_churn (C2) — applies to EVERY project, RT or not. FTA's
+  //      enhanced P-50 form crosswalks a published feed to its NTD ID by
+  //      agency_id, so removing/renaming an agency_id quietly breaks the NTD
+  //      crosswalk (and any consumer keyed on agency_id). Only the `agencies`
+  //      slice of the diff matters here.
+  //
+  // Both are advisory: the caller acknowledges and re-publishes with the
+  // matching ignore flag. Both are skipped on a first publish and on a
+  // re-publish of the already-published snapshot (nothing can have changed).
+  const snapshotChanged = !!existingPublication && existingPublication.snapshot_id !== snapshot.id;
+  if (existingPublication && snapshotChanged && (!ignoreRtBreakage || !ignoreAgencyChurn)) {
+    const rtCount = await env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM project_rt_feed WHERE project_id = ? AND managed = 0`,
     )
-      .bind(existingPublication.snapshot_id, project.id)
-      .first<{ state_r2_key: string }>();
-    if (prior) {
-      const removed = await diffRemovedIds(env, prior.state_r2_key, snapshot.state_r2_key);
-      if (!rtReportEmpty(removed)) {
-        throw rtBreakage({
-          removed: {
-            agencies: removed.agencies,
-            routes: removed.routes,
-            stops: removed.stops,
-            trips: removed.trips,
-          },
-        });
+      .bind(project.id)
+      .first<{ n: number }>();
+    const rtGateApplies = (rtCount?.n ?? 0) > 0 && !ignoreRtBreakage;
+    const churnGateApplies = !ignoreAgencyChurn;
+
+    if (rtGateApplies || churnGateApplies) {
+      const prior = await env.DB.prepare(
+        `SELECT state_r2_key FROM feed_snapshot WHERE id = ? AND project_id = ?`,
+      )
+        .bind(existingPublication.snapshot_id, project.id)
+        .first<{ state_r2_key: string }>();
+      if (prior) {
+        const removed: RtBreakageReport = await diffRemovedIds(
+          env,
+          prior.state_r2_key,
+          snapshot.state_r2_key,
+        );
+        if (rtGateApplies && !rtReportEmpty(removed)) {
+          throw rtBreakage({
+            removed: {
+              agencies: removed.agencies,
+              routes: removed.routes,
+              stops: removed.stops,
+              trips: removed.trips,
+            },
+          });
+        }
+        if (churnGateApplies && removed.agencies.length > 0) {
+          throw agencyIdChurn({ removed: { agencies: removed.agencies } });
+        }
       }
     }
   }
@@ -117,6 +154,27 @@ export async function performPublish(env: Env, input: PerformPublishInput): Prom
     const buf = await source.arrayBuffer();
     publishedBytes = buf.byteLength;
     await putFeedBlob(env, pubKey, buf, { contentType: 'application/zip' });
+  }
+
+  // Project the NTD ID + license onto feed_project (migration 0024). The
+  // editor's feed state stays the source of truth; this is the copy the public
+  // feeds origin reads for feed_info.json + dmfr.json without having to inflate
+  // the state blob. Only written when the caller supplied the field — the cron
+  // path omits both and must not clobber what the last interactive publish set.
+  const sets: string[] = [];
+  const binds: (string | null)[] = [];
+  if (input.ntdId !== undefined) {
+    sets.push('ntd_id = ?');
+    binds.push(input.ntdId); // string | null — never Number()
+  }
+  if (input.licenseSpdx !== undefined) {
+    sets.push('license_spdx = ?');
+    binds.push(input.licenseSpdx);
+  }
+  if (sets.length > 0) {
+    await env.DB.prepare(`UPDATE feed_project SET ${sets.join(', ')} WHERE id = ?`)
+      .bind(...binds, project.id)
+      .run();
   }
 
   // Upsert publication + append history.

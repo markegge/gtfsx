@@ -270,9 +270,24 @@ Design rationale is preserved in the decisions appendix of the archived
   The per-paid-subscriber notice (`sendUpgradeNotification`) is unchanged.
 - Secrets: `RESEND_API_KEY`, `MOBILITY_DATABASE_REFRESH_TOKEN`,
   `TURNSTILE_SECRET_KEY`, `STRIPE_SECRET_KEY` (live), `STRIPE_WEBHOOK_SIGNING_SECRET` (live).
-- Stripe: live-mode Price IDs (`STRIPE_PRICE_PRO_*`, `STRIPE_PRICE_AGENCY/TEAM_*`),
-  portal config, webhook `→ /api/billing/webhooks/stripe`. Pricing v2 (Agency
-  $299/mo · $2,499/yr) is live.
+  Pending secret: `GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST` (demo_request OCI
+  uploads stay queued until the Google Ads conversion action is created and this
+  is set — see `worker/marketing/ads/README.md` §4).
+- Stripe: live-mode Price IDs (`STRIPE_PRICE_TEAM_*` only; `STRIPE_PRICE_PRO_*`
+  removed from `wrangler.jsonc` in pricing v4), portal config, webhook
+  `→ /api/billing/webhooks/stripe`.
+- **Pricing v4 live since 2026-07-11** — Pro tier retired (zero subscribers);
+  lineup is Editor (free) / Planner (`agency`, $299/mo · $2,988/yr, 14-day trial)
+  / Enterprise (call us, "multi-agency subscriptions for consultants and state
+  DOTs"). Former Pro entitlements folded into Planner; `geojson_export` now free.
+  Primary agency-funnel conversion is **booked demos**: `GET /book-demo?src=…`
+  logs a `demo_request` event then 302s to `https://fantastical.app/markegge/gtfsx-demo`;
+  marketing pages (home two-panel hero, /planning, compare, state-dot, feed-health)
+  are demo-first. Post-deploy manual steps still open: archive `gtfsb_pro` prices
+  in Stripe (live + test; also fix the `scripts/setup-stripe.ts` team-annual
+  $2,499-vs-$2,988 drift before any re-run), and the Google Ads session
+  (demo_request conversion action + secret, budget reweight editor→planning,
+  RSA rewrites dropping Pro/$49/trial-first copy).
 - The project owner's account (`mark@gtfsx.com`) is staff + enterprise.
   Pre-launch D1 backup under `backups/` (gitignored).
 - **Rollback:** `BILLING_ENABLED=false` disables paid checkout/portal but leaves

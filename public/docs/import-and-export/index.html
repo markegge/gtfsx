@@ -81,7 +81,7 @@
         <li>GTFS-Flex files where applicable (<code>locations.geojson</code>, <code>booking_rules.txt</code>, <code>location_groups.txt</code>, <code>location_group_stops.txt</code>).</li>
         <li>GTFS-Fares v2 files where present in the imported feed (round-trip preservation — see <a href="/docs/fares/#v2-roadmap">Fares</a>).</li>
         <li><code>feed_info.txt</code> always — synthesized from agency data if you didn't fill it in explicitly.</li>
-        <li>Optionally, a provisional <code>ext_ntd_id</code> column on <code>agency.txt</code> carrying your National Transit Database ID. Off by default, and <strong>not</strong> part of the GTFS spec — see <a href="/docs/ntd-id/#ext-ntd-id">NTD ID &amp; FTA reporting</a> before you turn it on.</li>
+        <li>A provisional <code>external_id</code> column on <code>agency.txt</code>, whenever any agency in the feed has an NTD / External ID set. It carries each agency's own identifier and is <strong>not</strong> part of the GTFS spec — see <a href="/docs/ntd-id/#external-id-column">NTD ID &amp; FTA reporting</a>. No agency has one, no column is written.</li>
       </ul>
       <p>The ZIP is named after the project slug, with the export date appended (<code>sunny-valley-transit-20260518.zip</code>). Drop it on a static host, hand it to Google Transit Partners, or use the editor's <a href="/docs/hosted-publishing/">hosted publishing</a> to serve it from a stable URL.</p>
 
@@ -112,7 +112,7 @@
         <li><strong><code>directions.txt</code>, <code>frequencies.txt</code>, <code>pathways.txt</code>, <code>levels.txt</code></strong> — supported on import; partially supported in the editor; written back on export.</li>
       </ul>
       <div class="callout">
-        <p><strong>Columns and files the editor doesn't know are dropped, not preserved.</strong> The importer reads a fixed set of GTFS files and, within each, a fixed set of spec fields. A custom column your agency added to <code>routes.txt</code>, or a non-GTFS file you shipped alongside the standard ones, will not survive an import-then-export cycle. If you depend on a non-standard field, keep the authoritative copy outside GTFS·X. The one deliberate exception is <a href="/docs/ntd-id/#ext-ntd-id"><code>ext_ntd_id</code></a>, which is read on import and written back on export.</p>
+        <p><strong>Columns and files the editor doesn't know are dropped, not preserved.</strong> The importer reads a fixed set of GTFS files and, within each, a fixed set of spec fields. A custom column your agency added to <code>routes.txt</code>, or a non-GTFS file you shipped alongside the standard ones, will not survive an import-then-export cycle. If you depend on a non-standard field, keep the authoritative copy outside GTFS·X. The one deliberate exception is <a href="/docs/ntd-id/#external-id-column"><code>external_id</code></a> on <code>agency.txt</code>, which the importer reads onto each agency and the exporter writes back.</p>
       </div>
 
       <h2 id="limits">Limits</h2>
@@ -135,7 +135,7 @@
         <ul>
           <li><a href="/docs/validation/">Validation</a> — runs before every export; blocks on errors.</li>
           <li><a href="/docs/hosted-publishing/">Hosted publishing</a> — serve the exported ZIP from a stable URL.</li>
-          <li><a href="/docs/ntd-id/">NTD ID &amp; FTA reporting</a> — the provisional <code>ext_ntd_id</code> export column.</li>
+          <li><a href="/docs/ntd-id/">NTD ID &amp; FTA reporting</a> — the provisional <code>external_id</code> column on <code>agency.txt</code>.</li>
           <li><a href="/docs/deep-links/">Deep-link integration</a> — load a feed into the editor from a URL.</li>
         </ul>
       </div>

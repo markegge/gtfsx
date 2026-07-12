@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
     <title>NTD ID &amp; FTA reporting — GTFS·X</title>
-    <meta name="description" content="Set your agency's National Transit Database ID on a GTFS feed, keep agency_id stable for FTA's P-50 crosswalk, publish a DMFR file for Transitland and the Mobility Database, and file the P-50 with confidence." />
+    <meta name="description" content="Set your agency's National Transit Database ID in the Agency panel, export it on agency.txt, keep agency_id stable for FTA's P-50 crosswalk, publish a DMFR file for Transitland and the Mobility Database, and file the P-50 with confidence." />
     <link rel="canonical" href="https://www.gtfsx.com/docs/ntd-id/" />
     <meta property="og:title" content="NTD ID &amp; FTA reporting — GTFS·X" />
-    <meta property="og:description" content="How GTFS·X carries your NTD ID through a published feed: the ntd_id sidecar, the DMFR registry file, agency_id warnings, and the P-50 helper." />
+    <meta property="og:description" content="How GTFS·X carries each agency's NTD ID through a published feed: the external_id column on agency.txt, the metadata sidecar, the DMFR registry file, agency_id warnings, and the P-50 helper." />
     <meta property="og:type" content="article" />
     <meta property="og:url" content="https://www.gtfsx.com/docs/ntd-id/" />
     <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
@@ -23,7 +23,7 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "headline": "NTD ID & FTA reporting — GTFS·X",
-  "description": "Set your agency's National Transit Database ID on a GTFS feed, keep agency_id stable for FTA's P-50 crosswalk, publish a DMFR file for Transitland and the Mobility Database, and file the P-50 with confidence.",
+  "description": "Set your agency's National Transit Database ID in the Agency panel, export it on agency.txt, keep agency_id stable for FTA's P-50 crosswalk, publish a DMFR file for Transitland and the Mobility Database, and file the P-50 with confidence.",
   "image": "https://www.gtfsx.com/og-default.png",
   "author": {
     "@type": "Organization",
@@ -80,36 +80,39 @@
       </div>
 
       <h2 id="set-your-ntd-id">Setting your NTD ID</h2>
-      <p>The NTD ID is a property of the feed, alongside the feed's name. Set it once and it travels with the project.</p>
-      <ul>
-        <li>In <strong>Share &amp; Publish</strong> (the footer tab), the <strong>NTD ID</strong> field sits next to the snapshot you're about to publish.</li>
-        <li>In the <strong>Export GTFS</strong> dialog, so agencies working in the free browser editor can set it without publishing through GTFS·X.</li>
-      </ul>
+      <p>The NTD ID belongs to the <strong>agency</strong>, not to the project, so that is where you set it. Open the <strong>Agency</strong> panel and fill in the field labelled <strong>NTD / External ID</strong>. That's the only place it lives, and everything else on this page follows from it: the export column, the published metadata, the DMFR file, and the P-50 helper all read it from the agency.</p>
       <p>It's optional. Leave it blank if your agency doesn't report to the NTD (most Canadian, tribal, and private operators don't) and nothing on this page applies to you.</p>
+      <p>The field is deliberately free-form. It's called "NTD / External ID" rather than "NTD ID" because it accepts any external identifier your agency is known by, not only an FTA one, and because GTFS·X does not enforce a five-digit shape on it. Type the identifier exactly as the issuing body writes it.</p>
       <div class="callout">
         <p><strong>Leading zeros are part of the ID.</strong> If your NTD ID is <code>00123</code>, type <code>00123</code> — not <code>123</code>. GTFS·X treats the value as text end to end and never drops a leading zero, but a spreadsheet will, so double-check whatever you copied it from.</p>
       </div>
+      <h3 id="multi-agency">Feeds with more than one agency</h3>
+      <p>Each agency in a feed carries its own NTD ID. That's the right model: if three operators share one feed and each reports to the NTD separately, each row of <code>agency.txt</code> gets its own identifier, and the export, the published metadata, the DMFR file, and the P-50 helper all keep them distinct.</p>
+      <div class="callout">
+        <p><strong>Known limitation: the Agency panel currently edits only the first agency.</strong> So while a multi-agency feed can carry an ID per agency, there is at present no way to <em>type</em> the second and subsequent agencies' IDs into the editor. Today they have to arrive by <a href="/docs/import-and-export/#import">import</a>: put an <code>external_id</code> column on the <code>agency.txt</code> of the feed you import and every agency's value is read in, kept through editing, and written back out. Everything downstream handles all agencies correctly — this gap is in the editing UI only, and we're closing it.</p>
+      </div>
 
       <h2 id="where-it-goes">Where your NTD ID ends up</h2>
-      <p>Once a feed with an NTD ID is published, the number appears in the two machine-readable files that sit next to your feed. Neither one changes the GTFS ZIP itself.</p>
+      <p>Once an agency has an NTD ID, it shows up in three places. The first is inside the feed itself; the other two are the machine-readable files published alongside it.</p>
       <ul>
-        <li><strong><code>feeds.gtfsx.com/&lt;slug&gt;/feed_info.json</code></strong> — the sidecar metadata file that already carries your publisher name, service dates, and version. It now also carries <code>ntd_id</code> (and your feed's license, if you declared one). Monitoring scripts and catalog ingestors read this.</li>
+        <li><strong><code>agency.txt</code>, in every export</strong> — as an <code>external_id</code> column, one value per agency row. This is a provisional extension column, described <a href="#external-id-column">below</a>.</li>
+        <li><strong><code>feeds.gtfsx.com/&lt;slug&gt;/feed_info.json</code></strong> — the sidecar metadata file that already carries your publisher name, service dates, and version. It now also lists every agency in the feed, each with its <code>agency_id</code>, <code>agency_name</code>, and <code>external_id</code>. Monitoring scripts and catalog ingestors read this.</li>
         <li><strong><code>feeds.gtfsx.com/&lt;slug&gt;/dmfr.json</code></strong> — a registry document, described next.</li>
       </ul>
-      <p>Both keys are simply absent when you haven't set an NTD ID, so a consumer sees "not declared" rather than a blank value.</p>
+      <p>An agency with no NTD ID simply has no <code>external_id</code> in the listing, so a consumer sees "not declared" rather than a blank value.</p>
 
       <h2 id="dmfr">The DMFR file: getting into Transitland and the Mobility Database</h2>
       <p>Every published GTFS·X feed now also serves a <strong>DMFR</strong> document at <code>https://feeds.gtfsx.com/&lt;slug&gt;/dmfr.json</code>. DMFR (Distributed Mobility Feed Registry, v0.5.1) is the format Transitland and the wider open-transit-data ecosystem use to describe "here is a feed, here is who operates it, here is the license." It's a small JSON file, generated for you, and it needs no configuration.</p>
       <p>Why you'd want it: getting listed in <a href="https://database.mobilitydata.org/" rel="external">the Mobility Database</a> and <a href="https://www.transit.land/" rel="external">Transitland</a> is how trip planners, researchers, OpenTripPlanner deployments, and app developers discover your feed in the first place. Historically that means filling in a form and hoping someone types your details correctly. With a DMFR file you hand over one URL and the registry has everything it needs, already structured:</p>
       <ul>
         <li><strong>Your feed URL</strong>, and your GTFS-Realtime URLs if you've registered any (vehicle positions, trip updates, alerts) — they appear as a companion realtime entry.</li>
-        <li><strong>Your operator record</strong>, tagged <code>us_ntd_id</code> with your NTD ID. This is the tag the Transitland atlas uses, so the NTD crosswalk survives into the catalog instead of being lost at the door.</li>
+        <li><strong>An operator record for each agency in the feed</strong>, tagged <code>us_ntd_id</code> with that agency's own NTD ID, and tied back to its <code>agency_id</code> inside the feed. <code>us_ntd_id</code> is the tag the Transitland atlas uses, so the NTD crosswalk survives into the catalog instead of being lost at the door. Because each operator names the agency it describes, a feed carrying several NTD reporters crosswalks correctly rather than ambiguously.</li>
         <li><strong>Your license</strong>, if you declared one.</li>
       </ul>
       <p>Publishing the file doesn't submit you to anything. It's a document you can point a registry maintainer at, or attach to a submission form. GTFS·X's own one-click Mobility Database submission (in the distribution checklist) is unchanged and still the easiest path.</p>
 
       <h3 id="license">Declaring a feed license</h3>
-      <p>In the same section of <strong>Share &amp; Publish</strong> you can declare the feed's license from a short list — CC0 1.0 (public domain), CC BY 4.0 (attribution), or ODbL 1.0 (share-alike) — or leave it unspecified. Whatever you pick is published in <code>feed_info.json</code> and the DMFR file as its standard SPDX identifier, so a reuser can see the terms without emailing you. GTFS·X never guesses a license on your behalf; unspecified stays unspecified.</p>
+      <p>In <strong>Share &amp; Publish</strong> (the footer tab) you can declare the feed's license from a short list — CC0 1.0 (public domain), CC BY 4.0 (attribution), or ODbL 1.0 (share-alike) — or leave it unspecified. Whatever you pick is published in <code>feed_info.json</code> and the DMFR file as its standard SPDX identifier, so a reuser can see the terms without emailing you. GTFS·X never guesses a license on your behalf; unspecified stays unspecified.</p>
 
       <h2 id="agency-id-warnings">The agency_id warnings</h2>
       <p>Because FTA's crosswalk is matched on <code>agency_id</code>, the validator now flags feeds that don't have usable ones. Both messages are <strong>warnings</strong>, not errors — they never block an export or a publish — and both are dismissible from the Validation panel if you don't report to the NTD.</p>
@@ -142,34 +145,29 @@
       <h2 id="p50-helper">Filing the P-50: the helper panel</h2>
       <p>Once a feed is published, <strong>Share &amp; Publish</strong> shows an <strong>NTD / FTA P-50 reporting</strong> panel. It's a transcription aid: it lays out, copy-ready, precisely the values the enhanced P-50 form collects, so you're not digging through your feed with a text editor at 4pm on a filing deadline.</p>
       <ul>
-        <li><strong>Your NTD ID</strong>, as you entered it.</li>
         <li><strong>The canonical feed URL</strong> — the stable <code>feeds.gtfsx.com</code> address that keeps working across re-publishes. This is the URL to give FTA.</li>
-        <li><strong>Every <code>agency_id</code> and <code>agency_name</code> in the feed</strong>, each with its own copy button.</li>
+        <li><strong>Every agency in the feed</strong>, one row each: its <code>agency_id</code>, its <code>agency_name</code>, and its NTD ID. Every value has its own copy button, and any agency still missing an NTD ID is called out so you notice before you file rather than after.</li>
       </ul>
-      <p>Copy each value across as the form asks for it. Nothing is submitted to FTA on your behalf; the P-50 is filed by you, in FTA's reporting system, during your reporting cycle.</p>
-      <p>If your feed contains several agencies, read the panel's note carefully. The NTD ID you set identifies the <em>reporting</em> agency for the feed as a whole — GTFS·X does not yet model a separate NTD ID per agency inside one feed. If several of the agencies in your feed report to the NTD separately, give FTA each one's own NTD ID next to its <code>agency_id</code> on the form.</p>
+      <p>Copy each value across as the form asks for it. If several of the agencies in your feed report to the NTD separately, the panel gives you each one's ID next to its <code>agency_id</code> — which is exactly how the form wants them. Nothing is submitted to FTA on your behalf; the P-50 is filed by you, in FTA's reporting system, during your reporting cycle.</p>
 
-      <h2 id="ext-ntd-id">The ext_ntd_id export column (provisional)</h2>
+      <h2 id="external-id-column">The external_id column on agency.txt (provisional)</h2>
       <div class="callout">
-        <p><strong><code>ext_ntd_id</code> is not part of the GTFS specification.</strong> It is a provisional extension column we ship so agencies that want the NTD ID inside the feed itself can have it today. A proposal for a standard NTD ID field is pending; if and when one lands, the column name will change to match it. Track it at <a href="https://github.com/GTFS-X/gtfsx/issues/62" rel="external">GTFS-X/gtfsx#62</a>. If you need a feed that is strictly spec-only, leave this off — which is the default.</p>
+        <p><strong><code>external_id</code> is not part of the GTFS specification.</strong> It is a provisional extension column we ship so agencies that want the NTD ID inside the feed itself can have it today. A proposal for a standard field is pending; if and when one lands, the column name will change to match it. Track it at <a href="https://github.com/GTFS-X/gtfsx/issues/62" rel="external">GTFS-X/gtfsx#62</a>. Consumers that don't recognise the column ignore it, as GTFS consumers are expected to do with any column they don't know.</p>
       </div>
-      <p>Background: when FTA proposed forcing <code>agency_id</code> to equal the NTD ID, commenters objected and asked instead for a separate, dedicated NTD ID field so that existing <code>agency_id</code> values could stay put. FTA withdrew the requirement. No standard field exists yet, so <code>ext_ntd_id</code> fills the gap in the meantime.</p>
-      <p>To use it, tick <strong>Include NTD ID as <code>ext_ntd_id</code> on agency.txt</strong> in the Export dialog. It's off by default, and stays greyed out until the feed has an NTD ID — if it doesn't, an NTD ID field appears right underneath so you can set one without leaving the dialog. When the option is on, your export's <code>agency.txt</code> carries one extra trailing column with your NTD ID in it. When it's off, the ZIP is byte-for-byte what it would otherwise be: no empty column, no header change.</p>
-      <p>Two behaviors worth knowing:</p>
-      <ul>
-        <li><strong>Single-agency feeds only.</strong> If your feed has more than one agency, the column is not written and the Export dialog tells you why. An NTD ID identifies one reporting agency; stamping the same one onto every agency row would assert that they all report under it, which would be false. Per-agency NTD IDs aren't modeled yet.</li>
-        <li><strong>It round-trips.</strong> Import a feed that carries <code>ext_ntd_id</code> and GTFS·X reads the NTD ID off it, sets it on the project, and turns the export option back on — so the column survives an import-then-export cycle rather than being silently dropped.</li>
-      </ul>
+      <p>Background: when FTA proposed forcing <code>agency_id</code> to equal the NTD ID, commenters objected and asked instead for a separate, dedicated field, so that existing <code>agency_id</code> values could stay put. FTA withdrew the requirement. No standard field exists yet, so <code>external_id</code> fills the gap in the meantime. The name is generic on purpose: the column carries whatever external identifier the agency is known by, and an NTD ID is the common case rather than the only one.</p>
+      <p>There is nothing to switch on. Whenever at least one agency in your feed has an NTD / External ID, your export's <code>agency.txt</code> carries an <code>external_id</code> column with each agency's own value in its own row. When no agency has one, the column isn't written at all: the ZIP is byte-for-byte what it would otherwise be, with no empty column and no header change. The Export dialog has no NTD setting to find, because there's no decision left to make there.</p>
+      <p>The column <strong>round-trips</strong>. Import a feed whose <code>agency.txt</code> carries <code>external_id</code> and GTFS·X reads each row's value onto that agency, holds it through editing, and writes it back out on export. Nothing is silently dropped, and a multi-agency feed keeps each agency's own ID distinct all the way through.</p>
 
       <h2 id="feed-health">Looking up another agency's NTD ID</h2>
       <p>The <a href="/feed-health/">GTFS Feed Health dashboard</a>'s state-by-state agency view now shows each agency's NTD ID next to its Mobility Database feed ID. Handy for state DOTs reconciling a sub-recipient list, and for anyone who needs to confirm which NTD ID belongs to which operator before filing.</p>
 
       <h2 id="gotchas">Edge cases and gotchas</h2>
       <ul>
-        <li><strong>The NTD ID is not written into your GTFS ZIP by default.</strong> It lives with the feed and is published in the metadata sidecar and the DMFR file. The only way it enters the ZIP is the opt-in <code>ext_ntd_id</code> column above.</li>
+        <li><strong>Once set, the NTD ID goes into your GTFS ZIP.</strong> There's no separate opt-in, so if you specifically need an export with no extension columns in it, clear the NTD / External ID field before exporting.</li>
         <li><strong>Setting an NTD ID does not file anything with FTA.</strong> The P-50 is still yours to submit. GTFS·X gets the values right and keeps them stable; the reporting cycle is between you and FTA.</li>
         <li><strong>Changing your feed's slug breaks the URL you gave FTA.</strong> The same caveat as any catalog submission — see <a href="/docs/hosted-publishing/#gotchas">hosted publishing</a>. Pick a slug you can live with before you file.</li>
-        <li><strong>Importing a feed replaces the NTD ID.</strong> Import is a whole-project replace, so importing a feed with no <code>ext_ntd_id</code> clears whatever NTD ID was set. Re-enter it if you're importing into an existing published project.</li>
+        <li><strong>Importing a feed replaces the NTD IDs.</strong> Import is a whole-project replace, so importing a feed whose <code>agency.txt</code> has no <code>external_id</code> column clears whatever IDs were set. Re-enter them if you're importing into an existing published project.</li>
+        <li><strong>Only the first agency's ID is editable in the app today.</strong> See the <a href="#multi-agency">multi-agency note</a> above: additional agencies' IDs currently have to arrive by import.</li>
         <li><strong>Dismissing the <code>agency_id</code> warnings is safe if you don't report to the NTD.</strong> They're advisory for non-reporters. The multi-agency one, though, is a real spec violation regardless of NTD — fix that one.</li>
       </ul>
 
@@ -177,9 +175,9 @@
         <h2>See also</h2>
         <ul>
           <li><a href="/docs/hosted-publishing/">Hosted publishing</a> — the stable feed URL FTA needs, and the distribution checklist.</li>
-          <li><a href="/docs/agency-setup/">Agency setup</a> — where <code>agency_id</code> and <code>agency_name</code> live.</li>
+          <li><a href="/docs/agency-setup/">Agency setup</a> — the Agency panel, where <code>agency_id</code>, <code>agency_name</code>, and the NTD / External ID live.</li>
           <li><a href="/docs/validation/">Validation</a> — how warnings and dismissals work.</li>
-          <li><a href="/docs/import-and-export/">Import &amp; export</a> — the <code>ext_ntd_id</code> opt-in.</li>
+          <li><a href="/docs/import-and-export/">Import &amp; export</a> — the <code>external_id</code> column, read on import and written on export.</li>
           <li><a href="https://www.transit.dot.gov/ntd" rel="external">National Transit Database</a> — look up your NTD ID and the P-50 reporting cycle.</li>
           <li><a href="https://www.federalregister.gov/documents/2025/07/10/2025-12813/national-transit-database-reporting-changes-and-clarifications-for-report-years-2025-and-2026" rel="external">FTA final notice, July 10 2025 (FR 2025-12813)</a> — the reporting changes behind all of this.</li>
         </ul>

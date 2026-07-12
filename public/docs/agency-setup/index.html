@@ -86,6 +86,7 @@
         <li><strong><code>agency_phone</code></strong> — public contact number. Shown by some apps; useful for riders trying to reach customer service.</li>
         <li><strong><code>agency_fare_url</code></strong> — link to a page describing fare policy. Useful when the fare data alone doesn't tell the whole story (transfer rules, fare-capping policies).</li>
         <li><strong><code>agency_email</code></strong> — internal contact for the GTFS feed itself (often a generic <code>data@</code> alias). Used by feed catalogs to reach the operator about quality issues.</li>
+        <li><strong>NTD / External ID</strong> — the agency's external identifier; in the US, its National Transit Database ID. Free-form text, so leading zeros are safe (<code>00123</code> stays <code>00123</code>). Set it and it's exported as an <code>external_id</code> column on <code>agency.txt</code> and carried into your published feed's metadata for FTA's P-50 crosswalk. This is a provisional extension field, not part of the GTFS spec — see <a href="/docs/ntd-id/">NTD ID &amp; FTA reporting</a>.</li>
       </ul>
 
       <h2 id="multi-agency">Multi-agency feeds (joint operators)</h2>
@@ -95,6 +96,7 @@
         <li>Edit each route in the Routes panel and assign it to the correct agency via the <strong>Agency</strong> dropdown.</li>
         <li>Fare records also carry an <code>agency_id</code>; the editor sets it automatically based on the route(s) the fare applies to.</li>
       </ol>
+      <p>Each agency also carries its own <strong>NTD / External ID</strong>, which is the right model when several operators in one feed report to the NTD separately. One caveat today: the Agency panel edits the first agency's fields, so additional agencies' IDs have to arrive via <a href="/docs/import-and-export/#import">import</a> (an <code>external_id</code> column on the imported <code>agency.txt</code>). See <a href="/docs/ntd-id/#multi-agency">NTD ID &amp; FTA reporting</a>.</p>
       <p>One thing to know: each agency has its <em>own</em> timezone. A feed with operators in two timezones (say, an interstate transit district) is valid, and <code>stop_times</code> are interpreted in the agency of the trip's route. This is the correct way to model service that crosses a timezone boundary — don't try to "normalize" everything to one timezone, because riders will see wrong departure times.</p>
 
       <h2 id="gotchas">Edge cases and gotchas</h2>
@@ -110,6 +112,7 @@
           <li><a href="/docs/quick-start/">Quick start</a> — agency setup is step 1.</li>
           <li><a href="/docs/routes-and-shapes/">Routes &amp; shapes</a> — where you assign routes to agencies.</li>
           <li><a href="/docs/import-and-export/">Import &amp; export</a> — agency fields preserved on round-trip.</li>
+          <li><a href="/docs/ntd-id/">NTD ID &amp; FTA reporting</a> — the NTD / External ID field and FTA's P-50 crosswalk.</li>
         </ul>
       </div>
     </main>

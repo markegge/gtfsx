@@ -1,7 +1,7 @@
 import type { ValidationMessage } from '../types/ui';
 import type { AppStore } from '../store';
 import { featureEnabled } from '../store/featuresSlice';
-import { flexZoneHasGroup, flexZoneHasPolygons, flexZoneShape } from '../store/flexSlice';
+import { flexZoneHasGroup, flexZoneHasPolygons, flexZoneShape, type FlexZone } from '../store/flexSlice';
 import { gtfsTimeToSeconds, secondsToGtfsTime, formatTimeShort } from '../utils/time';
 import { getUSHolidaysInRange, serviceRunsOnDate } from '../utils/holidays';
 import { findBlockOverlaps } from './blockBuilder';
@@ -23,6 +23,39 @@ export const VALIDATION_CODES = {
   // but noisy — a common artifact of bulk holiday-adders and rough imports —
   // so it's a dismissible cleanup nudge, not a hard error.
   redundantException: 'redundant-calendar-exception',
+
+  // ── GTFS-Flex (gtfs.org/community/extensions/flex) ─────────────────────
+  // One code per spec rule, named after the canonical MobilityData notice it
+  // mirrors so tests/external/validator-parity-mapping.ts can line the two
+  // vocabularies up 1:1. Zone/geography shape:
+  flexNoServiceArea: 'flex-no-service-area',
+  flexEmptyStopGroup: 'flex-empty-stop-group',
+  flexDuplicateGroupStop: 'flex-duplicate-group-stop',
+  flexUnknownGroupStop: 'flex-unknown-group-stop',
+  flexDuplicateGeographyId: 'flex-duplicate-geography-id',
+  flexUnsupportedGeometry: 'flex-unsupported-geometry-type',
+  flexInvalidGeometry: 'flex-invalid-geometry',
+  // Service window + calendar:
+  flexNoPickupWindow: 'flex-no-pickup-window',
+  flexMalformedWindow: 'flex-malformed-pickup-drop-off-window',
+  flexInvalidWindow: 'flex-invalid-pickup-drop-off-window',
+  flexNoServicePattern: 'flex-no-service-pattern',
+  flexUnknownServicePattern: 'flex-unknown-service-pattern',
+  // booking_rules.txt — conditional requirements keyed on booking_type:
+  flexMissingBookingRule: 'flex-missing-pickup-drop-off-booking-rule-id',
+  flexInvalidBookingType: 'flex-invalid-booking-type',
+  flexMissingPriorNoticeDurationMin: 'flex-missing-prior-notice-duration-min',
+  flexInvalidPriorNoticeDurationMin: 'flex-invalid-prior-notice-duration-min',
+  flexMissingPriorNoticeLastDay: 'flex-missing-prior-notice-last-day',
+  flexMissingPriorNoticeLastTime: 'flex-missing-prior-notice-last-time',
+  flexMissingPriorNoticeStartTime: 'flex-missing-prior-notice-start-time',
+  flexForbiddenRealTimeBookingField: 'flex-forbidden-real-time-booking-field-value',
+  flexForbiddenSameDayBookingField: 'flex-forbidden-same-day-booking-field-value',
+  flexForbiddenPriorDayBookingField: 'flex-forbidden-prior-day-booking-field-value',
+  flexForbiddenPriorNoticeStartDay: 'flex-forbidden-prior-notice-start-day',
+  flexForbiddenPriorNoticeStartTime: 'flex-forbidden-prior-notice-start-time',
+  flexPriorNoticeLastDayAfterStartDay: 'flex-prior-notice-last-day-after-start-day',
+  flexUnknownPriorNoticeService: 'flex-unknown-prior-notice-service',
 } as const;
 
 // Human label for each dismissible rule, shown in the validation panel's
@@ -30,6 +63,33 @@ export const VALIDATION_CODES = {
 export const DISMISSIBLE_RULE_LABELS: Record<string, string> = {
   [VALIDATION_CODES.holidayExceptions]: 'Holiday calendar_dates reminders',
   [VALIDATION_CODES.redundantException]: 'Redundant calendar_dates exceptions',
+
+  [VALIDATION_CODES.flexNoServiceArea]: 'Flex zone has no service area',
+  [VALIDATION_CODES.flexEmptyStopGroup]: 'Flex stop group has no stops',
+  [VALIDATION_CODES.flexDuplicateGroupStop]: 'Flex stop group lists a stop twice',
+  [VALIDATION_CODES.flexUnknownGroupStop]: 'Flex stop group references a missing stop',
+  [VALIDATION_CODES.flexDuplicateGeographyId]: 'Flex geography id collides with another id',
+  [VALIDATION_CODES.flexUnsupportedGeometry]: 'Flex zone geometry is not a polygon',
+  [VALIDATION_CODES.flexInvalidGeometry]: 'Flex zone polygon is malformed',
+  [VALIDATION_CODES.flexNoPickupWindow]: 'Flex zone has no pickup/drop-off window',
+  [VALIDATION_CODES.flexMalformedWindow]: 'Flex pickup/drop-off window is not HH:MM:SS',
+  [VALIDATION_CODES.flexInvalidWindow]: 'Flex pickup/drop-off window ends before it starts',
+  [VALIDATION_CODES.flexNoServicePattern]: 'Flex zone has no service pattern',
+  [VALIDATION_CODES.flexUnknownServicePattern]: 'Flex zone references a missing service pattern',
+  [VALIDATION_CODES.flexMissingBookingRule]: 'Flex zone has no booking rule',
+  [VALIDATION_CODES.flexInvalidBookingType]: 'Booking rule has an invalid booking_type',
+  [VALIDATION_CODES.flexMissingPriorNoticeDurationMin]: 'Same-day booking is missing prior_notice_duration_min',
+  [VALIDATION_CODES.flexInvalidPriorNoticeDurationMin]: 'prior_notice_duration_max is below prior_notice_duration_min',
+  [VALIDATION_CODES.flexMissingPriorNoticeLastDay]: 'Prior-day booking is missing prior_notice_last_day',
+  [VALIDATION_CODES.flexMissingPriorNoticeLastTime]: 'Prior-day booking is missing prior_notice_last_time',
+  [VALIDATION_CODES.flexMissingPriorNoticeStartTime]: 'Booking rule is missing prior_notice_start_time',
+  [VALIDATION_CODES.flexForbiddenRealTimeBookingField]: 'Real-time booking sets a forbidden prior-notice field',
+  [VALIDATION_CODES.flexForbiddenSameDayBookingField]: 'Same-day booking sets a forbidden prior-notice field',
+  [VALIDATION_CODES.flexForbiddenPriorDayBookingField]: 'Prior-day booking sets a forbidden prior-notice field',
+  [VALIDATION_CODES.flexForbiddenPriorNoticeStartDay]: 'prior_notice_start_day is forbidden here',
+  [VALIDATION_CODES.flexForbiddenPriorNoticeStartTime]: 'prior_notice_start_time is forbidden here',
+  [VALIDATION_CODES.flexPriorNoticeLastDayAfterStartDay]: 'Booking closes before it opens',
+  [VALIDATION_CODES.flexUnknownPriorNoticeService]: 'Booking rule references a missing service pattern',
 };
 
 let msgId = 0;
@@ -115,8 +175,16 @@ export function runValidation(state: AppStore): ValidationMessage[] {
   }
 
   // Route checks
+  // A demand-response-only feed has no routes.txt rows in the editor: the flex
+  // route is synthesized per zone at export time. So "no routes" is only a
+  // finding when nothing will materialize one either.
+  const flexZonesMaterializingTrips = state.flexZones.filter(
+    (z) => z.pickupWindowStart && z.pickupWindowEnd,
+  );
   if (state.routes.length === 0) {
-    messages.push(msg('warning', 'No routes defined'));
+    if (flexZonesMaterializingTrips.length === 0) {
+      messages.push(msg('warning', 'No routes defined'));
+    }
   } else {
     const routesWithTrips = new Set(state.trips.map((t) => t.route_id));
     // Routes that will receive a materialized trip from a flex zone at
@@ -356,10 +424,16 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     }
   }
 
-  // Unused stops
+  // Unused stops. A stop belonging to a flex zone's stop group IS used — it is
+  // served via location_group_stops.txt, not stop_times.txt — so it must not be
+  // reported as an orphan (and must never be offered the delete-unused fix).
+  const flexGroupStopIds = new Set<string>();
+  for (const z of state.flexZones) {
+    for (const sid of z.stopIds ?? []) flexGroupStopIds.add(sid);
+  }
   if (state.stopTimes.length > 0) {
     for (const s of state.stops) {
-      if (!usedStopIds.has(s.stop_id)) {
+      if (!usedStopIds.has(s.stop_id) && !flexGroupStopIds.has(s.stop_id)) {
         const m = msg('warning', `Stop "${s.stop_name || s.stop_id}" is not used by any trip`, 'stop', s.stop_id);
         m.fix = { id: 'delete-unused-stop' };
         messages.push(m);
@@ -367,62 +441,248 @@ export function runValidation(state: AppStore): ValidationMessage[] {
     }
   }
 
-  // Flex zone checks — catch the silent-drop cases that otherwise leave a
-  // user's zone missing from the exported feed with no explanation.
-  const timeOk = (s?: string) => !s || /^\d{1,2}:\d{2}:\d{2}$/.test(s);
-  for (const zone of state.flexZones) {
-    const hasWindow = zone.pickupWindowStart && zone.pickupWindowEnd;
-    if (!hasWindow) {
-      messages.push(msg(
-        'warning',
-        `Flex zone "${zone.name}" has no pickup window — it will NOT be exported as a trip.`,
-        'flex_zone', zone.id,
-      ));
+  // ── GTFS-Flex (gtfs.org/community/extensions/flex) ─────────────────────────
+  // One consolidated pass over the zones: service-area shape, geography-id
+  // namespace, GeoJSON geometry, pickup/drop-off window, service pattern, and
+  // the booking_rules.txt conditional requirements. Deliberately UNGATED by the
+  // `demandResponse` feature flag — a zone that exists must be validated even if
+  // the user later switched the feature off, or its problems would go silent.
+  if (state.flexZones.length > 0) {
+    const flexMsg = (
+      severity: 'error' | 'warning', text: string, zone: FlexZone, code: string,
+    ) => messages.push(msg(severity, text, 'flex_zone', zone.id, code));
+    const zoneLabel = (z: FlexZone) => z.name || z.id;
+    // A booking-rule field counts as "set" only when it carries a real value —
+    // an empty string from a CSV import is the same as absent.
+    const isSet = (v: unknown) => v !== undefined && v !== null && v !== '';
+    const andList = (fields: string[]) =>
+      fields.length === 1 ? fields[0] : `${fields.slice(0, -1).join(', ')} and ${fields[fields.length - 1]}`;
+
+    const timeOk = (s?: string) => !s || /^\d{1,2}:\d{2}:\d{2}$/.test(s);
+    // Every service_id a zone may legitimately name, from either calendar file.
+    const flexServiceIds = new Set(serviceIdSet);
+    for (const d of state.calendarDates) flexServiceIds.add(d.service_id);
+    // ...but only calendar.txt yields an exportable trip: materializeFlex falls
+    // back to calendars[0] and SKIPS the zone when there is no calendar row at
+    // all, so a dates-only feed silently drops every flex trip.
+    const zoneHasExportableService = (z: FlexZone) =>
+      (!!z.serviceId && serviceIdSet.has(z.serviceId)) || state.calendars.length > 0;
+
+    // GTFS-Flex shares ONE id namespace across stops.stop_id, the
+    // locations.geojson feature ids, and location_groups.location_group_id. Map
+    // every id a zone contributes back to its owners so a collision names both.
+    const geographyOwners = new Map<string, { label: string; zone?: FlexZone }[]>();
+    const claim = (id: string, label: string, zone?: FlexZone) => {
+      const list = geographyOwners.get(id) ?? [];
+      list.push({ label, zone });
+      geographyOwners.set(id, list);
+    };
+    for (const s of state.stops) claim(s.stop_id, `stop "${s.stop_name || s.stop_id}"`);
+
+    // The window checks apply to the primary window AND to each additional
+    // window (each materializes its own trip + stop_times rows).
+    const checkWindow = (zone: FlexZone, start: string, end: string, where: string) => {
+      if (!timeOk(start)) {
+        flexMsg('error', `Flex zone "${zoneLabel(zone)}"${where} start_pickup_drop_off_window "${start}" must be HH:MM:SS.`, zone, VALIDATION_CODES.flexMalformedWindow);
+      }
+      if (!timeOk(end)) {
+        flexMsg('error', `Flex zone "${zoneLabel(zone)}"${where} end_pickup_drop_off_window "${end}" must be HH:MM:SS.`, zone, VALIDATION_CODES.flexMalformedWindow);
+      }
+      if (timeOk(start) && timeOk(end) && gtfsTimeToSeconds(end) <= gtfsTimeToSeconds(start)) {
+        flexMsg('error', `Flex zone "${zoneLabel(zone)}"${where} pickup/drop-off window ends (${end}) at or before it starts (${start}) — riders would have no time to book.`, zone, VALIDATION_CODES.flexInvalidWindow);
+      }
+    };
+
+    for (const zone of state.flexZones) {
+      const label = zoneLabel(zone);
+      const shape = flexZoneShape(zone);
+      const hasWindow = !!(zone.pickupWindowStart && zone.pickupWindowEnd);
+      const hasStops = (zone.stopIds?.length ?? 0) > 0;
+
+      // ── Service area ─────────────────────────────────────────────────────
+      if (shape === 'empty') {
+        flexMsg('warning', `Flex zone "${label}" has no service area — add a polygon or a stop group, or remove the zone.`, zone, VALIDATION_CODES.flexNoServiceArea);
+      }
+      if (flexZoneHasGroup(zone)) {
+        if (!hasStops) {
+          flexMsg('warning', `Flex zone "${label}" has a stop group with no stops. Add stops to the group${flexZoneHasPolygons(zone) ? ' or remove the group to keep this a polygon-only zone' : ''}.`, zone, VALIDATION_CODES.flexEmptyStopGroup);
+        }
+        const seen = new Set<string>();
+        for (const sid of zone.stopIds ?? []) {
+          if (seen.has(sid)) {
+            flexMsg('warning', `Flex zone "${label}" lists stop "${sid}" in its group more than once.`, zone, VALIDATION_CODES.flexDuplicateGroupStop);
+            continue;
+          }
+          seen.add(sid);
+          if (!stopIdSet.has(sid)) {
+            flexMsg('error', `Flex zone "${label}" references stop "${sid}" in its group, but no such stop exists.`, zone, VALIDATION_CODES.flexUnknownGroupStop);
+          }
+        }
+      }
+
+      // ── Geometry (locations.geojson) ─────────────────────────────────────
+      // Our drawing tools only ever produce Polygons, but an imported feed can
+      // carry any geometry type or a degenerate ring straight into the store.
+      for (const feature of zone.geojson?.features ?? []) {
+        const geom = feature.geometry;
+        if (!geom || (geom.type !== 'Polygon' && geom.type !== 'MultiPolygon')) {
+          flexMsg('error', `Flex zone "${label}" has a ${geom?.type || 'missing'} feature in locations.geojson — a flex location must be a Polygon or MultiPolygon.`, zone, VALIDATION_CODES.flexUnsupportedGeometry);
+          continue;
+        }
+        const rings = geom.type === 'Polygon'
+          ? [geom.coordinates]
+          : geom.coordinates;
+        const bad = rings.some((polygon) =>
+          !Array.isArray(polygon) || polygon.length === 0 || polygon.some((ring) => {
+            if (!Array.isArray(ring) || ring.length < 4) return true;
+            const first = ring[0];
+            const last = ring[ring.length - 1];
+            return !Array.isArray(first) || !Array.isArray(last)
+              || first[0] !== last[0] || first[1] !== last[1];
+          }),
+        );
+        if (bad) {
+          flexMsg('error', `Flex zone "${label}" has an invalid polygon in locations.geojson — every ring needs at least 4 positions and must close (first position = last).`, zone, VALIDATION_CODES.flexInvalidGeometry);
+        }
+      }
+
+      // The geography ids this zone contributes, matching what the exporter
+      // writes: the zone id for its polygon location, `${id}-group` for its
+      // (non-empty) stop group.
+      if (flexZoneHasPolygons(zone)) claim(zone.id, `flex zone "${label}"`, zone);
+      if (flexZoneHasGroup(zone) && hasStops) claim(`${zone.id}-group`, `flex zone "${label}" stop group`, zone);
+
+      // ── Pickup/drop-off window ───────────────────────────────────────────
+      if (!hasWindow) {
+        flexMsg('warning', `Flex zone "${label}" has no pickup/drop-off window set, so it won't be exported as a flex trip. Set a start + end time in the zone's Details.`, zone, VALIDATION_CODES.flexNoPickupWindow);
+      } else {
+        checkWindow(zone, zone.pickupWindowStart!, zone.pickupWindowEnd!, '');
+      }
+      (zone.additionalWindows ?? []).forEach((w, i) => {
+        if (!w.pickupWindowStart || !w.pickupWindowEnd) return;
+        checkWindow(zone, w.pickupWindowStart, w.pickupWindowEnd, ` additional window ${i + 1}`);
+      });
+
+      // ── Service pattern ──────────────────────────────────────────────────
+      if (hasWindow) {
+        if (zone.serviceId && !flexServiceIds.has(zone.serviceId)) {
+          flexMsg('error', `Flex zone "${label}" references service_id "${zone.serviceId}", which no longer exists.`, zone, VALIDATION_CODES.flexUnknownServicePattern);
+        } else if (!zoneHasExportableService(zone)) {
+          flexMsg('error', `Flex zone "${label}" has no service pattern in calendar.txt, so it can't be exported as a flex trip. Pick a calendar in the zone's Details.`, zone, VALIDATION_CODES.flexNoServicePattern);
+        }
+      }
+
+      // ── booking_rules.txt ────────────────────────────────────────────────
+      const rule = zone.bookingRule;
+      // pickup_type / drop_off_type 2 = "phone the agency", which the spec ties
+      // to a booking rule. These are the values the exporter actually writes
+      // (it clamps the window-forbidden 0/3 back to 2), so check the clamped
+      // value, not the raw one.
+      const pickupType = zone.pickupType === 1 || zone.pickupType === 2 ? zone.pickupType : 2;
+      const dropOffType = zone.dropOffType === 1 || zone.dropOffType === 2 || zone.dropOffType === 3
+        ? zone.dropOffType : 2;
+      if (!rule && (pickupType === 2 || dropOffType === 2)) {
+        flexMsg('warning', `Flex zone "${label}" has pickup_type/drop_off_type 2 ("phone the agency") but no booking rule — riders won't know how to request service. Add one in the zone's Details.`, zone, VALIDATION_CODES.flexMissingBookingRule);
+      }
+
+      if (rule) {
+        const bt = rule.bookingType;
+        const durationMin = isSet(rule.priorNoticeDurationMin);
+        const durationMax = isSet(rule.priorNoticeDurationMax);
+        const lastDay = isSet(rule.priorNoticeLastDay);
+        const lastTime = isSet(rule.priorNoticeLastTime);
+        const startDay = isSet(rule.priorNoticeStartDay);
+        const startTime = isSet(rule.priorNoticeStartTime);
+        const bookingServiceId = isSet(rule.priorNoticeServiceId);
+        const forbidden = (pairs: [string, boolean][]) =>
+          pairs.filter(([, set]) => set).map(([field]) => field);
+
+        if (bt !== 0 && bt !== 1 && bt !== 2) {
+          flexMsg('error', `Flex zone "${label}" booking rule has booking_type "${bt}" — must be 0 (real time), 1 (same day) or 2 (prior day).`, zone, VALIDATION_CODES.flexInvalidBookingType);
+        } else if (bt === 0) {
+          // Real-time booking takes no prior notice: every prior_notice_* field
+          // is forbidden.
+          const bad = forbidden([
+            ['prior_notice_duration_min', durationMin],
+            ['prior_notice_duration_max', durationMax],
+            ['prior_notice_last_day', lastDay],
+            ['prior_notice_last_time', lastTime],
+            ['prior_notice_start_day', startDay],
+            ['prior_notice_start_time', startTime],
+            ['prior_notice_service_id', bookingServiceId],
+          ]);
+          if (bad.length > 0) {
+            flexMsg('error', `Flex zone "${label}" books in real time (booking_type=0), so ${andList(bad)} must be empty — real-time booking takes no prior notice.`, zone, VALIDATION_CODES.flexForbiddenRealTimeBookingField);
+          }
+        } else if (bt === 1) {
+          // Same-day booking: duration_min required; the prior-DAY fields are
+          // forbidden; start_day is optional but conflicts with duration_max.
+          if (!durationMin) {
+            flexMsg('error', `Flex zone "${label}" books same day (booking_type=1) but sets no prior_notice_duration_min — the spec requires it (minutes of advance notice).`, zone, VALIDATION_CODES.flexMissingPriorNoticeDurationMin);
+          }
+          const bad = forbidden([
+            ['prior_notice_last_day', lastDay],
+            ['prior_notice_last_time', lastTime],
+            ['prior_notice_service_id', bookingServiceId],
+          ]);
+          if (bad.length > 0) {
+            flexMsg('error', `Flex zone "${label}" books same day (booking_type=1), so ${andList(bad)} must be empty — ${bad.length === 1 ? 'that field is' : 'those fields are'} only for prior-day booking (booking_type=2).`, zone, VALIDATION_CODES.flexForbiddenSameDayBookingField);
+          }
+          if (startDay && durationMax) {
+            flexMsg('error', `Flex zone "${label}" booking rule sets both prior_notice_start_day and prior_notice_duration_max — on same-day booking they are mutually exclusive.`, zone, VALIDATION_CODES.flexForbiddenPriorNoticeStartDay);
+          }
+          if (startDay && !startTime) {
+            flexMsg('error', `Flex zone "${label}" booking rule sets prior_notice_start_day but no prior_notice_start_time — the time is required whenever the day is set.`, zone, VALIDATION_CODES.flexMissingPriorNoticeStartTime);
+          }
+        } else {
+          // Prior-day booking: last_day AND last_time are each required — the
+          // canonical validator flags them independently, so a rule missing both
+          // gets both notices (don't chain them). The duration fields are
+          // forbidden; start_time and start_day imply each other.
+          if (!lastDay) {
+            flexMsg('error', `Flex zone "${label}" books a prior day (booking_type=2) but sets no prior_notice_last_day — the spec requires it (how many days ahead booking closes).`, zone, VALIDATION_CODES.flexMissingPriorNoticeLastDay);
+          }
+          if (!lastTime) {
+            flexMsg('error', `Flex zone "${label}" books a prior day (booking_type=2) but sets no prior_notice_last_time — the spec requires the time of day booking closes.`, zone, VALIDATION_CODES.flexMissingPriorNoticeLastTime);
+          }
+          const bad = forbidden([
+            ['prior_notice_duration_min', durationMin],
+            ['prior_notice_duration_max', durationMax],
+          ]);
+          if (bad.length > 0) {
+            flexMsg('error', `Flex zone "${label}" books a prior day (booking_type=2), so ${andList(bad)} must be empty — ${bad.length === 1 ? 'that field is' : 'those fields are'} only for same-day booking (booking_type=1).`, zone, VALIDATION_CODES.flexForbiddenPriorDayBookingField);
+          }
+          if (startTime && !startDay) {
+            flexMsg('error', `Flex zone "${label}" booking rule sets prior_notice_start_time but no prior_notice_start_day — the time is forbidden without the day.`, zone, VALIDATION_CODES.flexForbiddenPriorNoticeStartTime);
+          }
+          if (startDay && !startTime) {
+            flexMsg('error', `Flex zone "${label}" booking rule sets prior_notice_start_day but no prior_notice_start_time — the time is required whenever the day is set.`, zone, VALIDATION_CODES.flexMissingPriorNoticeStartTime);
+          }
+          if (lastDay && startDay && Number(rule.priorNoticeLastDay) > Number(rule.priorNoticeStartDay)) {
+            flexMsg('error', `Flex zone "${label}" booking closes ${rule.priorNoticeLastDay} days ahead but only opens ${rule.priorNoticeStartDay} days ahead — prior_notice_last_day must not be greater than prior_notice_start_day.`, zone, VALIDATION_CODES.flexPriorNoticeLastDayAfterStartDay);
+          }
+        }
+
+        if (durationMin && durationMax
+          && Number(rule.priorNoticeDurationMax) < Number(rule.priorNoticeDurationMin)) {
+          flexMsg('error', `Flex zone "${label}" booking rule has prior_notice_duration_max (${rule.priorNoticeDurationMax}) below prior_notice_duration_min (${rule.priorNoticeDurationMin}).`, zone, VALIDATION_CODES.flexInvalidPriorNoticeDurationMin);
+        }
+        if (bookingServiceId && !flexServiceIds.has(String(rule.priorNoticeServiceId))) {
+          flexMsg('error', `Flex zone "${label}" booking rule references prior_notice_service_id "${rule.priorNoticeServiceId}", which no longer exists.`, zone, VALIDATION_CODES.flexUnknownPriorNoticeService);
+        }
+      }
     }
-    if (!timeOk(zone.pickupWindowStart)) {
+
+    // ── Shared geography-id namespace ──────────────────────────────────────
+    for (const [id, owners] of geographyOwners) {
+      if (owners.length < 2) continue;
+      const zone = owners.find((o) => o.zone)?.zone;
+      if (!zone) continue;
       messages.push(msg(
         'error',
-        `Flex zone "${zone.name}" pickup window start "${zone.pickupWindowStart}" must be HH:MM:SS`,
+        `Geography id "${id}" is used by ${andList(owners.map((o) => o.label))} — stops.txt, locations.geojson and location_groups.txt share ONE id namespace, so each id must be unique across all three.`,
         'flex_zone', zone.id,
-      ));
-    }
-    if (!timeOk(zone.pickupWindowEnd)) {
-      messages.push(msg(
-        'error',
-        `Flex zone "${zone.name}" pickup window end "${zone.pickupWindowEnd}" must be HH:MM:SS`,
-        'flex_zone', zone.id,
-      ));
-    }
-    if (
-      zone.pickupWindowStart && zone.pickupWindowEnd &&
-      timeOk(zone.pickupWindowStart) && timeOk(zone.pickupWindowEnd) &&
-      zone.pickupWindowStart > zone.pickupWindowEnd
-    ) {
-      messages.push(msg(
-        'error',
-        `Flex zone "${zone.name}" pickup window end is before start`,
-        'flex_zone', zone.id,
-      ));
-    }
-    if (hasWindow && state.calendars.length === 0) {
-      messages.push(msg(
-        'error',
-        `Flex zone "${zone.name}" needs a service pattern (calendar) to produce a trip — define one in the Calendars tab.`,
-        'flex_zone', zone.id,
-      ));
-    }
-    if (hasWindow && zone.serviceId && !serviceIdSet.has(zone.serviceId)) {
-      messages.push(msg(
-        'error',
-        `Flex zone "${zone.name}" references service_id "${zone.serviceId}" which no longer exists.`,
-        'flex_zone', zone.id,
-      ));
-    }
-    if (!zone.bookingRule) {
-      messages.push(msg(
-        'warning',
-        `Flex zone "${zone.name}" has no booking rule — riders won't know how to request service.`,
-        'flex_zone', zone.id,
+        VALIDATION_CODES.flexDuplicateGeographyId,
       ));
     }
   }
@@ -666,84 +926,6 @@ export function runValidation(state: AppStore): ValidationMessage[] {
         ));
       } else {
         seenStopAreaPairs.add(key);
-      }
-    }
-  }
-
-  // ── GTFS-Flex zones (polygon / group / mixed) ──────────────────────────
-  // Only validate when the demand-response feature is on and zones exist —
-  // otherwise this is a no-op for ordinary fixed-route feeds.
-  if (featureEnabled(state, 'demandResponse') && state.flexZones.length > 0) {
-    for (const zone of state.flexZones) {
-      const shape = flexZoneShape(zone);
-      const label = zone.name || zone.id;
-
-      // A zone must carry at least one service-area shape (polygon or group).
-      if (shape === 'empty') {
-        messages.push(msg(
-          'warning',
-          `Flex zone "${label}" has no service area — add a polygon or a stop group, or remove the zone.`,
-          'flex_zone', zone.id,
-        ));
-      }
-
-      // A group component with no stops won't export a usable
-      // location_group_stops.txt row.
-      if (flexZoneHasGroup(zone) && (zone.stopIds?.length ?? 0) === 0) {
-        messages.push(msg(
-          'warning',
-          `Flex zone "${label}" has a stop group with no stops. Add stops to the group${flexZoneHasPolygons(zone) ? ' or remove the group to keep this a polygon-only zone' : ''}.`,
-          'flex_zone', zone.id,
-        ));
-      }
-
-      // Every stop referenced by a group must exist in stops.txt.
-      if (flexZoneHasGroup(zone)) {
-        const seen = new Set<string>();
-        for (const sid of zone.stopIds ?? []) {
-          if (seen.has(sid)) {
-            messages.push(msg(
-              'warning',
-              `Flex zone "${label}" lists stop "${sid}" in its group more than once.`,
-              'flex_zone', zone.id,
-            ));
-            continue;
-          }
-          seen.add(sid);
-          if (!stopIdSet.has(sid)) {
-            messages.push(msg(
-              'error',
-              `Flex zone "${label}" references stop "${sid}" in its group, but no such stop exists.`,
-              'flex_zone', zone.id,
-            ));
-          }
-        }
-      }
-
-      // A zone only materializes into a flex trip (and thus exports its
-      // locations / location_group references) when it has a pickup window;
-      // flag a zone that has a service area but no window so the user knows it
-      // won't appear in the exported feed.
-      if (shape !== 'empty' && (!zone.pickupWindowStart || !zone.pickupWindowEnd)) {
-        messages.push(msg(
-          'warning',
-          `Flex zone "${label}" has no pickup window set, so it won't be exported as a flex trip. Set a pickup start/end in the zone's Details.`,
-          'flex_zone', zone.id,
-        ));
-      }
-
-      // A zone with a window needs a service pattern to materialize a trip.
-      if (shape !== 'empty' && zone.pickupWindowStart && zone.pickupWindowEnd) {
-        const hasService = zone.serviceId
-          ? serviceIdSet.has(zone.serviceId) || state.calendarDates.some((d) => d.service_id === zone.serviceId)
-          : state.calendars.length > 0;
-        if (!hasService) {
-          messages.push(msg(
-            'warning',
-            `Flex zone "${label}" has no valid service pattern, so it can't be exported as a flex trip. Pick a calendar in the zone's Details.`,
-            'flex_zone', zone.id,
-          ));
-        }
       }
     }
   }

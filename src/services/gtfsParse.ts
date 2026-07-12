@@ -287,19 +287,31 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
   // Trips
   report({ phase: 'Parsing trips…' });
   const tripsText = await readFile('trips.txt');
-  const trips: Trip[] = tripsText
-    ? parseCSV(tripsText).map((row) => ({
-        trip_id: String(row.trip_id),
-        route_id: String(row.route_id),
-        service_id: String(row.service_id),
-        trip_headsign: row.trip_headsign || undefined,
-        trip_short_name: row.trip_short_name || undefined,
-        direction_id: (num(row.direction_id) as 0 | 1),
-        block_id: row.block_id ? String(row.block_id) : undefined,
-        shape_id: row.shape_id ? String(row.shape_id) : undefined,
-        wheelchair_accessible: row.wheelchair_accessible !== undefined ? num(row.wheelchair_accessible) : undefined,
-      }))
-    : [];
+  const tripRows = tripsText ? parseCSV(tripsText) : [];
+  const trips: Trip[] = tripRows.map((row) => ({
+    trip_id: String(row.trip_id),
+    route_id: String(row.route_id),
+    service_id: String(row.service_id),
+    trip_headsign: row.trip_headsign || undefined,
+    trip_short_name: row.trip_short_name || undefined,
+    direction_id: (num(row.direction_id) as 0 | 1),
+    block_id: row.block_id ? String(row.block_id) : undefined,
+    shape_id: row.shape_id ? String(row.shape_id) : undefined,
+    wheelchair_accessible: row.wheelchair_accessible !== undefined ? num(row.wheelchair_accessible) : undefined,
+  }));
+
+  // GTFS-Flex puts safe_duration_factor / safe_duration_offset on trips.txt.
+  // Keep only the trips that carry them; the flex zones read them back below.
+  const tripSafeDuration = new Map<string, { factor?: number; offset?: number }>();
+  for (const row of tripRows) {
+    const hasFactor = row.safe_duration_factor !== undefined && row.safe_duration_factor !== '';
+    const hasOffset = row.safe_duration_offset !== undefined && row.safe_duration_offset !== '';
+    if (!hasFactor && !hasOffset) continue;
+    tripSafeDuration.set(String(row.trip_id), {
+      factor: hasFactor ? num(row.safe_duration_factor) : undefined,
+      offset: hasOffset ? num(row.safe_duration_offset) : undefined,
+    });
+  }
 
   // Stop times. A flex stop_time has a location_id (polygon) or
   // location_group_id (stop group) instead of stop_id; we split those out
@@ -632,23 +644,33 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
   // ─── GTFS-Flex: locations.geojson + booking_rules.txt ────────────────────
 
   /**
-   * Extract a flex location_id from a GeoJSON feature. Our own exporter
-   * writes it as `properties.stop_id`; standard GTFS-Flex v2 feeds use
-   * the top-level `id` field and often leave properties empty.
+   * Extract a flex location_id from a GeoJSON feature. The spec puts it in the
+   * top-level `id` field (which is what we now export); feeds we exported
+   * earlier carried it in `properties.stop_id`, so both are accepted.
    */
   const locationIdOf = (f: GeoJSON.Feature): string => {
     const p = (f.properties || {}) as Record<string, unknown>;
-    return String(p.stop_id || p.id || f.id || '');
+    return String(f.id ?? p.id ?? p.stop_id ?? '');
   };
 
   /**
-   * Key a flex location_id back to a zone_id. Our own exporter writes
-   * multiple features for a multi-polygon zone as `${zoneId}-0`,
-   * `${zoneId}-1`, …, so stripping a trailing `-N` recovers the zone id
-   * for re-import. Flex v2 feeds with unique ids per feature (e.g.
-   * `area_708`) just map 1:1 — each polygon becomes its own zone.
+   * Feeds we exported before the one-zone-one-location fix wrote each polygon of
+   * a zone as its own feature — ids `${zoneId}-0`, `${zoneId}-1`, … carried in
+   * `properties.stop_id`, never at the top level. Only features with exactly
+   * that legacy shape (and a `-0` sibling) get the trailing `-N` stripped so
+   * their polygons regroup into one zone. Everything else — our current export
+   * and third-party flex feeds, which both carry a top-level `id` — maps 1:1, so
+   * a zone whose own id ends in `-1` survives a round-trip unmangled.
    */
-  const zoneIdFromLocationId = (loc: string): string => loc.replace(/-\d+$/, '');
+  const isLegacyFeatureId = (f: GeoJSON.Feature): boolean => {
+    const p = (f.properties || {}) as Record<string, unknown>;
+    return f.id == null && p.id == null && p.stop_id != null;
+  };
+  const zoneIdFromLocationId = (f: GeoJSON.Feature, loc: string, allIds: Set<string>): string => {
+    if (!isLegacyFeatureId(f)) return loc;
+    const base = loc.replace(/-\d+$/, '');
+    return base !== loc && allIds.has(`${base}-0`) ? base : loc;
+  };
 
   // booking_rules.txt → id → BookingRule
   const bookingRulesText = await readFile('booking_rules.txt');
@@ -665,6 +687,7 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
         priorNoticeLastTime: row.prior_notice_last_time || undefined,
         priorNoticeStartDay: row.prior_notice_start_day ? num(row.prior_notice_start_day) : undefined,
         priorNoticeStartTime: row.prior_notice_start_time || undefined,
+        priorNoticeServiceId: row.prior_notice_service_id || undefined,
         message: row.message || undefined,
         pickupMessage: row.pickup_message || undefined,
         dropOffMessage: row.drop_off_message || undefined,
@@ -705,6 +728,41 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
 
   const numOrU = (v: unknown) => (v === '' || v == null ? undefined : Number(v));
 
+  /** stop_times pickup_type / drop_off_type on a flex row, when the feed sets one. */
+  const flexTypeOrU = (v: unknown): 0 | 1 | 2 | 3 | undefined => {
+    const n = numOrU(v);
+    return n === 0 || n === 1 || n === 2 || n === 3 ? n : undefined;
+  };
+
+  /**
+   * Travel within a single location or location group takes TWO stop_times
+   * records on the same trip (same id, stop_sequence 1 and 2), so collapse a
+   * zone's rows to one per trip before reading windows off them — otherwise the
+   * second record would look like an extra service window.
+   */
+  const oneRowPerTrip = (rows: CsvRow[]): CsvRow[] => {
+    const seen = new Set<string>();
+    return rows.filter((r) => {
+      const tid = String(r.trip_id || '');
+      if (seen.has(tid)) return false;
+      seen.add(tid);
+      return true;
+    });
+  };
+
+  /**
+   * safe_duration_factor / safe_duration_offset are trips.txt fields. Feeds we
+   * exported earlier wrote them on the flex stop_times row instead, so fall back
+   * to that rather than silently dropping a user's values.
+   */
+  const safeDurationOf = (flexRow: CsvRow | undefined) => {
+    const fromTrip = flexRow ? tripSafeDuration.get(String(flexRow.trip_id || '')) : undefined;
+    return {
+      factor: fromTrip?.factor ?? numOrU(flexRow?.safe_duration_factor),
+      offset: fromTrip?.offset ?? numOrU(flexRow?.safe_duration_offset),
+    };
+  };
+
   // Track the set of trip_ids each emitted group zone references, so a
   // polygon zone whose flex stop_times row shares the same trip can be merged
   // into it (= a "mixed" polygon + group zone). Our exporter puts both rows on
@@ -737,6 +795,7 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
       }
     }
 
+    const safeDuration = safeDurationOf(flexRow);
     const zone: FlexZone = {
       // Mirror our own export's naming so a round-trip is stable.
       id: groupId.replace(/-group$/, ''),
@@ -747,12 +806,14 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
       bookingRule,
       pickupWindowStart: pickupStart || undefined,
       pickupWindowEnd: pickupEnd || undefined,
+      pickupType: flexTypeOrU(flexRow?.pickup_type),
+      dropOffType: flexTypeOrU(flexRow?.drop_off_type),
       serviceId,
       routeId,
       meanDurationFactor: numOrU(flexRow?.mean_duration_factor),
       meanDurationOffset: numOrU(flexRow?.mean_duration_offset),
-      safeDurationFactor: numOrU(flexRow?.safe_duration_factor),
-      safeDurationOffset: numOrU(flexRow?.safe_duration_offset),
+      safeDurationFactor: safeDuration.factor,
+      safeDurationOffset: safeDuration.offset,
     };
     flexZones.push(zone);
     groupZoneById.set(zone.id, zone);
@@ -764,12 +825,13 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
   if (locationsText) {
     try {
       const geo = JSON.parse(locationsText) as GeoJSON.FeatureCollection;
-      // Group features by zone id (location_id prefix before the -N suffix)
+      // Group features by zone id (1:1 today; legacy exports split a zone's
+      // polygons across `${zoneId}-N` features that regroup into one zone).
+      const geoFeatures = (geo.features || []).filter((f) => locationIdOf(f));
+      const allLocIds = new Set(geoFeatures.map((f) => locationIdOf(f)));
       const byZone = new Map<string, GeoJSON.Feature[]>();
-      for (const f of geo.features || []) {
-        const locId = locationIdOf(f);
-        if (!locId) continue;
-        const zoneId = zoneIdFromLocationId(locId);
+      for (const f of geoFeatures) {
+        const zoneId = zoneIdFromLocationId(f, locationIdOf(f), allLocIds);
         const list = byZone.get(zoneId) || [];
         list.push(f);
         byZone.set(zoneId, list);
@@ -784,7 +846,9 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
         // window; subsequent rows become additionalWindows entries so a
         // zone with morning + evening shuttles round-trips faithfully.
         const myLocIds = new Set(features.map((f) => locationIdOf(f)));
-        const myFlexRows = flexStopTimeRows.filter((r) => myLocIds.has(String(r.location_id)));
+        const myFlexRows = oneRowPerTrip(
+          flexStopTimeRows.filter((r) => myLocIds.has(String(r.location_id))),
+        );
         const flexRow = myFlexRows[0];
         const extraRows = myFlexRows.slice(1);
 
@@ -847,16 +911,19 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
           mergeTarget.serviceId ||= serviceId;
           mergeTarget.routeId ||= routeId;
           mergeTarget.bookingRule ||= bookingRule;
+          mergeTarget.pickupType ??= flexTypeOrU(flexRow?.pickup_type);
+          mergeTarget.dropOffType ??= flexTypeOrU(flexRow?.drop_off_type);
           mergeTarget.meanDurationFactor ??= numOrU(flexRow?.mean_duration_factor);
           mergeTarget.meanDurationOffset ??= numOrU(flexRow?.mean_duration_offset);
-          mergeTarget.safeDurationFactor ??= numOrU(flexRow?.safe_duration_factor);
-          mergeTarget.safeDurationOffset ??= numOrU(flexRow?.safe_duration_offset);
+          mergeTarget.safeDurationFactor ??= safeDurationOf(flexRow).factor;
+          mergeTarget.safeDurationOffset ??= safeDurationOf(flexRow).offset;
           if (additionalWindows.length > 0 && !mergeTarget.additionalWindows) {
             mergeTarget.additionalWindows = additionalWindows;
           }
           continue;
         }
 
+        const safeDuration = safeDurationOf(flexRow);
         flexZones.push({
           id: zoneId,
           name: String(props.stop_name || props.name || zoneId),
@@ -865,12 +932,14 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
           bookingRule,
           pickupWindowStart: pickupStart ? String(pickupStart) : undefined,
           pickupWindowEnd: pickupEnd ? String(pickupEnd) : undefined,
+          pickupType: flexTypeOrU(flexRow?.pickup_type),
+          dropOffType: flexTypeOrU(flexRow?.drop_off_type),
           serviceId,
           routeId,
           meanDurationFactor: numOrU(flexRow?.mean_duration_factor),
           meanDurationOffset: numOrU(flexRow?.mean_duration_offset),
-          safeDurationFactor: numOrU(flexRow?.safe_duration_factor),
-          safeDurationOffset: numOrU(flexRow?.safe_duration_offset),
+          safeDurationFactor: safeDuration.factor,
+          safeDurationOffset: safeDuration.offset,
           additionalWindows: additionalWindows.length > 0 ? additionalWindows : undefined,
         });
       }
@@ -892,6 +961,24 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
     const remainingTrips = tripsWithoutFlex.filter((t) => t.route_id === r.route_id);
     return remainingTrips.length > 0;
   });
+  // A zone's fare rides on its synthesized route, so dropping that route would
+  // strand the fare_rules row pointing at it. Absorb the fare back onto the
+  // zone and drop the row; materializeFlex re-emits both on the next export.
+  const droppedFlexRouteIds = new Set(
+    routes
+      .filter((r) => flexZoneRouteIds.has(r.route_id))
+      .filter((r) => !routesWithoutFlex.some((kept) => kept.route_id === r.route_id))
+      .map((r) => r.route_id),
+  );
+  for (const zone of flexZones) {
+    if (!zone.routeId || !droppedFlexRouteIds.has(zone.routeId)) continue;
+    const rule = fareRules.find((f) => f.route_id === zone.routeId && f.fare_id);
+    if (rule) zone.fareId = rule.fare_id;
+  }
+  const fareRulesWithoutFlex = fareRules.filter(
+    (f) => !(f.route_id && droppedFlexRouteIds.has(f.route_id)),
+  );
+
   // Re-point flex zones that lost their route to the kept route (if any).
   for (const zone of flexZones) {
     if (zone.routeId && !routesWithoutFlex.some((r) => r.route_id === zone.routeId)) {
@@ -903,7 +990,7 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
     agencies, calendars, calendarDates,
     routes: routesWithoutFlex, shapes, stops,
     trips: tripsWithoutFlex, stopTimes, feedInfo,
-    routeStops, fareAttributes, fareRules, transfers,
+    routeStops, fareAttributes, fareRules: fareRulesWithoutFlex, transfers,
     frequencies, levels, pathways,
     fareAreas, stopAreas, fareNetworks, routeNetworks,
     timeframes, riderCategories, fareMedia,

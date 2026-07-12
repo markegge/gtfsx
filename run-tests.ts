@@ -891,10 +891,11 @@ async function main() {
   assert('export: 4 location_group_stops rows',
     (locGroupStopsTxt.trim().split('\n').length - 1) === 4, locGroupStopsTxt);
   // The mixed zone's trip carries BOTH a location_id row and a
-  // location_group_id row (two flex stop_times on the same trip).
+  // location_group_id row (two flex stop_times on the same trip). The whole zone
+  // is one location, so the location_id is the zone id itself.
   const mixedStopTimeRows = stopTimesTxt.split('\n').filter(l => l.startsWith('zmixed-trip,'));
   assert('export: mixed zone has 2 flex stop_times rows', mixedStopTimeRows.length === 2, `got ${mixedStopTimeRows.length}`);
-  assert('export: mixed has a location_id row', mixedStopTimeRows.some(r => r.includes('zmixed-0')));
+  assert('export: mixed has a location_id row', mixedStopTimeRows.some(r => r.split(',').includes('zmixed')));
   assert('export: mixed has a location_group_id row', mixedStopTimeRows.some(r => r.includes('zmixed-group')));
 
   // Round-trip: re-import and confirm all three zones reconstruct with the

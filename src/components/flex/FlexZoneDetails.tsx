@@ -513,31 +513,10 @@ export function FlexZoneDetails({ zone }: Props) {
         </summary>
         <div className="pl-2 mt-2 space-y-1.5 text-[11px]">
           <p className="text-warm-gray/80">
-            Let trip planners estimate ETA for on-demand legs. Leave blank if unsure.
+            Let trip planners estimate ETA for on-demand legs. Written to trips.txt as
+            safe_duration_factor / safe_duration_offset. Leave blank if unsure.
           </p>
           <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[10px] text-warm-gray mb-0.5">Mean duration factor</label>
-              <input
-                type="number" step="0.01" min="0"
-                value={zone.meanDurationFactor ?? ''}
-                onChange={(e) => setField('meanDurationFactor',
-                  e.target.value === '' ? undefined : Number(e.target.value))}
-                placeholder="e.g. 1.0"
-                className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] text-warm-gray mb-0.5">Mean duration offset (s)</label>
-              <input
-                type="number" step="1"
-                value={zone.meanDurationOffset ?? ''}
-                onChange={(e) => setField('meanDurationOffset',
-                  e.target.value === '' ? undefined : Number(e.target.value))}
-                placeholder="e.g. 300"
-                className="w-full px-2 py-1 border border-sand rounded text-xs bg-white focus:outline-none focus:border-purple"
-              />
-            </div>
             <div>
               <label className="block text-[10px] text-warm-gray mb-0.5">Safe duration factor</label>
               <input

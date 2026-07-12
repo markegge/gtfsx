@@ -169,16 +169,19 @@ Why staged: the editor's target audience is small and mid-size agencies whose im
 
 Full GTFS-Flex authoring is shipped (`src/store/flexSlice.ts`, `gtfsImport.ts` / `gtfsExport.ts`, `src/components/flex/`):
 
-- ✅ `locations.geojson` polygon zones (single + multi-polygon) with edit handles on the map.
-- ✅ `booking_rules.txt` (booking type, prior-notice durations, contact info, messages) per zone or trip.
-- ✅ Extended `stop_times` (location_id, pickup/drop_off booking rule ids, pickup/drop-off windows).
-- ✅ `location_groups.txt` + `location_group_stops.txt` (a zone is polygon **or** group; mixed not yet supported).
+- ✅ `locations.geojson` polygon zones. One zone = one location: a zone is exported as a single Feature with a top-level `id` (the zone id), and a multi-polygon zone merges into one `MultiPolygon` Feature. Properties are limited to the spec's `stop_name` / `stop_desc`.
+- ✅ `booking_rules.txt` (booking type, prior-notice durations, `prior_notice_service_id`, contact info, messages) per zone.
+- ✅ Extended `stop_times` (location_id, pickup/drop_off booking rule ids, pickup/drop-off windows, pickup/drop-off types). Travel within one zone correctly emits the **two** records the spec requires, both carrying the window and neither carrying an arrival/departure time.
+- ✅ `location_groups.txt` + `location_group_stops.txt`. A zone may be polygon, group, or **mixed** (polygon + group on one trip = travel from a zone to a group).
 - ✅ `continuous_pickup` / `continuous_drop_off` (route-level + per-`stop_time` fields).
-- ✅ Additional service windows per zone (e.g. morning + evening shuttles); travel-time duration factors (mean/safe).
-- ✅ `calendar_dates` exception handling; flex route-type customization (715, 1551, 1564).
-- ✅ Zone ↔ route ↔ service_id linkage preserved on round-trip; validation + pre-export checks for incomplete zones.
+- ✅ Additional service windows per zone (e.g. morning + evening shuttles); `safe_duration_factor` / `safe_duration_offset` on `trips.txt`.
+- ✅ `calendar_dates` exception handling; flex zones create a `route_type` 715 route (715, 1551, 1564 all selectable).
+- ✅ Zone ↔ route ↔ service_id linkage preserved on round-trip; validation + pre-export checks for incomplete zones. Zones with no pickup window are skipped entirely on export (no orphan geometry or booking rules in the zip).
 - ✅ Per-`stop_time` continuous pickup/drop-off overrides surfaced in the timetable UI (flag icon in each stop header → popover; overrides the route default per stop, applied across the route's trips; round-trips through import/export).
-- 🔲 Mixed polygon+group zones in a single zone (rare) — needs separate model design. Tracked in GitHub issues (#29 part 2).
+- 🔲 Import a GeoJSON boundary file as a zone (today a zone must be drawn, buffered, or arrive via a GTFS zip). Tracked as #56.
+- 🔲 Editor UI for `pickup_type` / `drop_off_type`, `prior_notice_start_day` / `_time`, `pickup_message` / `drop_off_message`; booking-rule reuse across zones. All round-trip through import/export today, but have no editor. Tracked as #58.
+
+Note: `mean_duration_factor` / `mean_duration_offset` are **not** GTFS fields (they were dropped before Flex merged into the base spec). They are still parsed from legacy feeds but are no longer written to the zip or exposed in the UI. The real spec fields are `safe_duration_factor` / `safe_duration_offset` on `trips.txt`.
 
 ### 1.8 Validation, import, export
 

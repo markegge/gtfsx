@@ -66,3 +66,6 @@ tiles/coverage/*.fgb
 
 # Google Drive strategy docs (symlink, not part of repo)
 /GTFS-X
+
+# Local video masters for videos.gtfsx.com (uploaded to R2 via wrangler, never committed)
+/videos/

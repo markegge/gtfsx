@@ -289,8 +289,16 @@ Design rationale is preserved in the decisions appendix of the archived
   marketing pages (home two-panel hero, /planning, compare, state-dot, feed-health)
   are demo-first. Google Ads follow-through done 2026-07-12: `demo_request`
   conversion action created (ctId 7682006138), its secret set on prod, budgets
-  reweighted (Editor $12/day, Planning $28/day). Still open: RSA rewrites
-  dropping Pro/$49/trial-first copy.
+  reweighted (Editor $12/day, Planning $28/day), Book-appointments goal wired
+  into the Agency & Planning campaign, RSAs rewritten for the planning audience
+  (Route Planning ad → Excellent strength; Title VI ad → Average; stale
+  "Pro"/"Agency Tier" copy scrubbed from sitelinks and headlines), a
+  "Book a 30-Min Demo" campaign sitelink added, duplicate sitelinks removed,
+  and 12 negative keywords added (GIS-intent terms on Editor, consumer
+  trip-planning terms on Agency & Planning). Still open in Google Ads: the
+  disapproved 400×400 business-logo asset (Misleading Ad Design) needs a
+  compliant re-upload, and bidding stays Maximize Clicks until ≥30
+  conversions/30 days.
 - **`/transitfeeds/` static page live since 2026-07-12**
   (`public/transitfeeds/index.html`, `https://www.gtfsx.com/transitfeeds/`), a
   landing page for the shut-down transitfeeds.com/OpenMobilityData. Registered

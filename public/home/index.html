@@ -73,7 +73,7 @@
       <p class="subhead">Everything a transit agency needs to build, publish, and plan its service.</p>
     </div>
 
-    <div class="hero-panels">
+    <div class="hero-panels planner-forward">
 
       <div class="hero-panel panel-editor reveal">
         <h2 class="panel-title">The Fast, Free GTFS Editor</h2>
@@ -86,32 +86,69 @@
           <li>Nationwide demand-propensity map</li>
         </ul>
         <div class="panel-ctas">
-          <a href="/editor" class="btn btn-primary btn-lg" data-cta="open-editor">Open the editor <span class="arrow">→</span></a>
+          <a href="/editor" class="btn btn-ghost btn-md" data-cta="open-editor">Open the editor <span class="arrow">→</span></a>
         </div>
         <p class="panel-note"><span class="pin">●</span> No account, installation, or GIS required.</p>
       </div>
 
       <div class="hero-panel panel-planner reveal">
-        <h2 class="panel-title">The Powerful, Self-Serve Route Planner</h2>
-        <p class="panel-sub">Plan routes, costs, Title&nbsp;VI &amp; demographic coverage as a team. Hosted publishing, scenario comparison, and analyses you can put in a board memo or grant narrative, built into the same editor.</p>
-        <ul class="panel-points">
-          <li>Operating cost, coverage &amp; Title VI equity analyses</li>
-          <li>Hosted feed URL, rider mini-site &amp; embeds</li>
-          <li>Scenario snapshots &amp; team workspaces</li>
-        </ul>
-        <div class="panel-ctas">
-          <a href="/book-demo?src=home_panel" class="btn btn-primary btn-lg" data-cta="home_panel_demo">Book a 30-min demo <span class="arrow">→</span></a>
-          <a href="/pricing/" class="textlink" data-cta="home_panel_subscribe">or subscribe · $2,988/yr</a>
+        <div class="planner-body">
+          <div>
+            <h2 class="panel-title">The Powerful, Self-Serve Route Planner</h2>
+            <p class="panel-sub">Plan routes, costs, Title&nbsp;VI &amp; demographic coverage as a team. Hosted publishing, scenario comparison, and analyses you can put in a board memo or grant narrative, built into the same editor.</p>
+            <ul class="panel-points">
+              <li>Operating cost, coverage &amp; Title VI equity analyses</li>
+              <li>Hosted feed URL, rider mini-site &amp; embeds</li>
+              <li>Scenario snapshots &amp; team workspaces</li>
+            </ul>
+          </div>
+          <div class="plan-mock" role="img" aria-label="The GTFS·X planner: coverage shading, Title VI status, and operating cost computed on the map">
+            <div class="bar">
+              <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="#E8734A"></rect><path d="M7 7 L17 17 M17 7 L7 17" stroke="#FFF8F0" stroke-width="3" stroke-linecap="round"></path></svg>
+              <span class="proj">Mountain Line — Bozeman</span>
+              <span class="grow"></span>
+              <span class="chip vi">Title VI</span>
+              <span class="chip cov">Coverage</span>
+            </div>
+            <div class="plan-map">
+              <svg viewBox="0 0 460 250" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                <path d="M 30 200 L 130 160 L 240 120 L 350 85 L 440 55" stroke="#fff" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M 30 200 L 130 160 L 240 120 L 350 85 L 440 55" stroke="#E8734A" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M 110 235 L 260 210 L 240 120 L 420 150" stroke="#fff" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M 110 235 L 260 210 L 240 120 L 420 150" stroke="#274BAC" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                <g fill="#fff" stroke="#3D2E22" stroke-width="2">
+                  <circle cx="130" cy="160" r="5.5"/><circle cx="240" cy="120" r="6"/><circle cx="350" cy="85" r="5.5"/><circle cx="260" cy="210" r="5.5"/>
+                </g>
+                <g>
+                  <line x1="130" y1="147" x2="130" y2="154" stroke="#C9BBA8" stroke-width="1.5"/>
+                  <rect x="60" y="123" width="140" height="24" rx="5" fill="#fff" stroke="#EADBC8" stroke-width="1.2"/>
+                  <text class="feat-label" x="130" y="139" text-anchor="middle">Coverage · 68% pop.</text>
+                </g>
+                <g>
+                  <line x1="350" y1="72" x2="350" y2="79" stroke="#C9BBA8" stroke-width="1.5"/>
+                  <rect x="248" y="48" width="124" height="24" rx="5" fill="#fff" stroke="#EADBC8" stroke-width="1.2"/>
+                  <text class="feat-label" x="310" y="64" text-anchor="middle">Title VI · passes</text>
+                </g>
+                <g>
+                  <line x1="260" y1="197" x2="260" y2="204" stroke="#C9BBA8" stroke-width="1.5"/>
+                  <rect x="184" y="173" width="152" height="24" rx="5" fill="#fff" stroke="#EADBC8" stroke-width="1.2"/>
+                  <text class="feat-label" x="260" y="189" text-anchor="middle">Operating cost $1.2M/yr</text>
+                </g>
+              </svg>
+            </div>
+          </div>
         </div>
-        <p class="panel-note">14-day free trial available.</p>
+        <div class="panel-ctas">
+          <a href="/book-demo?src=home_panel" class="btn btn-primary btn-lg btn-demo" data-cta="home_panel_demo">Book a 30-min demo <span class="arrow">→</span></a>
+          <a href="/pricing/" class="textlink" data-cta="home_panel_subscribe">or subscribe · $2,988/yr</a>
+          <span class="panel-note">14-day free trial available.</span>
+        </div>
       </div>
 
     </div>
 
     <p class="hero-trust" style="justify-content:center">
-      <span class="pin">●</span> No signup required
-      <span class="dot-sep">·</span>
-      Nothing you build leaves your browser until you save, export, or publish it.
+      <span class="pin">●</span> From blank map to published feed in an afternoon.
     </p>
   </div>
 </section>

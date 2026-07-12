@@ -394,3 +394,43 @@ h3.sub { font-weight: 800; font-size: 20px; line-height: 1.2; }
   .hero-panel .panel-ctas .btn { width: 100%; }
   .compare th, .compare td { padding: 13px 12px; font-size: 12.5px; }
 }
+
+/* ── Planner-forward hero (30/70) — scoped under .hero-panels.planner-forward
+     so the default 50/50 rules stay intact. From handoffs/planner-forward-hero.html. ── */
+.hero-panels.planner-forward { grid-template-columns: 3fr 7fr; }
+.planner-forward .panel-editor { padding: 32px 28px; }
+.planner-forward .panel-editor .panel-title { font-size: 23px; }
+.planner-forward .panel-editor .panel-sub { font-size: 15px; }
+/* Planner panel: copy left, planning mock right */
+.planner-body { display: grid; grid-template-columns: 1.05fr 1fr; gap: 28px; }
+.planner-body > div { display: flex; flex-direction: column; }
+.planner-body .panel-points { margin-bottom: 0; }
+.panel-planner .panel-ctas { margin-top: 28px; gap: 18px; }
+/* Demo CTA — the most prominent element on the page */
+.btn-demo { font-size: 20px; padding: 18px 36px; box-shadow: 0 10px 26px rgba(232,115,74,0.42); }
+.panel-planner .panel-ctas .panel-note { margin: 0; }
+/* Planning mock (mini editor chrome + analysis map) */
+.plan-mock { background: #fff; border-radius: var(--radius-xl); overflow: hidden; border: 1px solid rgba(255,248,240,0.2); box-shadow: 0 18px 40px -20px rgba(0,0,0,0.5); align-self: start; }
+.plan-mock .bar { height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: #fff; border-bottom: 1px solid var(--gtfs-sand); }
+.plan-mock .bar .proj { font-family: var(--font-heading); font-weight: 800; font-size: 12px; color: var(--gtfs-dark-brown); }
+.plan-mock .bar .grow { flex: 1; }
+.plan-mock .bar .chip { font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 6px; }
+.plan-mock .bar .chip.vi { color: var(--gtfs-purple); background: var(--gtfs-purple-light); }
+.plan-mock .bar .chip.cov { color: var(--gtfs-teal); background: var(--gtfs-teal-light); }
+.plan-mock .plan-map {
+  position: relative; height: 250px; overflow: hidden;
+  background-color: #EFE9DD;
+  background-image:
+    radial-gradient(at 30% 65%, rgba(42,157,143,0.28) 0 30%, transparent 60%),
+    radial-gradient(at 72% 35%, rgba(233,196,106,0.3) 0 28%, transparent 58%),
+    repeating-linear-gradient(0deg, rgba(61,46,34,0.045) 0 1px, transparent 1px 44px),
+    repeating-linear-gradient(90deg, rgba(61,46,34,0.045) 0 1px, transparent 1px 44px);
+}
+.plan-mock .plan-map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+@media (max-width: 940px) {
+  .hero-panels.planner-forward { grid-template-columns: 1fr; }
+  .planner-body { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .btn-demo { width: 100%; font-size: 18px; padding: 16px 30px; }
+}

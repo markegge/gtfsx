@@ -40,8 +40,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import JSZip from 'jszip';
 import { importGtfsZip, loadImportIntoStore } from '../../src/services/gtfsImport';
+import { exportGtfsZip } from '../../src/services/gtfsExport';
 import { runValidation } from '../../src/services/validation';
 import { useStore } from '../../src/store';
+import type { FlexZone } from '../../src/store/flexSlice';
 import {
   classifyOurNotice,
   MOBILITY_TO_OURS,
@@ -130,6 +132,155 @@ async function buildFixtureBrokenZip(): Promise<Buffer> {
   return zip.generateAsync({ type: 'nodebuffer' });
 }
 
+// ─── GTFS-Flex feeds ───────────────────────────────────────────────────────
+// Built through OUR OWN exporter (services/gtfsExport.ts) rather than checked in
+// as static files, so the fixture can never drift from the flex data model: any
+// change to how we materialize locations.geojson / location_groups.txt /
+// booking_rules.txt / stop_times windows immediately shows up in the next
+// parity run against the canonical validator.
+
+/** A closed square ring, as a GeoJSON Polygon Feature. */
+function squareFeature(lon: number, lat: number): GeoJSON.Feature {
+  return {
+    type: 'Feature',
+    properties: {},
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[
+        [lon, lat], [lon, lat + 0.05], [lon + 0.05, lat + 0.05], [lon + 0.05, lat], [lon, lat],
+      ]],
+    },
+  };
+}
+
+/** Reset every slice the exporter reads, then seed a minimal flex feed. */
+function seedFlexStore(stops: Record<string, unknown>[], zones: FlexZone[]): void {
+  const s = useStore.getState();
+  s.setAgencies([{
+    agency_id: 'SVT', agency_name: 'Sample Valley Transit',
+    agency_url: 'https://example.org', agency_timezone: 'America/Denver',
+    agency_phone: '406-555-0100',
+  } as never]);
+  s.setCalendars([{
+    service_id: 'weekday',
+    monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 0, sunday: 0,
+    start_date: '20260101', end_date: '20991231',
+  } as never]);
+  s.setCalendarDates([]);
+  s.setStops(stops as never);
+  s.setRoutes([]);
+  s.setRouteStops([]);
+  s.setTrips([]);
+  s.setStopTimes([]);
+  s.setShapes([]);
+  s.setFrequencies([]);
+  s.setTransfers([]);
+  s.setLevels([]);
+  s.setPathways([]);
+  s.setFareAttributes([]);
+  s.setFareRules([]);
+  s.setFareAreas([]);
+  s.setStopAreas([]);
+  s.setFareNetworks([]);
+  s.setRouteNetworks([]);
+  s.setTimeframes([]);
+  s.setRiderCategories([]);
+  s.setFareMedia([]);
+  s.setFareProducts([]);
+  s.setFareLegRules([]);
+  s.setFareTransferRules([]);
+  s.setFeedInfo(undefined as never);
+  s.setFlexZones(zones);
+}
+
+async function exportStoreZip(): Promise<Buffer> {
+  const blob = await exportGtfsZip();
+  return Buffer.from(await blob.arrayBuffer());
+}
+
+const FLEX_STOPS = [
+  { stop_id: 'depot', stop_name: 'Transit Depot', stop_lat: 45.68, stop_lon: -111.04, wheelchair_boarding: 1 },
+  { stop_id: 'clinic', stop_name: 'Valley Clinic', stop_lat: 45.7, stop_lon: -111.01, wheelchair_boarding: 1 },
+];
+
+/**
+ * The canonical microtransit feed, spec-valid end to end: a polygon zone a rider
+ * gets on and off inside (two stop_times records on one location_id, a window,
+ * pickup/drop_off_type 2 + a booking rule, route_type 715), plus a stop-group
+ * zone with a prior-day booking rule.
+ */
+async function buildFlexZip(): Promise<Buffer> {
+  seedFlexStore(FLEX_STOPS, [
+    {
+      id: 'dial-a-ride', name: 'Dial-a-Ride', bufferMiles: 0,
+      geojson: { type: 'FeatureCollection', features: [squareFeature(-111.1, 45.6)] },
+      serviceId: 'weekday',
+      pickupWindowStart: '06:00:00', pickupWindowEnd: '22:00:00',
+      safeDurationFactor: 1.5, safeDurationOffset: 600,
+      bookingRule: {
+        bookingType: 1,
+        priorNoticeDurationMin: 60,
+        priorNoticeDurationMax: 1440,
+        message: 'Call at least an hour ahead.',
+        phoneNumber: '406-555-0100',
+        infoUrl: 'https://example.org/dial-a-ride',
+      },
+    },
+    {
+      id: 'flag-stops', name: 'Flag Stops', bufferMiles: 0,
+      geojson: { type: 'FeatureCollection', features: [] },
+      stopIds: ['depot', 'clinic'],
+      serviceId: 'weekday',
+      pickupWindowStart: '07:00:00', pickupWindowEnd: '18:00:00',
+      bookingRule: {
+        bookingType: 2,
+        priorNoticeLastDay: 1,
+        priorNoticeLastTime: '17:00:00',
+        // prior_notice_start_time is REQUIRED whenever start_day is set — the
+        // canonical validator caught this feed missing it on the first run.
+        priorNoticeStartDay: 14,
+        priorNoticeStartTime: '09:00:00',
+        phoneNumber: '406-555-0100',
+      },
+    },
+  ]);
+  return exportStoreZip();
+}
+
+/**
+ * The same shape of feed with DELIBERATE flex errors, one per rule family:
+ *   - `depot` is BOTH a stops.stop_id and a locations.geojson feature id
+ *     (duplicate_geography_id — the three files share ONE id namespace).
+ *   - a booking_type=2 rule that sets prior_notice_duration_min (forbidden on
+ *     prior-day booking) and no prior_notice_last_day (required).
+ *   - a pickup/drop-off window that ends before it starts.
+ */
+async function buildFlexBrokenZip(): Promise<Buffer> {
+  seedFlexStore(FLEX_STOPS, [
+    {
+      id: 'depot', name: 'Depot Zone', bufferMiles: 0,
+      geojson: { type: 'FeatureCollection', features: [squareFeature(-111.1, 45.6)] },
+      serviceId: 'weekday',
+      pickupWindowStart: '06:00:00', pickupWindowEnd: '22:00:00',
+      bookingRule: { bookingType: 1, priorNoticeDurationMin: 60, phoneNumber: '406-555-0100' },
+    },
+    {
+      id: 'evening-shuttle', name: 'Evening Shuttle', bufferMiles: 0,
+      geojson: { type: 'FeatureCollection', features: [squareFeature(-110.9, 45.7)] },
+      serviceId: 'weekday',
+      // Ends before it starts.
+      pickupWindowStart: '22:00:00', pickupWindowEnd: '06:00:00',
+      bookingRule: {
+        bookingType: 2,
+        // Forbidden on booking_type=2, and prior_notice_last_day is missing.
+        priorNoticeDurationMin: 90,
+        phoneNumber: '406-555-0100',
+      },
+    },
+  ]);
+  return exportStoreZip();
+}
+
 const FEEDS: FeedDef[] = [
   {
     id: 'sample-gtfs-feed',
@@ -144,6 +295,18 @@ const FEEDS: FeedDef[] = [
     label: 'sample-gtfs-feed + injected errors (dropped calendar, dangling stop_id)',
     countryCode: '',
     build: buildFixtureBrokenZip,
+  },
+  {
+    id: 'flex-microtransit',
+    label: 'GTFS-Flex microtransit (our exporter) -- polygon zone + stop group, spec-valid',
+    countryCode: 'US',
+    build: buildFlexZip,
+  },
+  {
+    id: 'flex-microtransit-broken',
+    label: 'GTFS-Flex + injected errors (geography-id collision, bad booking rule, inverted window)',
+    countryCode: 'US',
+    build: buildFlexBrokenZip,
   },
 ];
 

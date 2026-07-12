@@ -19,6 +19,8 @@ export interface BookingRule {
   /** Days before when booking opens (booking_type=2, optional). */
   priorNoticeStartDay?: number;
   priorNoticeStartTime?: string;
+  /** service_id whose days are counted for prior notice (booking_type=2 only). */
+  priorNoticeServiceId?: string;
   /** Rider-facing instruction text (shown in trip planners). */
   message?: string;
   pickupMessage?: string;
@@ -55,12 +57,17 @@ export interface FlexZone {
   stopIds?: string[];
   /** Optional booking rule. Exported to booking_rules.txt with id `${zone.id}-booking`. */
   bookingRule?: BookingRule;
-  /** Optional pickup window (HH:MM:SS) when the zone is in service. */
+  /** Optional pickup/drop-off window (HH:MM:SS) when the zone is in service. */
   pickupWindowStart?: string;
   pickupWindowEnd?: string;
-  /** Optional drop-off window (HH:MM:SS); often the same as pickup. */
-  dropOffWindowStart?: string;
-  dropOffWindowEnd?: string;
+  /**
+   * stop_times pickup_type / drop_off_type for the zone's flex rows. Defaults
+   * to 2 ("phone the agency") — the canonical on-demand value. With a window
+   * defined the spec forbids pickup_type 0 and 3, and drop_off_type 0, so the
+   * export clamps those back to 2.
+   */
+  pickupType?: 0 | 1 | 2 | 3;
+  dropOffType?: 0 | 1 | 2 | 3;
   /**
    * service_id from calendar.txt that governs when this zone runs. Picked
    * from the service patterns the user has defined in the Calendars tab.
@@ -76,14 +83,19 @@ export interface FlexZone {
   /** Optional fare reference — fare_id from fare_attributes.txt. */
   fareId?: string;
   /**
-   * GTFS-Flex stop_times travel-time estimators used by trip planners to
-   * give ETA ranges for on-demand legs. Factors are dimensionless
-   * multipliers; offsets are seconds.
+   * GTFS-Flex trips.txt travel-time estimators used by trip planners to give
+   * ETA ranges for on-demand legs. The factor is a dimensionless multiplier;
+   * the offset is in seconds.
+   */
+  safeDurationFactor?: number;
+  safeDurationOffset?: number;
+  /**
+   * Legacy: mean_duration_factor / mean_duration_offset were dropped from the
+   * flex spec before adoption. Still parsed from feeds that carry them (so a
+   * user's data isn't silently discarded on import) but never written back.
    */
   meanDurationFactor?: number;
   meanDurationOffset?: number;
-  safeDurationFactor?: number;
-  safeDurationOffset?: number;
   /**
    * Additional service windows beyond the primary one. Each entry
    * materializes to its own flex trip (distinct trip_id, own service_id,

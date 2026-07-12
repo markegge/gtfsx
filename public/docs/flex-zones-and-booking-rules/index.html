@@ -39,7 +39,7 @@
     }
   },
   "datePublished": "2026-05-01",
-  "dateModified": "2026-06-12",
+  "dateModified": "2026-07-12",
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": "https://www.gtfsx.com/docs/flex-zones-and-booking-rules/"
@@ -86,25 +86,108 @@
         <img src="/assets/docs/flex-create-methods.png" alt="Flex Zones panel showing the three zone-creation options: Draw Zone on Map, Create Stop Group, and Auto-generate from fixed routes with a buffer distance input." loading="lazy" />
         <figcaption>The three zone-creation methods. Auto-generate has a configurable buffer (defaults to 0.75 mi); each method then routes you into the same Service Details configuration.</figcaption>
       </figure>
-      <p>Click <strong>+ Create New Flex Zone</strong>, then pick:</p>
+      <p>Click <strong>+ Add flex zone</strong>, then pick one of the three paths under <strong>Create new flex zone</strong>:</p>
       <ul>
-        <li><strong>Draw Zone on Map</strong> — click to place polygon vertices, double-click to close. Exports as <code>locations.geojson</code>. Multi-polygon zones (two disjoint service areas under the same booking) are supported — draw additional polygons within the same zone.</li>
-        <li><strong>Create Stop Group</strong> — a named group of existing stops, used when the "zone" is really a list of allowed pickup/drop-off points rather than a free area. Exports as <code>location_groups.txt</code> + <code>location_group_stops.txt</code>.</li>
-        <li><strong>Auto-generate from fixed routes</strong> — buffer a set of existing fixed routes by a configurable distance to produce a polygon zone. Useful for deviated fixed-route service where the deviation area is "X miles either side of the route."</li>
+        <li><strong>Draw Zone on Map.</strong> Click to place polygon vertices, double-click to close. Exports as <code>locations.geojson</code>. Multi-polygon zones (two disjoint service areas under the same booking) are supported: use <strong>+ Polygon</strong> in the zone's Details to draw another polygon into the same zone. All of a zone's polygons export as one <code>MultiPolygon</code> feature.</li>
+        <li><strong>Create Stop Group.</strong> A named group of existing stops, used when the "zone" is really a list of allowed pickup/drop-off points rather than a free area. Exports as <code>location_groups.txt</code> + <code>location_group_stops.txt</code>.</li>
+        <li><strong>Auto-generate from fixed routes.</strong> Buffer your existing bus routes by a configurable distance (default 0.75 mi) to produce a polygon zone. Useful for deviated fixed-route service where the deviation area is "X miles either side of the route."</li>
       </ul>
+      <p>Creating a zone also creates its paired route (<code>route_type</code> 715). You never add the route yourself.</p>
 
       <h2 id="configuring-a-zone">Configuring a zone</h2>
-      <p>Select a zone to open <strong>Service Details</strong>. The configuration fields:</p>
+      <p>Click <strong>Details</strong> on a zone to open its configuration. The fields, by section:</p>
       <ul>
-        <li><strong>Service pattern</strong> — pick from your calendars. Calendar_dates-only services are fine (a zone that only runs on event days).</li>
-        <li><strong>Pickup window</strong> — start and end times in HH:MM:SS. Required for export; a zone without a window is skipped on export with a warning. Defines the hours within which a rider can book a pickup.</li>
-        <li><strong>Drop-off window</strong> — same shape; optional. If unset, equals the pickup window.</li>
-        <li><strong>Additional service windows</strong> — multiple windows per zone (morning + evening shifts). Modeled as multiple trips on the same zone.</li>
-        <li><strong>Booking rule</strong> — links to a record in <code>booking_rules.txt</code>: prior-notice duration (must book at least N minutes in advance), latest booking time (cutoff for next-day requests), booking type (real-time, same-day, prior-day), phone / URL / message text.</li>
-        <li><strong>Fare</strong> — link to a fare defined in the Fares panel. Zones without a fare assignment will inherit any system-wide flat fare.</li>
-        <li><strong>Travel-time estimation</strong> — mean and "safe" duration factors that trip planners use to estimate door-to-door time. Mean is the typical case; "safe" pads for traffic so planners don't suggest impossibly tight connections.</li>
-        <li><strong>Continuous pickup / drop-off</strong> — applicable for deviated fixed-route hybrids; signals that riders can flag the bus down anywhere within the zone, not just at defined stops.</li>
+        <li><strong>Service area.</strong> The polygon area(s) and/or the stop group that make up the zone. A zone can carry both (a mixed zone): the polygon exports to <code>locations.geojson</code>, the stop group to <code>location_groups.txt</code>, and the same flex trip references both.</li>
+        <li><strong>Pickup start / Pickup end.</strong> Free-text <code>HH:MM:SS</code>. Required: a zone with no pickup window is skipped entirely on export (no geometry, no booking rule, no trip). This one window covers both pickup and drop-off, and exports as <code>start_pickup_drop_off_window</code> / <code>end_pickup_drop_off_window</code>.</li>
+        <li><strong>Service pattern.</strong> Pick from your calendars. calendar_dates-only services are fine (a zone that only runs on event days), and their exceptions apply automatically. If the feed defines exactly one service, it is pre-picked for you.</li>
+        <li><strong>Booking.</strong> Writes a record in <code>booking_rules.txt</code>: booking type (Real-time, Same-day, Prior day), prior-notice minutes (Same-day) or day/time cutoff (Prior day), booking phone, booking URL, info URL, and the rider message. The first time you touch a booking field, the phone and info URL are seeded from your <code>agency.txt</code> record; edit or clear them as needed.</li>
+        <li><strong>Additional service windows.</strong> Multiple windows per zone (morning + evening shifts). Each extra window becomes its own flex trip, and can use its own service pattern.</li>
+        <li><strong>Travel-time estimation (advanced).</strong> <code>Safe duration factor</code> and <code>Safe duration offset (s)</code>, written to <code>trips.txt</code> as <code>safe_duration_factor</code> / <code>safe_duration_offset</code>. They let a trip planner pad its ETA for an on-demand leg so it doesn't suggest impossibly tight connections. Leave blank if unsure.</li>
+        <li><strong>Fare.</strong> Link to a fare defined in the Fares panel. It exports as a <code>fare_rules.txt</code> row against the zone's paired route.</li>
       </ul>
+      <p>Continuous pickup / drop-off is not a zone field: it is set on the route (Routes panel) or per stop_time, and applies to deviated fixed-route hybrids where riders flag the bus down along a corridor.</p>
+
+      <h2 id="microtransit">Microtransit</h2>
+      <p>Microtransit (an on-demand zone a rider books into, with no fixed stops and no fixed times) is the simplest thing Flex models. In GTFS·X it is one flex zone, one trip carrying a pickup/drop-off window, and one booking rule. Because a rider gets on and off anywhere inside the same area, the trip's stop_times reference that one zone twice: the spec requires two records for travel within a single location, so a one-row flex trip is invalid.</p>
+      <p>Each thing you fill in maps to one file in the exported feed:</p>
+      <table>
+        <thead>
+          <tr><th>In the editor</th><th>What it writes</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Draw the zone (and name it)</td>
+            <td><code>locations.geojson</code>: one Feature for the zone, with the zone id at the <em>top level</em> of the Feature and only <code>stop_name</code> / <code>stop_desc</code> in <code>properties</code>. Several polygons in one zone merge into a single <code>MultiPolygon</code> Feature.</td>
+          </tr>
+          <tr>
+            <td>Pickup start / Pickup end</td>
+            <td><code>stop_times.txt</code>: <code>start_pickup_drop_off_window</code> and <code>end_pickup_drop_off_window</code> on both rows of the flex trip.</td>
+          </tr>
+          <tr>
+            <td>Service pattern</td>
+            <td><code>trips.txt</code>: the flex trip's <code>service_id</code>.</td>
+          </tr>
+          <tr>
+            <td>Booking fields</td>
+            <td><code>booking_rules.txt</code>: one row for the zone, referenced from the stop_times rows via <code>pickup_booking_rule_id</code> / <code>drop_off_booking_rule_id</code>.</td>
+          </tr>
+          <tr>
+            <td>Travel-time estimation (advanced)</td>
+            <td><code>trips.txt</code>: <code>safe_duration_factor</code> / <code>safe_duration_offset</code> (these are trips.txt fields, not stop_times fields).</td>
+          </tr>
+          <tr>
+            <td>The paired route (created for you)</td>
+            <td><code>routes.txt</code>: <code>route_type</code> 715, Demand and Response Bus Service.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Adding a microtransit zone to an existing feed</h3>
+      <ol>
+        <li><strong>Confirm demand response is enabled.</strong> <strong>Settings</strong> in the left rail opens <strong>Feature settings</strong>; the <strong>Demand response / paratransit</strong> card is on by default. If someone turned it off, turn it back on: while it's off, the Flex Zones panel is hidden.</li>
+        <li><strong>Open Flex Zones</strong> in the left rail. The panel is <strong>Flex Zones &amp; Rules</strong>, and existing zones are listed under <strong>Service areas</strong>.</li>
+        <li><strong>Click + Add flex zone, then Draw Zone on Map.</strong> The map banner reads <em>"Drawing Flex Zone — Click to add vertices, double-click to close polygon."</em> Click once per corner of the service area and double-click to place the last vertex and close the polygon. The zone appears in the list, and its paired route is created at the same time.</li>
+        <li><strong>Name the zone.</strong> New zones arrive as "Zone 2", "Zone 3", and so on. Click the name, type the rider-facing name (for example "East Side Microtransit"), and press Enter. The paired route's short name follows the zone name, so renaming here renames both.</li>
+        <li><strong>Click Details and set the service window.</strong> Under <strong>Service schedule</strong>, enter <code>Pickup start</code> (say <code>08:00:00</code>) and <code>Pickup end</code> (say <code>18:00:00</code>). These are free-text <code>HH:MM:SS</code> fields, and they are what makes the zone exportable.</li>
+        <li><strong>Pick the service pattern.</strong> Choose the calendar the zone runs on (weekdays, weekends, a dates-only service). The flex trip is written against that <code>service_id</code>.</li>
+        <li><strong>Fill in the booking rule.</strong> Under <strong>Booking</strong>, pick <strong>Real-time</strong>, <strong>Same-day</strong>, or <strong>Prior day</strong>. Same-day exposes <code>Min minutes ahead</code> (60, for "call an hour ahead"); Prior day exposes a day/time cutoff. Then set the booking phone, booking URL, info URL, and the rider message riders will actually read ("Call at least 1 hour before your pickup"). The phone and info URL are pre-filled from your agency record the first time you touch this section.</li>
+        <li><strong>Check the paired route.</strong> Open the <strong>Routes</strong> panel: the zone's route is in the <strong>Flex</strong> section, and its <strong>Route type</strong> reads <strong>Demand and Response Bus Service</strong> (<code>route_type</code> 715). Nothing to change, but the route color you set here is the color the zone is drawn in on the map.</li>
+        <li><strong>Validate.</strong> Open <strong>Validation</strong> in the bottom bar and clear anything flagged. Errors block export.</li>
+        <li><strong>Export GTFS.</strong> The export dialog's file list should now include <code>locations.geojson</code> (with your zone counted) and <code>booking_rules.txt</code>.</li>
+      </ol>
+
+      <figure>
+        <img src="/assets/docs/flex-microtransit-zone-details.png" alt="The Flex Zones panel with a zone's Details open: pickup start and end times, a service pattern dropdown, and the booking section with booking type, minutes of notice, phone, URL and rider message." loading="lazy" />
+        <figcaption>A microtransit zone's Details: the pickup window, the service pattern, and the booking rule. Booking phone and info URL are seeded from your agency record.</figcaption>
+      </figure>
+
+      <figure>
+        <img src="/assets/docs/flex-microtransit-route-type.png" alt="The Routes panel showing the flex zone's paired route with route type set to Demand and Response Bus Service, and the zone drawn on the map." loading="lazy" />
+        <figcaption>The paired route, created with the zone. Route type is Demand and Response Bus Service (<code>route_type</code> 715).</figcaption>
+      </figure>
+
+      <h3>What to look for in the zip</h3>
+      <p>Open the exported zip and check four things:</p>
+      <ul>
+        <li><strong><code>stop_times.txt</code> has two rows for the zone's trip</strong>, both with the same <code>location_id</code>, at <code>stop_sequence</code> 1 and 2, both carrying the window, and with no <code>arrival_time</code> or <code>departure_time</code>. The <code>location_id</code> is the zone's id; it is never surfaced in the editor.</li>
+      </ul>
+      <pre><code>trip_id,stop_sequence,location_id,start_pickup_drop_off_window,end_pickup_drop_off_window,pickup_type,drop_off_type,pickup_booking_rule_id,drop_off_booking_rule_id
+flex-zone-1752345678901-trip,1,flex-zone-1752345678901,08:00:00,18:00:00,2,2,flex-zone-1752345678901-booking,flex-zone-1752345678901-booking
+flex-zone-1752345678901-trip,2,flex-zone-1752345678901,08:00:00,18:00:00,2,2,flex-zone-1752345678901-booking,flex-zone-1752345678901-booking</code></pre>
+      <ul>
+        <li><strong><code>locations.geojson</code> has one Feature for the zone</strong>, with <code>"id"</code> at the top level of the Feature (not inside <code>properties</code>), matching the <code>location_id</code> above. A zone you drew as three polygons is still one Feature, with a <code>MultiPolygon</code> geometry.</li>
+        <li><strong><code>booking_rules.txt</code> has the zone's rule</strong>, and its <code>booking_rule_id</code> is what the two stop_times rows point at.</li>
+        <li><strong><code>routes.txt</code> carries <code>route_type</code> 715</strong> for the paired route, and <code>trips.txt</code> carries <code>safe_duration_factor</code> / <code>safe_duration_offset</code> if you set them.</li>
+      </ul>
+
+      <h3>What Flex does not cover</h3>
+      <p>A flex feed is a static description of <em>where</em> the service runs, <em>when</em> it runs, and <em>how to book it</em>. It is not a booking API. Publishing one does not make your service bookable from a trip planner, and it says nothing about what is happening right now:</p>
+      <ul>
+        <li><strong>No real-time vehicle availability.</strong> Nothing in the feed says whether a vehicle is free, how many seats are left, or how long the wait is.</li>
+        <li><strong>No dynamic pricing.</strong> Fares are the static ones you assign; surge or distance-based on-demand pricing has no representation.</li>
+        <li><strong>No live booking.</strong> Riders book the way your booking rule tells them to (a phone number or your booking URL). A trip planner can show the rule and deep-link to your booking page; it cannot reserve the ride.</li>
+      </ul>
+      <p>Live availability and in-app booking are the domain of GOFS and GTFS-OnDemand, which are separate specifications from GTFS-Flex. Set expectations accordingly when you tell riders the service is "in the app": what they will see is the zone, the hours, the fare, and how to call.</p>
 
       <h2 id="map-popups">Map popups and editing</h2>
       <p>Click a zone on the map to get a popup with quick links to <strong>Edit Route</strong> (every flex zone has an automatically-paired route that appears in trip planners) and <strong>Edit Service Details</strong>. Zone fill color tracks the linked route's color, so styling a zone consistently is a matter of styling its route.</p>
@@ -112,15 +195,19 @@
       <h2 id="export-behavior">What gets exported</h2>
       <p>Flex export produces multiple files depending on the zone types:</p>
       <ul>
-        <li><code>locations.geojson</code> — polygon zones (one Feature per zone).</li>
-        <li><code>booking_rules.txt</code> — every booking rule referenced by any zone.</li>
-        <li><code>location_groups.txt</code> + <code>location_group_stops.txt</code> — for stop-group zones.</li>
-        <li>Extended <code>stop_times.txt</code> columns — <code>location_id</code>, <code>start_pickup_drop_off_window</code>, <code>end_pickup_drop_off_window</code>, <code>pickup_booking_rule_id</code>, <code>drop_off_booking_rule_id</code>.</li>
+        <li><code>locations.geojson</code>: polygon zones, <strong>one Feature per zone</strong>, carrying the id at the top level of the Feature (not in <code>properties</code>, which holds only <code>stop_name</code> and <code>stop_desc</code>). A zone drawn as several polygons is a single <code>MultiPolygon</code> Feature, because the stop_times rows reference the zone by one id.</li>
+        <li><code>booking_rules.txt</code>: every booking rule referenced by an exported zone.</li>
+        <li><code>location_groups.txt</code> + <code>location_group_stops.txt</code>: for stop-group zones.</li>
+        <li><code>routes.txt</code>: each zone's paired route, at <code>route_type</code> 715 (Demand and Response Bus Service).</li>
+        <li><code>trips.txt</code>: one flex trip per service window, plus <code>safe_duration_factor</code> / <code>safe_duration_offset</code> when set.</li>
+        <li>Extended <code>stop_times.txt</code> columns: <code>location_id</code> (or <code>location_group_id</code>), <code>start_pickup_drop_off_window</code>, <code>end_pickup_drop_off_window</code>, <code>pickup_booking_rule_id</code>, <code>drop_off_booking_rule_id</code>. A flex trip gets <strong>two rows</strong>, with <code>pickup_type=2</code> and <code>drop_off_type=2</code> and no arrival or departure time. For a single-area zone both rows carry the same <code>location_id</code> (travel within one location requires two records); for a mixed polygon + stop-group zone, row 1 is the polygon and row 2 is the group.</li>
       </ul>
-      <p>Zones missing a pickup window are flagged in the Export dialog and skipped from the output. Fix the warning before publishing — a flex zone without a window won't function in trip planners.</p>
+      <p>Zones missing a pickup window are skipped from the output entirely: no geometry, no booking rule, no trip. Give every zone a window before publishing, since a flex zone without one won't function in trip planners.</p>
 
       <h2 id="gotchas">Edge cases and gotchas</h2>
       <ul>
+        <li><strong>You can't import a zone boundary file.</strong> There is no GeoJSON or shapefile upload: the editor's file input takes a GTFS <code>.zip</code> only. Draw the boundary on the map, buffer your existing routes, or import a feed that already contains a <code>locations.geojson</code>.</li>
+        <li><strong>A zone with no pickup window is silently absent from the zip.</strong> It isn't exported as an empty zone; it's skipped whole (geometry, booking rule, and trip). If a zone you expected is missing from <code>locations.geojson</code>, check its <code>Pickup start</code> / <code>Pickup end</code> first.</li>
         <li><strong>Booking rule sharing is the right default.</strong> If five zones all use the same phone-based booking with the same prior-notice rules, define one booking_rule and link all five zones to it. The editor lets you reuse rules across zones.</li>
         <li><strong>Polygon zones should not extend beyond your actual service area.</strong> A zone that reaches into a neighboring agency's territory will get suggested by trip planners as if you served it.</li>
         <li><strong>Don't combine deviated-fixed-route flex with regular fixed-route shapes carelessly.</strong> If the same trip is both fixed-route and deviation-eligible, the trip needs to reference the flex zone in its stop_times, not be a separate trip.</li>

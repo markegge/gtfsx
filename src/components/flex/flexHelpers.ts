@@ -24,10 +24,8 @@ export function createFlexZoneWithRoute(
       agency_id: state.agencies[0]?.agency_id || '',
       route_short_name: zone.name,
       route_long_name: `${zone.name} (Flex)`,
-      // Route type 3 (Bus). The GTFS-Flex spec doesn't require a specific
-      // route_type; Bus is the most broadly supported option across
-      // validators and consumer apps.
-      route_type: 3,
+      // Extended route type 715 — Demand and Response Bus Service.
+      route_type: 715,
       route_color: nextColor,
       route_text_color: getContrastTextColor(nextColor),
     });

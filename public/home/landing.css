@@ -398,7 +398,10 @@ h3.sub { font-weight: 800; font-size: 20px; line-height: 1.2; }
 /* ── Planner-forward hero (30/70) — scoped under .hero-panels.planner-forward
      so the default 50/50 rules stay intact. From handoffs/planner-forward-hero.html. ── */
 .hero-panels.planner-forward { grid-template-columns: 3fr 7fr; }
-.planner-forward .panel-editor { padding: 32px 28px; }
+/* Bottom padding matches the planner panel (38px) and both CTA rows get the
+   same min-height, so the two buttons sit on one visual baseline. */
+.planner-forward .panel-editor { padding: 32px 28px 38px; }
+.planner-forward .hero-panel .panel-ctas { margin-top: auto; min-height: 50px; align-items: center; }
 .planner-forward .panel-editor .panel-title { font-size: 23px; }
 .planner-forward .panel-editor .panel-sub { font-size: 15px; }
 /* Planner panel: copy left, planning mock right */

@@ -238,6 +238,11 @@ Design rationale is preserved in the decisions appendix of the archived
 
 ### Production — LIVE
 
+- **Repo transferred to the GTFS-X GitHub org (2026-07-12):** moved from
+  `markegge/gtfsx` to `GTFS-X/gtfsx` (https://github.com/GTFS-X/gtfsx), same
+  `main` default branch, still public. Cloudflare Workers Builds' GitHub App
+  connection had to be re-authorized for the new org to keep the push-to-main
+  prod auto-deploy working.
 - Worker `gtfs-builder`. SPA serves the full editor + auth + billing + forum.
 - **Backend + billing live since 2026-05-15.** `wrangler.jsonc` top-level vars:
   `BACKEND_ENABLED=true`, `BILLING_ENABLED=true`, `HARD_LIMITS=false`. (Originally
@@ -398,6 +403,9 @@ endpoint, store the signing secret.
 
 ## 7. Git & deploy workflow
 
+Repo: `GTFS-X/gtfsx` (https://github.com/GTFS-X/gtfsx), public, default branch
+`main`.
+
 ```
 main = source of truth; stays deployable. Feature branches are short-lived,
 branched off main, merged via --ff-only. Every push to main is a prod deploy
@@ -496,8 +504,8 @@ Cloudflare Managed `robots.txt` is injected at the edge on the feeds origin.
 
 ## 9. Outstanding engineering debt
 
-The product backlog (undeveloped features) lives in GitHub issues. The
-infra/tech-debt items that originated as `NF-*` anchors:
+The product backlog (undeveloped features) lives in GitHub issues
+(`GTFS-X/gtfsx`). The infra/tech-debt items that originated as `NF-*` anchors:
 
 - **NF-40a** — argon2id password hashing. **Deferred indefinitely** (issue #26,
   closed): WASM argon2 is blocked on workerd, pure-JS is too slow, and account

@@ -76,7 +76,7 @@ A web-based editor for creating, editing, analyzing, and publishing [GTFS](https
 ### Local development
 
 ```bash
-git clone https://github.com/markegge/gtfsx.git
+git clone https://github.com/GTFS-X/gtfsx.git
 cd gtfsx
 npm install
 cp .env.example .env

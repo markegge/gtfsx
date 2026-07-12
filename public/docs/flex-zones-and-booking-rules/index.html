@@ -189,6 +189,35 @@ flex-zone-1752345678901-trip,2,flex-zone-1752345678901,08:00:00,18:00:00,2,2,fle
       </ul>
       <p>Live availability and in-app booking are the domain of GOFS and GTFS-OnDemand, which are separate specifications from GTFS-Flex. Set expectations accordingly when you tell riders the service is "in the app": what they will see is the zone, the hours, the fare, and how to call.</p>
 
+      <h2 id="paratransit-vs-microtransit">Paratransit and microtransit</h2>
+      <p>GTFS does not distinguish between them. The words "paratransit" and "microtransit" appear nowhere in the spec, whose only vocabulary for this is "demand-responsive". Both are encoded exactly the same way: a <code>locations.geojson</code> zone, stop_times rows carrying a pickup/drop-off window instead of times, a <code>booking_rules.txt</code> entry, and <code>route_type</code> 715. There is no paratransit-specific route type, and no flag anywhere that marks a zone as one or the other. That is why the feature setting is called <em>Demand response / paratransit</em> and this page calls it microtransit: they are the same machinery.</p>
+      <p>What differs is convention, not fields:</p>
+      <table>
+        <thead>
+          <tr><th></th><th>Paratransit</th><th>Microtransit</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Booking type</td>
+            <td>Usually <strong>Prior day</strong> (book by a cutoff the day before)</td>
+            <td>Usually <strong>Real-time</strong> or <strong>Same-day</strong></td>
+          </tr>
+          <tr>
+            <td>Zone shape</td>
+            <td>Usually the ADA corridor around the fixed routes</td>
+            <td>Usually a free-standing service area</td>
+          </tr>
+          <tr>
+            <td>Fare</td>
+            <td>Often a separate, higher fare</td>
+            <td>Usually the standard fare</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>If you are modeling ADA complementary paratransit, <strong>Auto-generate from fixed routes</strong> is the path you want: its default buffer of 0.75 miles is the three-quarter-mile corridor the ADA requires around each fixed route, so the generated zone is the corridor.</p>
+      <p><strong>The one thing to get right: rider eligibility is not machine-readable.</strong> Paratransit is restricted to certified riders; microtransit is open to everyone. GTFS has no field for that distinction anywhere, so a trip planner consuming your feed cannot tell that a paratransit zone is closed to the general public, and may route an ordinary rider into it. (<code>rider_categories.txt</code> and its <code>eligibility_url</code> are a Fares v2 concept about who qualifies for a <em>fare</em>, such as a senior discount. They do not say who is permitted to board.)</p>
+      <p>The only place to state the restriction is prose that riders read and machines ignore. Put it in the booking rule's <strong>Rider message</strong> (or the pickup / drop-off message), and in the route description, in plain terms: who is eligible, and how to get certified. Assume nothing downstream enforces it.</p>
+
       <h2 id="map-popups">Map popups and editing</h2>
       <p>Click a zone on the map to get a popup with quick links to <strong>Edit Route</strong> (every flex zone has an automatically-paired route that appears in trip planners) and <strong>Edit Service Details</strong>. Zone fill color tracks the linked route's color, so styling a zone consistently is a matter of styling its route.</p>
 

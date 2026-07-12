@@ -117,6 +117,58 @@ async function buildBundleFixtureZip(): Promise<Buffer> {
   return zip.generateAsync({ type: 'nodebuffer' });
 }
 
+/**
+ * Minimal feed for the provisional `ext_ntd_id` extension column (#62).
+ * `ntdColumn` (when set) is written as an `ext_ntd_id` value on the FIRST agency
+ * row — deliberately a leading-zero value in the tests, since NTD IDs are 5-digit
+ * strings whose leading zeros are significant. `agencies: 2` produces a
+ * multi-agency feed, which must suppress the column on export.
+ */
+async function buildNtdFixtureZip(opts: { ntdColumn?: string; agencies?: 1 | 2 } = {}): Promise<Buffer> {
+  const { ntdColumn, agencies = 1 } = opts;
+  const zip = new JSZip();
+  const header = `agency_id,agency_name,agency_url,agency_timezone${ntdColumn !== undefined ? ',ext_ntd_id' : ''}\n`;
+  const ext = ntdColumn !== undefined ? `,${ntdColumn}` : '';
+  let agencyCsv = header + `A1,Valley Transit,https://valley.example,America/Denver${ext}\n`;
+  if (agencies === 2) {
+    // Second agency carries no NTD value even when the column exists.
+    agencyCsv += `A2,Ridge Transit,https://ridge.example,America/Denver${ntdColumn !== undefined ? ',' : ''}\n`;
+  }
+  zip.file('agency.txt', agencyCsv);
+  zip.file('routes.txt',
+    'route_id,agency_id,route_short_name,route_long_name,route_type\n' +
+    'R1,A1,1,Main Line,3\n');
+  zip.file('stops.txt',
+    'stop_id,stop_name,stop_lat,stop_lon\n' +
+    'S1,First St,45.6770,-111.0429\n' +
+    'S2,Second St,45.6800,-111.0400\n');
+  zip.file('calendar.txt',
+    'service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n' +
+    'WKDY,1,1,1,1,1,0,0,20260101,20271231\n');
+  zip.file('trips.txt',
+    'route_id,service_id,trip_id\n' +
+    'R1,WKDY,T1\n');
+  zip.file('stop_times.txt',
+    'trip_id,arrival_time,departure_time,stop_id,stop_sequence\n' +
+    'T1,08:00:00,08:00:00,S1,1\n' +
+    'T1,08:10:00,08:10:00,S2,2\n');
+  return zip.generateAsync({ type: 'nodebuffer' });
+}
+
+/** Read one file out of an exported zip Blob as text. */
+async function readExportedFile(blob: Blob, name: string): Promise<string> {
+  const z = await JSZip.loadAsync(Buffer.from(await blob.arrayBuffer()));
+  const entry = z.file(name);
+  if (!entry) throw new Error(`${name} missing from export`);
+  return entry.async('string');
+}
+
+/** Column names from a CSV's header row. PapaParse unparses with CRLF endings,
+ *  so the trailing cell carries a \r — split on /\r?\n/ and trim. */
+function headerColumns(csv: string): string[] {
+  return csv.split(/\r?\n/)[0].split(',').map((c) => c.trim());
+}
+
 let passed = 0;
 let failed = 0;
 const failures: string[] = [];
@@ -1480,6 +1532,88 @@ async function main() {
     s().setStopTimes([]);
     s().setFrequencies([]);
     s().setRouteStops([]);
+  }
+
+  // ---- PHASE 28: provisional ext_ntd_id extension column (#62) ----
+  // The NTD ID is project state (not an Agency field): the importer lifts it out
+  // of agency.txt into projectSlice.ntdId, and the exporter writes it back — so
+  // the column survives a round-trip. Leading zeros are significant throughout.
+  console.log('\nPhase 28: provisional ext_ntd_id column round-trip');
+  {
+    // ── 28a: import a feed carrying ext_ntd_id=01234 ────────────────────────
+    const ntdZip = await buildNtdFixtureZip({ ntdColumn: '01234' });
+    const ntdImport = await importGtfsZip(ntdZip as unknown as File);
+    assert('28a: parse lifts ext_ntd_id out of agency.txt', ntdImport.ntdId === '01234',
+      `got ${JSON.stringify(ntdImport.ntdId)}`);
+    // Guard the leading zero explicitly — a Number() coercion anywhere would
+    // silently turn "01234" into 1234 and break the agency's NTD identity.
+    assert('28a: leading zero preserved (string, not Number-coerced)',
+      ntdImport.ntdId === '01234' && typeof ntdImport.ntdId === 'string' && ntdImport.ntdId!.length === 5);
+
+    loadImportIntoStore(ntdImport);
+    assert('28a: ntdId lands in the store with its leading zero', s().ntdId === '01234',
+      `got ${JSON.stringify(s().ntdId)}`);
+    assert('28a: importing the column flips the export opt-in ON', s().exportNtdIdColumn === true);
+    assert('28a: ext_ntd_id is NOT stored on the Agency entity',
+      !('ext_ntd_id' in (s().agencies[0] as Record<string, unknown>)));
+
+    // ── 28b: export re-emits the column (single agency, opted in) ───────────
+    const ntdAgencyCsv = await readExportedFile(await exportGtfsZip(), 'agency.txt');
+    assert('28b: exported agency.txt has an ext_ntd_id header',
+      headerColumns(ntdAgencyCsv).includes('ext_ntd_id'), ntdAgencyCsv);
+    assert('28b: exported value keeps its leading zero (01234, not 1234)',
+      /(^|,)01234(,|\r?$)/m.test(ntdAgencyCsv), ntdAgencyCsv);
+    // Full round-trip: re-import the export and confirm the value comes back.
+    const ntdReimport = await importGtfsZip(
+      Buffer.from(await (await exportGtfsZip()).arrayBuffer()) as unknown as File,
+    );
+    assert('28b: round-trip export → import preserves 01234', ntdReimport.ntdId === '01234',
+      `got ${JSON.stringify(ntdReimport.ntdId)}`);
+
+    // ── 28c: opted OUT emits no column at all ──────────────────────────────
+    // The NTD ID stays set on the project — only the opt-in is off. agency.txt
+    // must be byte-identical to a feed that never had an NTD ID (no empty column,
+    // no header change).
+    s().setExportNtdIdColumn(false);
+    const optedOutCsv = await readExportedFile(await exportGtfsZip(), 'agency.txt');
+    assert('28c: opt-out emits no ext_ntd_id header',
+      !headerColumns(optedOutCsv).includes('ext_ntd_id'), optedOutCsv);
+    assert('28c: opt-out emits no NTD value anywhere in agency.txt',
+      !optedOutCsv.includes('01234'), optedOutCsv);
+    assert('28c: ntdId itself is retained on the project', s().ntdId === '01234');
+
+    // Byte-identical check against the same feed exported with no NTD ID at all.
+    s().setNtdId(null);
+    const noNtdCsv = await readExportedFile(await exportGtfsZip(), 'agency.txt');
+    assert('28c: opted-out agency.txt is byte-identical to a no-NTD export',
+      optedOutCsv === noNtdCsv, `${JSON.stringify(optedOutCsv)} vs ${JSON.stringify(noNtdCsv)}`);
+
+    // ── 28d: a feed WITHOUT the column imports as no-NTD ────────────────────
+    const plainImport = await importGtfsZip(
+      (await buildNtdFixtureZip()) as unknown as File,
+    );
+    assert('28d: no ext_ntd_id column → parse returns null', plainImport.ntdId === null);
+    loadImportIntoStore(plainImport);
+    assert('28d: store ntdId cleared (feed defines the project)', s().ntdId === null);
+    assert('28d: opt-in stays OFF by default', s().exportNtdIdColumn === false);
+
+    // ── 28e: multi-agency feed suppresses the column ────────────────────────
+    // ntdId is per-PROJECT and we have no per-agency NTD mapping, so opting in on
+    // a 2-agency feed must write NOTHING rather than assert that both agencies
+    // report under the same NTD ID.
+    const multiImport = await importGtfsZip(
+      (await buildNtdFixtureZip({ agencies: 2 })) as unknown as File,
+    );
+    loadImportIntoStore(multiImport);
+    assert('28e: fixture really has 2 agencies', s().agencies.length === 2);
+    s().setNtdId('01234');
+    s().setExportNtdIdColumn(true);
+    const multiCsv = await readExportedFile(await exportGtfsZip(), 'agency.txt');
+    assert('28e: multi-agency + opted in emits NO ext_ntd_id column',
+      !headerColumns(multiCsv).includes('ext_ntd_id'), multiCsv);
+    assert('28e: multi-agency export leaks no NTD value', !multiCsv.includes('01234'), multiCsv);
+    assert('28e: the opt-in checkbox stays checked (it just no-ops)',
+      s().exportNtdIdColumn === true && s().ntdId === '01234');
   }
 
   // ---- SUMMARY ----

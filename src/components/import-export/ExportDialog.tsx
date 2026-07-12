@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { flexZoneHasGroup, flexZoneHasPolygons } from '../../store/flexSlice';
-import { exportGtfsZip, downloadBlob } from '../../services/gtfsExport';
+import { exportGtfsZip, downloadBlob, ntdIdExportStatus } from '../../services/gtfsExport';
 import { exportFeedGeoJSON, feedHasGeoJSONGeometry } from '../../services/geojsonExport';
 import { runValidation } from '../../services/validation';
 import { trackFeedExported } from '../../services/trackBeacon';
@@ -263,6 +263,60 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
                 </div>
               )}
             </>
+          );
+        })()}
+
+        {/* Provisional NTD ID extension column (GTFS-X/gtfsx#62). Opt-in, default
+            off. The NTD ID itself is set in the publish panel — this only decides
+            whether it is written into the zip. ntdIdExportStatus() is the same
+            predicate the exporter uses, so this note always matches the zip. */}
+        {(() => {
+          const ntdStatus = ntdIdExportStatus(state);
+          const noNtdId = !state.ntdId;
+          return (
+            <div className="mt-2 mb-4 border-2 border-sand rounded-lg p-3">
+              <label
+                className={`flex items-start gap-2 ${noNtdId ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={state.exportNtdIdColumn}
+                  disabled={noNtdId}
+                  onChange={(e) => state.setExportNtdIdColumn(e.target.checked)}
+                  className="mt-0.5 accent-coral disabled:cursor-not-allowed"
+                />
+                <span className="flex-1">
+                  <span className="block text-sm text-dark-brown">
+                    Include NTD ID as <code className="text-xs bg-cream px-1 py-0.5 rounded">ext_ntd_id</code> on agency.txt
+                  </span>
+                  <span className="block text-xs text-warm-gray mt-0.5">
+                    Provisional extension field — not part of the GTFS spec. A proposal to add a
+                    dedicated NTD ID field is pending, so the column name may change.
+                  </span>
+                </span>
+              </label>
+
+              {noNtdId && (
+                <p className="text-xs text-warm-gray mt-2 pl-6">
+                  No NTD ID set for this feed. Add one in the publish panel to enable this option.
+                </p>
+              )}
+
+              {ntdStatus === 'multi-agency-suppressed' && (
+                <p className="text-xs text-amber-700 bg-gold-light border border-gold rounded p-2 mt-2">
+                  This feed has {state.agencies.length} agencies, so no <code>ext_ntd_id</code> column
+                  will be written. An NTD ID identifies a single reporting agency, and per-agency NTD
+                  IDs aren't modeled yet — stamping one ID onto every agency row would imply they all
+                  report under it.
+                </p>
+              )}
+
+              {ntdStatus === 'written' && (
+                <p className="text-xs text-teal mt-2 pl-6">
+                  agency.txt will carry <code>ext_ntd_id={state.ntdId}</code>.
+                </p>
+              )}
+            </div>
           );
         })()}
         </div>

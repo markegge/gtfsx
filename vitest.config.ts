@@ -57,7 +57,6 @@ export default defineConfig(async () => {
             // which returns 405 for non-GET. The `_feeds.local` namespace
             // makes it explicit that these are test-only bindings.
             FEEDS_ORIGIN: 'http://feeds.test.local',
-            BACKEND_ENABLED: 'true',
             HARD_LIMITS: 'false',
             AUTH_EMAIL_FROM: 'test@example.com',
             OWNER_NOTIFY_EMAIL: 'owner@example.com',

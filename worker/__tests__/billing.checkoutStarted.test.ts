@@ -1,8 +1,9 @@
 // GH #68 — recordCheckoutStarted(): the server-side upgrade-path-start signal.
 // The full POST /checkout route can't run in the worker test pool (no
-// BILLING_ENABLED / STRIPE_SECRET_KEY, fixed at pool boot), so we unit-test the
-// extracted helper directly: it writes a `checkout_started` pro_intent row, and
-// it swallows DB errors so a logging failure can never break checkout.
+// STRIPE_SECRET_KEY, fixed at pool boot, so billingReady() is false), so we
+// unit-test the extracted helper directly: it writes a `checkout_started`
+// pro_intent row, and it swallows DB errors so a logging failure can never
+// break checkout.
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { env } from 'cloudflare:test';

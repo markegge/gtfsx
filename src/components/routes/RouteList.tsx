@@ -27,10 +27,10 @@ export function RouteList() {
   // Quick text filter (short name / long name / description).
   const [text, setText] = useState('');
 
-  // Flex zones are materialized as routes (route_type 3, "… (Flex)") so they
-  // export cleanly and the validator sees them, but they're created/edited/
-  // deleted in the Flex Zones panel — keep them out of the Routes list so they
-  // don't read as regular routes here.
+  // Flex zones are materialized as routes (route_type 715, long-name-only —
+  // see flexRouteNames) so they export cleanly and the validator sees them,
+  // but they're created/edited/deleted in the Flex Zones panel — keep them out
+  // of the Routes list so they don't read as regular routes here.
   const managedRoutes = useMemo(() => {
     const flexRouteIds = new Set(flexZones.map((z) => z.routeId).filter(Boolean));
     return routes.filter((r) => !flexRouteIds.has(r.route_id));

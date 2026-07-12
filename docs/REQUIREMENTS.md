@@ -9,7 +9,7 @@ GTFS·X is a web application for creating, editing, analysing, and publishing GT
 | | |
 |---|---|
 | **Editor (anonymous, IndexedDB-only)** | Live in production at https://www.gtfsx.com. Two-rail layout (responsive left nav + configuration right rail). Mobile-responsive editor layout shipped (Phase 1 + Phase 2): all editing and analysis panels reachable at phone width; panel opens full-screen; bottom bar surfaces Timetable/Visualization/Validation. Map drawing and vertex drag remain mouse-optimized (touch-draw on roadmap). |
-| **Backend (auth, projects, orgs, publication, embeds, billing, forum)** | **Live in production since 2026-05-15** with live-mode Stripe billing — `BACKEND_ENABLED=true`, `BILLING_ENABLED=true`. (Originally disabled 2026-05-08 after a premature launch; re-enabled 2026-05-15.) Staging is parked — manual rehearsal only. |
+| **Backend (auth, projects, orgs, publication, embeds, billing, forum)** | **Live in production since 2026-05-15** with live-mode Stripe billing. The `BACKEND_ENABLED`/`BILLING_ENABLED` kill-switches (client and worker) were removed on 2026-07-12 as legacy; both are always on. Staging is parked, manual rehearsal only. |
 | **Plans** | Free ("Editor") / Agency ("Planner") / Enterprise, self-serve via Stripe Checkout. See [§3.7](#37-billing-and-subscription-plans). |
 | **Source of truth** | `main` — every push auto-deploys to production via Cloudflare Workers Builds. |
 
@@ -379,7 +379,8 @@ The backend tier is implemented as a single Cloudflare Worker that also serves t
 ### 3.7 Billing and subscription plans
 
 Self-serve subscriptions via Stripe — live in production since 2026-05-15
-(`worker/billing/*`, `src/components/billing/*`; gated by `BILLING_ENABLED`).
+(`worker/billing/*`, `src/components/billing/*`). The `BILLING_ENABLED` gate was
+removed on 2026-07-12 (legacy); checkout is always offered.
 
 - ✅ Three tiers — **Free ("Editor") / Agency ("Planner") / Enterprise** (internal plan ids `free` / `agency` / `enterprise`; `agency` was `team` before the pricing-v2 rename, migration 0017; the **Pro tier was retired in pricing v4, 2026-07** — zero subscribers, no migration needed; Stripe env vars stay `STRIPE_PRICE_TEAM_*`):
   - **Free ("Editor")** $0 — editor + up to 3 cloud-saved feeds; **demand-propensity map + system-level cost & coverage summaries** + GeoJSON export + a live demo mini-site preview; no publishing.

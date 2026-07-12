@@ -96,11 +96,6 @@
     // keeps working for already-posted images. See worker/index.ts (img-host
     // dispatch) and worker/forum/uploads.ts (publicUrl).
     "IMAGES_ORIGIN": "https://img.gtfsx.com",
-    // Kill switch. Originally disabled 2026-05-08 after premature launch;
-    // re-enabled 2026-05-15 alongside live billing.
-    "BACKEND_ENABLED": "true",
-    // Billing path kill switch. Live since 2026-05-15.
-    "BILLING_ENABLED": "true",
     "HARD_LIMITS": "false",
     // Public Mapbox token — same as VITE_MAPBOX_TOKEN. Used by the embed
     // pages on feeds.gtfsx.com to render the system + per-route maps.
@@ -198,8 +193,6 @@
         "APP_ORIGIN": "https://staging.gtfsx.com",
         "FEEDS_ORIGIN": "https://staging-feeds.gtfsx.com",
         "IMAGES_ORIGIN": "https://staging-img.gtfsx.com",
-        "BACKEND_ENABLED": "true",
-        "BILLING_ENABLED": "true",
         "HARD_LIMITS": "false",
         "MAPBOX_TOKEN": "pk.eyJ1IjoibWFya2VnZ2UiLCJhIjoiY21wYjlrdnhlMDRuZjJzb21mMXQwZTJlaSJ9.qCTIAgzwRD4nt6F2YA4OuQ",
         "STRIPE_PRICE_TEAM_MONTHLY": "price_1TbQW1JThEbTJMIV2YHbLXuf",

@@ -3,7 +3,8 @@ import Papa from 'papaparse';
 import length from '@turf/length';
 import { lineString } from '@turf/helpers';
 import { useStore } from '../store';
-import { flexZoneHasGroup, type FlexZone } from '../store/flexSlice';
+import { flexRouteNames } from '../components/flex/flexHelpers';
+import { bookingRuleIdOf, flexZoneHasGroup, type FlexZone } from '../store/flexSlice';
 import type { Calendar, Route, ShapePoint, Trip } from '../types/gtfs';
 
 /** Mirror of shapeSlice.recalcShapeDistances used as a last-resort safety
@@ -205,8 +206,7 @@ function materializeFlex(state: ReturnType<typeof useStore.getState>): FlexMater
         out.routes.push({
           route_id: routeId,
           agency_id: defaultAgencyId,
-          route_short_name: zone.name,
-          route_long_name: `${zone.name} (Flex)`,
+          ...flexRouteNames(zone.name),
           route_type: 715, // Demand and Response Bus Service
           route_color: '7C3AED',
           route_text_color: 'FFFFFF',
@@ -214,7 +214,7 @@ function materializeFlex(state: ReturnType<typeof useStore.getState>): FlexMater
       }
     }
 
-    const bookingId = zone.bookingRule ? `${zone.id}-booking` : undefined;
+    const bookingId = bookingRuleIdOf(zone);
     // A zone may carry polygon geometry, a stop group, or BOTH (mixed). In
     // GTFS-Flex a single stop_times row references one location_id OR one
     // location_group_id — never both — so a mixed zone emits two stop_times
@@ -560,13 +560,22 @@ export async function exportGtfsZip(): Promise<Blob> {
   }
 
   // booking_rules.txt (emitted whenever a materialized zone has a booking rule,
-  // polygon or group — they share the same schema).
+  // polygon or group — they share the same schema). A rule shared by several
+  // zones is written ONCE: every zone's stop_times rows already reference it by
+  // the same booking_rule_id. `name` is a library label, not a spec field, so it
+  // never reaches the file.
+  const seenBookingIds = new Set<string>();
   const bookingRows = flex.zones
-    .filter((z) => z.bookingRule)
+    .filter((z) => {
+      const id = bookingRuleIdOf(z);
+      if (!id || seenBookingIds.has(id)) return false;
+      seenBookingIds.add(id);
+      return true;
+    })
     .map((z) => {
       const b = z.bookingRule!;
       return {
-        booking_rule_id: `${z.id}-booking`,
+        booking_rule_id: bookingRuleIdOf(z)!,
         booking_type: b.bookingType,
         prior_notice_duration_min: b.priorNoticeDurationMin,
         prior_notice_duration_max: b.priorNoticeDurationMax,

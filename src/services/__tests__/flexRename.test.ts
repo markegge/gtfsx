@@ -4,8 +4,15 @@
 // GTFS-Flex export (locations.geojson stop_name + location_groups.txt name).
 import { beforeEach, describe, expect, it } from 'vitest';
 import JSZip from 'jszip';
+import Papa from 'papaparse';
 import { useStore } from '../../store';
 import { exportGtfsZip } from '../gtfsExport';
+import {
+  createFlexZoneWithRoute,
+  findFlexZoneRoute,
+  flexRouteNames,
+  routeMatchesFlexZoneName,
+} from '../../components/flex/flexHelpers';
 import type { FlexZone } from '../../store/flexSlice';
 
 const SQUARE: GeoJSON.FeatureCollection = {
@@ -27,8 +34,8 @@ function seedFlexZone(extra?: Partial<FlexZone>): void {
   s.setRoutes([
     {
       route_id: 'fz-route', agency_id: 'A',
-      route_short_name: 'Service Area 1', route_long_name: 'Service Area 1 (Flex)',
-      route_type: 3,
+      ...flexRouteNames('Service Area 1'),
+      route_type: 715,
     } as never,
   ]);
   s.addFlexZone({
@@ -36,6 +43,24 @@ function seedFlexZone(extra?: Partial<FlexZone>): void {
     geojson: SQUARE, routeId: 'fz-route',
     serviceId: 'wk', pickupWindowStart: '08:00:00', pickupWindowEnd: '17:00:00',
     ...extra,
+  });
+}
+
+/** A zone as feeds built before the long-name-only switch stored it: the route
+ *  named short = "<name>" / long = "<name> (Flex)", and no routeId on the zone. */
+function seedLegacyFlexZone(): void {
+  const s = useStore.getState();
+  s.setRoutes([
+    {
+      route_id: 'legacy-route', agency_id: 'A',
+      route_short_name: 'Service Area 1', route_long_name: 'Service Area 1 (Flex)',
+      route_type: 3,
+    } as never,
+  ]);
+  s.addFlexZone({
+    id: 'legacy-fz', name: 'Service Area 1', bufferMiles: 0,
+    geojson: SQUARE,
+    serviceId: 'wk', pickupWindowStart: '08:00:00', pickupWindowEnd: '17:00:00',
   });
 }
 
@@ -88,5 +113,88 @@ describe('flex service-area rename', () => {
     const groups = await zip.file('location_groups.txt')!.async('string');
     expect(groups).toContain('Downtown On-Demand');
     expect(groups).not.toContain('Service Area 1');
+  });
+});
+
+describe('flex route naming', () => {
+  it('names a new zone\'s route long-name-only (no route_short_name)', async () => {
+    createFlexZoneWithRoute({
+      id: 'new-fz', name: 'Northside Dial-a-Ride', bufferMiles: 0, geojson: SQUARE,
+      pickupWindowStart: '08:00:00', pickupWindowEnd: '17:00:00',
+    });
+    const zone = useStore.getState().flexZones.find((z) => z.id === 'new-fz')!;
+    const route = useStore.getState().routes.find((r) => r.route_id === zone.routeId)!;
+    expect(route.route_long_name).toBe('Northside Dial-a-Ride');
+    expect(route.route_short_name).toBe('');
+    expect(route.route_type).toBe(715);
+
+    // …and the exported row carries no short name, so route_long_name can't
+    // contain it (route_long_name_contains_short_name).
+    const blob = await exportGtfsZip();
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const rows = Papa.parse<Record<string, string>>(
+      await zip.file('routes.txt')!.async('string'),
+      { header: true, skipEmptyLines: true },
+    ).data;
+    const row = rows.find((r) => r.route_id === zone.routeId)!;
+    expect(row.route_long_name).toBe('Northside Dial-a-Ride');
+    expect(row.route_short_name ?? '').toBe('');
+  });
+
+  it('synthesizes a long-name-only route for a zone with no route', async () => {
+    useStore.getState().addFlexZone({
+      id: 'orphan', name: 'Rural Connector', bufferMiles: 0, geojson: SQUARE,
+      serviceId: 'wk', pickupWindowStart: '08:00:00', pickupWindowEnd: '17:00:00',
+    });
+    const blob = await exportGtfsZip();
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const rows = Papa.parse<Record<string, string>>(
+      await zip.file('routes.txt')!.async('string'),
+      { header: true, skipEmptyLines: true },
+    ).data;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].route_long_name).toBe('Rural Connector');
+    expect(rows[0].route_short_name ?? '').toBe('');
+  });
+
+  it('renaming a zone renames the paired route\'s long name', () => {
+    seedFlexZone();
+    // Mirrors FlexEditor.commitRename: the zone is the source of truth, the
+    // route follows via flexRouteNames.
+    useStore.getState().updateFlexZone('fz', { name: 'Downtown On-Demand' });
+    useStore.getState().updateRoute('fz-route', flexRouteNames('Downtown On-Demand'));
+    const route = useStore.getState().routes.find((r) => r.route_id === 'fz-route')!;
+    expect(route.route_long_name).toBe('Downtown On-Demand');
+    expect(route.route_short_name).toBe('');
+    expect(useStore.getState().flexZones.find((z) => z.id === 'fz')?.name).toBe('Downtown On-Demand');
+  });
+
+  it('still pairs a legacy "<name>" / "<name> (Flex)" route with its zone', () => {
+    seedLegacyFlexZone();
+    const { routes, flexZones } = useStore.getState();
+    const zone = flexZones.find((z) => z.id === 'legacy-fz')!;
+    expect(zone.routeId).toBeUndefined();
+    expect(findFlexZoneRoute(routes, zone)?.route_id).toBe('legacy-route');
+
+    expect(routeMatchesFlexZoneName(
+      { route_short_name: 'Service Area 1', route_long_name: 'Service Area 1 (Flex)' },
+      'Service Area 1',
+    )).toBe(true);
+    expect(routeMatchesFlexZoneName(flexRouteNames('Service Area 1'), 'Service Area 1')).toBe(true);
+    expect(routeMatchesFlexZoneName(flexRouteNames('Other Area'), 'Service Area 1')).toBe(false);
+  });
+
+  it('prefers the zone\'s routeId over a same-named route', () => {
+    seedFlexZone();
+    useStore.getState().setRoutes([
+      ...useStore.getState().routes,
+      {
+        route_id: 'decoy', agency_id: 'A',
+        route_short_name: 'Service Area 1', route_long_name: '', route_type: 3,
+      } as never,
+    ]);
+    const { routes, flexZones } = useStore.getState();
+    const zone = flexZones.find((z) => z.id === 'fz')!;
+    expect(findFlexZoneRoute(routes, zone)?.route_id).toBe('fz-route');
   });
 });

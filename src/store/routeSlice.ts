@@ -48,18 +48,19 @@ export const createRouteSlice: StateCreator<RouteSlice, [['zustand/immer', never
     // the RouteEditor. Renaming it there must also rename the area shape itself:
     // the map label, the Flex panel, and the GTFS-Flex export (location_group_name
     // + locations.geojson stop_name) all read FlexZone.name — not the route's
-    // name. Keep the zone's canonical name in sync with the route's short name.
+    // name. Keep the zone's canonical name in sync with the route's name. Flex
+    // routes carry the name in route_long_name (short is blank, so that a zone's
+    // prose name can't trip route_long_name_contains_short_name); legacy flex
+    // routes put it in route_short_name, so prefer short and fall back to long.
     // (The reverse direction — the Flex panel's inline rename writing back to the
     // route — lives in FlexEditor.commitRename; the `name !== newName` guard makes
     // that path a no-op here rather than a loop.)
-    if (typeof updates.route_short_name === 'string') {
-      const newName = updates.route_short_name.trim();
-      if (newName) {
-        const zone = (state as unknown as CrossSliceState).flexZones.find(
-          (z) => z.routeId === route_id,
-        );
-        if (zone && zone.name !== newName) zone.name = newName;
-      }
+    const renamed = updates.route_short_name?.trim() || updates.route_long_name?.trim();
+    if (renamed) {
+      const zone = (state as unknown as CrossSliceState).flexZones.find(
+        (z) => z.routeId === route_id,
+      );
+      if (zone && zone.name !== renamed) zone.name = renamed;
     }
   }),
   removeRoute: (route_id, opts) => set((state) => {

@@ -18,7 +18,6 @@ import { AuthLayout } from '../auth/AuthLayout';
 import { AuthButton } from '../auth/AuthButton';
 import { FormField } from '../ui/FormField';
 import { useStore } from '../../store';
-import { billingEnabled } from '../../utils/featureFlags';
 import {
   fetchPlanCatalog,
   openBillingPortal,
@@ -166,7 +165,6 @@ export function PricingPage() {
     setIntervals((prev) => ({ ...prev, [plan]: i }));
 
   const [plans, setPlans] = useState<PlanCatalogEntry[]>(FALLBACK_PLANS);
-  const [serverBillingEnabled, setServerBillingEnabled] = useState<boolean>(billingEnabled);
   const [talkToSalesOpen, setTalkToSalesOpen] = useState(false);
   // Which flow opened the modal — picks the prefilled mailto (Enterprise
   // inquiry vs. fix-my-feed scoping). Same booking link either way.
@@ -194,7 +192,6 @@ export function PricingPage() {
     fetchPlanCatalog()
       .then((res) => {
         if (res.plans?.length) setPlans(res.plans);
-        setServerBillingEnabled(res.billingEnabled);
       })
       .catch(() => {
         // Network or backend disabled — keep fallback content.
@@ -265,11 +262,6 @@ export function PricingPage() {
       // Logged-out users go straight to sign-up, carrying the plan so they land
       // back here for checkout after verifying their email.
       navigate(`/signup?next=${encodeURIComponent(`/pricing?plan=${plan}&interval=${interval}`)}`);
-      return;
-    }
-    if (!serverBillingEnabled) {
-      setError('Billing is not yet enabled in this environment.');
-      setPendingPlan(null);
       return;
     }
     setError(null);
@@ -665,13 +657,6 @@ export function PricingPage() {
             View a detailed description of all plans and features →
           </a>
         </div>
-
-        {!serverBillingEnabled && (
-          <div className="rounded-xl border border-gold bg-gold-light/40 p-4 text-sm text-amber-900">
-            Billing is not yet enabled in this environment. Paid checkout will open as soon as we flip
-            the switch—you can still create a free account and explore the editor today.
-          </div>
-        )}
 
         {checkoutContext ? (
           <div className="text-center">

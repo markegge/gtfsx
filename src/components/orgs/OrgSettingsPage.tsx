@@ -37,7 +37,6 @@ import {
   openBillingPortal,
   type OrgBillingState,
 } from '../../services/billingApi';
-import { billingEnabled } from '../../utils/featureFlags';
 import { ImportDialog } from '../import-export/ImportDialog';
 import { createProject, saveWorkingState } from '../../services/projectsApi';
 import { buildSnapshot, setCurrentWorkingStateVersion } from '../../db/serverPersistence';
@@ -563,7 +562,7 @@ export function OrgSettingsPage() {
                     <AuthButton
                       variant="secondary"
                       onClick={handleManagePortal}
-                      disabled={openingPortal || !billingEnabled}
+                      disabled={openingPortal}
                     >
                       {openingPortal ? 'Opening…' : 'Manage billing'}
                     </AuthButton>
@@ -571,7 +570,6 @@ export function OrgSettingsPage() {
                   {isAdmin && billing.plan === 'free' && matchingOrg && (
                     <AuthButton
                       onClick={() => navigate(`/pricing?ownerType=org&ownerId=${matchingOrg.id}`)}
-                      disabled={!billingEnabled}
                     >
                       Upgrade to Planner
                     </AuthButton>
@@ -606,11 +604,6 @@ export function OrgSettingsPage() {
               {!isAdmin && (
                 <p className="text-xs text-warm-gray">
                   Only owners and admins can change the org's plan or open the billing portal.
-                </p>
-              )}
-              {!billingEnabled && (
-                <p className="text-xs text-amber-700">
-                  Billing actions are temporarily disabled in this environment.
                 </p>
               )}
             </div>

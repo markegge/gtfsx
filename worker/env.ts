@@ -32,8 +32,6 @@ export interface Env {
   // (img.gtfsx.com / staging-img.gtfsx.com). New uploads return URLs on this
   // host; legacy feeds.gtfsx.com image URLs keep working via the feeds handler.
   IMAGES_ORIGIN: string;
-  BACKEND_ENABLED: string;
-  BILLING_ENABLED?: string;
   HARD_LIMITS: string;
   // Public Mapbox publishable token used by the embed pages on the feeds
   // origin. Same value as VITE_MAPBOX_TOKEN; not a secret.

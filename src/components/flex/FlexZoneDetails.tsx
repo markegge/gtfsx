@@ -4,6 +4,7 @@ import {
   bookingRuleIdOf, bookingRuleZones, flexBookingRules,
   flexZoneHasGroup, flexZoneHasPolygons,
 } from '../../store/flexSlice';
+import { RailSubHeading } from '../ui/RailHeadings';
 
 interface Props {
   zone: FlexZone;
@@ -67,6 +68,7 @@ export function FlexZoneDetails({ zone }: Props) {
     attachBookingRule, detachBookingRule, createBookingRule,
     renameBookingRule, deleteBookingRule,
     addFlexZoneGroup, removeFlexZoneGroup, clearFlexZonePolygons, setMapMode,
+    setEditingFlexZoneId,
   } = useStore();
   const hasGroup = flexZoneHasGroup(zone);
   const hasPolygons = flexZoneHasPolygons(zone);
@@ -78,6 +80,14 @@ export function FlexZoneDetails({ zone }: Props) {
   const drawPolygonIntoZone = () => {
     window.__flexAddPolygonZoneId = zone.id;
     setMapMode('draw_flex_zone');
+  };
+
+  // Reshape this zone's polygons on the map. Save / Cancel are anchored on the
+  // map (MapView) — the rail hides while shape editing, then comes back to this
+  // sub-panel because the detail id lives in the store.
+  const editZoneShape = () => {
+    setEditingFlexZoneId(zone.id);
+    setMapMode('edit_flex_zone');
   };
 
   // A service_id may be defined in calendar.txt, calendar_dates.txt, or both.
@@ -154,15 +164,13 @@ export function FlexZoneDetails({ zone }: Props) {
   };
 
   return (
-    <div className="px-3 pb-3 pt-1 space-y-3 bg-purple-50/30 border-l-2 border-purple-200">
+    <div className="space-y-5">
       {/* Service area composition: polygon area(s) and/or a stop group. A
           zone may carry both (a "mixed" zone) — each exports independently
           (locations.geojson + location_groups.txt) and both are referenced
           from the same flex trip. */}
       <div>
-        <div className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5">
-          Service Area
-        </div>
+        <RailSubHeading>Service Area</RailSubHeading>
 
         {/* Polygon component */}
         <div className="bg-white border border-sand rounded p-2 mb-2">
@@ -172,6 +180,14 @@ export function FlexZoneDetails({ zone }: Props) {
             </span>
             {hasPolygons ? (
               <div className="flex gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={editZoneShape}
+                  className="px-1.5 py-0.5 text-[11px] font-semibold text-purple hover:bg-purple-50 rounded"
+                  title="Reshape this zone on the map"
+                >
+                  Edit Shape
+                </button>
                 <button
                   type="button"
                   onClick={drawPolygonIntoZone}
@@ -209,7 +225,7 @@ export function FlexZoneDetails({ zone }: Props) {
           {hasPolygons ? (
             <>
               <p className="text-[10px] text-warm-gray/80 mt-1">
-                Exported to <code>locations.geojson</code>. Edit shape on the map via "Edit Shape".
+                Exported to <code>locations.geojson</code>. Use Edit Shape above to redraw it on the map.
               </p>
               {/* The zone id IS the location id: it's written as the top-level
                   `id` of the zone's locations.geojson Feature, and it's what the
@@ -326,9 +342,7 @@ export function FlexZoneDetails({ zone }: Props) {
 
       {/* Service window + days */}
       <div>
-        <div className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5">
-          Service Schedule
-        </div>
+        <RailSubHeading>Service Schedule</RailSubHeading>
         <div className="grid grid-cols-2 gap-2 mb-2">
           <div>
             <label className="block text-[10px] text-warm-gray mb-0.5">Pickup start</label>
@@ -398,9 +412,7 @@ export function FlexZoneDetails({ zone }: Props) {
 
       {/* Booking */}
       <div>
-        <div className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5">
-          Booking
-        </div>
+        <RailSubHeading>Booking</RailSubHeading>
 
         {/* Booking-rule library: define a call centre's rule once, attach it to
             every zone it covers. Editing it edits it everywhere — the banner
@@ -711,7 +723,7 @@ export function FlexZoneDetails({ zone }: Props) {
 
       {/* Additional service windows */}
       <details>
-        <summary className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5 cursor-pointer select-none">
+        <summary className="font-heading font-extrabold text-[13px] tracking-[0.04em] uppercase text-dark-brown mb-2.5 cursor-pointer select-none">
           Additional Service Windows ({zone.additionalWindows?.length ?? 0})
         </summary>
         <div className="pl-2 mt-2 space-y-2">
@@ -791,7 +803,7 @@ export function FlexZoneDetails({ zone }: Props) {
 
       {/* Travel-time estimation (advanced) */}
       <details>
-        <summary className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5 cursor-pointer select-none">
+        <summary className="font-heading font-extrabold text-[13px] tracking-[0.04em] uppercase text-dark-brown mb-2.5 cursor-pointer select-none">
           Travel-time estimation (advanced)
         </summary>
         <div className="pl-2 mt-2 space-y-1.5 text-[11px]">
@@ -828,9 +840,7 @@ export function FlexZoneDetails({ zone }: Props) {
 
       {/* Fare assignment */}
       <div>
-        <div className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5">
-          Fare
-        </div>
+        <RailSubHeading>Fare</RailSubHeading>
         <select
           value={zone.fareId || ''}
           onChange={(e) => setField('fareId', e.target.value || undefined)}

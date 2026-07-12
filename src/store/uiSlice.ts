@@ -53,6 +53,11 @@ export interface UISlice {
   editingRouteId: string | null;
   editingShapeId: string | null;
   editingFlexZoneId: string | null;
+  // Flex zone whose detail sub-panel is open in the right rail. Distinct from
+  // editingFlexZoneId, which is the zone whose SHAPE is being edited on the
+  // map — the rail unmounts during shape editing, so the two must not share a
+  // key or the open sub-panel would be lost on every map round-trip.
+  flexZoneDetailId: string | null;
   editingStopId: string | null;
   // service_id of the calendar (service pattern) currently in the detail
   // view. Mirrors editingRouteId — when set + the Calendars section is
@@ -139,6 +144,7 @@ export interface UISlice {
   setEditingRouteId: (id: string | null) => void;
   setEditingShapeId: (id: string | null) => void;
   setEditingFlexZoneId: (id: string | null) => void;
+  setFlexZoneDetailId: (id: string | null) => void;
   setEditingStopId: (id: string | null) => void;
   setEditingCalendarServiceId: (id: string | null) => void;
   setCreatingStop: (creating: boolean) => void;
@@ -179,6 +185,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   editingRouteId: null,
   editingShapeId: null,
   editingFlexZoneId: null,
+  flexZoneDetailId: null,
   editingStopId: null,
   editingCalendarServiceId: null,
   creatingStop: false,
@@ -264,6 +271,8 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
     state.editingStopId = null;
     // Same logic as editingStopId: leaving Calendars discards the open detail.
     if (section !== 'calendar') state.editingCalendarServiceId = null;
+    // Same for the Flex Zones detail sub-panel.
+    if (section !== 'flex') state.flexZoneDetailId = null;
     state.creatingStop = false;
     // Filter overlay on the map is only relevant while the Stops panel is
     // active; clear it when navigating elsewhere so other sections see the
@@ -300,6 +309,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   setEditingRouteId: (id) => set((state) => { state.editingRouteId = id; }),
   setEditingShapeId: (id) => set((state) => { state.editingShapeId = id; }),
   setEditingFlexZoneId: (id) => set((state) => { state.editingFlexZoneId = id; }),
+  setFlexZoneDetailId: (id) => set((state) => { state.flexZoneDetailId = id; }),
   setEditingStopId: (id) => set((state) => {
     state.editingStopId = id;
     // Open each stop on its Details tab rather than wherever the last one left off.

@@ -312,13 +312,13 @@ export function parseBoundaryGeoJson(text: string, fileName?: string): BoundaryI
 }
 
 /**
- * Open a flex zone's Details panel in the Flex Zones section. Fallback for
- * zones with no materialized route (legacy / orphaned) which therefore can't
- * open via the Routes editor. Lives in this non-component module so the
- * window-flag handoff (mirrored from FlexZonePopup) isn't flagged by the
- * react-hooks immutability rule, which only analyzes components and hooks.
+ * Open a flex zone's detail sub-panel in the Flex Zones section. Used by the
+ * map popup, the timetable's flex panel, and (as a fallback) the Routes panel
+ * for zones with no materialized route (legacy / orphaned) which therefore
+ * can't open via the Routes editor.
  */
 export function openFlexZoneDetails(zoneId: string) {
-  useStore.getState().setSidebarSection('flex');
-  window.__flexZoneExpand = zoneId;
+  const store = useStore.getState();
+  store.setSidebarSection('flex');
+  store.setFlexZoneDetailId(zoneId);
 }

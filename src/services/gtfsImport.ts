@@ -62,6 +62,7 @@ function applyImportToStore(data: Awaited<ReturnType<typeof importGtfsZip>>) {
   store.setEditingRouteId(null);
   store.setEditingShapeId(null);
   store.setEditingFlexZoneId(null);
+  store.setFlexZoneDetailId(null);
   store.setMapMode('select');
   // Drop any hidden-route / hidden-shape lists — the ids belong to routes
   // and shapes that no longer exist.

@@ -748,12 +748,16 @@ export function MapView() {
         delete window.__flexAddPolygonZoneId;
       } else {
         const geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [feature] };
+        const newZoneId = `flex-zone-${Date.now()}`;
         createFlexZoneWithRoute({
-          id: `flex-zone-${Date.now()}`,
+          id: newZoneId,
           name: nextFlexZoneName(currentState.flexZones),
           bufferMiles: 0,
           geojson,
         });
+        // Land in the new zone's detail sub-panel when the rail comes back, so
+        // booking rules / windows / fare are the obvious next step.
+        useStore.getState().setFlexZoneDetailId(newZoneId);
       }
       useStore.getState().setMapMode('select');
       if (drawRef.current) drawRef.current.deleteAll();

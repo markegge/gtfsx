@@ -984,6 +984,27 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
   }
 
   report({ phase: 'Finalizing…' });
+  // booking_rules.txt has no name column, so a rule arrives labelled with its
+  // own id. Where that id is one we generated (`<zone id>-booking`), it is a
+  // slug no reader can make sense of, so name the rule after the zones using it
+  // now that those are known. A meaningful id from a third-party feed is left
+  // alone: it is the best label the feed gave us.
+  const zonesByBookingRule = new Map<string, FlexZone[]>();
+  for (const zone of flexZones) {
+    const ruleId = zone.bookingRule?.id;
+    if (!ruleId) continue;
+    zonesByBookingRule.set(ruleId, [...(zonesByBookingRule.get(ruleId) ?? []), zone]);
+  }
+  for (const [ruleId, zones] of zonesByBookingRule) {
+    const unnamed = zones[0].bookingRule!.name === ruleId;
+    const derivedFromZone = zones.some((z) => ruleId.startsWith(z.id));
+    if (!unnamed || !derivedFromZone) continue;
+    const name = zones.length === 1
+      ? `${zones[0].name} booking`
+      : `Shared booking rule (${zones.length} zones)`;
+    for (const zone of zones) zone.bookingRule = { ...zone.bookingRule!, name };
+  }
+
   // Strip the synthetic flex trips from trips[] so re-exporting doesn't
   // create a duplicate (materializeFlex regenerates them from the zones).
   const flexZoneRouteIds = new Set(flexZones.map((z) => z.routeId).filter(Boolean) as string[]);

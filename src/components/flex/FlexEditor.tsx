@@ -121,12 +121,12 @@ export function FlexEditor() {
   const {
     shapes, routes, trips, stops, stopTimes, hiddenRouteIds,
     flexZones, updateFlexZone, updateRoute,
-    mapMode, setMapMode, editingFlexZoneId, setEditingFlexZoneId,
+    setMapMode, setEditingFlexZoneId,
+    flexZoneDetailId, setFlexZoneDetailId,
   } = useStore();
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bufferInput, setBufferInput] = useState<string>(String(DEFAULT_FLEX_BUFFER_MILES));
-  const [expandedZoneId, setExpandedZoneId] = useState<string | null>(null);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [confirmDeleteZoneId, setConfirmDeleteZoneId] = useState<string | null>(null);
   // Inline-rename state for the zone name. Keyed by zone id so only one row
@@ -148,15 +148,13 @@ export function FlexEditor() {
   // Persists only for the current session — the ref is re-initialized on reload.
   const skipDeleteConfirmRef = useRef(false);
 
-  // Let external triggers (e.g. the Flex zone map popup) expand a specific
-  // zone's Details panel on mount.
+  // Clear a stale detail id if the zone it points at is gone (deleted here, or
+  // by a feed load / undo elsewhere).
   useEffect(() => {
-    const pending = window.__flexZoneExpand;
-    if (pending && flexZones.some((z) => z.id === pending)) {
-      setExpandedZoneId(pending);
-      delete window.__flexZoneExpand;
+    if (flexZoneDetailId && !flexZones.some((z) => z.id === flexZoneDetailId)) {
+      setFlexZoneDetailId(null);
     }
-  }, [flexZones]);
+  }, [flexZoneDetailId, flexZones, setFlexZoneDetailId]);
 
   const busRoutes = routes.filter((r) => r.route_type !== 0 && !hiddenRouteIds.includes(r.route_id));
 
@@ -187,27 +185,29 @@ export function FlexEditor() {
       // demand-response zone inherits its parent routes' hours. Left blank when
       // those routes have no timed stop_times to derive it from.
       const span = computeBufferedServiceSpan(shapes, routes, trips, stopTimes, hiddenRouteIds);
+      const zoneId = `flex-zone-${Date.now()}`;
       createFlexZoneWithRoute({
-        id: `flex-zone-${Date.now()}`,
+        id: zoneId,
         name: nextFlexZoneName(useStore.getState().flexZones),
         bufferMiles,
         geojson,
         ...(span ? { pickupWindowStart: span.start, pickupWindowEnd: span.end } : {}),
       });
+      setFlexZoneDetailId(zoneId);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to generate service area');
     } finally {
       setGenerating(false);
     }
-  }, [shapes, routes, trips, stopTimes, hiddenRouteIds, bufferMiles, bufferValid]);
+  }, [shapes, routes, trips, stopTimes, hiddenRouteIds, bufferMiles, bufferValid, setFlexZoneDetailId]);
 
   const handleDrawZone = () => {
     setMapMode('draw_flex_zone');
   };
 
   const handleCreateGroup = useCallback(() => {
-    // Create an empty stop-group zone. User fills in stops via the zone's
-    // Details panel, which expands below the new row.
+    // Create an empty stop-group zone and open its detail sub-panel, where the
+    // user picks the stops that make up the group.
     const zoneId = `flex-group-${Date.now()}`;
     createFlexZoneWithRoute({
       id: zoneId,
@@ -216,69 +216,26 @@ export function FlexEditor() {
       geojson: { type: 'FeatureCollection', features: [] },
       stopIds: [],
     });
-    setExpandedZoneId(zoneId);
-  }, []);
+    setFlexZoneDetailId(zoneId);
+  }, [setFlexZoneDetailId]);
 
   const handleEditZone = (zone: FlexZone) => {
     setEditingFlexZoneId(zone.id);
     setMapMode('edit_flex_zone');
   };
 
-  const handleSaveEdit = () => {
-    window.__flexZoneEditSave?.();
-  };
+  const detailZone = flexZoneDetailId
+    ? flexZones.find((z) => z.id === flexZoneDetailId)
+    : undefined;
 
-  const handleCancelEdit = () => {
-    window.__flexZoneEditDiscard?.();
-  };
-
-  const isDrawing = mapMode === 'draw_flex_zone';
-  const isEditing = mapMode === 'edit_flex_zone';
+  // Editing one zone's service details takes over the whole rail body; the
+  // breadcrumb back to this list lives in the rail header (RightRail).
+  if (detailZone) {
+    return <FlexZoneDetails zone={detailZone} />;
+  }
 
   return (
     <div className="space-y-4">
-      {/* Zone editing active */}
-      {isEditing && editingFlexZoneId && (
-        <div className="bg-purple-50 border border-purple-300 rounded-lg p-3 space-y-2">
-          <p className="text-xs font-semibold text-purple-800">
-            Editing: {flexZones.find((z) => z.id === editingFlexZoneId)?.name}
-          </p>
-          <p className="text-[11px] text-purple-700">
-            Drag vertices to reshape. Click midpoints to add vertices. Use "Delete Vertex" on the map to remove.
-          </p>
-          <div className="flex gap-2">
-            <button
-              onClick={handleCancelEdit}
-              className="flex-1 px-3 py-1.5 bg-white border border-sand text-warm-gray rounded-lg text-xs font-semibold hover:bg-sand transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSaveEdit}
-              className="flex-1 px-3 py-1.5 bg-purple text-white rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Zone drawing active */}
-      {isDrawing && (
-        <div className="bg-purple-50 border border-purple-300 rounded-lg p-3 space-y-2">
-          <p className="text-xs font-semibold text-purple-800">Drawing zone…</p>
-          <p className="text-[11px] text-purple-700">
-            Click on the map to add vertices. Double-click to close and save the polygon.
-          </p>
-          <button
-            onClick={() => setMapMode('select')}
-            className="w-full px-3 py-1.5 bg-white border border-sand text-warm-gray rounded-lg text-xs font-semibold hover:bg-sand transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-
       {/* Zone list */}
       {flexZones.length > 0 ? (
         <div className="space-y-1.5">
@@ -286,121 +243,97 @@ export function FlexEditor() {
             Service Areas ({flexZones.length})
           </p>
           {flexZones.map((zone) => {
-            const expanded = expandedZoneId === zone.id;
             const hasBooking = !!zone.bookingRule;
             return (
               <div
                 key={zone.id}
-                className={`rounded-lg border transition-colors
-                  ${editingFlexZoneId === zone.id
-                    ? 'bg-purple-50 border-purple-300'
-                    : 'bg-cream border-sand'
-                  }`}
+                onClick={() => setFlexZoneDetailId(zone.id)}
+                className="group flex items-center gap-2 px-3 py-2 rounded-lg border bg-cream border-sand cursor-pointer hover:border-purple-300 hover:bg-purple-50/40 transition-colors"
               >
-                <div className="group flex items-center gap-2 px-3 py-2">
-                  <span
-                    className="w-3 h-3 rounded-sm shrink-0 border border-purple-300"
-                    style={{ backgroundColor: 'rgba(124,58,237,0.2)' }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    {renamingZoneId === zone.id ? (
-                      <input
-                        autoFocus
-                        value={nameDraft}
-                        onChange={(e) => setNameDraft(e.target.value)}
-                        onBlur={() => commitRename(zone)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                          if (e.key === 'Escape') {
-                            setNameDraft(zone.name);
-                            setRenamingZoneId(null);
-                          }
-                        }}
-                        className="text-sm font-medium text-dark-brown w-full px-1.5 py-0.5 bg-white border-2 border-purple-300 rounded outline-none focus:border-purple"
-                      />
-                    ) : (
+                <span
+                  className="w-3 h-3 rounded-sm shrink-0 border border-purple-300"
+                  style={{ backgroundColor: 'rgba(124,58,237,0.2)' }}
+                />
+                <div className="flex-1 min-w-0">
+                  {renamingZoneId === zone.id ? (
+                    <input
+                      autoFocus
+                      value={nameDraft}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      onBlur={() => commitRename(zone)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        if (e.key === 'Escape') {
+                          setNameDraft(zone.name);
+                          setRenamingZoneId(null);
+                        }
+                      }}
+                      className="text-sm font-medium text-dark-brown w-full px-1.5 py-0.5 bg-white border-2 border-purple-300 rounded outline-none focus:border-purple"
+                    />
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <span className="truncate text-sm font-medium text-dark-brown">{zone.name}</span>
                       <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setNameDraft(zone.name);
                           setRenamingZoneId(zone.id);
                         }}
-                        className="flex items-center gap-1 w-full text-left text-sm font-medium text-dark-brown hover:text-purple transition-colors"
+                        className="shrink-0 text-[11px] text-warm-gray opacity-0 group-hover:opacity-100 hover:text-purple transition-opacity"
                         title="Rename service area"
                       >
-                        <span className="truncate">{zone.name}</span>
-                        <span
-                          aria-hidden
-                          className="shrink-0 text-[11px] text-warm-gray opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          ✎
-                        </span>
-                      </button>
-                    )}
-                    <p className="text-[11px] text-warm-gray">
-                      {describeFlexZoneShape(zone)}
-                      {hasBooking && ' · booking set'}
-                      {zone.fareId && ` · fare ${zone.fareId}`}
-                    </p>
-                  </div>
-                  {!isEditing && !isDrawing && (
-                    <div className="flex gap-1 shrink-0">
-                      <button
-                        onClick={() => setExpandedZoneId(expanded ? null : zone.id)}
-                        className={`px-2 py-1 text-[11px] font-semibold rounded transition-colors
-                          ${expanded
-                            ? 'bg-purple-100 text-purple'
-                            : 'text-warm-gray hover:text-purple hover:bg-purple-50'}`}
-                        title="Booking rules, windows, fare"
-                      >
-                        Details {expanded ? '▾' : '▸'}
-                      </button>
-                      {zone.geojson.features.length > 0 && (
-                        <button
-                          onClick={() => handleEditZone(zone)}
-                          className="px-2 py-1 text-[11px] font-semibold text-warm-gray hover:text-purple hover:bg-purple-50 rounded transition-colors"
-                          title="Edit zone shape on the map"
-                        >
-                          Edit Shape
-                        </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          if (skipDeleteConfirmRef.current) {
-                            deleteFlexZoneWithRoute(zone.id);
-                          } else {
-                            setConfirmDeleteZoneId(zone.id);
-                          }
-                        }}
-                        className="px-1.5 py-1 text-[11px] text-warm-gray hover:text-red-500 transition-colors rounded"
-                        title="Remove zone"
-                      >
-                        ×
+                        ✎
                       </button>
                     </div>
                   )}
+                  <p className="text-[11px] text-warm-gray">
+                    {describeFlexZoneShape(zone)}
+                    {hasBooking && ' · booking set'}
+                    {zone.fareId && ` · fare ${zone.fareId}`}
+                  </p>
                 </div>
-                {expanded && !isEditing && !isDrawing && (
-                  <FlexZoneDetails zone={zone} />
-                )}
+                <div className="flex gap-1 shrink-0">
+                  {zone.geojson.features.length > 0 && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleEditZone(zone); }}
+                      className="px-2 py-1 text-[11px] font-semibold text-warm-gray hover:text-purple hover:bg-purple-50 rounded transition-colors"
+                      title="Edit zone shape on the map"
+                    >
+                      Edit Shape
+                    </button>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (skipDeleteConfirmRef.current) {
+                        deleteFlexZoneWithRoute(zone.id);
+                      } else {
+                        setConfirmDeleteZoneId(zone.id);
+                      }
+                    }}
+                    className="px-1.5 py-1 text-[11px] text-warm-gray hover:text-red-500 transition-colors rounded"
+                    title="Remove zone"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
             );
           })}
         </div>
       ) : (
-        !isDrawing && !isEditing && (
-          <EmptyState
-            icon="📍"
-            title="No service areas yet"
-            description="Draw a zone on the map, import a GeoJSON boundary, or generate one from your fixed routes."
-          />
-        )
+        <EmptyState
+          icon="📍"
+          title="No service areas yet"
+          description="Draw a zone on the map, import a GeoJSON boundary, or generate one from your fixed routes."
+        />
       )}
 
       {/* Add flex zone — dashed ghost trigger at the bottom, matching the other
           entity panels. The create sub-panel (and its drawing flow) keep the
           flex feature's purple accent. */}
-      {!isEditing && !isDrawing && (
-        !showCreatePanel ? (
+      {!showCreatePanel ? (
           <button
             onClick={() => setShowCreatePanel(true)}
             className="w-full py-2 rounded-lg border-2 border-dashed border-sand text-warm-gray text-sm font-medium hover:border-coral hover:text-coral transition-colors"
@@ -482,13 +415,12 @@ export function FlexEditor() {
             {/* Import an existing boundary */}
             <FlexBoundaryImport
               onImported={(zoneId) => {
-                setExpandedZoneId(zoneId);
+                setFlexZoneDetailId(zoneId);
                 setShowCreatePanel(false);
               }}
             />
           </div>
-        )
-      )}
+        )}
 
       <div className="border-t border-sand pt-3">
         <p className="text-[10px] text-warm-gray">

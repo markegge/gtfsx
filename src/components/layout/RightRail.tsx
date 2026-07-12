@@ -15,6 +15,7 @@ import { TitleVIPanel } from '../titlevi/TitleVIPanel';
 import { StopAnalysisPanel } from '../analysis/StopAnalysisPanel';
 import { AccessIsochronePanel } from '../analysis/AccessIsochronePanel';
 import { FlexEditor } from '../flex/FlexEditor';
+import { deleteFlexZoneWithRoute } from '../flex/flexHelpers';
 import { StationsPanel } from '../stations/StationsPanel';
 import { FrequenciesEditor } from '../frequencies/FrequenciesEditor';
 import { BlocksPanel } from '../blocks/BlocksPanel';
@@ -535,6 +536,67 @@ function CalendarDetailHeader() {
   );
 }
 
+/**
+ * Header for the flex zone detail sub-panel. Mirrors RouteDetailHeader: a
+ * breadcrumb back to the zone list, the zone name, and its Delete action.
+ */
+function FlexZoneDetailHeader() {
+  const zone = useStore((s) =>
+    s.flexZones.find((z) => z.id === s.flexZoneDetailId) ?? null,
+  );
+  const setFlexZoneDetailId = useStore((s) => s.setFlexZoneDetailId);
+  const setSidebarSection = useStore((s) => s.setSidebarSection);
+
+  if (!zone) return null;
+
+  return (
+    <div className="border-b border-sand bg-white shrink-0">
+      {/* Breadcrumb row */}
+      <div className="px-5 pt-3 flex items-center gap-2">
+        <div className="flex-1 min-w-0 text-[13px] text-warm-gray">
+          <button
+            onClick={() => setFlexZoneDetailId(null)}
+            className="hover:text-coral transition-colors"
+          >
+            Flex Zones
+          </button>
+          <span className="opacity-50 mx-1.5">›</span>
+          <span className="text-dark-brown font-semibold truncate">
+            {zone.name}
+          </span>
+        </div>
+        <button
+          onClick={() => {
+            setFlexZoneDetailId(null);
+            setSidebarSection(null);
+          }}
+          className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
+          title="Close editor"
+        >
+          ✕
+        </button>
+      </div>
+      {/* Title row */}
+      <div className="px-5 pt-1 pb-3 flex items-center gap-3">
+        <div
+          className="w-5 h-5 rounded-md shrink-0 border border-purple-300"
+          style={{ background: 'rgba(124,58,237,0.2)' }}
+        />
+        <h2 className="font-heading font-extrabold text-xl text-dark-brown leading-tight truncate flex-1 min-w-0">
+          {zone.name}
+        </h2>
+        <EditActions
+          onDelete={() => {
+            deleteFlexZoneWithRoute(zone.id);
+            setFlexZoneDetailId(null);
+          }}
+          deleteTitle="Delete this flex zone"
+        />
+      </div>
+    </div>
+  );
+}
+
 function GenericHeader({ section }: { section: SidebarSection }) {
   const title = SECTION_TITLES[section] ?? 'Configuration';
   const group = SECTION_GROUP[section];
@@ -568,6 +630,7 @@ export function RightRail() {
   const editingRouteId = useStore((s) => s.editingRouteId);
   const editingStopId = useStore((s) => s.editingStopId);
   const editingCalendarServiceId = useStore((s) => s.editingCalendarServiceId);
+  const flexZoneDetailId = useStore((s) => s.flexZoneDetailId);
   const creatingStop = useStore((s) => s.creatingStop);
   const mapMode = useStore((s) => s.mapMode);
   const storedWidth = useStore((s) => s.rightRailWidth);
@@ -681,6 +744,7 @@ export function RightRail() {
 
   const inRouteDetail = section === 'routes' && !!editingRouteId;
   const inCalendarDetail = section === 'calendar' && !!editingCalendarServiceId;
+  const inFlexDetail = section === 'flex' && !!flexZoneDetailId;
   const editingStop = !!editingStopId;
   const creatingNewStop = !!creatingStop;
 
@@ -719,7 +783,9 @@ export function RightRail() {
             ? <RouteDetailHeader />
             : inCalendarDetail
               ? <CalendarDetailHeader />
-              : <GenericHeader section={section} />}
+              : inFlexDetail
+                ? <FlexZoneDetailHeader />
+                : <GenericHeader section={section} />}
       <div className="flex-1 overflow-y-auto">
         <div className="p-5">
           {creatingNewStop

@@ -103,16 +103,6 @@ function applyImportToStore(data: Awaited<ReturnType<typeof importGtfsZip>>) {
   store.setFareTransferRules(data.fareTransferRules);
   store.setFlexZones(data.flexZones);
 
-  // Provisional `ext_ntd_id` extension column (GTFS-X/gtfsx#62). This is a
-  // replace-import: the loaded feed defines the project, so mirror what it
-  // carries — exactly as feedInfo above is replaced (with null when absent) —
-  // rather than letting the previous project's NTD ID linger on a new feed.
-  // A feed that carries the column is already using the extension, so the export
-  // opt-in comes back ON and the column survives an import → export round-trip.
-  // data.ntdId is a string with significant leading zeros; never Number() it.
-  store.setNtdId(data.ntdId);
-  store.setExportNtdIdColumn(!!data.ntdId);
-
   // Seed per-feed feature settings from what the imported feed contains, so its
   // advanced sections (frequencies, stations, transfers) show up — "the feed
   // contains the file" enables the feature. demandResponse is left unset so it

@@ -32,12 +32,6 @@ export interface ProjectSummary {
    * (Save → Save As). Enforced server-side too.
    */
   locked: boolean;
-  /**
-   * NTD ID last projected onto the project at publish time (migration 0024).
-   * The editor's feed state is the source of truth; this is what the public
-   * feeds origin is currently serving. Always a string — leading zeros matter.
-   */
-  ntdId?: string | null;
   /** SPDX short identifier for the feed's declared license, e.g. 'CC-BY-4.0'. */
   licenseSpdx?: string | null;
 }
@@ -484,13 +478,6 @@ export interface PublishInput {
   ignoreRtBreakage?: boolean;
   /** Acknowledges the 409 `agency_id_churn` warning (removed/renamed agency_ids). */
   ignoreAgencyChurn?: boolean;
-  /**
-   * FTA National Transit Database ID, projected onto the project at publish so
-   * feed_info.json + dmfr.json can carry the NTD crosswalk. A 1–5 digit STRING
-   * — leading zeros are significant, so never route this through Number().
-   * `null` clears it; omit to leave the current value alone.
-   */
-  ntdId?: string | null;
   /** SPDX short identifier for the feed's license, e.g. 'CC-BY-4.0'. */
   licenseSpdx?: string | null;
   zip?: Blob;
@@ -505,7 +492,6 @@ export async function publishProject(
     ignoreWarnings: input.ignoreWarnings,
     ignoreRtBreakage: input.ignoreRtBreakage,
     ignoreAgencyChurn: input.ignoreAgencyChurn,
-    ntdId: input.ntdId,
     licenseSpdx: input.licenseSpdx,
   };
   if (input.zip) {

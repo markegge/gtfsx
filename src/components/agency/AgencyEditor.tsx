@@ -82,6 +82,44 @@ export function AgencyEditor() {
         onChange={(v) => updateAgency(agency.agency_id, { agency_lang: v })}
       />
 
+      {/* The agency's external identifier — in the US, its FTA National Transit
+          Database (NTD) ID. Free-form on purpose: it carries significant leading
+          zeros ("01234") and may hold a non-NTD identifier, so it is stored and
+          exported as a STRING and never format-checked or Number()-coerced.
+          Exported as an `external_id` column on agency.txt whenever any agency
+          has one. Hand-rolled rather than <FormField> only because the label
+          carries the docs link. */}
+      <div className="mb-3">
+        <label
+          htmlFor="agency-external-id"
+          className="flex items-center gap-1.5 text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1"
+        >
+          NTD / External ID
+          <a
+            href="/docs/ntd-id/"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="What is an NTD / External ID?"
+            aria-label="What is an NTD / External ID? Opens the docs in a new tab"
+            className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-warm-gray/50 text-[9px] font-bold not-italic normal-case text-warm-gray hover:border-coral hover:text-coral transition-colors"
+          >
+            i
+          </a>
+        </label>
+        <input
+          id="agency-external-id"
+          type="text"
+          autoComplete="off"
+          placeholder="e.g. 01234"
+          value={agency.external_id ?? ''}
+          onChange={(e) => {
+            const trimmed = e.target.value.trim();
+            updateAgency(agency.agency_id, { external_id: trimmed === '' ? undefined : trimmed });
+          }}
+          className="w-full px-3 py-2 border-2 border-sand rounded-lg text-sm font-mono text-dark-brown bg-cream transition-colors focus:outline-none focus:border-coral focus:bg-white"
+        />
+      </div>
+
       <RailDivider />
       <RailSubHeading>Feed Info</RailSubHeading>
       {/* feed_publisher is fixed to GTFS·X on every export and publish (see

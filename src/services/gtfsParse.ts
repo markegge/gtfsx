@@ -139,10 +139,6 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
   fareLegRules: FareLegRule[];
   fareTransferRules: FareTransferRule[];
   flexZones: FlexZone[];
-  /** Value of the provisional `ext_ntd_id` column on agency.txt, if the feed
-   *  carries one (a string — leading zeros are significant). null when absent.
-   *  Applied to project state by the import entry point, not stored on Agency. */
-  ntdId: string | null;
   warnings: string[];
 }> {
   const report: ImportProgress = onProgress ?? (() => {});
@@ -175,34 +171,26 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
     return await entry.async('string');
   };
 
-  // Agency
+  // Agency. `external_id` is a custom column (the agency's NTD ID, in the US) —
+  // read per-row so each agency keeps its OWN value across a round-trip. It is a
+  // STRING with significant leading zeros ("01234"): parseCSV runs with
+  // dynamicTyping:false, so the value arrives as a string and must stay one —
+  // never Number()-coerce it. Blank cells normalize to undefined so a feed whose
+  // column is entirely empty doesn't re-export an empty column.
   const agencyText = await readFile('agency.txt');
-  const agencyRows = agencyText ? parseCSV(agencyText) : [];
-  const agencies: Agency[] = agencyRows.map((row) => ({
-    agency_id: row.agency_id || '',
-    agency_name: row.agency_name || '',
-    agency_url: row.agency_url || '',
-    agency_timezone: row.agency_timezone || 'America/New_York',
-    agency_lang: row.agency_lang,
-    agency_phone: row.agency_phone,
-    agency_fare_url: row.agency_fare_url,
-    agency_email: row.agency_email,
-  }));
-
-  // Provisional `ext_ntd_id` extension column (GTFS-X/gtfsx#62). It is NOT a
-  // GTFS field and is deliberately NOT stored on the Agency entity — it lives in
-  // project state (projectSlice.ntdId), and the exporter writes it back from
-  // there. Capturing it here is what lets the column survive a round-trip.
-  //
-  // NTD IDs are 5-digit strings whose leading zeros are significant ("01234"):
-  // parseCSV runs with dynamicTyping:false, so the value arrives as a string and
-  // must stay one — never Number()-coerce it. If several agency rows carry
-  // differing values we have no per-agency NTD model to represent that, so take
-  // the first non-empty one rather than failing the import.
-  const ntdId =
-    agencyRows
-      .map((row) => (row.ext_ntd_id ?? '').trim())
-      .find((v) => v !== '') ?? null;
+  const agencies: Agency[] = agencyText
+    ? parseCSV(agencyText).map((row) => ({
+        agency_id: row.agency_id || '',
+        agency_name: row.agency_name || '',
+        agency_url: row.agency_url || '',
+        agency_timezone: row.agency_timezone || 'America/New_York',
+        agency_lang: row.agency_lang,
+        agency_phone: row.agency_phone,
+        agency_fare_url: row.agency_fare_url,
+        agency_email: row.agency_email,
+        external_id: String(row.external_id ?? '').trim() || undefined,
+      }))
+    : [];
 
   // Calendar
   const calendarText = await readFile('calendar.txt');
@@ -1013,7 +1001,7 @@ export async function importGtfsZip(file: File, onProgress?: ImportProgress): Pr
     fareAreas, stopAreas, fareNetworks, routeNetworks,
     timeframes, riderCategories, fareMedia,
     fareProducts, fareLegRules, fareTransferRules,
-    flexZones, ntdId, warnings,
+    flexZones, warnings,
   };
 }
 

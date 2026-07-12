@@ -104,11 +104,8 @@ export function workingStateToImportData(snapshot: Record<string, unknown>): Imp
     fareLegRules: asArray(snapshot.fareLegRules),
     fareTransferRules: asArray(snapshot.fareTransferRules),
     flexZones: asArray(snapshot.flexZones),
-    // The working-state snapshot persists the project's NTD ID (a string with
-    // significant leading zeros — never Number()-coerce). Carry it through so a
-    // replace-import from My Feeds keeps it, exactly as a zip carrying the
-    // provisional ext_ntd_id column does. Anything non-string (old blob) → null.
-    ntdId: typeof snapshot.ntdId === 'string' ? snapshot.ntdId : null,
+    // An agency's `external_id` (its NTD ID) needs nothing here — it is a field
+    // on the Agency entity, so it rides along inside `agencies` above.
     warnings: [],
   };
 }

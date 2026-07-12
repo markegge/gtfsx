@@ -20,7 +20,6 @@ import { exportGtfsZip } from '../../services/gtfsExport';
 import { applySnapshotToStore, buildSnapshot } from '../../db/serverPersistence';
 import { DraftLinksSection, toEditorDeepLink } from './DraftLinksPanel';
 import { NtdP50Panel } from './NtdP50Panel';
-import { isNtdIdInvalid, NTD_ID_INVALID_HINT } from '../../utils/ntdId';
 
 // SPDX identifiers publishers actually use for open transit data. "Leave unset"
 // is a first-class choice — we never guess a license on someone's behalf.
@@ -106,13 +105,11 @@ export function PublishPanel() {
   const currentPublication = useStore((s) => s.currentPublication);
   const setPublicationHistory = useStore((s) => s.setPublicationHistory);
   const setCurrentPublication = useStore((s) => s.setCurrentPublication);
-  // NTD ID and license both live in the editor's feed state (the source of
-  // truth) — the server columns are only projections written at publish. The
-  // NTD ID is a string, never a number. Both are also editable outside this
-  // panel (the NTD ID from the export dialog, which anonymous users get), so
-  // neither may be mirrored into local component state.
-  const ntdId = useStore((s) => s.ntdId);
-  const setNtdId = useStore((s) => s.setNtdId);
+  // The license lives in the editor's feed state (the source of truth) — the
+  // server column is only a projection written at publish. It is editable
+  // outside this panel too, so it must not be mirrored into local component
+  // state. (An agency's NTD / external ID lives on the Agency entity and is
+  // edited in the Agency panel — see NtdP50Panel below, which reads it.)
   const licenseSpdx = useStore((s) => s.licenseSpdx);
   const setLicenseSpdx = useStore((s) => s.setLicenseSpdx);
   const feedsProjects = useStore((s) => s.feedsProjects);
@@ -198,9 +195,8 @@ export function PublishPanel() {
         snapshotId,
         ignoreWarnings: ignoreWarnings || undefined,
         ...flags,
-        // Project the feed's NTD ID + license onto the publication so
-        // feed_info.json and dmfr.json can carry the FTA NTD crosswalk.
-        ntdId: ntdId ?? null,
+        // Project the feed's license onto the publication so feed_info.json and
+        // dmfr.json can carry it.
         licenseSpdx: licenseSpdx ?? null,
         zip,
       });
@@ -375,16 +371,12 @@ export function PublishPanel() {
   };
 
   const currentPubSnapshotId = currentPublication?.snapshotId ?? null;
-  // The server rejects a malformed NTD ID (422); catch it here so the user
-  // isn't told about it only after a full ZIP render + upload.
-  const ntdIdInvalid = isNtdIdInvalid(ntdId);
   const canonicalUrl =
     currentPublication?.canonicalUrl ??
     (currentPublication && activeProject ? `${FEEDS_ORIGIN}/${activeProject.slug}/gtfs.zip` : null);
   const publishDisabled =
     !selectedSnapshot ||
     busy ||
-    ntdIdInvalid ||
     (selectedSnapshot.validationErrors ?? 0) > 0 ||
     selectedSnapshot.id === currentPubSnapshotId ||
     ((selectedSnapshot.validationWarnings ?? 0) > 0 && !ignoreWarnings);
@@ -517,72 +509,31 @@ export function PublishPanel() {
                 </div>
               )}
 
-              {/* Feed identity — travels with the publication into feed_info.json
-                  and the DMFR document (feeds.gtfsx.com/<slug>/dmfr.json), which
-                  is what carries the NTD crosswalk into Transitland / the
-                  Mobility Database. Both optional. */}
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label
-                    htmlFor="publish-ntd-id"
-                    className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1"
-                  >
-                    NTD ID <span className="normal-case font-normal">(optional)</span>
-                  </label>
-                  <input
-                    id="publish-ntd-id"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    maxLength={5}
-                    placeholder="e.g. 00123"
-                    value={ntdId ?? ''}
-                    onChange={(e) => setNtdId(e.target.value)}
-                    className={`w-full px-3 py-2 border-2 rounded-lg bg-cream text-sm text-dark-brown font-mono focus:outline-none focus:bg-white ${
-                      ntdIdInvalid ? 'border-red-300 focus:border-red-400' : 'border-sand focus:border-coral'
-                    }`}
-                  />
-                  {ntdIdInvalid ? (
-                    <p className="mt-1 text-[11px] text-red-600">{NTD_ID_INVALID_HINT}</p>
-                  ) : (
-                    <p className="mt-1 text-[11px] text-warm-gray">
-                      US agencies: your five-digit National Transit Database ID. Look it up at{' '}
-                      <a
-                        href="https://www.transit.dot.gov/ntd"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-coral hover:underline"
-                      >
-                        transit.dot.gov/ntd
-                      </a>
-                      .
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="publish-license"
-                    className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1"
-                  >
-                    Feed license <span className="normal-case font-normal">(optional)</span>
-                  </label>
-                  <select
-                    id="publish-license"
-                    value={licenseSpdx ?? ''}
-                    onChange={(e) => setLicenseSpdx(e.target.value)}
-                    className="w-full px-3 py-2 border-2 border-sand rounded-lg bg-cream text-sm text-dark-brown focus:outline-none focus:border-coral focus:bg-white"
-                  >
-                    {LICENSE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-[11px] text-warm-gray">
-                    SPDX identifier. Published in your feed's metadata so reusers know the terms.
-                  </p>
-                </div>
+              {/* Feed license — travels with the publication into feed_info.json
+                  and the DMFR document (feeds.gtfsx.com/<slug>/dmfr.json).
+                  Optional. */}
+              <div className="mt-4 sm:max-w-sm">
+                <label
+                  htmlFor="publish-license"
+                  className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1"
+                >
+                  Feed license <span className="normal-case font-normal">(optional)</span>
+                </label>
+                <select
+                  id="publish-license"
+                  value={licenseSpdx ?? ''}
+                  onChange={(e) => setLicenseSpdx(e.target.value)}
+                  className="w-full px-3 py-2 border-2 border-sand rounded-lg bg-cream text-sm text-dark-brown focus:outline-none focus:border-coral focus:bg-white"
+                >
+                  {LICENSE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-warm-gray">
+                  SPDX identifier. Published in your feed's metadata so reusers know the terms.
+                </p>
               </div>
 
               <label className="mt-4 flex items-center gap-2 text-xs text-dark-brown cursor-pointer select-none">

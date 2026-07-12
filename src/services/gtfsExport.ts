@@ -51,61 +51,6 @@ function stripUIFields<T extends object>(obj: T): Record<string, unknown> {
   return result;
 }
 
-// ── Provisional `ext_ntd_id` extension column (GTFS-X/gtfsx#62) ────────────
-// FTA withdrew its proposal to force agency_id = NTD ID (July 2025);
-// commenters asked instead for a SEPARATE NTD ID field. Until a google/transit
-// proposal lands, we ship it as an OPT-IN extension column `ext_ntd_id` on
-// agency.txt. Nothing is written unless the user ticks the box in ExportDialog.
-//
-// Multi-agency rule (deliberate): `ntdId` is per-PROJECT, but agency.txt can
-// hold several agencies and we have NO per-agency NTD mapping. Stamping one
-// project's NTD ID onto every agency row would assert something false — that
-// they all report under the same NTD ID. So the column is written ONLY when the
-// feed has exactly one agency. With >1 agency the opt-in silently no-ops and
-// ExportDialog explains why (see ntdIdExportStatus below, which the dialog
-// renders — keep the rule here as the single source of truth).
-//
-// NTD IDs are 5-digit STRINGS with significant leading zeros ("01234") — the
-// value is carried as a string end-to-end and never Number()-coerced.
-export type NtdIdExportStatus =
-  /** User has not opted in — agency.txt is byte-identical to a no-NTD export. */
-  | 'off'
-  /** Opted in, but no NTD ID is set on the project — nothing to write. */
-  | 'no-ntd-id'
-  /** Opted in with an NTD ID, but the feed has >1 agency — column suppressed. */
-  | 'multi-agency-suppressed'
-  /** Opted in, NTD ID set, exactly one agency — the column is written. */
-  | 'written';
-
-interface NtdIdExportState {
-  agencies: readonly unknown[];
-  ntdId: string | null;
-  exportNtdIdColumn: boolean;
-}
-
-/** Decide whether an export will carry the provisional `ext_ntd_id` column.
- *  Shared by the exporter and ExportDialog so the UI can never disagree with
- *  what actually lands in the zip. */
-export function ntdIdExportStatus(state: NtdIdExportState): NtdIdExportStatus {
-  if (!state.exportNtdIdColumn) return 'off';
-  if (!state.ntdId) return 'no-ntd-id';
-  if (state.agencies.length !== 1) return 'multi-agency-suppressed';
-  return 'written';
-}
-
-/** agency.txt rows, with the provisional `ext_ntd_id` column appended only when
- *  ntdIdExportStatus() says 'written'. In every other case the rows are exactly
- *  what they have always been — no empty column, no header change. (toCSV builds
- *  its header from the union of row keys, so appending the key here is enough to
- *  land it as a trailing column.) */
-function buildAgencyRows(state: ReturnType<typeof useStore.getState>): Record<string, unknown>[] {
-  const rows = state.agencies.map(stripUIFields);
-  if (ntdIdExportStatus(state) === 'written') {
-    rows[0].ext_ntd_id = state.ntdId; // string — leading zeros preserved
-  }
-  return rows;
-}
-
 /** Build the feed_info.txt row (returns null if we don't have enough info to
  *  produce the three required fields). User-provided `state.feedInfo` always
  *  wins; the three required slots — feed_publisher_name / feed_publisher_url /
@@ -392,9 +337,14 @@ export async function exportGtfsZip(): Promise<Blob> {
   const zip = new JSZip();
   const flex = materializeFlex(state);
 
-  // agency.txt (+ the opt-in provisional ext_ntd_id column — see buildAgencyRows)
+  // agency.txt. An agency's optional `external_id` (its NTD ID, in the US) is an
+  // ordinary field on the Agency entity, so it needs no special handling here:
+  // stripUIFields drops keys whose value is undefined, and toCSV takes the union
+  // of row keys — so the `external_id` column appears exactly when at least one
+  // agency has a non-empty value, and a feed where none do is byte-identical to
+  // one that never knew about the field (no empty column, no header change).
   if (state.agencies.length > 0) {
-    zip.file('agency.txt', toCSV(buildAgencyRows(state)));
+    zip.file('agency.txt', toCSV(state.agencies.map(stripUIFields)));
   }
 
   // calendar.txt (+ flex-synthesized service patterns)

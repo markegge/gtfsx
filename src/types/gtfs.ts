@@ -7,6 +7,18 @@ export interface Agency {
   agency_phone?: string;
   agency_fare_url?: string;
   agency_email?: string;
+  /**
+   * External identifier for this agency — in the US, its FTA National Transit
+   * Database (NTD) ID. Written to agency.txt as a custom `external_id` column
+   * whenever any agency in the feed has one (see gtfsExport), and read back
+   * per-row on import, so it round-trips.
+   *
+   * Free-form STRING, deliberately not format-checked: NTD IDs carry
+   * significant leading zeros ("01234") and the field may also hold a non-NTD
+   * identifier. Never Number()-coerce it. Empty is stored as undefined so no
+   * empty column is ever emitted.
+   */
+  external_id?: string;
 }
 
 export interface Calendar {

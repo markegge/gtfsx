@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { flexZoneHasGroup, flexZoneHasPolygons } from '../../store/flexSlice';
-import { exportGtfsZip, downloadBlob, ntdIdExportStatus } from '../../services/gtfsExport';
+import { exportGtfsZip, downloadBlob } from '../../services/gtfsExport';
 import { exportFeedGeoJSON, feedHasGeoJSONGeometry } from '../../services/geojsonExport';
 import { runValidation } from '../../services/validation';
 import { trackFeedExported } from '../../services/trackBeacon';
@@ -10,7 +10,6 @@ import { useProNudge } from '../billing/useProNudge';
 import { useEditorPlan } from '../billing/useEditorPlan';
 import { planHasFeature, cheapestPlanFor, planDisplayName } from '../billing/planConfig';
 import { Badge } from '../ui/Badge';
-import { isNtdIdInvalid, NTD_ID_INVALID_HINT } from '../../utils/ntdId';
 
 interface ExportDialogProps {
   onClose: () => void;
@@ -25,14 +24,6 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
   const [fileName, setFileName] = useState(
     () => state.projectName.replace(/\s+/g, '_').toLowerCase()
   );
-  // Latched at mount: the inline NTD ID input appears when the feed has no NTD
-  // ID yet and then STAYS mounted, so typing the first digit (which sets
-  // state.ntdId) doesn't unmount the field the user is typing into.
-  const [ntdIdFieldOpen] = useState(() => !useStore.getState().ntdId);
-  // Non-blocking, same rule as the publish panel — a malformed ID gets a hint,
-  // it never disables the export.
-  const ntdIdInvalid = isNtdIdInvalid(state.ntdId);
-
   // GeoJSON export is free on every plan (geojson_export feature) — the gate
   // below stays for safety if the matrix ever changes; a locked user is routed
   // to /pricing for the feature.
@@ -271,103 +262,6 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
                 </div>
               )}
             </>
-          );
-        })()}
-
-        {/* Provisional NTD ID extension column (GTFS-X/gtfsx#62). Opt-in, default
-            off. ntdIdExportStatus() is the same predicate the exporter uses, so
-            this note always matches the zip.
-
-            The NTD ID itself is settable right here as well as in the publish
-            panel — both write the SAME store field (setNtdId), which is the
-            single source of truth. The publish panel is backend-gated, so the
-            anonymous IndexedDB editor would otherwise have no way to set an NTD
-            ID and this opt-in would be permanently disabled for it. */}
-        {(() => {
-          const ntdStatus = ntdIdExportStatus(state);
-          const noNtdId = !state.ntdId;
-          return (
-            <div className="mt-2 mb-4 border-2 border-sand rounded-lg p-3">
-              <label
-                className={`flex items-start gap-2 ${noNtdId ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={state.exportNtdIdColumn}
-                  disabled={noNtdId}
-                  onChange={(e) => state.setExportNtdIdColumn(e.target.checked)}
-                  className="mt-0.5 accent-coral disabled:cursor-not-allowed"
-                />
-                <span className="flex-1">
-                  <span className="block text-sm text-dark-brown">
-                    Include NTD ID as <code className="text-xs bg-cream px-1 py-0.5 rounded">ext_ntd_id</code> on agency.txt
-                  </span>
-                  <span className="block text-xs text-warm-gray mt-0.5">
-                    Provisional extension field — not part of the GTFS spec. A proposal to add a
-                    dedicated NTD ID field is pending, so the column name may change.
-                  </span>
-                </span>
-              </label>
-
-              {/* Inline NTD ID entry. Shown when the feed had no NTD ID as the
-                  dialog opened, and kept mounted for the life of the dialog
-                  (the open flag is latched at mount) so the field doesn't
-                  vanish under the cursor the moment the first digit lands. */}
-              {ntdIdFieldOpen && (
-                <div className="mt-2 pl-6">
-                  <label
-                    htmlFor="export-ntd-id"
-                    className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1"
-                  >
-                    NTD ID <span className="normal-case font-normal">(optional)</span>
-                  </label>
-                  <input
-                    id="export-ntd-id"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    maxLength={5}
-                    placeholder="e.g. 00123"
-                    value={state.ntdId ?? ''}
-                    onChange={(e) => state.setNtdId(e.target.value)}
-                    className={`w-full px-3 py-2 border-2 rounded-lg text-sm bg-cream text-dark-brown font-mono focus:outline-none focus:bg-white ${
-                      ntdIdInvalid ? 'border-red-300 focus:border-red-400' : 'border-sand focus:border-coral'
-                    }`}
-                  />
-                  {ntdIdInvalid ? (
-                    <p className="mt-1 text-[11px] text-red-600">{NTD_ID_INVALID_HINT}</p>
-                  ) : (
-                    <p className="mt-1 text-[11px] text-warm-gray">
-                      US agencies: your five-digit National Transit Database ID. Look it up at{' '}
-                      <a
-                        href="https://www.transit.dot.gov/ntd"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-coral hover:underline"
-                      >
-                        transit.dot.gov/ntd
-                      </a>
-                      .
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {ntdStatus === 'multi-agency-suppressed' && (
-                <p className="text-xs text-amber-700 bg-gold-light border border-gold rounded p-2 mt-2">
-                  This feed has {state.agencies.length} agencies, so no <code>ext_ntd_id</code> column
-                  will be written. An NTD ID identifies a single reporting agency, and per-agency NTD
-                  IDs aren't modeled yet — stamping one ID onto every agency row would imply they all
-                  report under it.
-                </p>
-              )}
-
-              {ntdStatus === 'written' && (
-                <p className="text-xs text-teal mt-2 pl-6">
-                  agency.txt will carry <code>ext_ntd_id={state.ntdId}</code>.
-                </p>
-              )}
-            </div>
           );
         })()}
         </div>

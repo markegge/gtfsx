@@ -42,16 +42,11 @@ const DATA_KEYS = [
   'flexZones',
   'featureSettings',
   'dismissedValidations',
-  // The project's NTD ID (string, leading zeros significant — never coerce
-  // through Number()) and the opt-in flag to write it as an `ext_ntd_id`
-  // column on agency.txt at export time. Feed-state, round-trips through the
-  // working-state snapshot like any other editor data.
-  'ntdId',
-  'exportNtdIdColumn',
-  // The feed's declared license (SPDX short identifier). Feed-state like ntdId
-  // — the D1 `license_spdx` column is only the projection written at publish,
-  // so the working-state snapshot is what preserves a license the user picked
-  // but hasn't published yet.
+  // The feed's declared license (SPDX short identifier). Feed-state: the D1
+  // `license_spdx` column is only the projection written at publish, so the
+  // working-state snapshot is what preserves a license the user picked but
+  // hasn't published yet. (An agency's `external_id` needs no key of its own —
+  // it rides along inside the already-persisted `agencies` entity.)
   'licenseSpdx',
 ] as const;
 
@@ -116,8 +111,6 @@ export function resetStoreEntities() {
   state.setFlexZones([] as never);
   state.setFeatureSettings({});
   state.setDismissedValidations([]);
-  state.setNtdId(null);
-  state.setExportNtdIdColumn(false);
   state.setLicenseSpdx(null);
 }
 
@@ -197,13 +190,9 @@ function applySnapshotToStoreInner(snapshot: Record<string, unknown>) {
   if (Array.isArray(g('dismissedValidations'))) {
     state.setDismissedValidations(g('dismissedValidations') as never);
   }
-  // resetStoreEntities() above already cleared these to null/false, so an
-  // absent or explicitly-null key correctly leaves a fresh/cleared feed
-  // rather than leaking the previous project's NTD ID or license.
-  if (typeof g('ntdId') === 'string') state.setNtdId(g('ntdId') as string);
-  if (typeof g('exportNtdIdColumn') === 'boolean') {
-    state.setExportNtdIdColumn(g('exportNtdIdColumn') as boolean);
-  }
+  // resetStoreEntities() above already cleared this to null, so an absent or
+  // explicitly-null key correctly leaves a fresh/cleared feed rather than
+  // leaking the previous project's license.
   if (typeof g('licenseSpdx') === 'string') state.setLicenseSpdx(g('licenseSpdx') as string);
   // Older saved blobs may still carry a `visibilitySets` key (the removed
   // "Scenarios" feature). It's intentionally ignored here — unknown keys are

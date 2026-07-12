@@ -41,7 +41,6 @@
       h3 { font-size: 1.1rem; margin-top: 1.6rem; }
       .lede { font-size: 1.15rem; color:var(--muted); }
       .tier-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; vertical-align:middle; }
-      .tier-badge.pro { background:#FBEEDF; color:#9A4F00; border:1px solid #F0D1A0; }
       .tier-badge.planner,
 
       .tier-badge.agency { background:#EADFFD; color:#5B2E91; border:1px solid #C9B1F0; }
@@ -134,13 +133,13 @@
         <li>Read the system summary: population, households, workers, high-propensity riders, and jobs, with the count of census blocks covered noted underneath.</li>
         <li>Below it, the <strong>demographic profile</strong> compares the covered area's equity shares against the county baseline (a ratio above 1.0 means the served area over-represents that group).</li>
         <li>Scroll the per-route breakdown to see how each route contributes, then use <strong>Download CSV</strong> to export every figure (system, county baseline, and per route) for a report. Pair a route's coverage with the <a href="/docs/cost-estimation/">Cost estimation</a> panel for a service-per-dollar view.</li>
-        <li>Agency-plan users can switch on <strong>street-network walksheds</strong> for walk-distance reach instead of a straight-line buffer.</li>
+        <li>Planner-plan users can switch on <strong>street-network walksheds</strong> for walk-distance reach instead of a straight-line buffer.</li>
       </ol>
 
       <h2 id="methodology">Methodology</h2>
       <p>GTFS·X counts the individual US census blocks whose center point falls inside the walkshed, then sums each block's attributes. Counting real blocks rather than approximating with overlap math is what makes the figures exact.</p>
       <ul>
-        <li><strong>Walkshed.</strong> By default, a straight-line buffer around each stop: quarter-mile (1,320 ft) for bus, ferry, cable car, gondola, and funicular routes; half-mile (2,640 ft) for tram, subway, and rail. These match the conventional walking-distance assumptions used in transit-planning practice. Agency-plan users can switch to <strong>street-network walksheds</strong>, which follow the actual pedestrian network (and can size each stop's reach by its service frequency) instead of a circle.</li>
+        <li><strong>Walkshed.</strong> By default, a straight-line buffer around each stop: quarter-mile (1,320 ft) for bus, ferry, cable car, gondola, and funicular routes; half-mile (2,640 ft) for tram, subway, and rail. These match the conventional walking-distance assumptions used in transit-planning practice. Planner-plan users can switch to <strong>street-network walksheds</strong>, which follow the actual pedestrian network (and can size each stop's reach by its service frequency) instead of a circle.</li>
         <li><strong>Census blocks, not block groups.</strong> A census block is the Bureau's smallest geography, often a single city block. GTFS·X loads a nationwide layer of every block's internal point and tallies the blocks inside the walkshed, so coverage tracks your stop placement closely instead of being smeared across a half-mile disc. (An earlier version of this tool approximated block groups as discs on tract centroids; the block-level method replaces it.)</li>
         <li><strong>Data sources.</strong> Block geometry and 2020 population come from the Census <strong>TIGER/Line</strong> block file (TABBLOCK20). Demographic detail comes from the <strong>American Community Survey</strong> 5-year estimates (2022 release), published at the block-group level and apportioned down to each block in proportion to its 2020 population (a standard dasymetric step). Jobs come from the Census <strong>LEHD/LODES</strong> program, which already reports employment at the block level.</li>
         <li><strong>What each figure measures.</strong> <em>Population</em> (ACS <code>B01003</code>), <em>households</em> (occupied households, ACS <code>B25044</code>), and <em>workers</em> (employed residents counted where they live, ACS <code>B08301</code>) are residence-based. <em>Jobs</em> are workplace-based, from LODES. <em>High-propensity riders</em> estimates the residents most likely to use transit: renters, people in zero-vehicle households, and adults 18 to 24, combined and scaled to discount the overlap between those groups. The <em>equity profile</em> reports the minority, low-income, zero-vehicle, senior, and youth shares of the covered area against the surrounding county.</li>
@@ -150,7 +149,7 @@
 
       <h2 id="limits">Limits</h2>
       <ul>
-        <li>The default straight-line buffer treats stop placement as the unit of access; it doesn't model walk-network geometry, intersections, or topography. A stop on the wrong side of a freeway with no underpass still counts as covering everything within the buffer. The Agency-plan street-network walkshed addresses this by following the real pedestrian network.</li>
+        <li>The default straight-line buffer treats stop placement as the unit of access; it doesn't model walk-network geometry, intersections, or topography. A stop on the wrong side of a freeway with no underpass still counts as covering everything within the buffer. The Planner-plan street-network walkshed addresses this by following the real pedestrian network.</li>
         <li>ACS demographics are apportioned to blocks in proportion to each block's population, which assumes they're distributed evenly within a block group. This is far more accurate than a land-area split, but it remains an estimate at the block level for everything except the raw population and job counts (which are measured directly).</li>
         <li>"Workers" and "jobs" measure different things and are both reported: workers are employed residents counted where they live; jobs are counted where the work is (so a downtown with few residents but many jobs shows a low worker count and a high job count).</li>
         <li>Figures use the ACS 2022 5-year vintage and 2020 decennial block geometry. If your agency's adopted methodology requires a different vintage, cite the one used in any document.</li>

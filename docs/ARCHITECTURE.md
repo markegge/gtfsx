@@ -269,13 +269,17 @@ Design rationale is preserved in the decisions appendix of the archived
   `OWNER_DIGEST_ENABLED`. Metric definitions mirror the Admin dashboard exactly.
   The per-paid-subscriber notice (`sendUpgradeNotification`) is unchanged.
 - Secrets: `RESEND_API_KEY`, `MOBILITY_DATABASE_REFRESH_TOKEN`,
-  `TURNSTILE_SECRET_KEY`, `STRIPE_SECRET_KEY` (live), `STRIPE_WEBHOOK_SIGNING_SECRET` (live).
-  Pending secret: `GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST` (demo_request OCI
-  uploads stay queued until the Google Ads conversion action is created and this
-  is set — see `worker/marketing/ads/README.md` §4).
+  `TURNSTILE_SECRET_KEY`, `STRIPE_SECRET_KEY` (live), `STRIPE_WEBHOOK_SIGNING_SECRET` (live),
+  `GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST` (set on prod 2026-07-12 —
+  demo_request OCI uploads are live; see `worker/marketing/ads/README.md` §4).
 - Stripe: live-mode Price IDs (`STRIPE_PRICE_TEAM_*` only; `STRIPE_PRICE_PRO_*`
   removed from `wrangler.jsonc` in pricing v4), portal config, webhook
-  `→ /api/billing/webhooks/stripe`.
+  `→ /api/billing/webhooks/stripe`. Post-v4 Stripe cleanup done 2026-07-12:
+  `gtfsb_pro` product + prices archived (live mode), superseded team v1/v2
+  prices archived, the live $2,988 annual price carries lookup_key
+  `gtfsb_team_annual_v3`, the `gtfsb_team` product is display-named
+  "GTFS·X Planner", portal config updated, and `scripts/setup-stripe.ts` had
+  its team-annual $2,499 drift fixed plus a drift guard added.
 - **Pricing v4 live since 2026-07-11** — Pro tier retired (zero subscribers);
   lineup is Editor (free) / Planner (`agency`, $299/mo · $2,988/yr, 14-day trial)
   / Enterprise (call us, "multi-agency subscriptions for consultants and state
@@ -283,11 +287,10 @@ Design rationale is preserved in the decisions appendix of the archived
   Primary agency-funnel conversion is **booked demos**: `GET /book-demo?src=…`
   logs a `demo_request` event then 302s to `https://fantastical.app/markegge/gtfsx-demo`;
   marketing pages (home two-panel hero, /planning, compare, state-dot, feed-health)
-  are demo-first. Post-deploy manual steps still open: archive `gtfsb_pro` prices
-  in Stripe (live + test; also fix the `scripts/setup-stripe.ts` team-annual
-  $2,499-vs-$2,988 drift before any re-run), and the Google Ads session
-  (demo_request conversion action + secret, budget reweight editor→planning,
-  RSA rewrites dropping Pro/$49/trial-first copy).
+  are demo-first. Google Ads follow-through done 2026-07-12: `demo_request`
+  conversion action created (ctId 7682006138), its secret set on prod, budgets
+  reweighted (Editor $12/day, Planning $28/day). Still open: RSA rewrites
+  dropping Pro/$49/trial-first copy.
 - The project owner's account (`mark@gtfsx.com`) is staff + enterprise.
   Pre-launch D1 backup under `backups/` (gitignored).
 - **Rollback:** `BILLING_ENABLED=false` disables paid checkout/portal but leaves

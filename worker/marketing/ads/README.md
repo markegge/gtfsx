@@ -11,8 +11,9 @@ in `wrangler.jsonc`. Status page: `/api/admin/events/oci-status`.
 
 ---
 
-## One-time setup — Mark must complete this before code runs live
+## One-time setup — complete (kept as a runbook)
 
+All secrets and conversion actions below exist in prod as of 2026-07-12.
 Until every secret below is set in Cloudflare, the uploader logs
 `[oci] skipped — env not configured` and exits cleanly. So the cron is
 safe to ship before secrets exist; it just won't do anything.
@@ -98,12 +99,15 @@ Three conversion actions map to the three uploaded event kinds:
 |---|---|---|---|
 | `feed_exported` | Converted lead | `feed_exported` | exists (created 2026-05-26) |
 | `paywall_view` | Qualified lead | `paywall_view` | exists (created 2026-05-26) |
-| `demo_request` | Book appointment | `demo_request` (GET `/book-demo`) | **Mark must create — steps below** |
+| `demo_request` | Book appointment | `demo_request` (GET `/book-demo`) | exists (created 2026-07-12, ctId 7682006138) |
 
 Get each ID by: Goals → Summary → click the action → look at the URL,
 which contains `&ctId=NNNNNNNNNNN`. That number is the conversion action ID.
 
 #### Creating the `demo_request` conversion action (one-time, Ads UI)
+
+**Done 2026-07-12** (ctId 7682006138; secret set on prod). Steps kept below
+for reference if the action ever needs to be recreated.
 
 1. In Google Ads (`mark@eateggs.com`): **Goals → Conversions → Summary →
    "+ New conversion action"**.
@@ -133,7 +137,7 @@ which contains `&ctId=NNNNNNNNNNN`. That number is the conversion action ID.
    wrangler secret put GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST   # numeric ID
    ```
 
-**Until this secret is set, `demo_request` uploads are OFF but everything
+**If this secret is ever unset, `demo_request` uploads go OFF but everything
 else keeps working**: unlike the two original action IDs, this one is
 optional in `readOciConfig`, so the live `feed_exported`/`paywall_view`
 uploads are unaffected. Pending `demo_request` rows accumulate (visible on
@@ -200,5 +204,5 @@ under Goals → Summary within ~3 hours.
   payload. Adding a value would silently switch the action to value-based
   mode in Google's system.
 - **No user_id linking.** The session-anonymous architecture is locked
-  (see `docs/GOOGLE_ADS_PLAN.md` §4). LTV-weighted bidding would require
+  (see `docs/archive/GOOGLE_ADS_PLAN.md` §4). LTV-weighted bidding would require
   changing that and is out of scope.

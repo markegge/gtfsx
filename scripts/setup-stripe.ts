@@ -130,19 +130,35 @@ interface PriceSpec {
   interval: 'month' | 'year';
 }
 
-// Pricing v2 (May 2026): Agency tier moved $199→$299/mo and $1,999→$2,499/yr.
-// Stripe Prices are immutable — to bump the amount we create new Price objects
-// under fresh lookup keys (`_v2`), keep the originals around (active=true) so
-// existing subscribers continue to bill at the old amount, and point the env
-// vars at the new IDs so all new checkouts go through the v2 prices.
+// Stripe Prices are immutable — each amount bump creates a new Price object
+// under a fresh lookup key and points the env vars at the new ID. History:
+// v1 $199/$1,999 (May 2026) → v2 $299/$2,499 (May 2026) → v3 annual only,
+// $2,988 (Jun 2026; created in the dashboard without a lookup key —
+// `gtfsb_team_annual_v3` was assigned to it during the Jul 2026 pricing-v4
+// cleanup, which also archived the superseded v1/v2 prices; zero
+// subscriptions existed on them).
 const PRICES: PriceSpec[] = [
   { lookupKey: 'gtfsb_team_monthly_v2', productId: 'gtfsb_team', envName: 'STRIPE_PRICE_TEAM_MONTHLY', unitAmount: 29900,  interval: 'month' },
-  { lookupKey: 'gtfsb_team_annual_v2',  productId: 'gtfsb_team', envName: 'STRIPE_PRICE_TEAM_ANNUAL',  unitAmount: 249900, interval: 'year'  },
+  { lookupKey: 'gtfsb_team_annual_v3',  productId: 'gtfsb_team', envName: 'STRIPE_PRICE_TEAM_ANNUAL',  unitAmount: 298800, interval: 'year'  },
 ];
 
 async function upsertPrice(spec: PriceSpec): Promise<Stripe.Price> {
   const existing = await stripe.prices.list({ lookup_keys: [spec.lookupKey], active: true, limit: 1 });
-  if (existing.data.length > 0) return existing.data[0];
+  if (existing.data.length > 0) {
+    const p = existing.data[0];
+    // Drift guard: a spec amount that disagrees with the live price under the
+    // same lookup key means this file is stale — creating or reusing would
+    // silently put checkouts on the wrong amount. Fix the spec (or bump to a
+    // new lookup key) before re-running.
+    if (p.unit_amount !== spec.unitAmount || p.recurring?.interval !== spec.interval) {
+      throw new Error(
+        `Drift: live price ${p.id} (lookup_key=${spec.lookupKey}) is ` +
+        `$${(p.unit_amount ?? 0) / 100}/${p.recurring?.interval} but this spec says ` +
+        `$${spec.unitAmount / 100}/${spec.interval}. Refusing to proceed.`,
+      );
+    }
+    return p;
+  }
   return stripe.prices.create({
     product: spec.productId,
     unit_amount: spec.unitAmount,

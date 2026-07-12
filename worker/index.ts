@@ -33,6 +33,11 @@ const LEGACY_ALIAS_REDIRECTS: Record<string, string> = {
   // The trailing-slash form (/lp/agency-planning/) is covered too, because
   // aliasKey strips trailing slashes before the lookup.
   '/lp/agency-planning': '/planning',
+  // Vanity final URLs used by the Agency & Planning Google Ads RSAs (Title VI
+  // and Demographics ad groups). These were never wired up and 404'd until
+  // 2026-07-12; keep them pointing at the matching docs pages.
+  '/title-vi': '/docs/title-vi-analysis/',
+  '/demographics': '/docs/demographic-coverage/',
 };
 
 // Client-side (React Router) routes that have NO pre-rendered HTML file and

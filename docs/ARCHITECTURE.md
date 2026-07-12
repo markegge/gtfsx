@@ -291,6 +291,23 @@ Design rationale is preserved in the decisions appendix of the archived
   conversion action created (ctId 7682006138), its secret set on prod, budgets
   reweighted (Editor $12/day, Planning $28/day). Still open: RSA rewrites
   dropping Pro/$49/trial-first copy.
+- **`/transitfeeds/` static page live since 2026-07-12**
+  (`public/transitfeeds/index.html`, `https://www.gtfsx.com/transitfeeds/`), a
+  landing page for the shut-down transitfeeds.com/OpenMobilityData. Registered
+  in `sitemap.xml` via its canonical tag; internally linked from
+  `/learn/publish-gtfs-feed/` and from `/feed-health/` (`fh.js`, methodology
+  section, national view).
+- **`transitfeeds.net` redirect (Cloudflare-only, not in this repo).** Zone
+  `transitfeeds.net`, in the mark@eateggs.com CF account, has a Single
+  Redirect rule (Rules → Redirect Rules in the zone dashboard) matching
+  `http.host eq "transitfeeds.net"` or `"www.transitfeeds.net"`, 301'ing
+  (query string not preserved) to `https://www.gtfsx.com/transitfeeds/`
+  (previously → `/feed-health/`; changed 2026-07-12 alongside the page
+  above). Unlike the legacy-hostname redirects in §1 (`worker/index.ts`,
+  covering `gtfsstudio.net`/`gtfsstudio.com`/`gtfsbuilder.net`), this domain
+  is not bound to the Worker: `wrangler` has no command for redirect
+  rules/rulesets, so changing it requires the Cloudflare dashboard or a
+  direct API call.
 - The project owner's account (`mark@gtfsx.com`) is staff + enterprise.
   Pre-launch D1 backup under `backups/` (gitignored).
 - **Rollback:** `BILLING_ENABLED=false` disables paid checkout/portal but leaves

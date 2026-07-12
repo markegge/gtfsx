@@ -8,7 +8,6 @@ import { db } from '../../db/dexie';
 import { ApiError } from '../../services/authApi';
 import { patchProject } from '../../services/projectsApi';
 import { saveProjectNow } from '../../db/serverPersistence';
-import { backendEnabled } from '../../utils/featureFlags';
 import { AppBrand } from './AppBrand';
 import { VariantSwitcher } from '../variants/VariantSwitcher';
 import { UndoRedoControls } from './UndoRedoControls';
@@ -71,7 +70,6 @@ export function TopBar() {
   const hasContent = agenciesCount > 0 || routesCount > 0 || stopsCount > 0;
 
   const handleSaveClick = async () => {
-    if (!backendEnabled) return;
     setSaveError(null);
     if (!currentUser) {
       const next = `${window.location.pathname || '/'}?save=1`;
@@ -137,7 +135,7 @@ export function TopBar() {
 
         {/* Save button — hidden on phones; folded into the mobile menu below.
             Also hidden on /demo (read-only preview, no project to save). */}
-        {backendEnabled && !isDemo && (
+        {!isDemo && (
           <button
             onClick={handleSaveClick}
             disabled={saving || (!isDirty && !!activeServerProjectId)}
@@ -205,7 +203,7 @@ export function TopBar() {
                 aria-hidden
               />
               <div className="absolute right-0 top-full mt-1 z-40 w-64 max-h-[80vh] overflow-y-auto bg-white border border-sand rounded-xl shadow-lg p-2 flex flex-col">
-                {backendEnabled && !isDemo && (
+                {!isDemo && (
                   <button
                     onClick={() => { setMobileMenuOpen(false); handleSaveClick(); }}
                     disabled={saving || (!isDirty && !!activeServerProjectId)}
@@ -228,13 +226,9 @@ export function TopBar() {
                 >
                   Export GTFS
                 </button>
-                {backendEnabled && (
-                  <>
-                    <div className="border-t border-sand my-1" />
-                    {/* All UserMenu items inline — account, workspaces, sign in/out, etc. */}
-                    <UserMenuItems onClose={() => setMobileMenuOpen(false)} />
-                  </>
-                )}
+                <div className="border-t border-sand my-1" />
+                {/* All UserMenu items inline — account, workspaces, sign in/out, etc. */}
+                <UserMenuItems onClose={() => setMobileMenuOpen(false)} />
               </div>
             </>
           )}

@@ -336,8 +336,7 @@ console.log();
 for (const [envName, priceId] of Object.entries(priceIds)) {
   console.log(`     "${envName}": "${priceId}",`);
 }
-console.log(`     "STRIPE_PORTAL_CONFIG_ID": "${portalConfig.id}",`);
-console.log(`     "BILLING_ENABLED": "true"`);
+console.log(`     "STRIPE_PORTAL_CONFIG_ID": "${portalConfig.id}"`);
 console.log();
 console.log('2. Set Worker secrets on staging:');
 console.log();
@@ -360,5 +359,6 @@ if (signingSecret) {
 }
 console.log();
 console.log('4. Append to .env (frontend):');
-console.log('     VITE_BILLING_ENABLED=true');
+console.log('     VITE_STRIPE_PUBLISHABLE_TEST_KEY=pk_test_…   # staging/dev');
+console.log('     VITE_STRIPE_PUBLISHABLE_LIVE_KEY=pk_live_…   # prod (npm run build:prod)');
 console.log();

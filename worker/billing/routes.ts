@@ -23,10 +23,12 @@ export const billingRouter = new Hono<AppContext>();
 billingRouter.get('/plans', async (c) => {
   // Public catalog used by /pricing. Doesn't include Price IDs (those are
   // worker-side) — only display copy and amounts.
-  return c.json({
-    plans: PLAN_CATALOG,
-    billingEnabled: c.env.BILLING_ENABLED === 'true',
-  });
+  //
+  // Used to also return a `billingEnabled` flag mirroring the BILLING_ENABLED
+  // var, which /pricing used to grey out checkout. Both were removed on
+  // 2026-07-12 (legacy). Checkout is always offered; an environment with no
+  // Stripe secret still fails safe via billingReady() → 503.
+  return c.json({ plans: PLAN_CATALOG });
 });
 
 // Webhook endpoint. NO auth middleware here — the signature header is the auth.

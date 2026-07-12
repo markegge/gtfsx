@@ -5,7 +5,6 @@ import { useStore } from '../../store';
 import { logout as apiLogout } from '../../services/authApi';
 import { createOrg, type OrgRole } from '../../services/orgsApi';
 import { FormField } from '../ui/FormField';
-import { backendEnabled } from '../../utils/featureFlags';
 import { PlanBadge } from '../billing/PlanBadge';
 import { shouldShowUpgradeEntry } from '../../services/proIntent';
 
@@ -256,12 +255,9 @@ export function UserMenuItems({ onClose }: { onClose?: () => void } = {}) {
  * My Feeds, Account settings, Admin console, Sign out) when there's a user,
  * or the "Sign in" CTA otherwise. Use this on every page that needs
  * consistent account navigation.
- *
- * Returns null when backend features are disabled.
  */
 export function UserMenu() {
   const currentUser = useStore((s) => s.currentUser);
-  if (!backendEnabled) return null;
   const triggerClasses = currentUser
     ? 'w-9 h-9 rounded-full bg-coral text-white font-heading font-bold text-sm flex items-center justify-center hover:bg-[#d4603a] transition-colors shrink-0'
     : 'w-9 h-9 rounded-full bg-white border-2 border-sand text-warm-gray hover:border-coral hover:text-coral transition-colors flex items-center justify-center shrink-0';

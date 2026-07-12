@@ -63,8 +63,11 @@ export function resolvePriceId(env: Env, plan: Plan, interval: Interval): string
 // Whether the billing path is wired up enough to actually charge. Called
 // before checkout / portal endpoints so we can return a polite 503 in
 // staging-without-stripe rather than a cryptic Stripe error.
+//
+// The BILLING_ENABLED kill-switch was removed on 2026-07-12 (legacy); having a
+// Stripe secret key configured is now the only precondition.
 export function billingReady(env: Env): boolean {
-  return env.BILLING_ENABLED === 'true' && !!env.STRIPE_SECRET_KEY;
+  return !!env.STRIPE_SECRET_KEY;
 }
 
 // Detect Stripe SDK errors so callers can log full detail server-side and

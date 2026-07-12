@@ -279,19 +279,17 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext):
     // before the React bundle takes over. The dispatcher returns null for
     // SPA-only paths (/community/new, /community/profile) so they fall
     // through to the static-assets binding unchanged.
-    if (env.BACKEND_ENABLED === 'true') {
-      try {
-        const ssr = await maybeRenderForumPage(request, env);
-        if (ssr) return ssr;
-      } catch (err) {
-        // Never let SSR break the SPA shell — log and fall back.
-        console.error(`[forum-ssr] render error, falling back to SPA shell: ${errorDetail(err)}`);
-      }
+    try {
+      const ssr = await maybeRenderForumPage(request, env);
+      if (ssr) return ssr;
+    } catch (err) {
+      // Never let SSR break the SPA shell — log and fall back.
+      console.error(`[forum-ssr] render error, falling back to SPA shell: ${errorDetail(err)}`);
     }
 
     // Dynamic sitemap that augments the static one in `public/` with every
     // public forum thread URL.
-    if (url.pathname === '/sitemap.xml' && env.BACKEND_ENABLED === 'true') {
+    if (url.pathname === '/sitemap.xml') {
       try {
         return await serveSitemap(request, env);
       } catch (err) {

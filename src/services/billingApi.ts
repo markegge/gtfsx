@@ -27,7 +27,6 @@ export interface PlanCatalogEntry {
 
 export interface PlansResponse {
   plans: PlanCatalogEntry[];
-  billingEnabled: boolean;
 }
 
 export interface OwnerBillingState {

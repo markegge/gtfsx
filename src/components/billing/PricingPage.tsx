@@ -535,9 +535,29 @@ export function PricingPage() {
                   <p className="mt-1 text-xs text-warm-gray">{p.tagline}</p>
                 </div>
                 <div className="mt-4">
-                  <div className="flex items-baseline gap-1">
-                    <span className="font-heading text-3xl font-extrabold text-brown">{label.amount}</span>
-                    {label.per && <span className="text-xs text-warm-gray">{label.per}</span>}
+                  {/* Interval toggle rides the price baseline row instead of
+                      its own stacked row — keeps the card compact. */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-baseline gap-1">
+                      <span className="font-heading text-3xl font-extrabold text-brown">{label.amount}</span>
+                      {label.per && <span className="text-xs text-warm-gray">{label.per}</span>}
+                    </div>
+                    {showToggle && (
+                      <div className="inline-flex shrink-0 rounded-full border border-sand bg-white p-0.5 text-[11px]">
+                        {(['month', 'year'] as const).map((i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setIntervalFor(p.plan, i)}
+                            className={`rounded-full px-2.5 py-1 font-semibold transition-colors ${
+                              cardInterval === i ? 'bg-coral text-white' : 'text-warm-gray hover:text-brown'
+                            }`}
+                          >
+                            {i === 'month' ? 'Monthly' : 'Annual'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {label.sub && (
                     <p className="mt-0.5 text-xs text-warm-gray">{label.sub}</p>
@@ -546,22 +566,6 @@ export function PricingPage() {
                       the price doesn't look like a hard commitment. */}
                   {popular && (
                     <p className="mt-1 text-xs font-semibold text-coral">14-day free trial · cancel anytime</p>
-                  )}
-                  {showToggle && (
-                    <div className="mt-3 inline-flex rounded-full border border-sand bg-white p-0.5 text-[11px]">
-                      {(['month', 'year'] as const).map((i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => setIntervalFor(p.plan, i)}
-                          className={`rounded-full px-2.5 py-1 font-semibold transition-colors ${
-                            cardInterval === i ? 'bg-coral text-white' : 'text-warm-gray hover:text-brown'
-                          }`}
-                        >
-                          {i === 'month' ? 'Monthly' : 'Annual'}
-                        </button>
-                      ))}
-                    </div>
                   )}
                 </div>
                 <div className="mt-4 flex-1 text-sm text-brown">

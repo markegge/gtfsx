@@ -62,6 +62,7 @@
       label: 'Publishing & distribution',
       pages: [
         { path: '/docs/hosted-publishing/',  title: 'Hosted Publishing' },
+        { path: '/docs/ntd-id/',             title: 'NTD ID & FTA Reporting' },
         { path: '/docs/rider-mini-site/',    title: 'Rider Mini-Site' },
         { path: '/docs/embed-widgets/',      title: 'Embed Widgets' },
         { path: '/docs/draft-links/',        title: 'Draft Links' },

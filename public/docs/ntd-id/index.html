@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>NTD ID &amp; FTA reporting — GTFS·X</title>
+    <meta name="description" content="Set your agency's National Transit Database ID on a GTFS feed, keep agency_id stable for FTA's P-50 crosswalk, publish a DMFR file for Transitland and the Mobility Database, and file the P-50 with confidence." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/ntd-id/" />
+    <meta property="og:title" content="NTD ID &amp; FTA reporting — GTFS·X" />
+    <meta property="og:description" content="How GTFS·X carries your NTD ID through a published feed: the ntd_id sidecar, the DMFR registry file, agency_id warnings, and the P-50 helper." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/ntd-id/" />
+    <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@gtfsxapp" />
+    <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "NTD ID & FTA reporting — GTFS·X",
+  "description": "Set your agency's National Transit Database ID on a GTFS feed, keep agency_id stable for FTA's P-50 crosswalk, publish a DMFR file for Transitland and the Mobility Database, and file the P-50 with confidence.",
+  "image": "https://www.gtfsx.com/og-default.png",
+  "author": {
+    "@type": "Organization",
+    "name": "GTFS·X",
+    "url": "https://www.gtfsx.com/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "GTFS·X",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://www.gtfsx.com/gtfsx-lockup.svg"
+    }
+  },
+  "datePublished": "2026-07-12",
+  "dateModified": "2026-07-12",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://www.gtfsx.com/docs/ntd-id/"
+  }
+}
+  </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Publishing &amp; distribution · NTD ID &amp; FTA reporting</div>
+      <h1>NTD ID &amp; FTA reporting</h1>
+      <p class="lede">If your agency reports to the National Transit Database, FTA has to be able to match the GTFS feed you publish to the agency that filed the report. GTFS·X carries your NTD ID through the feed you publish, warns you before you break the link, and lays out exactly the values FTA's P-50 form asks for.</p>
+
+      <h2 id="what-is-an-ntd-id">What an NTD ID is, and why your feed cares</h2>
+      <p>Your <strong>NTD ID</strong> is the five-digit number FTA uses to identify your agency in the <a href="https://www.transit.dot.gov/ntd" rel="external">National Transit Database</a> (for example <code>00123</code> or <code>90157</code>). If you receive FTA formula funds, you already have one, and you already report under it every year.</p>
+      <p>Until recently that number had nothing to do with your GTFS feed. That changed. FTA now wants to connect the two, so that the schedule data riders see and the service data you report are demonstrably the same agency's. The mechanism is the <strong>enhanced P-50 form</strong> (Transit Agency Identification), which collects your published feed's URL alongside the <code>agency_id</code> values inside it, and crosswalks them to your NTD ID.</p>
+      <p>Two consequences follow, and they're the reason this page exists:</p>
+      <ul>
+        <li><strong>Your <code>agency_id</code> values matter now.</strong> FTA's crosswalk is matched on them. In its <a href="https://www.federalregister.gov/documents/2025/07/10/2025-12813/national-transit-database-reporting-changes-and-clarifications-for-report-years-2025-and-2026" rel="external">July 10, 2025 final notice</a> (FR 2025-12813), FTA made <code>agency_id</code> <em>non-conditional</em> for NTD reporters — meaning always required, including in <code>routes.txt</code>. The GTFS spec itself is looser: it lets a single-agency feed leave <code>agency_id</code> out entirely. So a feed that is perfectly valid GTFS can still be unusable for your NTD reporting.</li>
+        <li><strong>Your feed URL matters now.</strong> FTA needs a stable one. That's what <a href="/docs/hosted-publishing/">hosted publishing</a> gives you.</li>
+      </ul>
+      <div class="callout">
+        <p><strong>FTA did not require <code>agency_id</code> to equal your NTD ID.</strong> That was proposed and then withdrawn in July 2025. You do not need to renumber your agency, your routes, or anything else in your feed. Keep the <code>agency_id</code> values you already have — stability is what FTA needs, not a particular value.</p>
+      </div>
+
+      <h2 id="set-your-ntd-id">Setting your NTD ID</h2>
+      <p>The NTD ID is a property of the feed, alongside the feed's name. Set it once and it travels with the project.</p>
+      <ul>
+        <li>In <strong>Share &amp; Publish</strong> (the footer tab), the <strong>NTD ID</strong> field sits next to the snapshot you're about to publish.</li>
+        <li>In the <strong>Export GTFS</strong> dialog, so agencies working in the free browser editor can set it without publishing through GTFS·X.</li>
+      </ul>
+      <p>It's optional. Leave it blank if your agency doesn't report to the NTD (most Canadian, tribal, and private operators don't) and nothing on this page applies to you.</p>
+      <div class="callout">
+        <p><strong>Leading zeros are part of the ID.</strong> If your NTD ID is <code>00123</code>, type <code>00123</code> — not <code>123</code>. GTFS·X treats the value as text end to end and never drops a leading zero, but a spreadsheet will, so double-check whatever you copied it from.</p>
+      </div>
+
+      <h2 id="where-it-goes">Where your NTD ID ends up</h2>
+      <p>Once a feed with an NTD ID is published, the number appears in the two machine-readable files that sit next to your feed. Neither one changes the GTFS ZIP itself.</p>
+      <ul>
+        <li><strong><code>feeds.gtfsx.com/&lt;slug&gt;/feed_info.json</code></strong> — the sidecar metadata file that already carries your publisher name, service dates, and version. It now also carries <code>ntd_id</code> (and your feed's license, if you declared one). Monitoring scripts and catalog ingestors read this.</li>
+        <li><strong><code>feeds.gtfsx.com/&lt;slug&gt;/dmfr.json</code></strong> — a registry document, described next.</li>
+      </ul>
+      <p>Both keys are simply absent when you haven't set an NTD ID, so a consumer sees "not declared" rather than a blank value.</p>
+
+      <h2 id="dmfr">The DMFR file: getting into Transitland and the Mobility Database</h2>
+      <p>Every published GTFS·X feed now also serves a <strong>DMFR</strong> document at <code>https://feeds.gtfsx.com/&lt;slug&gt;/dmfr.json</code>. DMFR (Distributed Mobility Feed Registry, v0.5.1) is the format Transitland and the wider open-transit-data ecosystem use to describe "here is a feed, here is who operates it, here is the license." It's a small JSON file, generated for you, and it needs no configuration.</p>
+      <p>Why you'd want it: getting listed in <a href="https://database.mobilitydata.org/" rel="external">the Mobility Database</a> and <a href="https://www.transit.land/" rel="external">Transitland</a> is how trip planners, researchers, OpenTripPlanner deployments, and app developers discover your feed in the first place. Historically that means filling in a form and hoping someone types your details correctly. With a DMFR file you hand over one URL and the registry has everything it needs, already structured:</p>
+      <ul>
+        <li><strong>Your feed URL</strong>, and your GTFS-Realtime URLs if you've registered any (vehicle positions, trip updates, alerts) — they appear as a companion realtime entry.</li>
+        <li><strong>Your operator record</strong>, tagged <code>us_ntd_id</code> with your NTD ID. This is the tag the Transitland atlas uses, so the NTD crosswalk survives into the catalog instead of being lost at the door.</li>
+        <li><strong>Your license</strong>, if you declared one.</li>
+      </ul>
+      <p>Publishing the file doesn't submit you to anything. It's a document you can point a registry maintainer at, or attach to a submission form. GTFS·X's own one-click Mobility Database submission (in the distribution checklist) is unchanged and still the easiest path.</p>
+
+      <h3 id="license">Declaring a feed license</h3>
+      <p>In the same section of <strong>Share &amp; Publish</strong> you can declare the feed's license from a short list — CC0 1.0 (public domain), CC BY 4.0 (attribution), or ODbL 1.0 (share-alike) — or leave it unspecified. Whatever you pick is published in <code>feed_info.json</code> and the DMFR file as its standard SPDX identifier, so a reuser can see the terms without emailing you. GTFS·X never guesses a license on your behalf; unspecified stays unspecified.</p>
+
+      <h2 id="agency-id-warnings">The agency_id warnings</h2>
+      <p>Because FTA's crosswalk is matched on <code>agency_id</code>, the validator now flags feeds that don't have usable ones. Both messages are <strong>warnings</strong>, not errors — they never block an export or a publish — and both are dismissible from the Validation panel if you don't report to the NTD.</p>
+      <table>
+        <thead>
+          <tr><th>When it fires</th><th>What it means</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Your feed has more than one agency, and an agency or a route has no <code>agency_id</code>.</strong></td>
+            <td>This is a genuine GTFS defect, not just an NTD one: the spec requires <code>agency_id</code> once a feed contains multiple agencies, in <code>agency.txt</code> and in <code>routes.txt</code>. You get one message per offending row, so you can click straight through and fix each. Give each agency a stable id (<code>MTA</code>, <code>SVT</code>) and point every route at its operator.</td>
+          </tr>
+          <tr>
+            <td><strong>Your feed has one agency, and <code>agency_id</code> is blank on the agency or on some routes.</strong></td>
+            <td>Advisory. The GTFS spec allows this, so nothing is broken — but FTA's July 2025 notice made <code>agency_id</code> non-conditional for NTD reporters, including in <code>routes.txt</code>, and FTA cannot crosswalk your feed to your NTD ID without it. You get a single feed-level message (never one per route). If you report to the NTD, set an <code>agency_id</code> on the agency and on every route. If you don't, dismiss it.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>The fix is cheap and you only do it once. Pick a short, meaningful id, and then leave it alone forever — which brings us to the next section.</p>
+
+      <h2 id="churn-warning">Don't change your agency_id after you publish</h2>
+      <p>Renaming or removing an <code>agency_id</code> that's already in your published feed silently breaks things. FTA's crosswalk stops matching. So does every downstream consumer keyed on that id — trip planners, your own analytics, a realtime producer someone else operates.</p>
+      <p>So when you publish a snapshot that drops or renames an <code>agency_id</code> present in the currently-published feed, GTFS·X stops and shows you exactly which ids are disappearing. You have two choices:</p>
+      <ul>
+        <li><strong>Go back and keep the ids.</strong> Almost always the right answer. If what you actually wanted was to rename the agency as riders see it, change <code>agency_name</code> and leave <code>agency_id</code> alone — the two are independent, and only the name is rider-facing.</li>
+        <li><strong>Publish anyway.</strong> Sometimes the change is deliberate (a merger, a genuinely wrong id set years ago). The warning is an acknowledgement, not a block. If you take this path, re-file your P-50 with the new ids so FTA's crosswalk catches up.</li>
+      </ul>
+      <p>This check runs on every published feed, whether or not you have GTFS-Realtime. It's separate from the realtime ID-stability check, which covers <code>route_id</code>, <code>stop_id</code>, and <code>trip_id</code> as well.</p>
+
+      <h2 id="p50-helper">Filing the P-50: the helper panel</h2>
+      <p>Once a feed is published, <strong>Share &amp; Publish</strong> shows an <strong>NTD / FTA P-50 reporting</strong> panel. It's a transcription aid: it lays out, copy-ready, precisely the values the enhanced P-50 form collects, so you're not digging through your feed with a text editor at 4pm on a filing deadline.</p>
+      <ul>
+        <li><strong>Your NTD ID</strong>, as you entered it.</li>
+        <li><strong>The canonical feed URL</strong> — the stable <code>feeds.gtfsx.com</code> address that keeps working across re-publishes. This is the URL to give FTA.</li>
+        <li><strong>Every <code>agency_id</code> and <code>agency_name</code> in the feed</strong>, each with its own copy button.</li>
+      </ul>
+      <p>Copy each value across as the form asks for it. Nothing is submitted to FTA on your behalf; the P-50 is filed by you, in FTA's reporting system, during your reporting cycle.</p>
+      <p>If your feed contains several agencies, read the panel's note carefully. The NTD ID you set identifies the <em>reporting</em> agency for the feed as a whole — GTFS·X does not yet model a separate NTD ID per agency inside one feed. If several of the agencies in your feed report to the NTD separately, give FTA each one's own NTD ID next to its <code>agency_id</code> on the form.</p>
+
+      <h2 id="ext-ntd-id">The ext_ntd_id export column (provisional)</h2>
+      <div class="callout">
+        <p><strong><code>ext_ntd_id</code> is not part of the GTFS specification.</strong> It is a provisional extension column we ship so agencies that want the NTD ID inside the feed itself can have it today. A proposal for a standard NTD ID field is pending; if and when one lands, the column name will change to match it. Track it at <a href="https://github.com/GTFS-X/gtfsx/issues/62" rel="external">GTFS-X/gtfsx#62</a>. If you need a feed that is strictly spec-only, leave this off — which is the default.</p>
+      </div>
+      <p>Background: when FTA proposed forcing <code>agency_id</code> to equal the NTD ID, commenters objected and asked instead for a separate, dedicated NTD ID field so that existing <code>agency_id</code> values could stay put. FTA withdrew the requirement. No standard field exists yet, so <code>ext_ntd_id</code> fills the gap in the meantime.</p>
+      <p>To use it, tick <strong>Include NTD ID as <code>ext_ntd_id</code> on agency.txt</strong> in the Export dialog. It's off by default, and stays greyed out until the feed has an NTD ID — if it doesn't, an NTD ID field appears right underneath so you can set one without leaving the dialog. When the option is on, your export's <code>agency.txt</code> carries one extra trailing column with your NTD ID in it. When it's off, the ZIP is byte-for-byte what it would otherwise be: no empty column, no header change.</p>
+      <p>Two behaviors worth knowing:</p>
+      <ul>
+        <li><strong>Single-agency feeds only.</strong> If your feed has more than one agency, the column is not written and the Export dialog tells you why. An NTD ID identifies one reporting agency; stamping the same one onto every agency row would assert that they all report under it, which would be false. Per-agency NTD IDs aren't modeled yet.</li>
+        <li><strong>It round-trips.</strong> Import a feed that carries <code>ext_ntd_id</code> and GTFS·X reads the NTD ID off it, sets it on the project, and turns the export option back on — so the column survives an import-then-export cycle rather than being silently dropped.</li>
+      </ul>
+
+      <h2 id="feed-health">Looking up another agency's NTD ID</h2>
+      <p>The <a href="/feed-health/">GTFS Feed Health dashboard</a>'s state-by-state agency view now shows each agency's NTD ID next to its Mobility Database feed ID. Handy for state DOTs reconciling a sub-recipient list, and for anyone who needs to confirm which NTD ID belongs to which operator before filing.</p>
+
+      <h2 id="gotchas">Edge cases and gotchas</h2>
+      <ul>
+        <li><strong>The NTD ID is not written into your GTFS ZIP by default.</strong> It lives with the feed and is published in the metadata sidecar and the DMFR file. The only way it enters the ZIP is the opt-in <code>ext_ntd_id</code> column above.</li>
+        <li><strong>Setting an NTD ID does not file anything with FTA.</strong> The P-50 is still yours to submit. GTFS·X gets the values right and keeps them stable; the reporting cycle is between you and FTA.</li>
+        <li><strong>Changing your feed's slug breaks the URL you gave FTA.</strong> The same caveat as any catalog submission — see <a href="/docs/hosted-publishing/#gotchas">hosted publishing</a>. Pick a slug you can live with before you file.</li>
+        <li><strong>Importing a feed replaces the NTD ID.</strong> Import is a whole-project replace, so importing a feed with no <code>ext_ntd_id</code> clears whatever NTD ID was set. Re-enter it if you're importing into an existing published project.</li>
+        <li><strong>Dismissing the <code>agency_id</code> warnings is safe if you don't report to the NTD.</strong> They're advisory for non-reporters. The multi-agency one, though, is a real spec violation regardless of NTD — fix that one.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/hosted-publishing/">Hosted publishing</a> — the stable feed URL FTA needs, and the distribution checklist.</li>
+          <li><a href="/docs/agency-setup/">Agency setup</a> — where <code>agency_id</code> and <code>agency_name</code> live.</li>
+          <li><a href="/docs/validation/">Validation</a> — how warnings and dismissals work.</li>
+          <li><a href="/docs/import-and-export/">Import &amp; export</a> — the <code>ext_ntd_id</code> opt-in.</li>
+          <li><a href="https://www.transit.dot.gov/ntd" rel="external">National Transit Database</a> — look up your NTD ID and the P-50 reporting cycle.</li>
+          <li><a href="https://www.federalregister.gov/documents/2025/07/10/2025-12813/national-transit-database-reporting-changes-and-clarifications-for-report-years-2025-and-2026" rel="external">FTA final notice, July 10 2025 (FR 2025-12813)</a> — the reporting changes behind all of this.</li>
+        </ul>
+      </div>
+    </main>
+    <style>
+footer.gx-footer { max-width: none; width: 100%; margin: 0; padding: 0; background: #3D2E22; color: #FFF8F0; font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif; box-sizing: border-box; }
+footer.gx-footer * { box-sizing: border-box; }
+footer.gx-footer a { text-decoration: none; }
+footer.gx-footer .gx-wrap { max-width: 1180px; margin: 0 auto; padding: 64px 28px 36px; }
+footer.gx-footer .gx-top { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 36px; }
+footer.gx-footer .gx-lockup { height: 28px; width: auto; display: block; margin-bottom: 16px; }
+footer.gx-footer .gx-blurb { font-size: 13.5px; color: rgba(255,248,240,0.6); line-height: 1.55; max-width: 240px; margin: 0; }
+footer.gx-footer .gx-social { display: flex; gap: 10px; margin-top: 18px; }
+footer.gx-footer .gx-social a { width: 34px; height: 34px; border-radius: 9px; background: rgba(255,248,240,0.08); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #FFF8F0; transition: background 0.12s; }
+footer.gx-footer .gx-social a:hover { background: #E8734A; }
+footer.gx-footer .gx-col h4 { font-family: "Nunito", ui-rounded, system-ui, sans-serif; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.07em; color: rgba(255,248,240,0.5); margin: 0 0 16px; }
+footer.gx-footer .gx-col a { display: block; font-size: 14px; color: rgba(255,248,240,0.82); margin-bottom: 11px; transition: color 0.12s; }
+footer.gx-footer .gx-col a:hover { color: #E8734A; }
+footer.gx-footer .gx-bottom { max-width: 1180px; margin: 48px auto 0; padding: 24px 28px 0; border-top: 1px solid rgba(255,248,240,0.12); display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 13px; color: rgba(255,248,240,0.5); }
+footer.gx-footer .gx-mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+@media (max-width: 780px) { footer.gx-footer .gx-top { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 480px) { footer.gx-footer .gx-top { grid-template-columns: 1fr; } }
+</style>
+<footer class="gx-footer">
+  <div class="gx-wrap">
+    <div class="gx-top">
+      <div>
+        <img class="gx-lockup" src="/gtfsx-lockup-on-dark.svg" alt="GTFS·X" width="100" height="28">
+        <p class="gx-blurb">The fast, easy GTFS editor and service planner. Built for transit agencies, planners, and consultants.</p>
+        <div class="gx-social">
+          <a href="https://twitter.com/gtfsxapp" aria-label="GTFS·X on X">X</a>
+          <a href="https://www.linkedin.com/company/gtfsx" aria-label="GTFS·X on LinkedIn">in</a>
+          <a href="https://github.com/GTFS-X/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
+        </div>
+      </div>
+      <div class="gx-col">
+        <h4>Product</h4>
+        <a href="/editor">Editor</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/planning">Planning</a>
+        <a href="/docs/hosted-publishing/">Publishing</a>
+      </div>
+      <div class="gx-col">
+        <h4>Learn</h4>
+        <a href="/learn/gtfs/">What is GTFS</a>
+        <a href="/learn/gtfs-flex/">What is GTFS-Flex</a>
+        <a href="/learn/publish-gtfs-feed/">Publish a GTFS feed</a>
+        <a href="/docs/">Docs</a>
+      </div>
+      <div class="gx-col">
+        <h4>Compare</h4>
+        <a href="/compare/trillium/">vs Trillium</a>
+        <a href="/compare/remix/">vs Remix</a>
+        <a href="/compare/gtfs-builder-rtap/">vs RTAP</a>
+      </div>
+      <div class="gx-col">
+        <h4>Company</h4>
+        <a href="/about/">About</a>
+        <a href="/feed-health/">GTFS Dashboard</a>
+        <a href="/community/announcements">Announcements</a>
+        <a href="mailto:hello@gtfsx.com">Contact</a>
+        <a href="/use-cases/state-dot/">State DOTs</a>
+      </div>
+    </div>
+    <div class="gx-bottom">
+      <span>© 2026 GTFS·X · Vector &amp; Vertex</span>
+      <span class="gx-mono">hello@gtfsx.com</span>
+    </div>
+  </div>
+</footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+    <script src="/assets/site-nav.js"></script>
+      <script src="/assets/docs/docs-nav.js"></script>
+</body>
+</html>

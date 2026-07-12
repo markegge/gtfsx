@@ -97,7 +97,7 @@ delivered once.
 | `session` | Active login (HTTP-only cookie scoped to the editor origin). |
 | `auth_token` | Single-use hashed tokens: `verify_email`, `magic_link`, `password_reset`, `invitation`. |
 | `organization` + `organization_membership` | Shared workspace + **many-to-many** user↔org with per-org role (critical for consultants). Includes org brand-logo columns. |
-| `feed_project` | One feed. Owned by a user or org (`owner_type`+`owner_id`); slug unique per owner; `brand_primary_color`; thumbnail pointer. |
+| `feed_project` | One feed. Owned by a user or org (`owner_type`+`owner_id`); slug unique per owner; `brand_primary_color`; thumbnail pointer; `locked`. Also `ntd_id` + `license_spdx` (0024) — a **projection** written at publish time, not the source of truth: the editor's feed state (`projectSlice.ntdId`) is. It exists so the feeds origin can serve `feed_info.json` / `dmfr.json` without inflating the state blob. `ntd_id` is **TEXT** — NTD IDs are 5-digit strings with significant leading zeros, and an INTEGER column would destroy them. |
 | `project_membership` *(future, BE-95)* | Per-project access inside an org without org-wide visibility. Not built. |
 | `feed_snapshot` | Immutable point-in-time editor state. Two R2 blobs (gzipped JSON + rendered ZIP) + a summary row. *(Renamed from `feed_version` in 0012.)* |
 | `draft_link` | Unguessable hashed token → a specific snapshot; time-limited, revocable. |
@@ -132,6 +132,12 @@ delivered once.
 | `0016_feed_thumbnail` | Route-map thumbnail pointers on `feed_project` (Mapbox Static Images → R2; og:image) |
 | `0017_rename_team_plan_to_agency` | Internal plan id `team`→`agency` (display name changed at pricing-v2; this aligns the data) |
 | `0018_service_alerts` | `service_alert` (GTFS-RT Service Alerts authoring, BE-90); `project_rt_feed.managed` column for RT coexistence (BE-92) |
+| `0019_scheduled_publish` | `scheduled_publish` (publish-at-a-time, BE-77) |
+| `0020_project_lock` | `feed_project.locked` |
+| `0021_embed_impressions` | `embed_impression` (per-project embed view counts) |
+| `0022_google_oauth` | `user.email_verified` + Google OAuth identity support |
+| `0023_pro_intent` | `pro_intent` (pricing-funnel intent log) |
+| `0024_ntd_id` | `feed_project.ntd_id` (TEXT — leading zeros are significant) + `feed_project.license_spdx`. Both projected at publish; feed state remains the source of truth. |
 
 ---
 
@@ -153,7 +159,7 @@ origin. This list is the source of truth.
 | `GET/POST /api/projects`, `GET/PATCH/DELETE /api/projects/:id`, `*/transfer`, `*/working-state` | Project CRUD + workspace transfer + working-state sync (If-Match) |
 | `POST/GET /api/projects/:id/snapshots`, `*/snapshots/:sid/state`, `*/restore`, `DELETE *` | Snapshots (list/create/fetch/restore/delete) |
 | `POST/GET/DELETE /api/projects/:id/draft-links[/:tokenHash]` | Draft review links |
-| `POST /api/projects/:id/publish` · `/unpublish` · `/publish/rollback` · `GET /publish/history` | Canonical publish lifecycle |
+| `POST /api/projects/:id/publish` · `/unpublish` · `/publish/rollback` · `GET /publish/history` | Canonical publish lifecycle. `publish` body (JSON or the multipart `meta` part): `snapshotId`, plus optional `ignoreWarnings`, `ignoreRtBreakage`, `ignoreAgencyChurn`, `ntdId`, `licenseSpdx`. `ntdId` is a **1–5 digit string** (`/^[0-9]{1,5}$/`, never `z.coerce`/`Number()` — leading zeros are significant); `null` clears it, omitting the key leaves the existing projection alone (the cron path omits both and must not clobber the last interactive publish). Advisory 409s: `rt_breakage` (removed ids referenced by an external RT feed) and **`agency_id_churn`** (removed/renamed `agency_id` vs. the published feed — fires for *every* project, RT or not, because FTA's P-50 crosswalk keys on `agency_id`); each is acknowledged by its matching `ignore*` flag. |
 | `POST /api/projects/:id/catalog-submissions`, `PUT /api/projects/:id/rt-feeds`, `GET /api/projects/:id/audit` | Distribution opt-in, external RT-feed registration, per-project audit |
 | `GET/POST/PUT/PATCH/DELETE /api/projects/:id/alerts[/:alertId]`, `GET */alerts/preview.json`, `POST */alerts/rt-feed` | Service Alerts authoring (Agency+; BE-90) |
 | `POST /api/projects/import` | Anonymous→signed-in bulk import |
@@ -165,10 +171,27 @@ origin. This list is the source of truth.
 
 ### Feeds origin (no auth)
 
-`GET feeds.*/<slug>/gtfs.zip` · `/feed_info.json` · `/alerts.pb` · `/alerts.json` ·
-`/draft/<token>.zip` · `/<slug>` (mini-site) · `/embed/route/<id>` ·
+`GET feeds.*/<slug>/gtfs.zip` · `/feed_info.json` · `/dmfr.json` · `/alerts.pb` ·
+`/alerts.json` · `/draft/<token>.zip` · `/<slug>` (mini-site) · `/embed/route/<id>` ·
 `/embed/stop/<id>` · `/embed/system-map` · `/_/orgs/<org_id>/logo` ·
 `/robots.txt` (`Disallow: /`).
+
+- **`/feed_info.json`** — sidecar metadata. Adds `ntd_id` and `license_spdx_identifier`,
+  both **omitted entirely when unset** (a consumer crosswalking feeds to NTD IDs should
+  see "absent", not an explicit null). The snapshot's feed state wins over the
+  `feed_project` projection (a snapshot saved before `ntdId` existed falls back to it).
+- **`/dmfr.json`** — [DMFR](https://dmfr.transit.land/) v0.5.1 registry document
+  (`worker/publication/dmfr.ts`; schema vendored at
+  `worker/__tests__/fixtures/dmfr.schema-v0.5.1.json` and asserted against in
+  `publication.ntd.test.ts`). Carries the NTD crosswalk on `operators[].tags.us_ntd_id`
+  so a publisher can hand one URL to Transitland / the Mobility Database. `Cache-Control:
+  public, max-age=3600` + `Access-Control-Allow-Origin: *` (registry tooling and
+  browser-based validators fetch it cross-origin). The required `operator.onestop_id` is
+  *derived* (`o-<geohash>-<name>`, geohash of the stop centroid) rather than faked; with
+  no usable stop coordinates the optional `operators` container is dropped and the NTD ID
+  falls back to feed-level `tags`. A companion `gtfs-rt` feed entry is emitted only when
+  the project has registered RT feeds. `buildDmfrDocument()` is pure (no env, no I/O) so
+  the schema test drives it directly and the route stays a thin loader.
 
 ---
 
@@ -250,7 +273,7 @@ Design rationale is preserved in the decisions appendix of the archived
   live-mode Stripe in a coordinated deploy.)
 - D1 `gtfs-builder` (`cfb27d4e-…`), KV (`da2476e5…`), R2 `gtfs-builder-feeds`
   + `gtfs-builder-forum-images`, tiles in `gtfs-builder-tiles`. Migrations
-  0001–0018 applied.
+  **0001–0023 applied** (the line previously said 0001–0018 and had drifted).
 - **GTFS-Realtime Service Alerts (BE-90..93)** live since 2026-05-30 — Agency+
   authoring under `/api/projects/:id/alerts`, public serving at
   `feeds.*/<slug>/alerts.pb` + `/alerts.json`.
@@ -327,6 +350,20 @@ Design rationale is preserved in the decisions appendix of the archived
   auth + editor up; `BACKEND_ENABLED=false` (with SPA rebuild) hides the whole
   backend. Both are `wrangler.jsonc` edits + redeploy. The two `*_ENABLED` flags
   and their `VITE_*` build-env twins must move in lockstep (see project memory).
+
+### Not yet deployed (in flight)
+
+Work that exists in the repo but is **not** live in production. Delete an entry
+from here when it ships, and fold it into the Production list above.
+
+- **NTD-ID alignment** — branch `feat/ntd-id-alignment`, **not merged, not
+  deployed.** Adds the project NTD ID + feed license, the `dmfr.json` route on
+  the feeds origin, the `agency_id_churn` publish gate, the NTD `agency_id`
+  validator warnings, the P-50 helper panel, and the provisional `ext_ntd_id`
+  export column. **Migration `0024_ntd_id.sql` is NOT applied to prod D1** —
+  apply it first, per the §7 pre-push checklist ("migrations applied on prod
+  first"), or the publish path will 500 on the missing `ntd_id` /
+  `license_spdx` columns.
 
 ### Staging — PARKED (since 2026-05-16)
 

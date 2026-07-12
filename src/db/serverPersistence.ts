@@ -48,6 +48,11 @@ const DATA_KEYS = [
   // working-state snapshot like any other editor data.
   'ntdId',
   'exportNtdIdColumn',
+  // The feed's declared license (SPDX short identifier). Feed-state like ntdId
+  // — the D1 `license_spdx` column is only the projection written at publish,
+  // so the working-state snapshot is what preserves a license the user picked
+  // but hasn't published yet.
+  'licenseSpdx',
 ] as const;
 
 type DataKey = (typeof DATA_KEYS)[number];
@@ -113,6 +118,7 @@ export function resetStoreEntities() {
   state.setDismissedValidations([]);
   state.setNtdId(null);
   state.setExportNtdIdColumn(false);
+  state.setLicenseSpdx(null);
 }
 
 export function applySnapshotToStore(snapshot: Record<string, unknown>) {
@@ -193,11 +199,12 @@ function applySnapshotToStoreInner(snapshot: Record<string, unknown>) {
   }
   // resetStoreEntities() above already cleared these to null/false, so an
   // absent or explicitly-null key correctly leaves a fresh/cleared feed
-  // rather than leaking the previous project's NTD ID.
+  // rather than leaking the previous project's NTD ID or license.
   if (typeof g('ntdId') === 'string') state.setNtdId(g('ntdId') as string);
   if (typeof g('exportNtdIdColumn') === 'boolean') {
     state.setExportNtdIdColumn(g('exportNtdIdColumn') as boolean);
   }
+  if (typeof g('licenseSpdx') === 'string') state.setLicenseSpdx(g('licenseSpdx') as string);
   // Older saved blobs may still carry a `visibilitySets` key (the removed
   // "Scenarios" feature). It's intentionally ignored here — unknown keys are
   // harmless and never re-applied.

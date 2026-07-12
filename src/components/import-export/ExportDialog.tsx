@@ -10,6 +10,7 @@ import { useProNudge } from '../billing/useProNudge';
 import { useEditorPlan } from '../billing/useEditorPlan';
 import { planHasFeature, cheapestPlanFor, planDisplayName } from '../billing/planConfig';
 import { Badge } from '../ui/Badge';
+import { isNtdIdInvalid, NTD_ID_INVALID_HINT } from '../../utils/ntdId';
 
 interface ExportDialogProps {
   onClose: () => void;
@@ -24,6 +25,13 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
   const [fileName, setFileName] = useState(
     () => state.projectName.replace(/\s+/g, '_').toLowerCase()
   );
+  // Latched at mount: the inline NTD ID input appears when the feed has no NTD
+  // ID yet and then STAYS mounted, so typing the first digit (which sets
+  // state.ntdId) doesn't unmount the field the user is typing into.
+  const [ntdIdFieldOpen] = useState(() => !useStore.getState().ntdId);
+  // Non-blocking, same rule as the publish panel — a malformed ID gets a hint,
+  // it never disables the export.
+  const ntdIdInvalid = isNtdIdInvalid(state.ntdId);
 
   // GeoJSON export is free on every plan (geojson_export feature) — the gate
   // below stays for safety if the matrix ever changes; a locked user is routed
@@ -267,9 +275,14 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
         })()}
 
         {/* Provisional NTD ID extension column (GTFS-X/gtfsx#62). Opt-in, default
-            off. The NTD ID itself is set in the publish panel — this only decides
-            whether it is written into the zip. ntdIdExportStatus() is the same
-            predicate the exporter uses, so this note always matches the zip. */}
+            off. ntdIdExportStatus() is the same predicate the exporter uses, so
+            this note always matches the zip.
+
+            The NTD ID itself is settable right here as well as in the publish
+            panel — both write the SAME store field (setNtdId), which is the
+            single source of truth. The publish panel is backend-gated, so the
+            anonymous IndexedDB editor would otherwise have no way to set an NTD
+            ID and this opt-in would be permanently disabled for it. */}
         {(() => {
           const ntdStatus = ntdIdExportStatus(state);
           const noNtdId = !state.ntdId;
@@ -296,10 +309,48 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
                 </span>
               </label>
 
-              {noNtdId && (
-                <p className="text-xs text-warm-gray mt-2 pl-6">
-                  No NTD ID set for this feed. Add one in the publish panel to enable this option.
-                </p>
+              {/* Inline NTD ID entry. Shown when the feed had no NTD ID as the
+                  dialog opened, and kept mounted for the life of the dialog
+                  (the open flag is latched at mount) so the field doesn't
+                  vanish under the cursor the moment the first digit lands. */}
+              {ntdIdFieldOpen && (
+                <div className="mt-2 pl-6">
+                  <label
+                    htmlFor="export-ntd-id"
+                    className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1"
+                  >
+                    NTD ID <span className="normal-case font-normal">(optional)</span>
+                  </label>
+                  <input
+                    id="export-ntd-id"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    maxLength={5}
+                    placeholder="e.g. 00123"
+                    value={state.ntdId ?? ''}
+                    onChange={(e) => state.setNtdId(e.target.value)}
+                    className={`w-full px-3 py-2 border-2 rounded-lg text-sm bg-cream text-dark-brown font-mono focus:outline-none focus:bg-white ${
+                      ntdIdInvalid ? 'border-red-300 focus:border-red-400' : 'border-sand focus:border-coral'
+                    }`}
+                  />
+                  {ntdIdInvalid ? (
+                    <p className="mt-1 text-[11px] text-red-600">{NTD_ID_INVALID_HINT}</p>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-warm-gray">
+                      US agencies: your five-digit National Transit Database ID. Look it up at{' '}
+                      <a
+                        href="https://www.transit.dot.gov/ntd"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-coral hover:underline"
+                      >
+                        transit.dot.gov/ntd
+                      </a>
+                      .
+                    </p>
+                  )}
+                </div>
               )}
 
               {ntdStatus === 'multi-agency-suppressed' && (

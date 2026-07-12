@@ -20,6 +20,7 @@ import { exportGtfsZip } from '../../services/gtfsExport';
 import { applySnapshotToStore, buildSnapshot } from '../../db/serverPersistence';
 import { DraftLinksSection, toEditorDeepLink } from './DraftLinksPanel';
 import { NtdP50Panel } from './NtdP50Panel';
+import { isNtdIdInvalid, NTD_ID_INVALID_HINT } from '../../utils/ntdId';
 
 // SPDX identifiers publishers actually use for open transit data. "Leave unset"
 // is a first-class choice — we never guess a license on someone's behalf.
@@ -29,10 +30,6 @@ const LICENSE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'CC-BY-4.0', label: 'CC BY 4.0 — attribution' },
   { value: 'ODbL-1.0', label: 'ODbL 1.0 — open database, share-alike' },
 ];
-
-// NTD IDs are 1–5 digit strings; leading zeros are significant, so this is a
-// string test, never a numeric one.
-const NTD_ID_RE = /^[0-9]{1,5}$/;
 
 // Env-aware public feeds origin (mirrors EmbedPanel): staging publishes to
 // staging-feeds.gtfsx.com, prod to feeds.gtfsx.com. Used for the canonical-URL
@@ -109,10 +106,15 @@ export function PublishPanel() {
   const currentPublication = useStore((s) => s.currentPublication);
   const setPublicationHistory = useStore((s) => s.setPublicationHistory);
   const setCurrentPublication = useStore((s) => s.setCurrentPublication);
-  // NTD ID lives in the editor's feed state (the source of truth) — the server
-  // column is only a projection written at publish. String, never a number.
+  // NTD ID and license both live in the editor's feed state (the source of
+  // truth) — the server columns are only projections written at publish. The
+  // NTD ID is a string, never a number. Both are also editable outside this
+  // panel (the NTD ID from the export dialog, which anonymous users get), so
+  // neither may be mirrored into local component state.
   const ntdId = useStore((s) => s.ntdId);
   const setNtdId = useStore((s) => s.setNtdId);
+  const licenseSpdx = useStore((s) => s.licenseSpdx);
+  const setLicenseSpdx = useStore((s) => s.setLicenseSpdx);
   const feedsProjects = useStore((s) => s.feedsProjects);
 
   const [loading, setLoading] = useState(false);
@@ -135,14 +137,7 @@ export function PublishPanel() {
   const [scheduled, setScheduled] = useState<ScheduledPublishInfo | null>(null);
   const [scheduleMode, setScheduleMode] = useState(false);
   const [scheduleAt, setScheduleAt] = useState('');
-  // The license isn't editor feed-state (it describes the *publication*), so it
-  // is seeded from the server's project row rather than the store.
   const activeProject = feedsProjects.find((p) => p.id === projectId) ?? null;
-  const serverLicense = activeProject?.licenseSpdx ?? '';
-  const [licenseSpdx, setLicenseSpdx] = useState(serverLicense);
-  useEffect(() => {
-    setLicenseSpdx(serverLicense);
-  }, [serverLicense]);
 
   const refresh = useCallback(async () => {
     if (!projectId) return;
@@ -206,7 +201,7 @@ export function PublishPanel() {
         // Project the feed's NTD ID + license onto the publication so
         // feed_info.json and dmfr.json can carry the FTA NTD crosswalk.
         ntdId: ntdId ?? null,
-        licenseSpdx: licenseSpdx || null,
+        licenseSpdx: licenseSpdx ?? null,
         zip,
       });
       setBanner({
@@ -382,7 +377,7 @@ export function PublishPanel() {
   const currentPubSnapshotId = currentPublication?.snapshotId ?? null;
   // The server rejects a malformed NTD ID (422); catch it here so the user
   // isn't told about it only after a full ZIP render + upload.
-  const ntdIdInvalid = !!ntdId && !NTD_ID_RE.test(ntdId);
+  const ntdIdInvalid = isNtdIdInvalid(ntdId);
   const canonicalUrl =
     currentPublication?.canonicalUrl ??
     (currentPublication && activeProject ? `${FEEDS_ORIGIN}/${activeProject.slug}/gtfs.zip` : null);
@@ -548,9 +543,7 @@ export function PublishPanel() {
                     }`}
                   />
                   {ntdIdInvalid ? (
-                    <p className="mt-1 text-[11px] text-red-600">
-                      NTD IDs are 1–5 digits. Keep any leading zeros — they're part of the ID.
-                    </p>
+                    <p className="mt-1 text-[11px] text-red-600">{NTD_ID_INVALID_HINT}</p>
                   ) : (
                     <p className="mt-1 text-[11px] text-warm-gray">
                       US agencies: your five-digit National Transit Database ID. Look it up at{' '}
@@ -576,7 +569,7 @@ export function PublishPanel() {
                   </label>
                   <select
                     id="publish-license"
-                    value={licenseSpdx}
+                    value={licenseSpdx ?? ''}
                     onChange={(e) => setLicenseSpdx(e.target.value)}
                     className="w-full px-3 py-2 border-2 border-sand rounded-lg bg-cream text-sm text-dark-brown focus:outline-none focus:border-coral focus:bg-white"
                   >

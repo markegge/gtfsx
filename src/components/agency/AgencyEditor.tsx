@@ -183,10 +183,7 @@ export function AgencyEditor() {
         placeholder="https://..."
         required
       />
-      <div className="mb-3">
-        <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-          Timezone <span className="text-coral">*</span>
-        </label>
+      <FormField label="Timezone" required>
         <select
           value={agency.agency_timezone}
           onChange={(e) => updateAgencyAt(index, { agency_timezone: e.target.value })}
@@ -196,7 +193,7 @@ export function AgencyEditor() {
             <option key={tz} value={tz}>{tz}</option>
           ))}
         </select>
-      </div>
+      </FormField>
       <div className="grid grid-cols-2 gap-3">
         <FormField
           label="Phone"

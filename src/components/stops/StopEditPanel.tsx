@@ -101,24 +101,22 @@ export function StopEditPanel() {
           Stop Location
         </label>
         <div className="grid grid-cols-2 gap-2 mb-2">
-          <div>
-            <label className="block text-[10px] text-warm-gray mb-0.5">Latitude</label>
+          <FormField label="Latitude" size="sub" containerClassName="">
             <input
               type="number"
               value={String(stop.stop_lat)}
               onChange={(e) => updateStop(stop.stop_id, { stop_lat: Number(e.target.value) })}
               className="w-full px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
             />
-          </div>
-          <div>
-            <label className="block text-[10px] text-warm-gray mb-0.5">Longitude</label>
+          </FormField>
+          <FormField label="Longitude" size="sub" containerClassName="">
             <input
               type="number"
               value={String(stop.stop_lon)}
               onChange={(e) => updateStop(stop.stop_id, { stop_lon: Number(e.target.value) })}
               className="w-full px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
             />
-          </div>
+          </FormField>
         </div>
 
         <div className="flex gap-2">
@@ -154,10 +152,7 @@ export function StopEditPanel() {
         )}
       </div>
 
-      <div className="mb-3">
-        <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-          Wheelchair Boarding
-        </label>
+      <FormField label="Wheelchair Boarding">
         <select
           value={stop.wheelchair_boarding}
           onChange={(e) => updateStop(stop.stop_id, { wheelchair_boarding: Number(e.target.value) })}
@@ -167,12 +162,9 @@ export function StopEditPanel() {
             <option key={val} value={val}>{label}</option>
           ))}
         </select>
-      </div>
+      </FormField>
 
-      <div className="mb-3">
-        <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-          Location Type
-        </label>
+      <FormField label="Location Type">
         <select
           value={stop.location_type}
           onChange={(e) => {
@@ -189,13 +181,10 @@ export function StopEditPanel() {
             <option key={val} value={val}>{label}</option>
           ))}
         </select>
-      </div>
+      </FormField>
 
       {canHaveParent && (
-        <div className="mb-3">
-          <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-            Parent Station
-          </label>
+        <FormField label="Parent Station">
           <select
             value={stop.parent_station || ''}
             onChange={(e) => updateStop(stop.stop_id, { parent_station: e.target.value || undefined })}
@@ -214,13 +203,10 @@ export function StopEditPanel() {
               Create a stop with Location Type "Station" to link this stop to it.
             </p>
           )}
-        </div>
+        </FormField>
       )}
 
-      <div className="mb-3">
-        <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-          Level
-        </label>
+      <FormField label="Level">
         <select
           value={stop.level_id || ''}
           onChange={(e) => updateStop(stop.stop_id, { level_id: e.target.value || undefined })}
@@ -239,12 +225,9 @@ export function StopEditPanel() {
             Define levels in the Stations panel to place this stop on a floor (for multi-level stations with pathways).
           </p>
         )}
-      </div>
+      </FormField>
 
-      <div className="mb-3">
-        <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-          Stop Timezone
-        </label>
+      <FormField label="Stop Timezone">
         <select
           value={stop.stop_timezone || ''}
           onChange={(e) => updateStop(stop.stop_id, { stop_timezone: e.target.value || undefined })}
@@ -257,7 +240,7 @@ export function StopEditPanel() {
         <p className="text-[11px] text-warm-gray mt-1">
           Override the agency timezone for this stop. Used by feeds that span multiple zones (e.g. ferries between Alaska and Pacific).
         </p>
-      </div>
+      </FormField>
 
       <FormField
         label="Fare Zone ID"

@@ -150,10 +150,7 @@ export function CreateStopPanel() {
           <FormField label="Longitude" value={lon} onChange={setLon} placeholder="-111.0429" type="number" required />
         </div>
 
-        <div className="mb-3">
-          <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-            Wheelchair Boarding
-          </label>
+        <FormField label="Wheelchair Boarding">
           <select
             value={wheelchair}
             onChange={(e) => setWheelchair(Number(e.target.value))}
@@ -163,12 +160,9 @@ export function CreateStopPanel() {
               <option key={val} value={val}>{label}</option>
             ))}
           </select>
-        </div>
+        </FormField>
 
-        <div className="mb-3">
-          <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-            Location Type
-          </label>
+        <FormField label="Location Type">
           <select
             value={locationType}
             onChange={(e) => setLocationType(Number(e.target.value))}
@@ -178,7 +172,7 @@ export function CreateStopPanel() {
               <option key={val} value={val}>{label}</option>
             ))}
           </select>
-        </div>
+        </FormField>
 
         <button
           onClick={handleCreate}

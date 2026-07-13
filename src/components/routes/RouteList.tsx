@@ -118,6 +118,7 @@ export function RouteList() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Filter routes…"
+            aria-label="Filter routes"
             className="w-full mb-2 px-2.5 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
           />
 

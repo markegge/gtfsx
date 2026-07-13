@@ -321,6 +321,7 @@ export function AreasEditor() {
         value={stopFilter}
         onChange={(e) => setStopFilter(e.target.value)}
         placeholder="Search stops by name or ID…"
+        aria-label="Search stops by name or ID"
         className="w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral focus:bg-white mb-2"
       />
       <div className="space-y-1 max-h-64 overflow-y-auto">

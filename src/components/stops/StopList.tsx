@@ -220,6 +220,7 @@ export function StopList() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Filter stops…"
+          aria-label="Filter stops"
           className="w-full px-2.5 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
         />
         <div>

@@ -336,6 +336,200 @@ def test_the_joint_fit_reproduces_the_marginals_and_the_union():
     print("ok: the 16-cell fit reproduces every ACS marginal AND both PUMS unions")
 
 
+def _real_boundary_block_groups():
+    """The block groups that made the nationwide build fail, with their real ACS
+    numbers. CA/FL/NJ/NY/TX all died the same way; these are the exact rows.
+
+        GEOID, pop, carless, low_income, senior, disability, prop_all, need_all
+    """
+    return [
+        # ── prop_all pinned to its Fréchet FLOOR: prop_all == low_income, so
+        #    every carless person is also low-income and the "carless but not
+        #    low-income" cells MUST be empty. (Texas, worst residual 0.0557.)
+        ("481410103582", 12348, 114, 2911, 198, 579, 2911, 3250),
+        ("482090109093", 9056, 230, 3325, 321, 681, 3325, 3633),
+        # ── prop_all pinned to its Fréchet CEILING: prop_all == carless +
+        #    low_income, so the two groups are DISJOINT and the "carless AND
+        #    low-income" cells must be empty.
+        ("481576732023", 23964, 102, 2831, 2246, 1156, 2933, 5360),
+        # ── need_all == prop_all as well: nobody is a senior/disabled person
+        #    outside the prop set either. TWO empty groups at once. (Worst
+        #    residual in the country: 0.1173.)
+        ("482917003022", 19209, 81, 11249, 596, 938, 11249, 11249),
+        # ── |senior ∪ disability| FORCED: senior == need_all, so every needy
+        #    person is a senior and nobody is disabled-but-not-senior. This is
+        #    the second family — the prop partition alone does not catch it.
+        ("060014044001", 2162, 0, 40, 503, 32, 40, 503),
+        ("060014212003", 726, 0, 10, 290, 24, 10, 290),
+        # ── the OVERLAP forced to zero: need_all - prop_all == senior +
+        #    disability, so every senior and every disabled person is outside the
+        #    prop set and NO ONE is both needy-by-age/disability and poor/carless.
+        #    The third family. (California.)
+        ("060014228001", 4422, 544, 738, 11, 24, 1013, 1048),
+        ("360710150033", 2328, 505, 1439, 19, 19, 1446, 1484),
+    ]
+
+
+def test_the_constraint_system_is_feasible_on_the_boundary_block_groups():
+    """FEASIBILITY, not convergence — the question that had to be answered first.
+
+    When the nationwide build failed, the live possibility was that the Fréchet
+    clamp or the marginals were producing a constraint system that NO 16-cell
+    distribution can satisfy. If so, a looser tolerance would have papered over a
+    real arithmetic bug. It is not so, and this proves it CONSTRUCTIVELY: for each
+    block group that failed, build an explicit INTEGER assignment of its people to
+    flag combinations and check it reproduces all seven numbers exactly.
+
+    An integer witness is a fortiori a non-negative real one, so the system is
+    feasible and IPF was right to keep trying — it was just crawling.
+
+    The witness is exactly reconcile()'s five partition targets, which is the
+    point: those clamps ARE the feasibility conditions. If reconcile ever stops
+    guaranteeing them, this test constructs a negative count and fails.
+    """
+    for geoid, pop, C, L, S, D, P, N in _real_boundary_block_groups():
+        # reconcile's invariants — the conditions under which a witness exists
+        assert max(C, L) <= P <= min(C + L, pop), geoid
+        assert max(P, S, D) <= N <= min(P + S + D, pop), geoid
+
+        # the five prop-partition groups, in people (joint_flags' closed form)
+        groups = {
+            "(none)": pop - N, "s|d only": N - P, "carless only": P - L,
+            "low_income only": P - C, "carless+low_income": C + L - P,
+        }
+        assert all(v >= 0 for v in groups.values()), (geoid, groups)
+        assert sum(groups.values()) == pop, (geoid, groups)
+
+        # u = |senior ∪ disability| — its Fréchet interval must be non-empty
+        u_lo, u_hi = max(S, D, N - P), min(S + D, N)
+        assert u_lo <= u_hi, (geoid, u_lo, u_hi)
+
+        # a witness at u = u_lo: the sd-partition and the overlap block
+        u = u_lo
+        assert pop - N >= 0 and N - u >= 0 and u - D >= 0 and u - S >= 0 \
+            and S + D - u >= 0, (geoid, u)
+        assert P + u - N >= 0, (geoid, u)   # |(senior ∪ disability) ∩ prop|
+
+        # and now the real thing: joint_flags.fit must land on it
+        seed = np.tile(U.joint_table().loc[
+            U.DEFAULT_KEY, [f"cell_{i}" for i in range(16)]].to_numpy(float), (1, 1))
+        cells, diag = J.fit([pop], [C], [L], [S], [D], [P], [N], seed)
+        assert diag["converged"], (geoid, diag)
+        got = J.marginals_from_cells(cells)
+        for key, want in (("carless", C), ("low_income", L), ("senior", S),
+                          ("disability", D), ("prop_all", P), ("need_all", N)):
+            assert abs(got[key][0] - want) <= J.TOLERANCE_PEOPLE, (geoid, key,
+                                                                   got[key][0], want)
+        assert abs(cells.sum() - pop) < 1e-6, geoid
+        assert (cells >= -1e-12).all(), geoid
+    print(f"ok: all {len(_real_boundary_block_groups())} boundary block groups are "
+          "FEASIBLE (explicit integer witness) and the fit lands on them")
+
+
+def test_forced_empty_groups_are_exactly_zero_not_merely_small():
+    """The bug, stated as a property.
+
+    Every one of these block groups has at least one flag-combination group that
+    the arithmetic forces to be EMPTY. The old six-constraint IPF could only
+    approach those zeros — it converges O(1/k) on a boundary solution — and after
+    40,000 iterations was still carrying ~0.18 of a person in cells that must hold
+    nobody. That leaked mass WAS the residual, to the digit, and it is what failed
+    the build on the five largest states.
+
+    So: not "small". ZERO. If a future change reintroduces a formulation that has
+    to discover these zeros rather than name them, this test fails immediately —
+    at 1e-9 people, not at the 0.05 guard, so it fails long before a build does.
+    """
+    for geoid, pop, C, L, S, D, P, N in _real_boundary_block_groups():
+        seed = np.tile(U.joint_table().loc[
+            U.DEFAULT_KEY, [f"cell_{i}" for i in range(16)]].to_numpy(float), (1, 1))
+        cells, _ = J.fit([pop], [C], [L], [S], [D], [P], [N], seed)
+        row = cells[0]
+
+        empty_groups = 0
+        for masks, targets, labels in (
+            (J.PARTITION_MASKS,
+             J.partition_targets([pop], [C], [L], [P], [N])[0],
+             J.PARTITION_LABELS),
+        ):
+            for mask, want, label in zip(masks, targets, labels):
+                got = row[mask].sum()
+                assert abs(got - want) < 1e-6, (geoid, label, got, want)
+                if want == 0:
+                    empty_groups += 1
+                    assert got < 1e-9, (
+                        f"{geoid}: the group '{label}' must hold NOBODY "
+                        f"(target 0) but the fit left {got:.6f} people in it — "
+                        "the fit is approaching the zero instead of landing on it")
+
+        # the senior∪disability axis, where u is forced
+        u_lo, u_hi = J.sd_union_bounds([S], [D], [P], [N])
+        if u_lo[0] >= u_hi[0]:
+            st = J.sd_partition_targets([pop], [S], [D], [N], u_lo)[0]
+            for mask, want, label in zip(J.SD_PARTITION_MASKS, st,
+                                         J.SD_PARTITION_LABELS):
+                got = row[mask].sum()
+                assert abs(got - want) < 1e-6, (geoid, label, got, want)
+                if want == 0:
+                    empty_groups += 1
+                    assert got < 1e-9, (geoid, label, got)
+            bt = J.block_targets([pop], [P], [N], u_lo)[0]
+            for mask, want, label in zip(J.BLOCK_MASKS, bt, J.BLOCK_LABELS):
+                got = row[mask].sum()
+                assert abs(got - want) < 1e-6, (geoid, label, got, want)
+                if want == 0:
+                    empty_groups += 1
+                    assert got < 1e-9, (geoid, label, got)
+
+        assert empty_groups, f"{geoid} was meant to be a BOUNDARY case but no " \
+                             "group is forced empty — the fixture is stale"
+    print("ok: every arithmetically-forced-empty flag group is EXACTLY zero "
+          "(<1e-9 people), not merely inside the guard")
+
+
+def test_the_fit_is_driven_far_past_the_guard():
+    """The guard must pass with room, not by a whisker.
+
+    A fit that stops the instant it scrapes under TOLERANCE_PEOPLE cannot tell a
+    converged block group from a crawling one — which is precisely how the
+    nationwide failure stayed invisible until it tipped over. The fit therefore
+    chases FIT_TARGET_PEOPLE, tens of thousands of times tighter than the guard,
+    and the guard is left to catch genuine infeasibility.
+    """
+    assert J.FIT_TARGET_PEOPLE < J.TOLERANCE_PEOPLE / 1000, (
+        "the fit target must be orders of magnitude inside the guard, or a pass "
+        "says nothing about how close the build came to failing")
+    for geoid, pop, C, L, S, D, P, N in _real_boundary_block_groups():
+        seed = np.tile(U.joint_table().loc[
+            U.DEFAULT_KEY, [f"cell_{i}" for i in range(16)]].to_numpy(float), (1, 1))
+        _, diag = J.fit([pop], [C], [L], [S], [D], [P], [N], seed)
+        assert diag["max_residual_people"] <= J.FIT_TARGET_PEOPLE, (geoid, diag)
+    print(f"ok: the boundary block groups converge to <= {J.FIT_TARGET_PEOPLE:g} "
+          f"people, {J.TOLERANCE_PEOPLE / J.FIT_TARGET_PEOPLE:,.0f}x inside the guard")
+
+
+def test_infeasible_constraints_are_rejected_not_fitted():
+    """The guard the whole investigation was about.
+
+    If the marginals and the unions are NOT jointly realisable — need_all above
+    prop_all + senior + disability, say, which is the latent clamp bug reconcile's
+    conditional bound exists to prevent — then no 16-cell distribution satisfies
+    them and the fit must SAY SO, not converge to something plausible-looking.
+    """
+    seed = np.tile(U.joint_table().loc[
+        U.DEFAULT_KEY, [f"cell_{i}" for i in range(16)]].to_numpy(float), (1, 1))
+    # need_all = 100 but prop_all + senior + disability = 10 + 5 + 5 = 20.
+    # There are not enough seniors and disabled people in existence to fill it.
+    try:
+        J.fit([1000], [10], [8], [5], [5], [10], [100], seed)
+    except AssertionError as exc:
+        assert "INFEASIBLE" in str(exc), exc
+    else:
+        raise AssertionError(
+            "an unrealisable constraint system was FITTED instead of rejected")
+    print("ok: an infeasible constraint system is rejected, not quietly fitted")
+
+
 def test_the_joint_is_not_independence():
     """The whole reason the joint is MEASURED and not assumed.
 
@@ -427,6 +621,10 @@ if __name__ == "__main__":
     test_the_tile_schema_is_seventeen_integer_codes()
     test_flag_bits_agree_across_every_module()
     test_the_joint_fit_reproduces_the_marginals_and_the_union()
+    test_the_constraint_system_is_feasible_on_the_boundary_block_groups()
+    test_forced_empty_groups_are_exactly_zero_not_merely_small()
+    test_the_fit_is_driven_far_past_the_guard()
+    test_infeasible_constraints_are_rejected_not_fitted()
     test_the_joint_is_not_independence()
     test_joint_table_is_sane()
     test_corrections_table_is_sane()

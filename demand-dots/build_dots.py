@@ -1618,9 +1618,17 @@ def main():
     bg_cells, diag = fit_bg_cells(bg_data)
     print(f"  Fitted {len(bg_data):,} block groups in {time.time()-t0:.1f}s "
           f"({diag['iterations']:,} iterations; worst residual "
-          f"{diag['max_residual_people']:.4f} people, "
+          f"{diag['max_residual_people']:.2e} people, "
           f"{diag['unconverged_rows']} row(s) over the "
-          f"{diag['tolerance_people']} tolerance)")
+          f"{diag['tolerance_people']} guard)")
+    # The fit is driven ~50,000x past the guard (joint_flags.FIT_TARGET_PEOPLE),
+    # so a healthy state prints a residual of ~1e-6 and lands nowhere near it. A
+    # residual that creeps up towards the guard means the fit has found a boundary
+    # the three partitions do not name — visible here long before it fails.
+    print(f"  {diag['u_pinned_rows']:,} block group(s) have a FORCED "
+          f"senior∪disability union (the Fréchet interval is a single point); "
+          f"{diag['rows_over_target']} row(s) short of the "
+          f"{diag['target_people']:g}-person fit target, all inside the guard")
     if not diag["converged"]:
         raise AssertionError(
             f"the flag fit did not converge: {diag['unconverged_rows']} block "

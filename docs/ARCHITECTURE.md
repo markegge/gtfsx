@@ -67,7 +67,7 @@ in project memory.
 | `marketing/` | Marketing-site SSR (`ssr.ts`) + Google Ads OCI uploader (`ads/`) |
 | `admin/` | Staff operator console (dashboard, users, orgs, audit, events, ads attribution) |
 | `import/` | Catalog-search / external feed import |
-| `cron/` | Scheduled tasks (account-deletion reaper, metrics rollup, OCI upload, daily owner digest) |
+| `cron/` | Scheduled tasks (due scheduled-publishes, account-deletion reaper, metrics rollup, OCI upload, daily owner digest) |
 | `email/` | Resend templates |
 | `db/`, `util/` | DB helpers; crypto, rate-limit, CSRF, errors |
 | `legacy/` | Legacy tile/catalog handlers retained from before the rebrand |
@@ -138,6 +138,7 @@ delivered once.
 | `0022_google_oauth` | `user.email_verified` + Google OAuth identity support |
 | `0023_pro_intent` | `pro_intent` (pricing-funnel intent log) |
 | `0024_feed_license` | `feed_project.license_spdx` (SPDX short id, NULL when undeclared) — projected at publish; feed state remains the source of truth. **License only.** No NTD-ID column: the ID belongs to the agency (`agency.external_id`) and rides inside the feed state. |
+| `0025_scheduled_publish_acks` | `scheduled_publish.ignore_rt_breakage` + `.ignore_agency_churn` (both `INTEGER NOT NULL DEFAULT 0`) — the ID-stability gates the user acknowledged **at schedule time**, replayed by the cron at fire time. Without them a scheduled publish that tripped either gate could only fail unattended. (`ignore_warnings` was already on the row from 0019.) |
 
 ---
 
@@ -160,6 +161,7 @@ origin. This list is the source of truth.
 | `POST/GET /api/projects/:id/snapshots`, `*/snapshots/:sid/state`, `*/restore`, `DELETE *` | Snapshots (list/create/fetch/restore/delete) |
 | `POST/GET/DELETE /api/projects/:id/draft-links[/:tokenHash]` | Draft review links |
 | `POST /api/projects/:id/publish` · `/unpublish` · `/publish/rollback` · `GET /publish/history` | Canonical publish lifecycle. `publish` body (JSON or the multipart `meta` part): `snapshotId`, plus optional `ignoreWarnings`, `ignoreRtBreakage`, `ignoreAgencyChurn`, `licenseSpdx`. There is **no `ntdId` field** — an agency's NTD ID is `agency.external_id` inside the feed, so it arrives with the snapshot state and needs no publish-request plumbing. For `licenseSpdx`, `null` clears it and omitting the key leaves the existing projection alone (the cron path omits it and must not clobber the last interactive publish). Advisory 409s: `rt_breakage` (removed ids referenced by an external RT feed) and **`agency_id_churn`** (removed/renamed `agency_id` vs. the published feed — fires for *every* project, RT or not, because FTA's P-50 crosswalk keys on `agency_id`); each is acknowledged by its matching `ignore*` flag. |
+| `POST/DELETE /api/projects/:id/publish/schedule` | Scheduled publish (BE-77). Body (JSON, or the multipart `meta` part + a rendered `zip` — the cron has no client to render one at fire time): `snapshotId`, `scheduledFor` (unix ms, ≥1 min out), plus the **same** optional acknowledgement flags as `publish`: `ignoreWarnings`, `ignoreRtBreakage`, `ignoreAgencyChurn`. **Scheduling runs the identical ID-stability gates and returns the identical advisory 409s** (`rt_breakage`, `agency_id_churn`) — one shared evaluation, `worker/publication/idStability.ts → assertIdStable()`, also called by `performPublish`. A scheduled publish targets a fixed, immutable snapshot, so the diff is computable *at schedule time*, while the user is present to acknowledge it; at fire time nobody is there to ask. The acknowledgements persist on the row (`scheduled_publish.ignore_rt_breakage` / `ignore_agency_churn`, 0025) and the cron replays **exactly those** into `performPublish`, which re-runs the gates — so churn that appears *after* scheduling (someone published something else, moving the baseline; or an RT feed gets registered) is still un-acknowledged, and the schedule **fails** (`status='failed'`, `failure_reason='agency_id_churn: …'`) instead of publishing something the user never agreed to. A 409 is raised before any write, leaving the existing pending schedule and stored ZIP untouched. Serialized schedule (here and in `GET /publish/history`): `{ id, snapshotId, scheduledFor, ignoreWarnings, ignoreRtBreakage, ignoreAgencyChurn, status, failureReason }`. `DELETE` cancels the pending row (idempotent). |
 | `POST /api/projects/:id/catalog-submissions`, `PUT /api/projects/:id/rt-feeds`, `GET /api/projects/:id/audit` | Distribution opt-in, external RT-feed registration, per-project audit |
 | `GET/POST/PUT/PATCH/DELETE /api/projects/:id/alerts[/:alertId]`, `GET */alerts/preview.json`, `POST */alerts/rt-feed` | Service Alerts authoring (Agency+; BE-90) |
 | `POST /api/projects/import` | Anonymous→signed-in bulk import |
@@ -374,11 +376,20 @@ from here when it ships, and fold it into the Production list above.
   `agency.txt`), the feed license, the `dmfr.json` route on the feeds origin
   (one operator per agency), the `agencies[]` array in `feed_info.json`, the
   `agency_id_churn` publish gate, the NTD `agency_id` validator warnings, and
-  the P-50 helper panel. **Migration `0024_feed_license.sql` is NOT applied to
-  prod D1** — apply it first, per the §7 pre-push checklist ("migrations applied
-  on prod first"), or the publish path will 500 on the missing `license_spdx`
-  column. (It adds `license_spdx` only; the NTD ID needs no D1 column, since it
-  lives inside the feed state.)
+  the P-50 helper panel. It also closes the **scheduled-publish gate hole**: the
+  schedule endpoint now runs the same `rt_breakage` / `agency_id_churn` gates
+  and returns the same 409s, so the user acknowledges while present; the acks
+  persist on `scheduled_publish` and the cron replays them (it still re-runs the
+  gates, so churn introduced after scheduling fails the row rather than
+  publishing unacknowledged).
+  **Two migrations are NOT applied to prod D1 — `0024_feed_license.sql` and
+  `0025_scheduled_publish_acks.sql`.** Apply both first, per the §7 pre-push
+  checklist ("migrations applied on prod first"): without 0024 the publish path
+  500s on the missing `license_spdx` column, and without 0025 the schedule
+  endpoint, `GET /publish/history` (it serializes the acks) and the
+  scheduled-publish cron all 500 on the missing `ignore_rt_breakage` /
+  `ignore_agency_churn` columns. (Neither adds an NTD-ID column: the ID lives
+  inside the feed state.)
 
 ### Staging — PARKED (since 2026-05-16)
 

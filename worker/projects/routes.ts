@@ -14,6 +14,7 @@ import { logAudit } from '../util/audit';
 import { clientIp } from '../util/rateLimit';
 import { generateToken, sha256Hex } from '../util/crypto';
 import { performPublish } from '../publication/performPublish';
+import { assertIdStable } from '../publication/idStability';
 import { getOrgMembership, roleAtLeast, type OrgRole } from '../orgs/routes';
 import { isValidSlug, slugify, uniqueSlug } from './slug';
 import {
@@ -1263,10 +1264,16 @@ const publishJsonSchema = z.object({
   licenseSpdx: licenseSpdxField,
 });
 
+// A scheduled publish runs the SAME gates as an immediate one — but at schedule
+// time, while the user is present to acknowledge them (the cron has nobody to
+// ask). So it takes the same ignore flags, and they are persisted on the row for
+// the cron to replay. See worker/migrations/0025_scheduled_publish_acks.sql.
 const schedulePublishSchema = z.object({
   snapshotId: z.string().min(1),
   scheduledFor: z.number().int().positive(), // unix ms, must be in the future
   ignoreWarnings: z.boolean().optional(),
+  ignoreRtBreakage: z.boolean().optional(),
+  ignoreAgencyChurn: z.boolean().optional(),
 });
 
 const draftLinkCreateSchema = z.object({
@@ -1309,6 +1316,8 @@ interface ScheduledPublishRow {
   snapshot_id: string;
   scheduled_for: number;
   ignore_warnings: number;
+  ignore_rt_breakage: number;
+  ignore_agency_churn: number;
   status: string;
   failure_reason: string | null;
   created_at: number;
@@ -1318,7 +1327,8 @@ interface ScheduledPublishRow {
 // shows it only when 'pending' (with a Cancel) or 'failed' (with the reason).
 async function loadLatestSchedule(env: Env, projectId: string): Promise<ScheduledPublishRow | null> {
   return env.DB.prepare(
-    `SELECT id, snapshot_id, scheduled_for, ignore_warnings, status, failure_reason, created_at
+    `SELECT id, snapshot_id, scheduled_for, ignore_warnings, ignore_rt_breakage, ignore_agency_churn,
+            status, failure_reason, created_at
        FROM scheduled_publish WHERE project_id = ? ORDER BY created_at DESC LIMIT 1`,
   )
     .bind(projectId)
@@ -1331,6 +1341,10 @@ function serializeSchedule(s: ScheduledPublishRow) {
     snapshotId: s.snapshot_id,
     scheduledFor: s.scheduled_for,
     ignoreWarnings: s.ignore_warnings === 1,
+    // The ID-stability gates the user acknowledged at schedule time; the cron
+    // replays exactly these into performPublish and nothing more.
+    ignoreRtBreakage: s.ignore_rt_breakage === 1,
+    ignoreAgencyChurn: s.ignore_agency_churn === 1,
     status: s.status,
     failureReason: s.failure_reason,
   };
@@ -1608,6 +1622,8 @@ projectsRouter.post('/:id/publish/schedule', async (c) => {
   let snapshotId: string;
   let scheduledFor: number;
   let ignoreWarnings = false;
+  let ignoreRtBreakage = false;
+  let ignoreAgencyChurn = false;
   let incomingZip: ArrayBuffer | null = null;
   if (contentType.includes('multipart/form-data')) {
     const parsed = (await c.req.parseBody({ all: false })) as Record<string, string | File>;
@@ -1619,6 +1635,8 @@ projectsRouter.post('/:id/publish/schedule', async (c) => {
     snapshotId = metaResult.data.snapshotId;
     scheduledFor = metaResult.data.scheduledFor;
     ignoreWarnings = metaResult.data.ignoreWarnings ?? false;
+    ignoreRtBreakage = metaResult.data.ignoreRtBreakage ?? false;
+    ignoreAgencyChurn = metaResult.data.ignoreAgencyChurn ?? false;
     if (zipPart && typeof zipPart !== 'string') {
       incomingZip = await (zipPart as Blob).arrayBuffer();
       if (incomingZip.byteLength === 0) throw validationFailed('Empty zip');
@@ -1629,6 +1647,8 @@ projectsRouter.post('/:id/publish/schedule', async (c) => {
     snapshotId = body.snapshotId;
     scheduledFor = body.scheduledFor;
     ignoreWarnings = body.ignoreWarnings ?? false;
+    ignoreRtBreakage = body.ignoreRtBreakage ?? false;
+    ignoreAgencyChurn = body.ignoreAgencyChurn ?? false;
   }
 
   if (scheduledFor <= now + 60_000) {
@@ -1644,6 +1664,23 @@ projectsRouter.post('/:id/publish/schedule', async (c) => {
       validationWarnings: snapshot.validation_warnings,
     });
   }
+
+  // ID-stability gates — the SAME evaluation performPublish runs, but here, while
+  // the user is at the keyboard. Without this, a scheduled publish that churns an
+  // agency_id (or breaks an RT feed) would fail unattended at fire time with no
+  // way to have acknowledged it in advance. The 409s are identical, so the
+  // client's existing acknowledge-and-retry modals work unchanged; the retry
+  // carries ignoreRtBreakage/ignoreAgencyChurn, which we persist below.
+  //
+  // Runs BEFORE any write, so a 409 leaves the existing pending schedule and the
+  // snapshot's stored ZIP untouched.
+  await assertIdStable(c.env, {
+    projectId: project.id,
+    snapshot,
+    existingPublication,
+    ignoreRtBreakage,
+    ignoreAgencyChurn,
+  });
 
   // Persist the rendered ZIP on the snapshot so the cron can publish it. If no
   // zip was supplied, the snapshot must already carry one (e.g. re-scheduling).
@@ -1664,16 +1701,29 @@ projectsRouter.post('/:id/publish/schedule', async (c) => {
 
   const schedId = ulid();
   await c.env.DB.prepare(
-    `INSERT INTO scheduled_publish (id, project_id, snapshot_id, scheduled_for, ignore_warnings, status, scheduled_by_user_id, created_at)
-     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`,
-  ).bind(schedId, project.id, snapshot.id, scheduledFor, ignoreWarnings ? 1 : 0, user.id, now).run();
+    `INSERT INTO scheduled_publish (id, project_id, snapshot_id, scheduled_for, ignore_warnings,
+                                    ignore_rt_breakage, ignore_agency_churn, status, scheduled_by_user_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+  )
+    .bind(
+      schedId,
+      project.id,
+      snapshot.id,
+      scheduledFor,
+      ignoreWarnings ? 1 : 0,
+      ignoreRtBreakage ? 1 : 0,
+      ignoreAgencyChurn ? 1 : 0,
+      user.id,
+      now,
+    )
+    .run();
 
   await logAudit(c.env, {
     actorUserId: user.id,
     subjectType: 'publication',
     subjectId: project.id,
     action: 'project.schedule_publish',
-    metadata: { snapshotId: snapshot.id, scheduledFor },
+    metadata: { snapshotId: snapshot.id, scheduledFor, ignoreRtBreakage, ignoreAgencyChurn },
     ip: clientIp(c.req.raw),
   });
 
@@ -1683,6 +1733,8 @@ projectsRouter.post('/:id/publish/schedule', async (c) => {
       snapshotId: snapshot.id,
       scheduledFor,
       ignoreWarnings,
+      ignoreRtBreakage,
+      ignoreAgencyChurn,
       status: 'pending',
       failureReason: null,
     },

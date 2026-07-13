@@ -9,12 +9,12 @@
 // function performs the publish itself, identically for both paths.
 import { ulid } from 'ulidx';
 import type { Env } from '../env';
-import { diffRemovedIds, isEmpty as rtReportEmpty, type RtBreakageReport } from './idStability';
+import { assertIdStable } from './idStability';
 import { submitToCatalogs } from './submit';
 import { getFeedBlob, publicationZipKey, putFeedBlob } from '../projects/r2';
 import { loadFeedStateFromKey, maybeRegenerateThumbnail } from '../embeds/thumbnail';
 import { logAudit } from '../util/audit';
-import { validationFailed, notFound, rtBreakage, agencyIdChurn } from '../util/errors';
+import { validationFailed, notFound } from '../util/errors';
 
 export interface PublishProject {
   id: string;
@@ -82,63 +82,21 @@ export async function performPublish(env: Env, input: PerformPublishInput): Prom
     });
   }
 
-  // ─── ID-stability gates ─────────────────────────────────────────────────────
+  // ─── ID-stability gates (rt_breakage BE-88 + agency_id_churn C2) ────────────
   //
-  // Both gates read the SAME diff (old published state − new snapshot state),
-  // so we load and diff at most once per publish:
-  //
-  //   1. rt_breakage (BE-88) — the harder gate, and therefore checked first.
-  //      Only applies when the project has externally-hosted (managed=0) RT
-  //      feeds: dropping an agency/route/stop/trip id out from under someone
-  //      else's RT producer breaks it. Any removed id trips it.
-  //
-  //   2. agency_id_churn (C2) — applies to EVERY project, RT or not. FTA's
-  //      enhanced P-50 form crosswalks a published feed to its NTD ID by
-  //      agency_id, so removing/renaming an agency_id quietly breaks the NTD
-  //      crosswalk (and any consumer keyed on agency_id). Only the `agencies`
-  //      slice of the diff matters here.
-  //
-  // Both are advisory: the caller acknowledges and re-publishes with the
-  // matching ignore flag. Both are skipped on a first publish and on a
-  // re-publish of the already-published snapshot (nothing can have changed).
-  const snapshotChanged = !!existingPublication && existingPublication.snapshot_id !== snapshot.id;
-  if (existingPublication && snapshotChanged && (!ignoreRtBreakage || !ignoreAgencyChurn)) {
-    const rtCount = await env.DB.prepare(
-      `SELECT COUNT(*) AS n FROM project_rt_feed WHERE project_id = ? AND managed = 0`,
-    )
-      .bind(project.id)
-      .first<{ n: number }>();
-    const rtGateApplies = (rtCount?.n ?? 0) > 0 && !ignoreRtBreakage;
-    const churnGateApplies = !ignoreAgencyChurn;
-
-    if (rtGateApplies || churnGateApplies) {
-      const prior = await env.DB.prepare(
-        `SELECT state_r2_key FROM feed_snapshot WHERE id = ? AND project_id = ?`,
-      )
-        .bind(existingPublication.snapshot_id, project.id)
-        .first<{ state_r2_key: string }>();
-      if (prior) {
-        const removed: RtBreakageReport = await diffRemovedIds(
-          env,
-          prior.state_r2_key,
-          snapshot.state_r2_key,
-        );
-        if (rtGateApplies && !rtReportEmpty(removed)) {
-          throw rtBreakage({
-            removed: {
-              agencies: removed.agencies,
-              routes: removed.routes,
-              stops: removed.stops,
-              trips: removed.trips,
-            },
-          });
-        }
-        if (churnGateApplies && removed.agencies.length > 0) {
-          throw agencyIdChurn({ removed: { agencies: removed.agencies } });
-        }
-      }
-    }
-  }
+  // One shared evaluation (worker/publication/idStability.ts → assertIdStable),
+  // also run by the schedule endpoint at SCHEDULE time so a scheduled publish is
+  // acknowledged while the user is still at the keyboard. The cron replays those
+  // persisted acknowledgements through here — so a gate that fires at fire time
+  // means the diff CHANGED since scheduling (someone published something else in
+  // between, moving the baseline), and the schedule correctly fails.
+  await assertIdStable(env, {
+    projectId: project.id,
+    snapshot,
+    existingPublication,
+    ignoreRtBreakage,
+    ignoreAgencyChurn,
+  });
 
   // Copy the rendered ZIP into the publication slot in R2.
   const pubKey = publicationZipKey(project.id, snapshot.id);

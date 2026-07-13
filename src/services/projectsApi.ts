@@ -429,6 +429,9 @@ export interface ScheduledPublishInfo {
   snapshotId: string;
   scheduledFor: number; // unix ms
   ignoreWarnings: boolean;
+  /** ID-stability gates acknowledged at schedule time; the cron replays these. */
+  ignoreRtBreakage: boolean;
+  ignoreAgencyChurn: boolean;
   status: 'pending' | 'executed' | 'cancelled' | 'failed';
   failureReason: string | null;
 }
@@ -556,14 +559,31 @@ export function getEmbedImpressions(
   );
 }
 
+export interface SchedulePublishInput {
+  snapshotId: string;
+  scheduledFor: number;
+  ignoreWarnings?: boolean;
+  /**
+   * The schedule endpoint runs the SAME ID-stability gates as an immediate
+   * publish (409 `rt_breakage` / 409 `agency_id_churn`) — at schedule time,
+   * while the user is present to acknowledge them. The acknowledgement is
+   * persisted on the scheduled row and replayed by the cron at fire time.
+   */
+  ignoreRtBreakage?: boolean;
+  ignoreAgencyChurn?: boolean;
+  zip?: Blob;
+}
+
 export function schedulePublish(
   projectId: string,
-  input: { snapshotId: string; scheduledFor: number; ignoreWarnings?: boolean; zip?: Blob },
+  input: SchedulePublishInput,
 ): Promise<{ scheduled: ScheduledPublishInfo }> {
   const meta = {
     snapshotId: input.snapshotId,
     scheduledFor: input.scheduledFor,
     ignoreWarnings: input.ignoreWarnings,
+    ignoreRtBreakage: input.ignoreRtBreakage,
+    ignoreAgencyChurn: input.ignoreAgencyChurn,
   };
   if (input.zip) {
     // The cron has no client to render the GTFS ZIP at fire time, so we upload

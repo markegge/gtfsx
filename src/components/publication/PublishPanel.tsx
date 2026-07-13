@@ -97,6 +97,32 @@ interface IgnoreFlags {
   ignoreAgencyChurn?: boolean;
 }
 
+// Publishing now and scheduling a publish trip the SAME two 409 gates
+// (rt_breakage, agency_id_churn) against the same baseline — the server runs one
+// shared check for both. So both are modelled as one retryable action: a gate
+// 409 parks the action, the modal collects the acknowledgement, and we replay the
+// action verbatim with the extra flag. For a schedule, the acknowledgement is
+// persisted server-side and replayed by the cron at fire time — which is the
+// whole point: at fire time the user is asleep and cannot acknowledge anything.
+type PendingAction =
+  | { kind: 'publish'; snapshotId: string; flags: IgnoreFlags }
+  | { kind: 'schedule'; snapshotId: string; scheduledFor: number; flags: IgnoreFlags };
+
+function withFlag(action: PendingAction, flag: keyof IgnoreFlags): PendingAction {
+  const flags: IgnoreFlags = { ...action.flags, [flag]: true };
+  return action.kind === 'publish' ? { ...action, flags } : { ...action, flags };
+}
+
+/** Ack suffixes, shared by the publish + schedule success banners. */
+function ackNotes(flags: IgnoreFlags): string[] {
+  const notes: string[] = [];
+  if (flags.ignoreRtBreakage) notes.push('GTFS-RT breakage acknowledged.');
+  if (flags.ignoreAgencyChurn) {
+    notes.push('agency_id change acknowledged — update your NTD P-50 crosswalk.');
+  }
+  return notes;
+}
+
 export function PublishPanel() {
   const projectId = useStore((s) => s.activeServerProjectId);
   const snapshotList = useStore((s) => s.snapshotList);
@@ -122,13 +148,11 @@ export function PublishPanel() {
   const [unpublishConfirm, setUnpublishConfirm] = useState(false);
   const [rtBreakage, setRtBreakage] = useState<{
     removed: RemovedIds;
-    snapshotId: string;
-    flags: IgnoreFlags;
+    action: PendingAction;
   } | null>(null);
   const [agencyChurn, setAgencyChurn] = useState<{
     agencies: string[];
-    snapshotId: string;
-    flags: IgnoreFlags;
+    action: PendingAction;
   } | null>(null);
   const [publishErrors, setPublishErrors] = useState<string[] | null>(null);
   const [scheduled, setScheduled] = useState<ScheduledPublishInfo | null>(null);
@@ -178,11 +202,11 @@ export function PublishPanel() {
     );
   }
 
-  // One publish path for every entry point (fresh publish, "publish anyway"
-  // after an rt_breakage ack, "publish anyway" after an agency_id_churn ack).
-  // `flags` carries the acknowledgements accumulated so far, so acking one
-  // warning and then tripping the other keeps the first ack.
-  const doPublish = async (snapshotId: string, flags: IgnoreFlags, successMessage: string) => {
+  // One path for every entry point — publish now, schedule for later, and the
+  // "…anyway" retries after an rt_breakage or agency_id_churn acknowledgement.
+  // `action.flags` carries the acks accumulated so far, so acking one gate and
+  // then tripping the other keeps the first ack.
+  const runAction = async (action: PendingAction) => {
     if (!projectId) return;
     setBusy(true);
     setBanner(null);
@@ -190,21 +214,43 @@ export function PublishPanel() {
     setRtBreakage(null);
     setAgencyChurn(null);
     try {
-      const zip = await renderSnapshotZip(projectId, snapshotId);
-      const result = await publishProject(projectId, {
-        snapshotId,
-        ignoreWarnings: ignoreWarnings || undefined,
-        ...flags,
-        // Project the feed's license onto the publication so feed_info.json and
-        // dmfr.json can carry it.
-        licenseSpdx: licenseSpdx ?? null,
-        zip,
-      });
-      setBanner({
-        kind: 'success',
-        message: successMessage,
-        url: result.publication.canonicalUrl,
-      });
+      // Render the ZIP now, for both paths: the cron has no client to render at
+      // fire time, so a scheduled publish's bytes are captured at schedule time.
+      const zip = await renderSnapshotZip(projectId, action.snapshotId);
+      if (action.kind === 'publish') {
+        const result = await publishProject(projectId, {
+          snapshotId: action.snapshotId,
+          ignoreWarnings: ignoreWarnings || undefined,
+          ...action.flags,
+          // Project the feed's license onto the publication so feed_info.json and
+          // dmfr.json can carry it.
+          licenseSpdx: licenseSpdx ?? null,
+          zip,
+        });
+        setBanner({
+          kind: 'success',
+          message: ['Feed published.', ...ackNotes(action.flags)].join(' '),
+          url: result.publication.canonicalUrl,
+        });
+      } else {
+        await schedulePublish(projectId, {
+          snapshotId: action.snapshotId,
+          scheduledFor: action.scheduledFor,
+          ignoreWarnings: ignoreWarnings || undefined,
+          // Persisted on the scheduled row and replayed by the cron at fire time.
+          ...action.flags,
+          zip,
+        });
+        setBanner({
+          kind: 'success',
+          message: [
+            `Scheduled to publish on ${formatDate(action.scheduledFor)}.`,
+            ...ackNotes(action.flags),
+          ].join(' '),
+        });
+        setScheduleMode(false);
+        setScheduleAt('');
+      }
       setIgnoreWarnings(false);
       await refresh();
     } catch (err) {
@@ -212,9 +258,9 @@ export function PublishPanel() {
         const code = err.code as string;
         const removed = (err.extra?.removed ?? {}) as RemovedIds;
         if (code === 'rt_breakage') {
-          setRtBreakage({ removed, snapshotId, flags });
+          setRtBreakage({ removed, action });
         } else if (code === 'agency_id_churn') {
-          setAgencyChurn({ agencies: removed.agencies ?? [], snapshotId, flags });
+          setAgencyChurn({ agencies: removed.agencies ?? [], action });
         } else if (code === 'validation_failed') {
           const issues = (err.extra?.issues as unknown[]) ?? [];
           const errList: string[] = [err.message];
@@ -229,7 +275,10 @@ export function PublishPanel() {
           setBanner({ kind: 'error', message: err.message });
         }
       } else {
-        setBanner({ kind: 'error', message: 'Publish failed' });
+        setBanner({
+          kind: 'error',
+          message: action.kind === 'publish' ? 'Publish failed' : 'Could not schedule publish',
+        });
       }
     } finally {
       setBusy(false);
@@ -238,25 +287,17 @@ export function PublishPanel() {
 
   const handlePublish = async () => {
     if (!selectedSnapshot) return;
-    await doPublish(selectedSnapshot.id, {}, 'Feed published.');
+    await runAction({ kind: 'publish', snapshotId: selectedSnapshot.id, flags: {} });
   };
 
-  const handlePublishIgnoringRt = async () => {
+  const handleIgnoreRtBreakage = async () => {
     if (!rtBreakage) return;
-    await doPublish(
-      rtBreakage.snapshotId,
-      { ...rtBreakage.flags, ignoreRtBreakage: true },
-      'Feed published. GTFS-RT breakage acknowledged.',
-    );
+    await runAction(withFlag(rtBreakage.action, 'ignoreRtBreakage'));
   };
 
-  const handlePublishIgnoringChurn = async () => {
+  const handleIgnoreAgencyChurn = async () => {
     if (!agencyChurn) return;
-    await doPublish(
-      agencyChurn.snapshotId,
-      { ...agencyChurn.flags, ignoreAgencyChurn: true },
-      'Feed published. agency_id change acknowledged — update your NTD P-50 crosswalk.',
-    );
+    await runAction(withFlag(agencyChurn.action, 'ignoreAgencyChurn'));
   };
 
   const handleUnpublish = async () => {
@@ -314,6 +355,9 @@ export function PublishPanel() {
     }
   };
 
+  // Scheduling runs the same ID-stability gates as an immediate publish, so it
+  // can 409 and open the same modals — the user acknowledges NOW, while they're
+  // here, and the cron replays the acknowledgement when it fires.
   const handleSchedule = async () => {
     if (!selectedSnapshot || !projectId) return;
     const ms = fromLocalDatetimeInput(scheduleAt);
@@ -321,29 +365,12 @@ export function PublishPanel() {
       setBanner({ kind: 'error', message: 'Pick a date and time to schedule.' });
       return;
     }
-    setBusy(true);
-    setBanner(null);
-    setPublishErrors(null);
-    try {
-      // Render the ZIP now and upload it — the cron has no client to render at
-      // fire time, so the rendered bytes are captured at schedule time.
-      const zip = await renderSnapshotZip(projectId, selectedSnapshot.id);
-      await schedulePublish(projectId, {
-        snapshotId: selectedSnapshot.id,
-        scheduledFor: ms,
-        ignoreWarnings: selectedSnapshot.validationWarnings > 0 ? ignoreWarnings : undefined,
-        zip,
-      });
-      setBanner({ kind: 'success', message: `Scheduled to publish on ${formatDate(ms)}.` });
-      setScheduleMode(false);
-      setScheduleAt('');
-      setIgnoreWarnings(false);
-      await refresh();
-    } catch (err) {
-      setBanner({ kind: 'error', message: err instanceof ApiError ? err.message : 'Could not schedule publish' });
-    } finally {
-      setBusy(false);
-    }
+    await runAction({
+      kind: 'schedule',
+      snapshotId: selectedSnapshot.id,
+      scheduledFor: ms,
+      flags: {},
+    });
   };
 
   const handleCancelSchedule = async () => {
@@ -653,18 +680,20 @@ export function PublishPanel() {
       {rtBreakage && (
         <RtBreakageModal
           removed={rtBreakage.removed}
+          mode={rtBreakage.action.kind}
           busy={busy}
           onCancel={() => setRtBreakage(null)}
-          onConfirm={handlePublishIgnoringRt}
+          onConfirm={handleIgnoreRtBreakage}
         />
       )}
 
       {agencyChurn && (
         <AgencyChurnModal
           agencies={agencyChurn.agencies}
+          mode={agencyChurn.action.kind}
           busy={busy}
           onCancel={() => setAgencyChurn(null)}
-          onConfirm={handlePublishIgnoringChurn}
+          onConfirm={handleIgnoreAgencyChurn}
         />
       )}
 
@@ -860,13 +889,36 @@ function HistoryActionBadge({ action }: { action: string }) {
   return <Badge variant="info">{action}</Badge>;
 }
 
+// Both gate modals serve two callers: "Publish now" and "Schedule publish". In
+// schedule mode the acknowledgement is stored and replayed by the cron, so the
+// copy says so — the user is agreeing to something that happens later.
+type GateMode = 'publish' | 'schedule';
+
+const confirmLabel = (mode: GateMode, busy: boolean): string => {
+  if (mode === 'schedule') return busy ? 'Scheduling…' : 'Schedule anyway';
+  return busy ? 'Publishing…' : 'Publish anyway';
+};
+
+function ScheduleAckNote({ mode }: { mode: GateMode }) {
+  if (mode !== 'schedule') return null;
+  return (
+    <p className="text-xs text-warm-gray mb-4 px-3 py-2 rounded-md bg-cream border border-sand">
+      We check this now because nobody is here to ask when the schedule fires. Acknowledging is
+      recorded with the schedule and applied at publish time. If your published feed changes before
+      then, we'll re-check and hold the publish rather than publish something you didn't agree to.
+    </p>
+  );
+}
+
 function RtBreakageModal({
   removed,
+  mode,
   onCancel,
   onConfirm,
   busy,
 }: {
   removed: RemovedIds;
+  mode: GateMode;
   onCancel: () => void;
   onConfirm: () => void;
   busy: boolean;
@@ -889,6 +941,7 @@ function RtBreakageModal({
           references. Downstream trip-update and vehicle-position consumers may break until your RT
           producer catches up.
         </p>
+        <ScheduleAckNote mode={mode} />
         <div className="max-h-64 overflow-auto bg-cream border border-sand rounded-md p-3 text-xs font-mono text-dark-brown">
           {sections.map(([label, ids]) =>
             ids && ids.length > 0 ? (
@@ -915,7 +968,7 @@ function RtBreakageModal({
             Cancel
           </AuthButton>
           <AuthButton variant="danger" onClick={onConfirm} disabled={busy}>
-            {busy ? 'Publishing…' : 'Publish anyway'}
+            {confirmLabel(mode, busy)}
           </AuthButton>
         </div>
       </div>
@@ -929,11 +982,13 @@ function RtBreakageModal({
 // the NTD crosswalk even for feeds with no GTFS-Realtime at all.
 function AgencyChurnModal({
   agencies,
+  mode,
   onCancel,
   onConfirm,
   busy,
 }: {
   agencies: string[];
+  mode: GateMode;
   onCancel: () => void;
   onConfirm: () => void;
   busy: boolean;
@@ -955,8 +1010,10 @@ function AgencyChurnModal({
         <p className="text-sm text-warm-gray mb-4">
           The safe fix is to keep the existing <code className="font-mono">agency_id</code> values
           and change <code className="font-mono">agency_name</code> instead. If the change is
-          intentional, publish anyway — then refile your P-50 with the new IDs.
+          intentional, {mode === 'schedule' ? 'schedule' : 'publish'} anyway — then refile your P-50
+          with the new IDs.
         </p>
+        <ScheduleAckNote mode={mode} />
         <div className="max-h-48 overflow-auto bg-cream border border-sand rounded-md p-3 text-xs font-mono text-dark-brown">
           <div className="font-heading font-bold text-warm-gray uppercase tracking-wide text-[10px] mb-1">
             Removed agency_id ({agencies.length})
@@ -977,7 +1034,7 @@ function AgencyChurnModal({
             Cancel
           </AuthButton>
           <AuthButton variant="danger" onClick={onConfirm} disabled={busy}>
-            {busy ? 'Publishing…' : 'Publish anyway'}
+            {confirmLabel(mode, busy)}
           </AuthButton>
         </div>
       </div>

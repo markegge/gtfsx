@@ -23,13 +23,22 @@ export type ErrorCode =
   | 'internal';
 
 export class ApiError extends HTTPException {
+  /** The machine-readable code, also carried in the JSON body's `error` key. */
+  readonly code: ErrorCode;
+
   constructor(status: 400 | 401 | 402 | 403 | 404 | 409 | 410 | 413 | 422 | 429 | 500 | 502 | 503, code: ErrorCode, message: string, extra?: Record<string, unknown>) {
     super(status, {
+      // Populates Error.message. Hono's getResponse() returns `res` verbatim
+      // when supplied, so the wire format is unchanged — but non-HTTP callers
+      // (the scheduled-publish cron, which records a failure_reason) now get a
+      // real message instead of an empty string.
+      message,
       res: new Response(JSON.stringify({ error: code, message, ...extra }), {
         status,
         headers: { 'Content-Type': 'application/json' },
       }),
     });
+    this.code = code;
   }
 }
 

@@ -11,6 +11,7 @@
 import type { Env } from '../env';
 import { deleteProjectBlobs } from '../projects/r2';
 import { performPublish } from '../publication/performPublish';
+import { ApiError } from '../util/errors';
 import { requirePublishAccess } from '../billing/middleware';
 import type { OwnerType } from '../projects/quotas';
 import { sendOwnerDigest, type OwnerDigestMetrics } from '../email';
@@ -384,17 +385,35 @@ export async function runOwnerDigest(env: Env): Promise<OwnerDigestResult> {
 // uses. Each row is isolated — a failure marks just that row 'failed' (with a
 // reason) and never blocks the others. Access is re-checked at execution time
 // because the owner's plan/quota can change after scheduling.
+//
+// ID-stability acknowledgements: the schedule endpoint runs the same
+// rt_breakage / agency_id_churn gates the publish route does, so the user
+// acknowledges them while they're present; the acks land on the row
+// (ignore_rt_breakage / ignore_agency_churn, migration 0025) and we replay
+// EXACTLY those here — never more. performPublish re-runs the gates against the
+// CURRENT publication, so if the baseline moved after scheduling (someone
+// published something else in between) and un-acknowledged churn appears, the
+// gate still fires and this row fails with the reason recorded.
+interface DueSchedule {
+  id: string;
+  project_id: string;
+  snapshot_id: string;
+  ignore_warnings: number;
+  ignore_rt_breakage: number;
+  ignore_agency_churn: number;
+}
+
 export async function publishDueSchedules(env: Env): Promise<{ published: number; failed: number }> {
   const now = Date.now();
   const due = await env.DB.prepare(
-    `SELECT id, project_id, snapshot_id, ignore_warnings
+    `SELECT id, project_id, snapshot_id, ignore_warnings, ignore_rt_breakage, ignore_agency_churn
        FROM scheduled_publish
       WHERE status = 'pending' AND scheduled_for <= ?
       ORDER BY scheduled_for ASC
       LIMIT 100`,
   )
     .bind(now)
-    .all<{ id: string; project_id: string; snapshot_id: string; ignore_warnings: number }>();
+    .all<DueSchedule>();
 
   let published = 0;
   let failed = 0;
@@ -407,7 +426,7 @@ export async function publishDueSchedules(env: Env): Promise<{ published: number
       published += 1;
     } catch (err) {
       failed += 1;
-      const reason = err instanceof Error ? err.message : String(err);
+      const reason = scheduleFailureReason(err);
       console.error(`[scheduled-publish] ${row.id} failed:`, reason);
       await env.DB.prepare(
         `UPDATE scheduled_publish SET status = 'failed', failure_reason = ?, executed_at = ? WHERE id = ?`,
@@ -417,10 +436,19 @@ export async function publishDueSchedules(env: Env): Promise<{ published: number
   return { published, failed };
 }
 
-async function runOneScheduledPublish(
-  env: Env,
-  row: { id: string; project_id: string; snapshot_id: string; ignore_warnings: number },
-): Promise<void> {
+/**
+ * A human-readable failure reason for the scheduled_publish row — this is what
+ * the Publish panel shows the user next time they look. API errors (a tripped
+ * ID-stability gate, a plan downgrade, a missing ZIP) carry their machine code
+ * so the reason is unambiguous: "agency_id_churn: This snapshot removes …".
+ */
+function scheduleFailureReason(err: unknown): string {
+  if (err instanceof ApiError) return `${err.code}: ${err.message}`;
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+async function runOneScheduledPublish(env: Env, row: DueSchedule): Promise<void> {
   const project = await env.DB.prepare(
     `SELECT id, slug, name, owner_type, owner_id FROM feed_project WHERE id = ? AND deleted_at IS NULL`,
   )
@@ -459,6 +487,11 @@ async function runOneScheduledPublish(
     snapshot,
     existingPublication,
     ignoreWarnings: row.ignore_warnings === 1,
+    // Replay only what the user acknowledged at schedule time. NOT a blanket
+    // auto-ack: performPublish still evaluates both gates, so churn introduced
+    // after scheduling (a moved baseline) throws and fails this row.
+    ignoreRtBreakage: row.ignore_rt_breakage === 1,
+    ignoreAgencyChurn: row.ignore_agency_churn === 1,
     actorUserId: null, // system-initiated
     feedsOrigin: env.FEEDS_ORIGIN,
     runBackground: (p) => background.push(p),

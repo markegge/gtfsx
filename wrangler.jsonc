@@ -121,7 +121,7 @@
     // signup widget). ⚠️ Empty here => the /book-demo widget is skipped AND the
     // POST /api/demo-leads handler skips Turnstile verification. Populate it
     // wherever TURNSTILE_SECRET_KEY is set so the form is bot-gated.
-    "TURNSTILE_SITE_KEY": ""
+    "TURNSTILE_SITE_KEY": "0x4AAAAAADLpCWm4g4Q3zl6V"
     // Secrets (set via `wrangler secret put`):
     //   RESEND_API_KEY
     //   MOBILITY_DATABASE_REFRESH_TOKEN  (already set)

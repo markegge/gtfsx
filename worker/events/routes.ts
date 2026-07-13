@@ -21,9 +21,10 @@ const TrackSchema = z.object({
   // page_view is the original signal; the others feed the marketing funnel
   // (editor sessions, exports, paywall intent, marketing-CTA clicks). See
   // migration 0013. `kind` is a plain TEXT column — new kinds need no migration.
-  // demo_request is normally written server-side by GET /book-demo
-  // (worker/marketing/bookDemo.ts); it's listed here for kind parity with
-  // src/services/trackBeacon.ts — the client has no beacon call site for it.
+  // demo_request is normally written server-side by the /book-demo lead-form
+  // submit (POST /api/demo-leads, worker/marketing/demoLead.ts); it's listed
+  // here for kind parity with src/services/trackBeacon.ts — the client has no
+  // beacon call site for it.
   kind: z.enum(['page_view', 'editor_loaded', 'feed_exported', 'paywall_view', 'cta_click', 'demo_request']),
   path: z.string().min(1).max(512),
   ref: z.string().min(1).max(128).nullable().optional(),

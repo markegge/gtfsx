@@ -258,10 +258,10 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext):
       }
     }
 
-    // Demo-booking funnel: /book-demo?src=<placement>&gclid=... records a
-    // first-party demo_request conversion event, then 302s to the booking
-    // page. The handler never throws — insert errors are swallowed inside so
-    // the redirect always happens. See worker/marketing/bookDemo.ts.
+    // Demo-request funnel: GET /book-demo?src=<placement>&gclid=... serves the
+    // lead form (worker-rendered, noindex). The form POSTs to /api/demo-leads,
+    // which stores the lead, emits the demo_request conversion, and offers the
+    // booking calendar on the thank-you state. See worker/marketing/bookDemo.ts.
     if (
       request.method === 'GET' &&
       (url.pathname === '/book-demo' || url.pathname === '/book-demo/')

@@ -423,12 +423,16 @@ import { billingRouter } from './billing/routes';
 import { eventsRouter } from './events/routes';
 import { importRouter } from './import/routes';
 import { forumRouter } from './forum/routes';
+import { demoLeadRouter } from './marketing/demoLead';
 apiRouter.route('/orgs', orgsRouter);
 apiRouter.route('/admin', adminRouter);
 apiRouter.route('/billing', billingRouter);
 apiRouter.route('/events', eventsRouter);
 apiRouter.route('/import', importRouter);
 apiRouter.route('/forum', forumRouter);
+// /book-demo lead form submit (the demo_request conversion emission). Public,
+// cookieless; inherits the X-GB-Client CSRF check. See worker/marketing/demoLead.ts.
+apiRouter.route('/demo-leads', demoLeadRouter);
 // Publication and distribution endpoints hang off the projects router
 // (/api/projects/:id/publish, /catalog-submissions, etc.) so project-ownership
 // checks stay co-located with their endpoints. See worker/projects/routes.ts.

@@ -72,7 +72,7 @@ describe('/api/events/track gclid persistence', () => {
     expect(row!.gclid).toBeNull();
   });
 
-  it('accepts kind=demo_request (parity with the server-side /book-demo writer)', async () => {
+  it('accepts kind=demo_request (parity with the /book-demo lead-form writer)', async () => {
     const client = makeClient();
     const res = await client.post('/api/events/track', {
       kind: 'demo_request',

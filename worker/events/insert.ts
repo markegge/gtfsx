@@ -1,7 +1,7 @@
 // Shared `event` INSERT. One place owns the column list so the two write
 // paths — the client beacon endpoint (worker/events/routes.ts) and
-// server-side conversion events like GET /book-demo
-// (worker/marketing/bookDemo.ts) — can't drift.
+// server-side conversion events like the demo_request lead-form submit
+// (worker/marketing/demoLead.ts) — can't drift.
 //
 // Same privacy contract as the beacon: no IP, no User-Agent, no user id
 // stored. See worker/migrations/0007_events.sql.

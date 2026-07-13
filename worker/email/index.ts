@@ -224,6 +224,47 @@ export async function sendUpgradeNotification(
   });
 }
 
+// Internal notification to the GTFS·X owner inbox whenever someone submits the
+// /book-demo lead form (POST /api/demo-leads). Fired best-effort by the lead
+// handler and no-op when OWNER_NOTIFY_EMAIL isn't configured. `reply_to` is set
+// to the lead's own email so the owner can reply straight to them.
+export async function sendDemoLeadNotification(
+  env: Env,
+  lead: { name: string; email: string; org: string; message: string | null; src: string | null },
+): Promise<void> {
+  const to = env.OWNER_NOTIFY_EMAIL;
+  if (!to) return;
+  const name = escapeHtml(lead.name);
+  const email = escapeHtml(lead.email);
+  const org = escapeHtml(lead.org);
+  const src = lead.src ? escapeHtml(lead.src) : '—';
+  const messageHtml = lead.message
+    ? `<p style="margin: 14px 0 0;"><strong>What they want to see:</strong><br />${escapeHtml(lead.message)}</p>`
+    : '';
+  await send(env, {
+    to,
+    subject: `New demo request: ${lead.org} (${lead.email})`,
+    replyTo: lead.email,
+    html: wrap(`
+      <p>📅 A new demo request came in from the /book-demo form.</p>
+      <p><strong>Name:</strong> ${name}<br />
+         <strong>Email:</strong> ${email}<br />
+         <strong>Agency / org:</strong> ${org}<br />
+         <strong>Source:</strong> ${src}</p>
+      ${messageHtml}
+      <p style="color: #666; font-size: 13px; margin: 18px 0 0;">Reply to this email to reach them directly.</p>
+    `),
+    text:
+      `New demo request from the /book-demo form.\n\n` +
+      `Name:        ${lead.name}\n` +
+      `Email:       ${lead.email}\n` +
+      `Agency/org:  ${lead.org}\n` +
+      `Source:      ${lead.src ?? '—'}\n` +
+      (lead.message ? `\nWhat they want to see:\n${lead.message}\n` : '') +
+      `\nReply to this email to reach them directly.`,
+  });
+}
+
 /** Metrics rendered by the daily owner digest. Computed in worker/cron/tasks.ts. */
 export interface OwnerDigestMetrics {
   /** New user rows created in the last 24h (matches Admin "signups"). */

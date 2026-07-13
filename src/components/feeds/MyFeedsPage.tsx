@@ -9,8 +9,6 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Modal } from '../ui/Modal';
 import { EmptyState } from '../ui/EmptyState';
 import { Badge } from '../ui/Badge';
-import { AppBrand } from '../layout/AppBrand';
-import { UserMenu } from '../layout/UserMenu';
 import {
   createProject,
   deleteProject,
@@ -309,14 +307,8 @@ export function MyFeedsPage() {
   }
 
   return (
-    <div className="min-h-full bg-cream">
-      <header className="h-14 bg-white border-b border-sand flex items-center px-3 sm:px-5 gap-2 sm:gap-3 shrink-0">
-        <AppBrand mode="link" showTagline={false} />
-        <div className="flex-1" />
-        <UserMenu />
-      </header>
-
-      <main className="max-w-5xl mx-auto px-6 py-8">
+    <>
+      <AuthLayout wide bare>
         <div className="flex items-start justify-between mb-6">
           <div>
             <h1 className="font-heading font-extrabold text-3xl text-dark-brown">
@@ -454,7 +446,7 @@ export function MyFeedsPage() {
             onRestore={handleRestoreFromTrash}
           />
         )}
-      </main>
+      </AuthLayout>
 
       {showCreate && (
         <CreateFeedDialog
@@ -618,7 +610,7 @@ export function MyFeedsPage() {
           </button>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

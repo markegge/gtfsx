@@ -4,8 +4,7 @@ import { useStore } from '../../store';
 import { AuthLayout } from '../auth/AuthLayout';
 import { AuthButton } from '../auth/AuthButton';
 import { FormField } from '../ui/FormField';
-import { AppBrand } from '../layout/AppBrand';
-import { UserMenu, RoleBadge } from '../layout/UserMenu';
+import { RoleBadge } from '../layout/UserMenu';
 import { ApiError } from '../../services/authApi';
 import {
   createInvitation,
@@ -435,17 +434,16 @@ export function OrgSettingsPage() {
   };
 
   return (
-    <div className="min-h-full bg-cream">
-      <header className="h-14 bg-white border-b border-sand flex items-center px-3 sm:px-5 gap-2 sm:gap-3 shrink-0">
-        <AppBrand mode="link" showTagline={false} />
-        <Link to="/feeds" className="text-sm text-warm-gray hover:text-coral transition-colors whitespace-nowrap ml-2">
-          ← My Feeds
-        </Link>
-        <div className="flex-1" />
-        <UserMenu />
-      </header>
-
-      <main className="max-w-4xl mx-auto px-6 py-8">
+    <>
+      <AuthLayout
+        wide
+        bare
+        headerExtra={
+          <Link to="/feeds" className="text-sm text-warm-gray hover:text-coral transition-colors whitespace-nowrap ml-2">
+            ← My Feeds
+          </Link>
+        }
+      >
         <div className="bg-white border border-sand rounded-2xl p-6 mb-5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
@@ -714,7 +712,7 @@ export function OrgSettingsPage() {
             </AuthButton>
           </section>
         )}
-      </main>
+      </AuthLayout>
 
       {showImport && (
         <ImportDialog
@@ -786,7 +784,7 @@ export function OrgSettingsPage() {
           }}
         />
       )}
-    </div>
+    </>
   );
 }
 

@@ -108,11 +108,10 @@ export async function placeStopsOnMap(page: Page, count: number) {
     await page.waitForTimeout(150);
   }
   await page.getByRole('button', { name: /done placing/i }).click();
-  // Placing via the map doesn't exit the "New stop" create panel on its own
-  // (only the manual-entry form's Create button does) — the panel's back
-  // arrow returns to the route's Stops list. It shares an accessible name
-  // ("←") with nothing else in the rail, so no aside-scoping is needed.
-  await page.getByRole('button', { name: '←' }).click();
+  // Finishing placement now returns to the list the user came from (the
+  // route's Stops tab), instead of stranding them on the "New stop" form.
+  // Assert the create panel closed: its "Place on Map" toggle is gone.
+  await expect(page.getByRole('button', { name: /place on map/i })).toHaveCount(0);
 }
 
 /** Wait for a Playwright download and return its suggested filename + path. */

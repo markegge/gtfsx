@@ -106,6 +106,21 @@ export function MapView() {
   const [popupDirectionId, setPopupDirectionId] = useState<0 | 1>(0);
   const [popupFlexZoneId, setPopupFlexZoneId] = useState<string | null>(null);
 
+  // Suppress map popups while placing stops. A click on the route shape in
+  // place_stop mode drops a stop (handled in handleMapClick) and must not also
+  // leave a route/stop/flex popup floating over the map — two surfaces
+  // reacting to one click. Clear any open popup when placement mode activates;
+  // no new popup can open while in place_stop (handleMapClick returns early),
+  // so this fully suppresses them for the duration.
+  useEffect(() => {
+    if (mapMode === 'place_stop') {
+      setPopupStopId(null);
+      setPopupRouteId(null);
+      setPopupShapeId(null);
+      setPopupFlexZoneId(null);
+    }
+  }, [mapMode]);
+
   // Track the last stop placed (for ESC undo)
   const lastPlacedStopRef = useRef<string | null>(null);
   // Track the draw feature ID for shape/zone editing

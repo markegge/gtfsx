@@ -72,6 +72,20 @@ export interface ListProjectsResponse {
   quota: ProjectQuota;
 }
 
+/**
+ * A soft-deleted feed (issue #63 — delete protection). Returned by
+ * `GET /api/projects/deleted`; carries the same fields as ProjectSummary plus
+ * when it was deleted and when it will be permanently purged.
+ */
+export interface DeletedProjectSummary extends ProjectSummary {
+  deletedAt: number;
+  purgeAt: number;
+}
+
+export interface ListDeletedProjectsResponse {
+  projects: DeletedProjectSummary[];
+}
+
 export class ConflictError extends ApiError {
   currentVersion: number;
   constructor(message: string, currentVersion: number) {
@@ -184,8 +198,41 @@ export function setProjectLocked(id: string, locked: boolean): Promise<ProjectSu
   return patchProject(id, { locked });
 }
 
-export function deleteProject(id: string): Promise<void> {
-  return requestJson<void>(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' });
+/**
+ * Soft-delete a feed (issue #63). Rejects with a 409 ApiError when the feed is
+ * currently published or locked — pass `unpublish: true` to unpublish and
+ * delete in one call (the combined action MyFeedsPage offers once the user
+ * confirms they want to take the feed down).
+ */
+export function deleteProject(id: string, opts: { unpublish?: boolean } = {}): Promise<void> {
+  const q = opts.unpublish ? '?unpublish=1' : '';
+  return requestJson<void>(`/api/projects/${encodeURIComponent(id)}${q}`, { method: 'DELETE' });
+}
+
+/**
+ * List the caller's soft-deleted feeds for the "Recently deleted" trash view
+ * (issue #63). Scoped the same way as listProjects (personal vs org
+ * workspace) so an org's trash isn't mixed with the caller's personal one.
+ */
+export function listDeletedProjects(
+  opts: { scope?: string } = {},
+): Promise<ListDeletedProjectsResponse> {
+  const params = new URLSearchParams();
+  if (opts.scope && opts.scope !== 'personal') params.set('scope', opts.scope);
+  const q = params.toString();
+  return requestJson<ListDeletedProjectsResponse>(`/api/projects/deleted${q ? '?' + q : ''}`);
+}
+
+/**
+ * Restore a soft-deleted feed (issue #63). The restored project's slug may
+ * differ from the one it had before deletion if another feed claimed that
+ * slug in the meantime (the server assigns a free suffixed slug) — callers
+ * should compare against the pre-delete slug and tell the user when it changed.
+ */
+export function restoreProject(id: string): Promise<ProjectSummary> {
+  return requestJson<ProjectSummary>(`/api/projects/${encodeURIComponent(id)}/restore`, {
+    method: 'POST',
+  });
 }
 
 export interface TransferResult {

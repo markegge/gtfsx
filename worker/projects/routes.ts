@@ -44,6 +44,10 @@ import {
   maybeRegenerateThumbnail,
   parseFeedStateFromGzip,
 } from '../embeds/thumbnail';
+// Retention window for the trash. Owned by the reaper that enforces it, so the
+// "purged in N days" the UI shows and the day the row actually dies are the
+// same number by construction.
+import { PROJECT_DELETE_GRACE_MS } from '../cron/tasks';
 
 interface ProjectRow {
   id: string;
@@ -208,6 +212,66 @@ export async function requireOwnedProject(
   throw notFound('Project not found');
 }
 
+/**
+ * The mirror of requireOwnedProject for the trash routes: load a SOFT-DELETED
+ * project the caller is allowed to act on. requireOwnedProject deliberately
+ * 404s on deleted rows (they're gone as far as every other route is concerned),
+ * so restore needs its own loader.
+ *
+ * Gated at delete-grade access ('admin' on org-owned feeds) — whoever could
+ * delete a feed is exactly whoever can bring it back.
+ */
+async function requireDeletedProject(env: Env, user: AuthedUser, projectId: string): Promise<ProjectRow> {
+  const row = await env.DB.prepare(
+    `SELECT id, slug, name, description, owner_type, owner_id,
+            working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked
+       FROM feed_project WHERE id = ?`,
+  )
+    .bind(projectId)
+    .first<ProjectRow>();
+  if (!row || row.deleted_at === null) throw notFound('Project not found');
+
+  if (row.owner_type === 'user') {
+    if (row.owner_id !== user.id) throw notFound('Project not found');
+    return row;
+  }
+
+  if (row.owner_type === 'org') {
+    const membership = await getOrgMembership(env, row.owner_id, user.id);
+    if (!membership) throw notFound('Project not found');
+    if (!roleAtLeast(membership.role, 'admin')) {
+      throw forbidden('You do not have permission to perform this action');
+    }
+    return row;
+  }
+
+  throw notFound('Project not found');
+}
+
+/**
+ * Resolve the `scope` query param (`personal` | `org:<id>`) that GET / and
+ * GET /deleted share, checking org membership. Any member can LIST a workspace's
+ * feeds (acting on one is gated separately).
+ */
+async function resolveListScope(
+  env: Env,
+  user: AuthedUser,
+  scope: string,
+): Promise<{ ownerType: 'user' | 'org'; ownerId: string }> {
+  if (scope === 'personal') {
+    return { ownerType: 'user', ownerId: user.id };
+  }
+  if (scope.startsWith('org:')) {
+    const ownerId = scope.slice(4);
+    if (!ownerId) throw validationFailed('Invalid scope');
+    const membership = await getOrgMembership(env, ownerId, user.id);
+    if (!membership) throw notFound('Organization not found');
+    return { ownerType: 'org', ownerId };
+  }
+  throw validationFailed('scope must be "personal" or "org:<id>"');
+}
+
 async function requireOwnedSnapshot(env: Env, projectId: string, snapshotId: string): Promise<SnapshotRow> {
   const row = await env.DB.prepare(
     `SELECT id, project_id, label, created_by_user_id, state_r2_key, zip_r2_key, zip_size,
@@ -345,22 +409,7 @@ projectsRouter.post('/', async (c) => {
 projectsRouter.get('/', async (c) => {
   const user = c.var.user!;
   const includeArchived = c.req.query('include_archived') === '1';
-  const scope = c.req.query('scope') ?? 'personal';
-
-  let ownerType: 'user' | 'org';
-  let ownerId: string;
-  if (scope === 'personal') {
-    ownerType = 'user';
-    ownerId = user.id;
-  } else if (scope.startsWith('org:')) {
-    ownerType = 'org';
-    ownerId = scope.slice(4);
-    if (!ownerId) throw validationFailed('Invalid scope');
-    const membership = await getOrgMembership(c.env, ownerId, user.id);
-    if (!membership) throw notFound('Organization not found');
-  } else {
-    throw validationFailed('scope must be "personal" or "org:<id>"');
-  }
+  const { ownerType, ownerId } = await resolveListScope(c.env, user, c.req.query('scope') ?? 'personal');
 
   const archivedFilter = includeArchived ? '' : ' AND archived_at IS NULL';
   const rows = await c.env.DB.prepare(
@@ -404,6 +453,43 @@ projectsRouter.get('/', async (c) => {
       warning,
     },
   });
+});
+
+// ─── GET /api/projects/deleted — the trash ────────────────────────────────────
+//
+// Soft-deleted feeds for a workspace (?scope=personal | org:<id>, same rules as
+// GET /), newest deletion first. `purgeAt` = deleted_at + PROJECT_DELETE_GRACE_MS
+// — when the nightly reaper will erase it for good, so the UI can say
+// "purged in N days".
+//
+// MUST stay registered ahead of GET /:id — '/deleted' would otherwise be read
+// as a project id.
+projectsRouter.get('/deleted', async (c) => {
+  const user = c.var.user!;
+  const { ownerType, ownerId } = await resolveListScope(c.env, user, c.req.query('scope') ?? 'personal');
+
+  // Same select as GET / (minus the publication/thumbnail extras — a deleted
+  // feed is by definition unpublished, and the trash doesn't show thumbnails).
+  const rows = await c.env.DB.prepare(
+    `SELECT p.id, p.slug, p.name, p.description, p.owner_type, p.owner_id,
+            p.working_state_r2_key, p.working_state_version, p.working_state_size, p.working_state_updated_at,
+            p.archived_at, p.deleted_at, p.created_at, p.updated_at, p.brand_primary_color, p.locked,
+            (SELECT COUNT(*) FROM feed_snapshot v WHERE v.project_id = p.id) AS snapshot_count
+       FROM feed_project p
+       WHERE p.owner_type = ? AND p.owner_id = ? AND p.deleted_at IS NOT NULL
+       ORDER BY p.deleted_at DESC`,
+  )
+    .bind(ownerType, ownerId)
+    .all<ProjectRow & { snapshot_count: number }>();
+
+  const projects = (rows.results ?? []).map((r) => ({
+    ...shapeProject(r),
+    snapshotCount: r.snapshot_count,
+    deletedAt: r.deleted_at,
+    purgeAt: (r.deleted_at ?? 0) + PROJECT_DELETE_GRACE_MS,
+  }));
+
+  return c.json({ projects, retentionMs: PROJECT_DELETE_GRACE_MS });
 });
 
 projectsRouter.get('/:id', async (c) => {
@@ -529,15 +615,46 @@ projectsRouter.patch('/:id', async (c) => {
   return c.json(shapeProject(updated!));
 });
 
+// ─── DELETE /api/projects/:id — soft delete (trash) ────────────────────────
+//
+// Sets feed_project.deleted_at. The feed leaves the owner's list but stays
+// recoverable for PROJECT_DELETE_GRACE_MS via GET /api/projects/deleted +
+// POST /:id/restore; after that the nightly reaper purges it for good
+// (worker/cron/tasks.ts → reapDeletedProjects).
+//
+// Refused (409) when the feed is LOCKED, or when it is currently PUBLISHED.
+// `?unpublish=1` opts into the combined action: take the feed down, then
+// delete it.
 projectsRouter.delete('/:id', async (c) => {
   const user = c.var.user!;
   const id = c.req.param('id');
   const { row: current } = await requireOwnedProject(c.env, user, id, 'admin');
 
   // A locked feed is protected from deletion. Unlock it first (PATCH locked:false).
+  // The lock outranks ?unpublish=1 — it protects against exactly this.
   if (current.locked === 1) {
     throw conflict('This feed is locked. Unlock it before deleting.');
   }
+
+  // A published feed can't just be soft-deleted: the public feed handler joins
+  // feed_project WITHOUT filtering deleted_at, so the ZIP would keep serving on
+  // FEEDS_ORIGIN forever while vanishing from the owner's list — leaving them no
+  // way to ever take it down. Deletion is gated on publication state (NOT on the
+  // `locked` flag, which also blocks renames and means something different).
+  const publication = await loadPublication(c.env, current.id);
+  const alsoUnpublish = c.req.query('unpublish') === '1';
+  if (publication && !alsoUnpublish) {
+    const feedsHost = c.env.FEEDS_ORIGIN.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    throw conflict(
+      `This feed is published at ${feedsHost}/${publication.canonical_slug}. Unpublish it before deleting.`,
+      { reason: 'published', canonicalSlug: publication.canonical_slug },
+    );
+  }
+
+  // ?unpublish=1 — take it down first, through the same code path POST
+  // /:id/unpublish uses, so both emit an 'unpublish' history row + audit event.
+  const ip = clientIp(c.req.raw);
+  await unpublishProject(c.env, current.id, publication, user.id, ip);
 
   const now = Date.now();
   await c.env.DB.prepare(`UPDATE feed_project SET deleted_at = ?, updated_at = ? WHERE id = ?`)
@@ -549,10 +666,84 @@ projectsRouter.delete('/:id', async (c) => {
     subjectType: 'project',
     subjectId: current.id,
     action: 'project.delete',
-    ip: clientIp(c.req.raw),
+    metadata: { unpublished: !!publication, purgeAt: now + PROJECT_DELETE_GRACE_MS },
+    ip,
   });
 
   return c.body(null, 204);
+});
+
+// ─── POST /api/projects/:id/restore — bring a feed back out of the trash ───
+//
+// Clears deleted_at. Admin-level, same as the delete it undoes.
+//
+// Restoring does NOT re-publish: the publication row is gone (delete requires an
+// unpublish first), and resurrecting a live feed URL behind the user's back is
+// not something a "restore" should do. They can publish again from the editor.
+projectsRouter.post('/:id/restore', async (c) => {
+  const user = c.var.user!;
+  const id = c.req.param('id');
+
+  // requireOwnedProject() 404s on soft-deleted rows (correctly — they're gone
+  // as far as every other route is concerned), so resolve the row and the
+  // caller's access to it here.
+  const current = await requireDeletedProject(c.env, user, id);
+
+  // The unique index on (owner_type, owner_id, slug) is partial —
+  // `WHERE deleted_at IS NULL` — so while this feed sat in the trash its slug
+  // was free for a NEW feed to take. If that happened, restoring it under the
+  // old slug would violate the index. Suffix it (`<slug>-2`, `-3`, …) and tell
+  // the client, rather than failing a restore the user is entitled to.
+  const restoredSlug = await uniqueSlug(
+    c.env,
+    current.owner_type,
+    current.owner_id,
+    current.slug,
+    current.id,
+  );
+  const slugChanged = restoredSlug !== current.slug;
+
+  const now = Date.now();
+  await c.env.DB.prepare(
+    `UPDATE feed_project SET deleted_at = NULL, slug = ?, updated_at = ? WHERE id = ?`,
+  )
+    .bind(restoredSlug, now, current.id)
+    .run();
+
+  // Belt and braces: a project restored from BEFORE the publish-guard existed
+  // could still carry a publication row pointing at the old slug. Keep the
+  // canonical URL pointed at this project (same rule as the transfer route).
+  if (slugChanged) {
+    await c.env.DB.prepare(`UPDATE publication SET canonical_slug = ? WHERE project_id = ?`)
+      .bind(restoredSlug, current.id)
+      .run();
+  }
+
+  await logAudit(c.env, {
+    actorUserId: user.id,
+    subjectType: 'project',
+    subjectId: current.id,
+    action: 'project.restore',
+    metadata: { slugChanged, previousSlug: current.slug, slug: restoredSlug },
+    ip: clientIp(c.req.raw),
+  });
+
+  const fresh = await c.env.DB.prepare(
+    `SELECT id, slug, name, description, owner_type, owner_id,
+            working_state_r2_key, working_state_version, working_state_size, working_state_updated_at,
+            archived_at, deleted_at, created_at, updated_at, brand_primary_color, locked
+       FROM feed_project WHERE id = ?`,
+  )
+    .bind(current.id)
+    .first<ProjectRow>();
+  if (!fresh) throw notFound('Project not found');
+
+  return c.json({
+    project: shapeProject(fresh),
+    slug: restoredSlug,
+    slugChanged,
+    previousSlug: current.slug,
+  });
 });
 
 // ─── POST /api/projects/:id/transfer — move between workspaces ─────────────
@@ -1311,6 +1502,46 @@ async function loadPublication(env: Env, projectId: string): Promise<Publication
     .first<PublicationRow>();
 }
 
+/**
+ * Take a published feed down: drop the publication pointer (the canonical URL
+ * on FEEDS_ORIGIN stops serving immediately), append an 'unpublish' history
+ * row, and audit it.
+ *
+ * The single implementation behind BOTH `POST /:id/unpublish` and the combined
+ * `DELETE /:id?unpublish=1` — a delete-then-unpublish that drifted from the
+ * standalone unpublish is exactly how a feed ends up orphaned and still live.
+ *
+ * The caller passes the already-loaded publication row (or null); this is a
+ * no-op when the project isn't published.
+ */
+async function unpublishProject(
+  env: Env,
+  projectId: string,
+  existing: PublicationRow | null,
+  actorUserId: string,
+  ip: string,
+): Promise<void> {
+  if (!existing) return;
+
+  const now = Date.now();
+  await env.DB.prepare(`DELETE FROM publication WHERE project_id = ?`).bind(projectId).run();
+  await env.DB.prepare(
+    `INSERT INTO publication_history (id, project_id, snapshot_id, action, actor_user_id, created_at)
+     VALUES (?, ?, ?, 'unpublish', ?, ?)`,
+  )
+    .bind(ulid(), projectId, existing.snapshot_id, actorUserId, now)
+    .run();
+
+  await logAudit(env, {
+    actorUserId,
+    subjectType: 'publication',
+    subjectId: projectId,
+    action: 'project.unpublish',
+    metadata: { snapshotId: existing.snapshot_id },
+    ip,
+  });
+}
+
 interface ScheduledPublishRow {
   id: string;
   snapshot_id: string;
@@ -1460,31 +1691,9 @@ projectsRouter.post('/:id/unpublish', async (c) => {
   const id = c.req.param('id');
   const { row: project } = await requireOwnedProject(c.env, user, id, 'editor');
 
+  // Idempotent — unpublishProject() is a no-op when there's nothing published.
   const existing = await loadPublication(c.env, project.id);
-  if (!existing) {
-    // Idempotent — no-op.
-    return c.body(null, 204);
-  }
-
-  const now = Date.now();
-  await c.env.DB.prepare(`DELETE FROM publication WHERE project_id = ?`)
-    .bind(project.id)
-    .run();
-  await c.env.DB.prepare(
-    `INSERT INTO publication_history (id, project_id, snapshot_id, action, actor_user_id, created_at)
-     VALUES (?, ?, ?, 'unpublish', ?, ?)`,
-  )
-    .bind(ulid(), project.id, existing.snapshot_id, user.id, now)
-    .run();
-
-  await logAudit(c.env, {
-    actorUserId: user.id,
-    subjectType: 'publication',
-    subjectId: project.id,
-    action: 'project.unpublish',
-    metadata: { snapshotId: existing.snapshot_id },
-    ip: clientIp(c.req.raw),
-  });
+  await unpublishProject(c.env, project.id, existing, user.id, clientIp(c.req.raw));
 
   return c.body(null, 204);
 });

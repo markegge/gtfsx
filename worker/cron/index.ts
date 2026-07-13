@@ -1,5 +1,12 @@
 import type { Env } from '../env';
-import { reapDeletedUsers, summarizeWeeklyMetrics, expireEnterpriseGrants, publishDueSchedules, runOwnerDigest } from './tasks';
+import {
+  reapDeletedUsers,
+  reapDeletedProjects,
+  summarizeWeeklyMetrics,
+  expireEnterpriseGrants,
+  publishDueSchedules,
+  runOwnerDigest,
+} from './tasks';
 import { uploadPendingConversions } from '../marketing/ads/oci';
 
 // Scheduled worker entry point. Invoked from worker/index.ts#scheduled().
@@ -55,6 +62,15 @@ export async function runScheduled(
     await reapDeletedUsers(env);
   } catch (err) {
     console.error('[cron] reapDeletedUsers failed', err);
+  }
+
+  // Trash: feeds deleted individually (not via an account deletion) whose
+  // 30-day restore window has run out. Runs AFTER the user reaper so feeds
+  // already purged with their owner are simply not candidates here.
+  try {
+    await reapDeletedProjects(env);
+  } catch (err) {
+    console.error('[cron] reapDeletedProjects failed', err);
   }
 
   try {

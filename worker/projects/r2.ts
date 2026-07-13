@@ -64,8 +64,7 @@ export async function deleteFeedBlob(env: Env, key: string): Promise<void> {
   await env.FEEDS.delete(key);
 }
 
-export async function deleteProjectBlobs(env: Env, projectId: string): Promise<void> {
-  const prefix = projectPrefix(projectId);
+export async function deletePrefixedBlobs(env: Env, prefix: string): Promise<void> {
   let cursor: string | undefined = undefined;
   while (true) {
     const listed: R2Objects = await env.FEEDS.list({ prefix, cursor });
@@ -76,4 +75,18 @@ export async function deleteProjectBlobs(env: Env, projectId: string): Promise<v
     cursor = listed.truncated ? listed.cursor : undefined;
     if (!cursor) break;
   }
+}
+
+/**
+ * Every R2 object belonging to a project, across all three key namespaces:
+ *   projects/<id>/**      working state, snapshot states + zips, thumbnails
+ *   publications/<id>/**  published + rolled-back ZIPs
+ *   draft-links/<id>/**   draft preview ZIPs
+ *
+ * Used only on the permanent-purge path (worker/projects/purge.ts).
+ */
+export async function deleteProjectBlobs(env: Env, projectId: string): Promise<void> {
+  await deletePrefixedBlobs(env, projectPrefix(projectId));
+  await deletePrefixedBlobs(env, `publications/${projectId}/`);
+  await deletePrefixedBlobs(env, `draft-links/${projectId}/`);
 }

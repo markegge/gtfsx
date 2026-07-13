@@ -198,7 +198,7 @@ export function LoginPage() {
             <Link to="/reset-password" className="text-coral hover:underline">
               Forgot password?
             </Link>
-            <Link to={signupHref} className="text-warm-gray hover:text-dark-brown">
+            <Link to={signupHref} className="text-coral hover:underline">
               Sign up
             </Link>
           </div>

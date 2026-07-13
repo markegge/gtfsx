@@ -133,7 +133,7 @@ export function ThreadView() {
     return (
       <div className="bg-white border border-sand rounded-lg p-6">
         <p className="text-sm text-red-700 mb-2">{error}</p>
-        <Link to="/community" className="text-sm text-coral hover:underline">← Back to community</Link>
+        <Link to="/community" className="text-sm text-coral hover:text-coral">← Back to community</Link>
       </div>
     );
   }
@@ -289,18 +289,23 @@ export function ThreadView() {
               {(isAdmin || isAuthor) && (
                 <button
                   onClick={() => setConfirmDeleteThread(true)}
-                  className="text-xs text-warm-gray hover:text-red-700"
+                  className="px-2 py-1 rounded-md text-xs border border-sand text-warm-gray hover:border-red-300 hover:text-red-700 transition-colors"
                 >
                   Delete thread
                 </button>
               )}
               {isAdmin && (
-                <div className="flex gap-1 text-[11px]">
-                  <button onClick={() => handleAdminToggle('pinned')} className="hover:text-coral">
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => handleAdminToggle('pinned')}
+                    className="px-2 py-1 rounded-md text-xs border border-sand hover:border-coral hover:text-coral transition-colors"
+                  >
                     {thread.pinned ? 'Unpin' : 'Pin'}
                   </button>
-                  <span>·</span>
-                  <button onClick={() => handleAdminToggle('locked')} className="hover:text-coral">
+                  <button
+                    onClick={() => handleAdminToggle('locked')}
+                    className="px-2 py-1 rounded-md text-xs border border-sand hover:border-coral hover:text-coral transition-colors"
+                  >
                     {thread.locked ? 'Unlock' : 'Lock'}
                   </button>
                 </div>

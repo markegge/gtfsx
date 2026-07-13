@@ -327,7 +327,7 @@ The backend tier is implemented as a single Cloudflare Worker that also serves t
 - ✅ Rate limits on all `/auth/*` endpoints (KV-backed, per IP + per email).
 - ✅ Account settings: change name, email (with re-verify), password, soft-delete account.
 - ⚠️ Password hashing is PBKDF2-HMAC-SHA256 @ 100k iterations (workerd cap). Argon2id migration (**NF-40a**) should land before broad RTAP distribution; details in [`ARCHITECTURE.md`](./ARCHITECTURE.md) §4 / §9. Tracked in GitHub issues.
-- 🔲 Google OAuth (deferred to v1.1). Tracked in GitHub issues.
+- ✅ Google OAuth ("Sign in with Google").
 
 ### 3.2 Organizations
 

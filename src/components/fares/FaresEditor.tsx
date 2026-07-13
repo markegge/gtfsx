@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useStore } from '../../store';
 import { FormField } from '../ui/FormField';
 import { Breadcrumb } from '../ui/Breadcrumb';
+import { TabButton } from '../ui/Tabs';
 import { Badge } from '../ui/Badge';
 import { RailSubHeading, RailDivider } from '../ui/RailHeadings';
 import { EditActions } from '../ui/EditActions';
@@ -230,15 +231,9 @@ export function FaresEditor() {
           {/* Sub-tabs */}
           <div className="flex gap-1 mb-4 border-b border-sand">
             {(['details', 'rules'] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setFareTab(t)}
-                className={`px-3 py-2 font-heading font-bold text-[13px] border-b-2 transition-colors ${
-                  fareTab === t ? 'text-coral border-coral' : 'text-warm-gray border-transparent hover:text-dark-brown'
-                }`}
-              >
+              <TabButton key={t} active={fareTab === t} onClick={() => setFareTab(t)}>
                 {t === 'details' ? 'Edit Fare' : 'Route Rules'}
-              </button>
+              </TabButton>
             ))}
           </div>
 

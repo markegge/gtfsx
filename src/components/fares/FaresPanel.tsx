@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../../store';
 import { featureEnabled } from '../../store/featuresSlice';
+import { TabButton } from '../ui/Tabs';
 import { FaresEditor } from './FaresEditor';
 import { FareZoneTool } from './FareZoneTool';
 import { AreasEditor } from './AreasEditor';
@@ -73,7 +74,7 @@ export function FaresPanel() {
           </TabButton>
         )}
         {showTransfers && (
-          <TabButton active={effectiveTab === 'transfers'} onClick={() => setTab('transfers')}>
+          <TabButton active={effectiveTab === 'transfers'} onClick={() => setTab('transfers')} className="flex items-center">
             Transfers
             {transferCount > 0 && (
               <span
@@ -141,25 +142,3 @@ function V2SectionBody({ section }: { section: V2Section }) {
   }
 }
 
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`relative px-3 py-2 font-heading font-bold text-[13px] border-b-2 transition-colors flex items-center ${
-        active
-          ? 'text-coral border-coral'
-          : 'text-warm-gray border-transparent hover:text-dark-brown'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}

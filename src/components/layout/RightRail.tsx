@@ -25,6 +25,7 @@ import { PaywallOverlay } from '../billing/PaywallOverlay';
 import { useEditorPlan } from '../billing/useEditorPlan';
 import { EditActions } from '../ui/EditActions';
 import { Breadcrumb } from '../ui/Breadcrumb';
+import { TabButton } from '../ui/Tabs';
 
 const RIGHT_RAIL_DEFAULT_WIDTH = 460;
 const RIGHT_RAIL_MIN_WIDTH = 320;
@@ -243,14 +244,11 @@ function RouteDetailHeader() {
             const active = tab === t.id;
             const count = counts[t.id];
             return (
-              <button
+              <TabButton
                 key={t.id}
+                active={active}
                 onClick={() => setRouteDetailTab(t.id)}
-                className={`relative px-3 py-2 font-heading font-bold text-[13px] flex items-center gap-1.5 border-b-2 transition-colors ${
-                  active
-                    ? 'text-coral border-coral'
-                    : 'text-warm-gray border-transparent hover:text-dark-brown'
-                }`}
+                className="flex items-center gap-1.5"
               >
                 <span>{t.label}</span>
                 {count != null && count > 0 && (
@@ -262,7 +260,7 @@ function RouteDetailHeader() {
                     {count.toLocaleString()}
                   </span>
                 )}
-              </button>
+              </TabButton>
             );
           })}
         </div>
@@ -366,17 +364,9 @@ function StopEditHeader() {
       {/* Details / Trips / Coverage tabs (mirrors the route editor's tab strip). */}
       <div className="flex gap-1 mt-3 -mb-3.5">
         {(['details', 'trips', 'coverage'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setStopDetailTab(t)}
-            className={`px-3 py-2 font-heading font-bold text-[13px] border-b-2 transition-colors ${
-              stopDetailTab === t
-                ? 'text-coral border-coral'
-                : 'text-warm-gray border-transparent hover:text-dark-brown'
-            }`}
-          >
+          <TabButton key={t} active={stopDetailTab === t} onClick={() => setStopDetailTab(t)}>
             {t === 'details' ? 'Details' : t === 'trips' ? 'Trips' : 'Coverage'}
-          </button>
+          </TabButton>
         ))}
       </div>
     </div>
@@ -496,17 +486,9 @@ function CalendarDetailHeader() {
       <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex gap-1 px-3 -mb-px min-w-max">
           {(['details', 'routes', 'exceptions'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setCalendarDetailTab(t)}
-              className={`px-3 py-2 font-heading font-bold text-[13px] border-b-2 transition-colors ${
-                calendarDetailTab === t
-                  ? 'text-coral border-coral'
-                  : 'text-warm-gray border-transparent hover:text-dark-brown'
-              }`}
-            >
+            <TabButton key={t} active={calendarDetailTab === t} onClick={() => setCalendarDetailTab(t)}>
               {t === 'details' ? 'Details' : t === 'routes' ? 'Routes' : 'Exceptions'}
-            </button>
+            </TabButton>
           ))}
         </div>
       </div>

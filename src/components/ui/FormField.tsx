@@ -13,9 +13,20 @@ interface FormFieldProps {
    *  default value is one-keystroke replaceable (e.g. the date-stamped
    *  default in the Save Snapshot dialog). */
   autoFocus?: boolean;
+  /** Override the auto-derived data-testid (slug of `label`). Only needed
+   *  when two fields on the same panel would otherwise share a label. */
+  testId?: string;
 }
 
-export function FormField({ label, value, onChange, placeholder, type = 'text', required, error, disabled, autoFocus }: FormFieldProps) {
+// FormField has no htmlFor/id pairing (the label text carries formatting
+// hints inline, e.g. the required asterisk), so it isn't reachable via
+// getByLabel(). Every instance gets a stable data-testid derived from its
+// label instead, without having to thread a prop through every call site.
+function slugify(label: string): string {
+  return label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+export function FormField({ label, value, onChange, placeholder, type = 'text', required, error, disabled, autoFocus, testId }: FormFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (!autoFocus) return;
@@ -32,6 +43,7 @@ export function FormField({ label, value, onChange, placeholder, type = 'text', 
       </label>
       <input
         ref={inputRef}
+        data-testid={testId ?? `field-${slugify(label)}`}
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../../store';
 import { FormField } from '../ui/FormField';
+import { Breadcrumb } from '../ui/Breadcrumb';
 import { RailSubHeading } from '../ui/RailHeadings';
 import { EditActions } from '../ui/EditActions';
 import { generateId } from '../../services/idGenerator';
@@ -111,13 +112,13 @@ export function FareMediaEditor() {
   // ── Detail view ───────────────────────────────────────────────────────────
   return (
     <div>
-      <nav className="text-[13px] text-warm-gray flex items-center gap-1.5 mb-1">
-        <button onClick={() => open(null)} className="hover:text-coral transition-colors">‹</button>
-        <button onClick={() => open(null)} className="hover:text-coral transition-colors">Fare Media</button>
-        <span className="opacity-50">›</span>
-        <span className="text-dark-brown font-semibold truncate">
-          {selected.fare_media_name || selected.fare_media_id}
-        </span>
+      <nav className="text-[13px] text-warm-gray mb-1">
+        <Breadcrumb
+          items={[
+            { label: 'Fare Media', onClick: () => open(null) },
+            { label: selected.fare_media_name || selected.fare_media_id, className: 'truncate' },
+          ]}
+        />
       </nav>
 
       <div className="flex items-center justify-between gap-3 mb-4">

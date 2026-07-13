@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { FormField } from '../ui/FormField';
+import { Breadcrumb } from '../ui/Breadcrumb';
 import { Badge } from '../ui/Badge';
 import { RailSubHeading } from '../ui/RailHeadings';
 import { EditActions } from '../ui/EditActions';
@@ -195,13 +196,13 @@ export function AreasEditor() {
   return (
     <div>
       {/* Breadcrumb */}
-      <nav className="text-[13px] text-warm-gray flex items-center gap-1.5 mb-1">
-        <button onClick={() => openArea(null)} className="hover:text-coral transition-colors">‹</button>
-        <button onClick={() => openArea(null)} className="hover:text-coral transition-colors">Areas</button>
-        <span className="opacity-50">›</span>
-        <span className="text-dark-brown font-semibold truncate">
-          {selectedArea.area_name || selectedArea.area_id}
-        </span>
+      <nav className="text-[13px] text-warm-gray mb-1">
+        <Breadcrumb
+          items={[
+            { label: 'Areas', onClick: () => openArea(null) },
+            { label: selectedArea.area_name || selectedArea.area_id, className: 'truncate' },
+          ]}
+        />
       </nav>
 
       {/* Title + actions */}

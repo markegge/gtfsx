@@ -24,6 +24,7 @@ import { FeatureSettingsPanel } from '../settings/FeatureSettingsPanel';
 import { PaywallOverlay } from '../billing/PaywallOverlay';
 import { useEditorPlan } from '../billing/useEditorPlan';
 import { EditActions } from '../ui/EditActions';
+import { Breadcrumb } from '../ui/Breadcrumb';
 
 const RIGHT_RAIL_DEFAULT_WIDTH = 460;
 const RIGHT_RAIL_MIN_WIDTH = 320;
@@ -197,16 +198,12 @@ function RouteDetailHeader() {
       {/* Breadcrumb row */}
       <div className="px-5 pt-3 flex items-center gap-2">
         <div className="flex-1 min-w-0 text-[13px] text-warm-gray">
-          <button
-            onClick={() => setEditingRouteId(null)}
-            className="hover:text-coral transition-colors"
-          >
-            Routes
-          </button>
-          <span className="opacity-50 mx-1.5">›</span>
-          <span className="text-dark-brown font-semibold truncate">
-            {title}
-          </span>
+          <Breadcrumb
+            items={[
+              { label: 'Routes', onClick: () => setEditingRouteId(null) },
+              { label: title, className: 'truncate' },
+            ]}
+          />
         </div>
         <button
           onClick={() => {
@@ -319,37 +316,27 @@ function StopEditHeader() {
     <div className="px-5 py-3.5 border-b border-sand bg-white shrink-0">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <nav className="text-[13px] text-warm-gray flex items-center gap-1.5">
-            <button onClick={goBack} className="hover:text-coral transition-colors">
+          <nav className="text-[13px] text-warm-gray">
+            <button onClick={goBack} className="hover:text-coral transition-colors mr-1.5">
               ←
             </button>
             {fromRouteContext ? (
-              <>
-                <button
-                  onClick={() => setSidebarSection('routes')}
-                  className="hover:text-coral transition-colors"
-                >
-                  Routes
-                </button>
-                <span className="opacity-50">›</span>
-                <button
-                  onClick={() => { setEditingStopId(null); setRouteDetailTab('details'); }}
-                  className="hover:text-coral transition-colors truncate"
-                >
-                  {route.route_short_name || route.route_long_name || 'Route'}
-                </button>
-                <span className="opacity-50">›</span>
-                <button
-                  onClick={() => { setEditingStopId(null); selectStop(null); setRouteDetailTab('stops'); }}
-                  className="hover:text-coral transition-colors"
-                >
-                  Stops
-                </button>
-              </>
+              <Breadcrumb
+                items={[
+                  { label: 'Routes', onClick: () => setSidebarSection('routes') },
+                  {
+                    label: route.route_short_name || route.route_long_name || 'Route',
+                    onClick: () => { setEditingStopId(null); setRouteDetailTab('details'); },
+                    className: 'truncate',
+                  },
+                  {
+                    label: 'Stops',
+                    onClick: () => { setEditingStopId(null); selectStop(null); setRouteDetailTab('stops'); },
+                  },
+                ]}
+              />
             ) : (
-              <button onClick={goBack} className="hover:text-coral transition-colors">
-                Stops
-              </button>
+              <Breadcrumb items={[{ label: 'Stops', onClick: goBack }]} />
             )}
           </nav>
           <h2 className="mt-1 font-heading font-extrabold text-lg text-dark-brown leading-tight truncate">
@@ -425,29 +412,22 @@ function CreateStopHeader() {
     <div className="px-5 py-3.5 border-b border-sand bg-white shrink-0">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <nav className="text-[13px] text-warm-gray flex items-center gap-1.5">
-            <button onClick={goBack} className="hover:text-coral transition-colors">←</button>
+          <nav className="text-[13px] text-warm-gray">
+            <button onClick={goBack} className="hover:text-coral transition-colors mr-1.5">←</button>
             {fromRouteContext && route ? (
-              <>
-                <button onClick={() => setSidebarSection('routes')} className="hover:text-coral transition-colors">
-                  Routes
-                </button>
-                <span className="opacity-50">›</span>
-                <button
-                  onClick={() => { setCreatingStop(false); setRouteDetailTab('details'); }}
-                  className="hover:text-coral transition-colors truncate"
-                >
-                  {route.route_short_name || route.route_long_name || 'Route'}
-                </button>
-                <span className="opacity-50">›</span>
-                <button onClick={goBack} className="hover:text-coral transition-colors">
-                  Stops
-                </button>
-              </>
+              <Breadcrumb
+                items={[
+                  { label: 'Routes', onClick: () => setSidebarSection('routes') },
+                  {
+                    label: route.route_short_name || route.route_long_name || 'Route',
+                    onClick: () => { setCreatingStop(false); setRouteDetailTab('details'); },
+                    className: 'truncate',
+                  },
+                  { label: 'Stops', onClick: goBack },
+                ]}
+              />
             ) : (
-              <button onClick={goBack} className="hover:text-coral transition-colors">
-                Stops
-              </button>
+              <Breadcrumb items={[{ label: 'Stops', onClick: goBack }]} />
             )}
           </nav>
           <h2 className="mt-1 font-heading font-extrabold text-lg text-dark-brown leading-tight truncate">
@@ -483,14 +463,12 @@ function CalendarDetailHeader() {
     <div className="border-b border-sand bg-white shrink-0">
       <div className="px-5 pt-3 flex items-center gap-2">
         <div className="flex-1 min-w-0 text-[13px] text-warm-gray">
-          <button
-            onClick={() => setEditingCalendarServiceId(null)}
-            className="hover:text-coral transition-colors"
-          >
-            Calendars
-          </button>
-          <span className="opacity-50 mx-1.5">›</span>
-          <span className="text-dark-brown font-semibold truncate">{title}</span>
+          <Breadcrumb
+            items={[
+              { label: 'Calendars', onClick: () => setEditingCalendarServiceId(null) },
+              { label: title, className: 'truncate' },
+            ]}
+          />
         </div>
         <button
           onClick={() => useStore.getState().setSidebarSection(null)}
@@ -554,16 +532,12 @@ function FlexZoneDetailHeader() {
       {/* Breadcrumb row */}
       <div className="px-5 pt-3 flex items-center gap-2">
         <div className="flex-1 min-w-0 text-[13px] text-warm-gray">
-          <button
-            onClick={() => setFlexZoneDetailId(null)}
-            className="hover:text-coral transition-colors"
-          >
-            Flex Zones
-          </button>
-          <span className="opacity-50 mx-1.5">›</span>
-          <span className="text-dark-brown font-semibold truncate">
-            {zone.name}
-          </span>
+          <Breadcrumb
+            items={[
+              { label: 'Flex Zones', onClick: () => setFlexZoneDetailId(null) },
+              { label: zone.name, className: 'truncate' },
+            ]}
+          />
         </div>
         <button
           onClick={() => {

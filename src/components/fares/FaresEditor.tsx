@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../../store';
 import { FormField } from '../ui/FormField';
+import { Breadcrumb } from '../ui/Breadcrumb';
 import { Badge } from '../ui/Badge';
 import { RailSubHeading, RailDivider } from '../ui/RailHeadings';
 import { EditActions } from '../ui/EditActions';
@@ -198,13 +199,13 @@ export function FaresEditor() {
       {selectedFare && (
         <div>
           {/* Breadcrumb */}
-          <nav className="text-[13px] text-warm-gray flex items-center gap-1.5 mb-1">
-            <button onClick={() => setSelectedFareId(null)} className="hover:text-coral transition-colors">‹</button>
-            <button onClick={() => setSelectedFareId(null)} className="hover:text-coral transition-colors">Fares</button>
-            <span className="opacity-50">›</span>
-            <span className="text-dark-brown font-semibold truncate">
-              {selectedFare.currency_type} {selectedFare.price}
-            </span>
+          <nav className="text-[13px] text-warm-gray mb-1">
+            <Breadcrumb
+              items={[
+                { label: 'Fares', onClick: () => setSelectedFareId(null) },
+                { label: `${selectedFare.currency_type} ${selectedFare.price}`, className: 'truncate' },
+              ]}
+            />
           </nav>
 
           {/* Title + actions */}

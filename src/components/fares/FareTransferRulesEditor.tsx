@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { FormField } from '../ui/FormField';
+import { Breadcrumb } from '../ui/Breadcrumb';
 import { RailSubHeading } from '../ui/RailHeadings';
 import { EditActions } from '../ui/EditActions';
 import type { FareTransferRule } from '../../types/gtfs';
@@ -101,11 +102,13 @@ export function FareTransferRulesEditor() {
   // ── Detail view ───────────────────────────────────────────────────────────
   return (
     <div>
-      <nav className="text-[13px] text-warm-gray flex items-center gap-1.5 mb-1">
-        <button onClick={() => setSelectedIndex(null)} className="hover:text-coral transition-colors">‹</button>
-        <button onClick={() => setSelectedIndex(null)} className="hover:text-coral transition-colors">Transfer Rules</button>
-        <span className="opacity-50">›</span>
-        <span className="text-dark-brown font-semibold truncate">{typeLabel(selected.fare_transfer_type)}</span>
+      <nav className="text-[13px] text-warm-gray mb-1">
+        <Breadcrumb
+          items={[
+            { label: 'Transfer Rules', onClick: () => setSelectedIndex(null) },
+            { label: typeLabel(selected.fare_transfer_type), className: 'truncate' },
+          ]}
+        />
       </nav>
 
       <div className="flex items-center justify-between gap-3 mb-4">

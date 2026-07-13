@@ -1,9 +1,9 @@
 # GTFS·X CI — runs on every push and PR. All jobs are blocking.
 #
 #   1. typecheck — frontend + worker tsc --noEmit
-#   2. editor-tests — npx tsx run-tests.ts (82 GTFS import/export assertions)
+#   2. editor-tests — npx tsx run-tests.ts (330 GTFS import/export assertions)
 #   3. frontend-service-tests — vitest (mocked fetch for demographics/snapToRoad)
-#   4. worker-tests — vitest (193 worker integration tests)
+#   4. worker-tests — vitest (490 worker integration tests)
 #   5. ui-smoke — Playwright SPA bootstrap check
 #   6. lint — eslint
 #

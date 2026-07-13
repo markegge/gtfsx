@@ -26,5 +26,28 @@ MOBILITY_DATABASE_REFRESH_TOKEN=unused-locally
 #    When unset, the welcome email falls back to AUTH_EMAIL_FROM.
 #  - WELCOME_BCC: address BCC'd on every welcome mail (prod: mark@gtfsx.com).
 #    When unset, no bcc is added.
+#    Possibly deprecated: not read anywhere in worker/env.ts or the rest of
+#    the Worker code as of 2026-07 — verify before relying on it.
 WELCOME_REPLY_TO=hello@gtfsx.com
 WELCOME_BCC=mark@gtfsx.com
+
+# Transitland API key (transit.land). Not referenced by worker/ or scripts/
+# in this repo as of 2026-07 — kept for tooling outside this repo that reads
+# the same .dev.vars file.
+TRANSITLAND_API_KEY=
+
+# Neon API key, used for Postgres branch/PITR operations against other
+# projects' Neon databases from scripts run out of this checkout (see
+# proj-level PITR-recovery notes). Not referenced by worker/ itself.
+NEON_API_KEY=
+
+# Smartlead API key. Not referenced by worker/ or scripts/ in this repo as of
+# 2026-07 — kept for outreach-automation tooling outside this repo.
+SMARTLEAD_API_KEY=
+
+# Stripe (billing). Test-mode secret key for local/staging dev; the live
+# secret key and webhook signing secret are `wrangler secret put` in
+# prod/staging, not normally needed for plain `wrangler dev` locally.
+STRIPE_SECRET_KEY_TEST=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SIGNING_SECRET=

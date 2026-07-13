@@ -123,6 +123,10 @@ button.submit:disabled { opacity: 0.6; cursor: default; }
   padding: 13px 26px; border-radius: 10px; transition: background 120ms;
 }
 .book:hover { background: var(--coral-deep); }
+/* Small nav link under the card, revealed with the thank-you state. */
+.home-link { text-align: center; margin: 16px 0 0; font-size: 13px; }
+.home-link a { color: var(--warm-gray); text-decoration: none; }
+.home-link a:hover { color: var(--coral-deep); text-decoration: underline; }
 .hidden { display: none; }
 </style>
 </head>
@@ -167,6 +171,7 @@ button.submit:disabled { opacity: 0.6; cursor: default; }
       <a class="book" href="${bookingUrl}" target="_blank" rel="noopener">Grab a time now</a>
     </div>
   </div>
+  <p class="home-link hidden" id="home-link"><a href="/">&larr; Back to home</a></p>
 </div>
 
 <script>
@@ -232,6 +237,7 @@ button.submit:disabled { opacity: 0.6; cursor: default; }
       if (res.ok) {
         document.getElementById('form-view').classList.add('hidden');
         document.getElementById('thanks-view').classList.remove('hidden');
+        document.getElementById('home-link').classList.remove('hidden');
         return;
       }
       return res.json().catch(function () { return {}; }).then(function (body) {

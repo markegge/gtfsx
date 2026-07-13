@@ -7,7 +7,6 @@ import { point as turfPoint } from '@turf/helpers';
 import type { Feature } from 'geojson';
 import {
   PROFILE_CATEGORIES,
-  MISSING_CATEGORIES,
   analyzeWalkshedProfiles,
   buildBlockIndex,
   bufferMilesForRouteType,
@@ -29,9 +28,10 @@ import {
 function blk(geoid: string, lon: number, lat: number, attrs: Partial<BlockPoint> = {}): BlockPoint {
   return {
     geoid, lon, lat,
-    pop: 0, hh: 0, workers: 0, riders: 0,
+    pop: 0, hh: 0, workers: 0,
     minority: 0, race_pop: 0, lowinc: 0, pov_univ: 0,
-    zeroveh_hh: 0, occ_hh: 0, senior: 0, youth: 0, jobs: 0,
+    zeroveh_hh: 0, occ_hh: 0, senior: 0, youth: 0,
+    carless: 0, disability: 0, prop_all: 0, need_all: 0, jobs: 0,
     ...attrs,
   };
 }
@@ -51,13 +51,20 @@ function rs(routeId: string, stopId: string, seq: number): RouteStop {
   return { route_id: routeId, stop_id: stopId, direction_id: 0, stop_sequence: seq, _snapped: false };
 }
 
-/** A fully-populated block so every category has a non-zero value. */
+/**
+ * A fully-populated block so every category has a non-zero value.
+ *
+ * The union columns respect the invariants the offline pipeline guarantees, so
+ * the fixture is a block that could actually exist:
+ *     carless (12), lowinc (35)          ≤ prop_all (40) ≤ need_all (62) ≤ pop (100)
+ *     senior (15), disability (10)       ≤ need_all (62)
+ *     prop_all ≤ carless + lowinc = 47;  need_all ≤ prop_all + senior + disability = 65
+ */
 function richBlock(geoid: string, lon: number, lat: number, scale = 1): BlockPoint {
   return blk(geoid, lon, lat, {
     pop: 100 * scale,
     hh: 40 * scale,
     workers: 55 * scale,
-    riders: 30 * scale,
     minority: 25 * scale,
     race_pop: 100 * scale,
     lowinc: 35 * scale,
@@ -66,6 +73,10 @@ function richBlock(geoid: string, lon: number, lat: number, scale = 1): BlockPoi
     occ_hh: 40 * scale,
     senior: 15 * scale,
     youth: 20 * scale,
+    carless: 12 * scale,
+    disability: 10 * scale,
+    prop_all: 40 * scale,
+    need_all: 62 * scale,
     jobs: 60 * scale,
   });
 }
@@ -158,7 +169,8 @@ describe('route aggregation is a UNION, never a sum', () => {
       if (shared[({
         population: 'pop', households: 'hh', workers: 'workers', minority: 'minority',
         lowIncome: 'lowinc', zeroVehicleHouseholds: 'zeroveh_hh', seniors: 'senior',
-        youth: 'youth', jobs: 'jobs', highPropensityRiders: 'riders',
+        youth: 'youth', carless: 'carless', disability: 'disability',
+        propensityAll: 'prop_all', needAll: 'need_all', jobs: 'jobs',
       } as const)[cat.key]] > 0) {
         expect(union.counts[cat.key]).toBeLessThan(naive);
       }
@@ -228,9 +240,10 @@ describe('categories overlap and are never totalled', () => {
     // category counts legitimately sum to MORE than the population — which is
     // exactly why summing them is forbidden.
     const b = blk('X', -111, 46, {
-      pop: 100, hh: 40, workers: 55, riders: 60,
+      pop: 100, hh: 40, workers: 55,
       minority: 90, race_pop: 100, lowinc: 80, pov_univ: 100,
-      zeroveh_hh: 30, occ_hh: 40, senior: 25, youth: 30, jobs: 10,
+      zeroveh_hh: 30, occ_hh: 40, senior: 25, youth: 30,
+      carless: 45, disability: 20, prop_all: 90, need_all: 95, jobs: 10,
     });
     const p = profileFromBlocks([b], 0.25, 1);
 
@@ -238,10 +251,13 @@ describe('categories overlap and are never totalled', () => {
       .filter((c) => c.basis === 'residence' && c.key !== 'population' && c.key !== 'households')
       .reduce((a, c) => a + p.counts[c.key], 0);
 
-    // workers 55 + minority 90 + low-income 80 + zero-veh HH 30 + 65+ 25 +
-    // under-18 30 + high-propensity 60 = 370 "people" inside a 100-person block.
-    // The groups are not disjoint; any UI that adds them is lying.
-    expect(residenceSum).toBe(370);
+    // workers 55 + minority 90 + low-income 80 + zero-veh HH 30 + carless 45 +
+    // 65+ 25 + disability 20 + under-18 30 + propensity 90 + need 95 = 560
+    // "people" inside a 100-person block. The groups are not disjoint; any UI
+    // that adds them is lying. (The two unions are the worst offenders here:
+    // `need` CONTAINS `propensity`, which CONTAINS carless and low-income, so
+    // adding those four alone triple-counts most of the block.)
+    expect(residenceSum).toBe(560);
     expect(residenceSum).toBeGreaterThan(p.counts.population);
 
     // The profile itself exposes no `total` of any kind — there is nothing to
@@ -251,13 +267,56 @@ describe('categories overlap and are never totalled', () => {
     );
   });
 
-  it('labels exactly one category an estimate (the composite) and the rest straight counts', () => {
+  it('labels exactly the two unions as estimates and every ACS segment as a straight count', () => {
     const estimates = PROFILE_CATEGORIES.filter((c) => c.kind === 'estimate');
-    expect(estimates.map((c) => c.key)).toEqual(['highPropensityRiders']);
-    // Everything else is an exact tabulation and must be labelled as such.
+    // The composites are PUMS-derived statistical unions, not headcounts. If a
+    // third key ever shows up here, something has been mislabelled — and the UI
+    // renders `kind` directly as the "est." badge, so a mislabel ships as a lie.
+    expect(estimates.map((c) => c.key)).toEqual(['propensityAll', 'needAll']);
     for (const c of PROFILE_CATEGORIES) {
-      if (c.key !== 'highPropensityRiders') expect(c.kind).toBe('count');
+      if (c.key !== 'propensityAll' && c.key !== 'needAll') expect(c.kind).toBe('count');
     }
+    // The four ACS segments the demand map draws must all be present, and all be
+    // counts — they are straight table lookups (B25044 / C17002 / B01001 / C21007).
+    for (const seg of ['carless', 'lowIncome', 'seniors', 'disability'] as const) {
+      const cat = PROFILE_CATEGORIES.find((c) => c.key === seg);
+      expect(cat, `segment ${seg} must be reported`).toBeDefined();
+      expect(cat!.kind).toBe('count');
+    }
+  });
+
+  it('never reports a segment larger than the union that contains it', () => {
+    // The offline pipeline guarantees carless/lowinc/senior/disability ≤ prop_all
+    // ≤ need_all ≤ pop on every block, and blocks are disjoint, so summing them
+    // over a walkshed preserves the ordering. If the UI ever showed "Carless 120 /
+    // Ridership propensity 90" the product would have visibly contradicted itself.
+    const p = profileFromBlocks(
+      [richBlock('A', -111, 46), richBlock('B', -111.01, 46.01, 3)],
+      0.25, 2,
+    );
+    const { counts } = p;
+    expect(counts.carless).toBeLessThanOrEqual(counts.propensityAll);
+    expect(counts.lowIncome).toBeLessThanOrEqual(counts.propensityAll);
+    expect(counts.propensityAll).toBeLessThanOrEqual(counts.needAll);
+    expect(counts.seniors).toBeLessThanOrEqual(counts.needAll);
+    expect(counts.disability).toBeLessThanOrEqual(counts.needAll);
+    expect(counts.needAll).toBeLessThanOrEqual(counts.population);
+  });
+
+  it('reports the unions as DE-DUPLICATED — strictly below the sum of their parts', () => {
+    // This is the whole point of the estimator, and the thing the retired ×0.6
+    // model got wrong. A union must be smaller than the sum of the groups it
+    // unions (people belong to several at once) and at least as big as the
+    // largest of them (it contains each).
+    const p = profileFromBlocks([richBlock('A', -111, 46)], 0.25, 1);
+    const { counts } = p;
+    expect(counts.propensityAll).toBeLessThan(counts.carless + counts.lowIncome);
+    expect(counts.propensityAll).toBeGreaterThanOrEqual(
+      Math.max(counts.carless, counts.lowIncome),
+    );
+    expect(counts.needAll).toBeLessThan(
+      counts.carless + counts.lowIncome + counts.seniors + counts.disability,
+    );
   });
 
   it('keeps jobs on a separate (workplace) basis from every residence-based category', () => {
@@ -290,11 +349,15 @@ describe('categories overlap and are never totalled', () => {
     expect(categoryShare(p, byKey.seniors)).toBeNull();
   });
 
-  it('documents the renter / age-18-24 gap instead of fabricating those categories', () => {
+  it('has dropped the retired ×0.6 propensity model entirely — renters and 18–24 are CUT, not pending', () => {
+    // The old model was renters ∪ carless ∪ adults 18–24, scaled by an invented
+    // ×0.6. It is not "missing pending a data refresh" — it is abandoned, and the
+    // two segments that only ever existed to feed it are gone with it. Neither
+    // may reappear as a category, and neither may reappear as a "coming soon".
     const keys = PROFILE_CATEGORIES.map((c) => c.key) as string[];
     expect(keys).not.toContain('renters');
     expect(keys).not.toContain('adults18to24');
-    expect(MISSING_CATEGORIES.map((m) => m.field)).toEqual(['renter', 'age_18_24']);
+    expect(keys).not.toContain('highPropensityRiders');
   });
 });
 
@@ -410,11 +473,14 @@ describe('no ridership model', () => {
     }
   });
 
-  it('carries the high-propensity composite straight through from the block layer, unmodified', () => {
-    // We do not re-weight, scale, or "improve" the upstream composite — it is
-    // reported as-is and labelled an estimate. Anything else would be modelling.
-    const b = richBlock('X', -111, 46); // riders: 30
+  it('carries both unions straight through from the block layer, unmodified', () => {
+    // We do not re-weight, scale, or "improve" the upstream unions — they are
+    // reported as-is and labelled estimates. Anything else would be a second,
+    // client-side model, which is precisely what this change exists to prevent:
+    // the estimator lives once, in Python, and the client only READS its columns.
+    const b = richBlock('X', -111, 46); // prop_all: 40, need_all: 62
     const p = profileFromBlocks([b], 0.25, 1);
-    expect(p.counts.highPropensityRiders).toBe(30);
+    expect(p.counts.propensityAll).toBe(40);
+    expect(p.counts.needAll).toBe(62);
   });
 });

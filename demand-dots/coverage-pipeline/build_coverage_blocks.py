@@ -1,5 +1,5 @@
 """
-Build an EXACT census-block-level coverage layer for GTFS·X (SELF-CONTAINED).
+Build an EXACT census-block-level coverage layer for GTFS·X.
 
 One POINT per populated / job-bearing census block, carrying EXACT integer
 demographic attributes at the block's official internal point, so the GTFS·X
@@ -7,28 +7,62 @@ Coverage panel can tabulate precise population / jobs / equity counts inside a
 transit walkshed (block centroid-in-polygon) instead of the coarse
 tract-centroid disc apportionment.
 
-This module imports ONLY third-party libraries (geopandas, pandas, numpy,
-requests, shapely via geopandas, pyogrio for FlatGeobuf IO). It does NOT import
-the repo's build_dots.py — every helper it needs is inlined here so the
-coverage-pipeline/ folder can be copied to a fresh workstation and run on its
-own.
+WHAT THIS FILE DEPENDS ON (and the one thing that changed)
+──────────────────────────────────────────────────────────
+Third-party: geopandas, pandas, numpy, requests, shapely (via geopandas),
+pyogrio (FlatGeobuf IO). Nothing else — the TIGER/LODES/ACS fetching, the
+apportionment and the FlatGeobuf write are all inlined here.
+
+ONE exception, and it is deliberate: the two UNION columns (`prop_all`,
+`need_all`) are produced by `../puma_union.py`, the estimator the demand-dot
+tiles are built with. It is IMPORTED, not copied.
+
+The rest of this folder duplicates small helpers from the parent (the ACS vintage
+probe, the state FIPS map) because those are inert lookups that resolve
+dynamically against the same API and cannot drift. `puma_union` is NOT that: it
+is a statistical model — an independence backbone, a PUMA-measured correction
+table and a Fréchet clamp — and a hand-mirrored second copy of it is exactly how
+the Coverage panel and the dot map end up quietly disagreeing about what "likely
+rider" means. There is ONE definition of the estimator, in ../puma_union.py, and
+both pipelines call it.
+
+The cost is that this folder is no longer copyable ON ITS OWN: copy
+`demand-dots/` (which carries puma_union.py + data/) and run this from inside it.
+That is stated in the README. It is a smaller price than two models.
 
 Pipeline:
-  1. Fetch ACS 5-year block-group demographics (FULL variable set mirroring
-     src/services/demographics.ts) and derive the per-BG metrics (population,
-     occupied households, workers, high-propensity riders, equity numerators /
-     denominators). The ACS vintage is auto-probed (newest published 5-year
+  1. Fetch ACS 5-year block-group demographics and derive the per-BG metrics:
+     population, occupied households, workers, the Title VI equity numerators /
+     denominators, the four transit SEGMENTS (carless, low income, senior,
+     disability — all straight ACS counts) and the two UNIONS (ridership
+     propensity, transit need — PUMS-derived statistical estimates, via
+     ../puma_union.py). The ACS vintage is auto-probed (newest published 5-year
      release), except Connecticut, which is pinned — see ACS_YEAR_BY_STATE.
   2. Fetch TIGER TABBLOCK20 block geometries WITH the official internal point
      (INTPTLAT20 / INTPTLON20) — the block centroid we tabulate against.
   3. Apportion every BG attribute down to its constituent blocks, weighted by
      block POP20 (2020 decennial) -> HOUSING20 -> ALAND20 -> even split. The
      per-block fraction is computed once and applied to every attribute
-     (dasymetric, 12-char GEOID-prefix join).
+     (dasymetric, 12-char GEOID-prefix join), then puma_union.reconcile() runs
+     AGAIN on the rounded block counts so the union invariants hold exactly on
+     every row of the .fgb (see reconcile_blocks).
   4. Join LODES WAC block-level jobs by GEOID (no apportionment — already
      block-level; LODES vintage auto-probed downward from 2024).
   5. Write a FlatGeobuf (EPSG:4326, POINT at each block's internal point) with
      short snake_case attribute keys, emitting ONLY blocks where pop>0 OR jobs>0.
+
+ESTIMATES vs COUNTS — the distinction the whole layer must preserve
+──────────────────────────────────────────────────────────────────
+    prop_all, need_all          ESTIMATE.  PUMS-derived statistical unions.
+    carless, lowinc, senior,
+    disability, minority, youth COUNT.     Straight ACS table lookups (people).
+    hh, occ_hh, zeroveh_hh      COUNT.     HOUSEHOLDS, not people.
+    jobs                        COUNT.     WORKPLACE universe (LODES). Never add
+                                           it to a residence-based number.
+
+The categories OVERLAP by construction — one person can be carless AND low-income
+AND a senior. There is NO honest total. The frontend surfaces the estimate/count
+split as badges; do not blur it here.
 
 CLI:
     python build_coverage_blocks.py --state MT --out states/mt.fgb [--cache-dir ./cache]
@@ -45,6 +79,28 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import requests
+
+# ─── The union estimator: imported, never re-implemented ──────────────────────
+#
+# ../puma_union.py owns the definition of `prop_all` / `need_all` — the same one
+# the demand-dot tiles are built from. Importing it (rather than copying it) is
+# what guarantees the dot map and the Coverage panel cannot disagree about the
+# number. It needs ../data/puma_corrections.csv and
+# ../data/2020_Census_Tract_to_2020_PUMA.txt, which it resolves relative to
+# itself.
+_PARENT = Path(__file__).resolve().parent.parent
+if str(_PARENT) not in sys.path:
+    sys.path.insert(0, str(_PARENT))
+try:
+    import puma_union  # noqa: E402  (path shim must run first)
+except ImportError as exc:  # pragma: no cover - import-time guard
+    raise ImportError(
+        f"Could not import the union estimator from {_PARENT / 'puma_union.py'}.\n"
+        "This pipeline lives inside demand-dots/ and imports its parent's "
+        "puma_union.py (plus data/puma_corrections.csv and the PUMA crosswalk) "
+        "rather than keeping a second copy of the model. Copy the whole "
+        "demand-dots/ directory, not just coverage-pipeline/."
+    ) from exc
 
 # ─── Vintages / endpoints ─────────────────────────────────────────────────────
 
@@ -183,7 +239,18 @@ def _census_key() -> str:
     return ""
 
 
-# ─── ACS variable set (mirrors src/services/demographics.ts ACS_ALL_VARS) ─────
+# ─── ACS variable set ─────────────────────────────────────────────────────────
+#
+# Every table here is available AT BLOCK GROUP. That is not a given, and the one
+# that bites is disability:
+#
+#   C21007, NOT B18101 / B18105 / C18108. The B18xxx family and C18108 are
+#   published at TRACT and above ONLY. Ask the API for them at block group and it
+#   does NOT error — it returns rows of NULLs, which coerce to 0 and ship as a
+#   silently empty column. C21007 ("Age by Veteran Status by Poverty Status by
+#   Disability Status", civilian population 18+) IS block-group available, and its
+#   universe is exactly the one puma_union's PUMS correction table is measured
+#   against, so the union and the segment describe the same concept.
 
 ACS_BASE_VARS = [
     "B01003_001E",  # total population
@@ -207,12 +274,12 @@ ACS_YOUTH_NUM = [
     "B01001_003E", "B01001_004E", "B01001_005E", "B01001_006E",  # male <5,5-9,10-14,15-17
     "B01001_027E", "B01001_028E", "B01001_029E", "B01001_030E",  # female <5,5-9,10-14,15-17
 ]
-ACS_TENURE_TOTAL = "B25003_001E"
-ACS_TENURE_RENTER = "B25003_003E"
-ACS_AVG_HH_SIZE = "B25010_001E"
-ACS_AGE_18_24 = [
-    "B01001_007E", "B01001_008E", "B01001_009E", "B01001_010E",  # male 18-19,20,21,22-24
-    "B01001_031E", "B01001_032E", "B01001_033E", "B01001_034E",  # female 18-19,20,21,22-24
+ACS_DISABILITY_NUM = [
+    # C21007 "with a disability" cells, across the 8 age x veteran x poverty
+    # branches of the table. Summing the branches gives the whole civilian 18+
+    # disabled population of the block group. Same cells as build_dots.py.
+    "C21007_005E", "C21007_008E", "C21007_012E", "C21007_015E",
+    "C21007_020E", "C21007_023E", "C21007_027E", "C21007_030E",
 ]
 
 ACS_ALL_VARS = [
@@ -221,16 +288,50 @@ ACS_ALL_VARS = [
     ACS_HOUSEHOLDS_DENOM, *ACS_NO_VEHICLE_NUM,
     *ACS_SENIOR_NUM,
     *ACS_YOUTH_NUM,
-    ACS_TENURE_TOTAL, ACS_TENURE_RENTER, ACS_AVG_HH_SIZE,
-    *ACS_AGE_18_24,
+    *ACS_DISABILITY_NUM,
 ]
 
-# The integer attributes apportioned to blocks (mirror BlockGroupData fields).
-ATTR_KEYS = [
-    "pop", "hh", "workers", "riders",
+# ─── The block attribute schema ───────────────────────────────────────────────
+#
+# COUNT_KEYS  straight ACS counts (+ derived-but-exact ones). Tabulating them is
+#             a sum; a walkshed total is a headcount of what the ACS published.
+# UNION_KEYS  the two PUMS-derived statistical ESTIMATES. Not headcounts. The
+#             frontend badges them differently, and it must keep doing so.
+#
+# `carless` is PEOPLE (zero-vehicle HOUSEHOLDS x the PUMA's measured zero-vehicle
+# household size, ~1.8 — NOT the ~2.43 average household size, which over-counted
+# by ~35%). `zeroveh_hh` is the raw HOUSEHOLD count and is kept alongside it: the
+# Title VI panel's denominator is occupied households, not people.
+#
+# The old `riders` column (renters u carless u adults 18-24, x an invented 0.6)
+# is GONE. It was a different, abandoned model — the true dedup factor for that
+# composite is 0.824, so it under-counted its own headline by 27% — and shipping
+# it beside prop_all would have put two contradictory answers to the same question
+# in one file. Nothing reads it any more (blockCoverage.ts / walkshedProfile.ts /
+# CoveragePanel all moved to prop_all + need_all).
+COUNT_KEYS = [
+    "pop", "hh", "workers",
     "minority", "race_pop", "lowinc", "pov_univ",
     "zeroveh_hh", "occ_hh", "senior", "youth",
+    "carless", "disability",
 ]
+UNION_KEYS = ["prop_all", "need_all"]
+
+# The integer attributes apportioned to blocks, in .fgb column order.
+ATTR_KEYS = [*COUNT_KEYS, *UNION_KEYS]
+
+# The subset puma_union.reconcile() constrains. Its keys are the estimator's own
+# names, so they are mapped to our column names once, here, rather than at three
+# call sites.
+RECONCILE_TO_COLUMN = {
+    "total_pop": "pop",
+    "carless": "carless",
+    "low_income": "lowinc",
+    "senior": "senior",
+    "disability": "disability",
+    "prop_all": "prop_all",
+    "need_all": "need_all",
+}
 
 
 def _num(df: pd.DataFrame, col: str) -> pd.Series:
@@ -243,11 +344,17 @@ def _num(df: pd.DataFrame, col: str) -> pd.Series:
 
 
 def fetch_block_group_full_state(state_fips: str) -> pd.DataFrame:
-    """Fetch the FULL ACS variable set for a state's block groups and derive the
-    per-BG attributes that mirror src/services/demographics.ts exactly."""
+    """Fetch the FULL ACS variable set for a state's block groups and derive every
+    per-BG attribute: the counts, and the two PUMS-derived unions."""
     acs_year = _acs_year(state_fips)
     dataset = f"{CENSUS_API_BASE}/{acs_year}/acs/acs5"
-    cache_file = cache_path(f"acs{acs_year}_cov_bg_state_{state_fips}.csv")
+    # The cache key carries the content hash of the PUMS tables the unions are
+    # derived from (puma_union.corrections_hash), so regenerating those tables —
+    # or bumping the schema — busts the cache instead of silently reusing a CSV
+    # whose prop_all/need_all columns were computed from the old ones. A stale
+    # cache here has no error surface at all: the columns are simply wrong.
+    schema_key = puma_union.corrections_hash()
+    cache_file = cache_path(f"acs{acs_year}_v{schema_key}_cov_bg_state_{state_fips}.csv")
     if cache_file.exists():
         print(f"  Using cached coverage ACS block-group data: {cache_file}")
         return pd.read_csv(cache_file, dtype={"GEOID": str})
@@ -287,24 +394,47 @@ def fetch_block_group_full_state(state_fips: str) -> pd.DataFrame:
     total_race = _num(df, "B03002_001E")
     nonhisp_white = _num(df, "B03002_003E")
 
-    # High-propensity riders — identical model to demographics.ts:
-    #   renter_pop   = renter share of tenure × population
-    #   zero_veh_pop = zero-vehicle households × avg household size (≥0; 2.5 fb)
-    #   pop_18_24    = adults 18-24 from B01001
-    #   high = min(population, round((renter_pop + zero_veh_pop + pop_18_24)×0.6))
+    # ── The four SEGMENTS. Straight ACS counts, one table each. ───────────────
+    #
+    # carless is the one that needs a conversion: B25044 counts zero-vehicle
+    # HOUSEHOLDS, not people. It is scaled by the PUMA's own MEASURED zero-vehicle
+    # household size (~1.8 persons, from PUMS — see puma_union/
+    # build_puma_corrections), not by B25010's average household size (~2.43): a
+    # zero-vehicle household is much smaller than an average one, and using the
+    # average over-counted this segment by ~35%.
     zero_veh_hh = sum((_num(df, c) for c in ACS_NO_VEHICLE_NUM), start=pd.Series(0.0, index=df.index))
-    tenure_total = _num(df, ACS_TENURE_TOTAL)
-    renter_units = _num(df, ACS_TENURE_RENTER)
-    renter_pop = np.where(tenure_total > 0, (renter_units / tenure_total * population).round(), 0)
-    avg_hh_raw = _num(df, ACS_AVG_HH_SIZE)
-    avg_hh = avg_hh_raw.where(avg_hh_raw > 0, 2.5)
-    zero_veh_pop = (zero_veh_hh * avg_hh).round()
-    pop_18_24 = sum((_num(df, c) for c in ACS_AGE_18_24), start=pd.Series(0.0, index=df.index))
-    riders = np.minimum(population, ((renter_pop + zero_veh_pop + pop_18_24) * 0.6).round())
+    params = puma_union.puma_params(df["GEOID"])
+    carless = zero_veh_hh * params["hh_size_carless"].to_numpy()
 
     lowinc = sum((_num(df, c) for c in ACS_LOW_INCOME_NUM), start=pd.Series(0.0, index=df.index))
     senior = sum((_num(df, c) for c in ACS_SENIOR_NUM), start=pd.Series(0.0, index=df.index))
     youth = sum((_num(df, c) for c in ACS_YOUTH_NUM), start=pd.Series(0.0, index=df.index))
+    disability = sum((_num(df, c) for c in ACS_DISABILITY_NUM), start=pd.Series(0.0, index=df.index))
+
+    # ── The two UNIONS. Estimated, not counted. ───────────────────────────────
+    #
+    # The ACS publishes MARGINALS at block group and no joint distribution below
+    # PUMA, so "how many DISTINCT people are carless OR low-income" cannot be read
+    # off a table. puma_union.estimate() answers it the same way the demand-dot
+    # tiles do — independence backbone x a PUMS-measured PUMA correction, then
+    # Fréchet-clamped — and reconcile() makes the invariants
+    # (segment <= prop_all <= need_all <= pop) true BY CONSTRUCTION.
+    #
+    # The population handed to the estimator is B01003_001E, the same `pop` column
+    # this layer displays. build_dots.py feeds it B01001_001E (the sex-by-age
+    # universe). The two are the ACS's total population and agree to the person in
+    # practice; using OUR pop is what guarantees `prop_all <= pop` holds against
+    # the number the Coverage panel actually shows.
+    cls = puma_union.estimate(
+        population.to_numpy(),
+        carless.to_numpy(), lowinc.to_numpy(),
+        senior.to_numpy(), disability.to_numpy(),
+        params["c_prop"].to_numpy(), params["c_need"].to_numpy(),
+    )
+    violations = puma_union.check_invariants(cls)
+    if violations:
+        raise AssertionError(
+            "block-group invariants violated by the union estimator: " + "; ".join(violations))
 
     out = pd.DataFrame({
         "GEOID": df["GEOID"],
@@ -313,7 +443,6 @@ def fetch_block_group_full_state(state_fips: str) -> pd.DataFrame:
         # spec; also surfaced separately as occ_hh (the equity denominator).
         "hh": _num(df, ACS_HOUSEHOLDS_DENOM),
         "workers": _num(df, "B08301_001E"),
-        "riders": riders,
         "minority": np.maximum(0, total_race - nonhisp_white),
         "race_pop": total_race,
         "lowinc": lowinc,
@@ -322,9 +451,14 @@ def fetch_block_group_full_state(state_fips: str) -> pd.DataFrame:
         "occ_hh": _num(df, ACS_HOUSEHOLDS_DENOM),
         "senior": senior,
         "youth": youth,
+        # From reconcile(): already integer, already clamped, already consistent.
+        "carless": cls["carless"],
+        "disability": cls["disability"],
+        "prop_all": cls["prop_all"],
+        "need_all": cls["need_all"],
     })
     for k in ATTR_KEYS:
-        out[k] = out[k].round().astype(int)
+        out[k] = out[k].round().clip(lower=0).astype(int)
     out.to_csv(cache_file, index=False)
     print(f"  Cached coverage ACS data: {len(out)} block groups")
     return out
@@ -407,15 +541,89 @@ def build_bg_to_blocks_index(blocks_gdf: gpd.GeoDataFrame) -> dict[str, pd.DataF
     return {bg: g for bg, g in b.groupby("BG_GEOID", sort=False)}
 
 
+def _largest_remainder(total: int, weights: np.ndarray) -> np.ndarray:
+    """Split an integer `total` across blocks by `weights` (which sum to 1),
+    conserving it EXACTLY: floor everything, then hand the leftover units to the
+    largest fractional remainders.
+
+    THIS REPLACES INDEPENDENT PER-BLOCK ROUNDING, WHICH DESTROYED RARE COLUMNS.
+    ──────────────────────────────────────────────────────────────────────────
+    The old code did `round(bg_total * weight_i)` per block, independently. For a
+    COMMON attribute that is roughly fine — the population of a block group is big
+    enough that most blocks want ≥ 0.5 of a person and round up as often as down.
+
+    For a RARE one it is a shredder. A block group with 24 zero-vehicle households
+    spread over 100 blocks gives each block 0.24 of a household; every single one
+    rounds to ZERO, and all 24 households simply cease to exist. The loss is
+    systematic (never compensating), and it grows as the attribute gets rarer.
+
+    Measured on Montana, against the ACS block-group truth the file is built from:
+
+        zero-vehicle households   -10.25%     seniors 65+        -0.23%
+        carless people             -5.70%     low income         -0.11%
+        disability                 -0.58%     population         -0.01%
+
+    The -5.70% is not a coincidence: build_dots.py hit this exact bug and its
+    APPORTION_VERSION note records "lost 5.7% of Montana's carless population" —
+    the same state, the same attribute, the same number. That pipeline fixed it and
+    this one did not, so the shipped us.fgb has been serving a zero-vehicle
+    household count a tenth short of the ACS — into the Title VI panel, whose
+    zero-vehicle row is one of its four equity numerators.
+
+    Largest-remainder (Hamilton) is the right tool HERE specifically because this
+    is one quantity across many units: the fractional remainders vary from block to
+    block, so the leftovers land in different places each time and nothing is
+    starved systematically. (It is the WRONG tool for splitting one block's dot
+    budget across 16 fixed-share cells — see build_dots._apportion_dots, which uses
+    randomized apportionment for that opposite case. The two are not
+    interchangeable, and the distinction is why each pipeline uses what it uses.)
+    """
+    if total <= 0:
+        return np.zeros(len(weights), dtype=np.int64)
+    exact = weights * float(total)
+    base = np.floor(exact).astype(np.int64)
+    leftover = int(total - base.sum())
+    if leftover > 0:
+        # Stable sort so a given block group always apportions identically.
+        order = np.argsort(-(exact - base), kind="stable")
+        base[order[:leftover]] += 1
+    return base
+
+
 def apportion_state(
     bg_data: pd.DataFrame,
     bg_index: dict[str, pd.DataFrame],
 ) -> dict[str, dict]:
     """Apportion every BG attribute to its blocks, weighted by POP20 (->HOUSING20
-    ->ALAND20->even). The per-block fraction is computed once and applied to all
-    attributes (generalized N-attribute apportionment). Returns
-    geoid -> {lon, lat, attrs...} for every block in a BG that has data."""
+    ->ALAND20->even). The per-block fraction is computed once and applied to every
+    attribute, each split by largest remainder so the block group's total is
+    conserved EXACTLY (see _largest_remainder). Returns
+    geoid -> {lon, lat, attrs...} for every block in a BG that has data.
+
+    Conservation is per-column and per-block-group, so the statewide block sums
+    come back to the ACS statewide totals to the person. What it does NOT give is
+    cross-column consistency: the leftover unit of `carless` and the leftover unit
+    of `prop_all` can land in different blocks, so a block can end up with
+    carless = 12 and prop_all = 11 — a segment larger than the union containing it.
+    reconcile_blocks() runs next and fixes exactly that.
+
+    POPULATION IS APPORTIONED FIRST, AND IT GATES EVERYTHING ELSE.
+    ─────────────────────────────────────────────────────────────
+    Only blocks where `pop > 0` OR `jobs > 0` are written to the .fgb. If the other
+    columns were apportioned over the same weights as population, largest remainder
+    could hand the last low-income resident to a block that ended up with pop = 0 —
+    and that block is then DROPPED, taking the person with it. That would quietly
+    re-open the leak this function was just fixed to close, and it would put
+    low-income residents in a block with no residents, which is nonsense on its own
+    terms.
+
+    So population is split first, and every residence-based column is then split
+    over the weights RESTRICTED to the blocks that actually received people (and
+    renormalized). Each column still conserves its block-group total exactly, and
+    every unit now lands in a block that survives to the file.
+    """
     blocks: dict[str, dict] = {}
+    residence_keys = [k for k in ATTR_KEYS if k != "pop"]
     for _, row in bg_data.iterrows():
         bg_geoid = row["GEOID"]
         bg_blocks = bg_index.get(bg_geoid)
@@ -433,17 +641,85 @@ def apportion_state(
             n = len(bg_blocks)
             weights = np.full(n, 1.0 / n)
 
-        bg_attrs = {k: float(row[k]) for k in ATTR_KEYS}
+        split = {"pop": _largest_remainder(int(row["pop"]), weights)}
+
+        # Restrict the residence columns to the blocks that got people. When the
+        # block group has no population at all there is nowhere coherent to put
+        # them, so fall back to the raw weights; such blocks carry no jobs either
+        # and are dropped at emit, which is the right answer for an empty BG.
+        peopled = split["pop"] > 0
+        w_res = weights
+        if peopled.any():
+            masked = weights * peopled
+            s = masked.sum()
+            if s > 0:
+                w_res = masked / s
+        for k in residence_keys:
+            split[k] = _largest_remainder(int(row[k]), w_res)
+
         geoids = bg_blocks["GEOID_BLOCK"].to_numpy()
         lons = bg_blocks["INTPTLON20"].to_numpy()
         lats = bg_blocks["INTPTLAT20"].to_numpy()
         for i in range(len(bg_blocks)):
-            frac = weights[i]
             rec = {"lon": float(lons[i]), "lat": float(lats[i])}
             for k in ATTR_KEYS:
-                rec[k] = max(0, int(round(bg_attrs[k] * frac)))
+                rec[k] = int(split[k][i])
             blocks[geoids[i]] = rec
     return blocks
+
+
+def reconcile_blocks(blocks: dict[str, dict]) -> tuple[dict[str, dict], int]:
+    """Re-run puma_union.reconcile() on the ROUNDED block counts.
+
+    Returns (blocks, n_rows_changed).
+
+    WHY THIS EXISTS. The estimator's invariants
+    (carless/lowinc/senior/disability <= prop_all <= need_all <= pop, plus both
+    Fréchet bounds) hold exactly at BLOCK GROUP, and they hold exactly on the
+    real-valued block split too, because a block's counts are its block group's
+    counts times one scalar weight. What breaks them is ROUNDING: apportion_state
+    rounds each column independently, so a block wanting carless = 11.6 and
+    prop_all = 11.5 rounds to 12 and 11 — a segment bigger than the union it
+    belongs to, off by one person, in a file nobody will ever eyeball.
+
+    At walkshed scale those ±1s mostly cancel, which is exactly why this must not
+    be left to average out: a ¼-mi walkshed around a rural stop can contain ONE
+    block, and then the panel prints "Carless 12 / Likely riders 11" and the
+    product has visibly contradicted itself.
+
+    reconcile() is idempotent and is the estimator's own choke point, so calling
+    it again on the integers is not a patch over the model — it is the same
+    clamp, applied at the geography we ship. It moves counts by at most the
+    rounding error that created the violation.
+    """
+    if not blocks:
+        return blocks, 0
+
+    geoids = list(blocks)
+    cols = {
+        name: np.array([blocks[g][col] for g in geoids], dtype=np.int64)
+        for name, col in RECONCILE_TO_COLUMN.items()
+    }
+    fixed = puma_union.reconcile(
+        cols["total_pop"], cols["carless"], cols["low_income"],
+        cols["senior"], cols["disability"],
+        cols["prop_all"], cols["need_all"],
+    )
+
+    changed = np.zeros(len(geoids), dtype=bool)
+    for name, col in RECONCILE_TO_COLUMN.items():
+        changed |= fixed[name] != cols[name]
+    for i, g in enumerate(geoids):
+        if not changed[i]:
+            continue
+        for name, col in RECONCILE_TO_COLUMN.items():
+            blocks[g][col] = int(fixed[name][i])
+
+    violations = puma_union.check_invariants(fixed)
+    if violations:
+        raise AssertionError(
+            "block-level invariants violated after reconcile: " + "; ".join(violations))
+    return blocks, int(changed.sum())
 
 
 def build_state(state: str, out: str, cache_dir: str | None = None) -> dict:
@@ -473,6 +749,12 @@ def build_state(state: str, out: str, cache_dir: str | None = None) -> dict:
     bg_index = build_bg_to_blocks_index(blocks_gdf)
     block_attrs = apportion_state(bg_data, bg_index)
     print(f"  Apportioned {len(block_attrs):,} blocks in {time.time()-t0:.1f}s")
+
+    # Re-clamp the union invariants after the independent per-column rounding.
+    block_attrs, n_fixed = reconcile_blocks(block_attrs)
+    pct = 100.0 * n_fixed / max(1, len(block_attrs))
+    print(f"  Reconciled union invariants at block level: "
+          f"{n_fixed:,} of {len(block_attrs):,} blocks adjusted ({pct:.2f}%, rounding only)")
 
     # Conservation check (population): sum of block pop ≈ statewide ACS pop.
     apportioned_pop = sum(b["pop"] for b in block_attrs.values())
@@ -551,7 +833,13 @@ def build_state(state: str, out: str, cache_dir: str | None = None) -> dict:
         "acs_pop": statewide_acs_pop,
         "hh": int(gdf["hh"].sum()),
         "workers": int(gdf["workers"].sum()),
-        "riders": int(gdf["riders"].sum()),
+        "carless": int(gdf["carless"].sum()),
+        "lowinc": int(gdf["lowinc"].sum()),
+        "senior": int(gdf["senior"].sum()),
+        "disability": int(gdf["disability"].sum()),
+        "prop_all": int(gdf["prop_all"].sum()),
+        "need_all": int(gdf["need_all"].sum()),
+        "blocks_reconciled": n_fixed,
         "jobs": int(gdf["jobs"].sum()),
         "size_mb": size_mb,
         "out": str(out_path),
@@ -564,8 +852,17 @@ def build_state(state: str, out: str, cache_dir: str | None = None) -> dict:
     print(f"  Total population:   {stats['pop']:,}  (ACS statewide {statewide_acs_pop:,})")
     print(f"  Total households:   {stats['hh']:,}")
     print(f"  Total workers:      {stats['workers']:,}")
-    print(f"  Total riders:       {stats['riders']:,}")
-    print(f"  Total jobs:         {stats['jobs']:,}")
+    print(f"  Total jobs:         {stats['jobs']:,}   (WORKPLACE universe — never add to residents)")
+    print("  ── Segments (ACS counts, people; they OVERLAP — do not sum) ──")
+    print(f"    Carless:          {stats['carless']:,}")
+    print(f"    Low income:       {stats['lowinc']:,}")
+    print(f"    Senior 65+:       {stats['senior']:,}")
+    print(f"    Disability:       {stats['disability']:,}")
+    print("  ── Unions (PUMS-derived ESTIMATES, de-duplicated) ──")
+    print(f"    Ridership propensity: {stats['prop_all']:,}"
+          f"  ({100.0 * stats['prop_all'] / max(1, stats['pop']):.1f}% of residents)")
+    print(f"    Transit need:         {stats['need_all']:,}"
+          f"  ({100.0 * stats['need_all'] / max(1, stats['pop']):.1f}% of residents)")
     print(f"  Bbox readback:      {stats['bbox_readback']:,} blocks in central 0.5° box")
     print("────────────────────────────────────────────────────────")
     return stats

@@ -304,6 +304,31 @@ Design rationale is preserved in the decisions appendix of the archived
   - A **nationwide rebuild + `verify_tiles.py` pass is required** before
     `us-2026e` can be published. Do not consider the redesign live until then;
     see the Demand-dot regen runbook in Appendix A.
+- **⚠️ Coverage block layer (`us.fgb`) — PROD IS ON THE OLD SCHEMA (2026-07-13).**
+  The layer in R2 (`gtfs-builder-tiles/coverage/us.fgb`, served at
+  `/_coverage/us.fgb`) still carries the retired `riders` column and lacks
+  `carless`, `disability`, `prop_all`, `need_all`. The coverage pipeline and the
+  whole frontend now expect the new schema. Status:
+  - `coverage-pipeline/build_coverage_blocks.py` + the frontend consumers
+    (`blockCoverage.ts`, `walkshedProfile.ts`, `demographics.ts`,
+    `CoveragePanel.tsx`, `WalkshedProfileTable.tsx`) are rewritten in the working
+    tree and **uncommitted**. Validated on a single-state Montana build only.
+  - **A nationwide regen is required** (see the Coverage-layer regen runbook in
+    Appendix A). It has NOT been run — that is a deliberate, separate step:
+    ```
+    cd demand-dots/coverage-pipeline && ../.venv/bin/python build_us.py --out us.fgb --jobs 4
+    ```
+  - **Shipping the client without the regen does NOT silently lie.**
+    `loadBlocksInBbox()` throws `CoverageLayerSchemaError` when the served .fgb
+    lacks the union columns, so a stale layer degrades to the block-group path
+    (straight ACS counts, and the UI says the propensity/need estimate is
+    unavailable) rather than rendering `prop_all` as a confident `0`. The order
+    is still regen-then-ship; the guard is a safety net, not a plan.
+  - **The old layer also under-counted.** Independent per-column rounding in the
+    apportionment destroyed rare attributes: measured on Montana, the live
+    `us.fgb` is short **-10.2% of zero-vehicle households** (a Title VI equity
+    numerator) and **-5.7% of carless residents**. Fixed with largest-remainder
+    apportionment; the regen is what puts the fix into prod.
 - **GTFS-Realtime Service Alerts (BE-90..93)** live since 2026-05-30 — Agency+
   authoring under `/api/projects/:id/alerts`, public serving at
   `feeds.*/<slug>/alerts.pb` + `/alerts.json`.
@@ -1165,17 +1190,42 @@ built archive's own header agrees with both.
 
 ### Coverage-layer regen
 
-`demand-dots/coverage-pipeline/` is deliberately self-contained (it imports
-nothing from the rest of the repo, so it can be copied to a beefier box and run
-there)—it therefore carries its own copy of the vintage probe and the CT pin.
-Keep the two in sync. See its README for runtime, RAM and merge-backend notes.
+`demand-dots/coverage-pipeline/` is **no longer standalone**: it imports
+`../puma_union.py` — the same union estimator the demand-dot tiles are built
+with, not a second copy of it — plus `../data/puma_corrections.csv` and the
+tract→PUMA crosswalk. Copy the whole `demand-dots/` directory, not just
+`coverage-pipeline/`, to run this elsewhere. It still carries its own copy of
+the vintage probe and the CT pin (both inert lookups that resolve dynamically
+against the same API and can't drift, unlike the estimator). Keep those two in
+sync. See its README for the schema, the largest-remainder apportionment fix,
+runtime/RAM, and merge-backend notes.
+
+The `.fgb` schema (2026-07): `geoid, pop, hh, workers, minority, race_pop,
+lowinc, pov_univ, zeroveh_hh, occ_hh, senior, youth, carless, disability,
+prop_all, need_all, jobs`. `carless`/`disability` are straight ACS counts;
+`prop_all` (ridership propensity = carless ∪ low-income) and `need_all`
+(transit need = + senior + disability) are the PUMS-derived estimates. The old
+`riders` column (renters ∪ carless ∪ adults 18–24, × an invented ×0.6) is gone.
 
 ```bash
 cd demand-dots/coverage-pipeline
-python build_us.py --out us.fgb --jobs 4           # ~3-5 h cold, resumable
+../.venv/bin/python build_us.py --out us.fgb --jobs 4   # ~3-5 h cold, resumable
 wrangler r2 object put gtfs-builder-tiles/coverage/us.fgb \
   --file us.fgb --content-type application/octet-stream --remote
 ```
+
+The ACS block-group cache key embeds `puma_union.corrections_hash()`, so it
+busts automatically when the correction tables or schema change — no manual
+cache-dir wipe needed. The old `acs<year>_cov_bg_state_<fips>.csv` cache files
+(pre-union schema) are dead; delete them.
+
+**Deploy ordering:** regenerate and upload `us.fgb` before, or together with,
+shipping client code that depends on the new columns. The client
+(`src/services/blockCoverage.ts`) already checks every loaded layer for the
+union-schema columns and throws `CoverageLayerSchemaError` if they're missing,
+so a stale layer degrades to "counts only, no estimate" instead of rendering a
+confident wrong number — but regenerate promptly regardless; that guard is a
+safety net for the deploy window, not a reason to leave prod on an old layer.
 
 ### Nationwide rebuild cost, for planning
 

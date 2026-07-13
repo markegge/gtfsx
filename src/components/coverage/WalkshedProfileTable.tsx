@@ -1,6 +1,5 @@
 import {
   PROFILE_CATEGORIES,
-  MISSING_CATEGORIES,
   categoryShare,
   type WalkshedProfile,
 } from '../../services/walkshedProfile';
@@ -24,12 +23,17 @@ function pctOrDash(v: number | null): string {
  * dishonest rather than merely imprecise:
  *
  *  1. The categories OVERLAP and DO NOT SUM. One person is counted in
- *     "Low-income", "Zero-vehicle household", "65+" and "High-propensity" at
- *     once. There is therefore NO total row, and there never should be.
- *  2. Rows are labelled `count` (an exact census-block tabulation) or `est.`
- *     (the one modelled composite). They are not the same kind of number and
- *     are not blurred together. `Jobs` is workplace-based; every other row is
- *     residence-based.
+ *     "Low-income", "Carless", "65+", "Ridership propensity" and "Transit need"
+ *     at once. There is therefore NO total row, and there never should be.
+ *  2. Rows are labelled `count` (an exact census-block ACS tabulation) or `est.`
+ *     (the two PUMS-derived de-duplicated unions). They are not the same kind of
+ *     number and are not blurred together. `Jobs` is workplace-based; every other
+ *     row is residence-based.
+ *
+ * The badge vocabulary is deliberately the SAME as the demand-dot map's layer
+ * control ("estimate" on the composite, "ACS count" on each segment). The two
+ * features now report the same numbers from the same pipeline, and they must not
+ * describe them with different words.
  */
 export function WalkshedProfileTable({
   profile,
@@ -115,29 +119,25 @@ export function WalkshedProfileNotes({ profile }: { profile: WalkshedProfile }) 
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-2">
         <p className="text-[10px] leading-relaxed text-amber-900">
           <span className="font-semibold">These categories overlap — do not add them up.</span>{' '}
-          The same person can be counted as low-income, in a zero-vehicle household, 65+, and
-          high-propensity all at once. There is no "total people served" number here, and adding the
-          rows together would invent one.
+          The same person can be counted as low-income, carless, 65+, and in both composites at
+          once. There is no "total people served" number here, and adding the rows together would
+          invent one.
         </p>
       </div>
       <p className="text-[10px] leading-relaxed text-warm-gray">
-        <span className="font-semibold text-dark-brown">Counts</span> are exact tabulations of the{' '}
-        {fmt(profile.blocksCounted)} census {profile.blocksCounted === 1 ? 'block' : 'blocks'} whose
-        center falls inside the walkshed.{' '}
-        <span className="font-semibold text-dark-brown">High-propensity residents</span> is the one
-        row that is <span className="font-semibold">not</span> a count: it is a modelled composite of
-        renters, zero-vehicle households, and adults 18–24, scaled by an ad-hoc ×0.6 factor to blunt
-        double-counting between them — treat it as an estimate, and note it is{' '}
-        <span className="font-semibold">not a ridership forecast</span>: it does not predict
-        boardings.{' '}
+        <span className="font-semibold text-dark-brown">Counts</span> are exact ACS tabulations of
+        the {fmt(profile.blocksCounted)} census{' '}
+        {profile.blocksCounted === 1 ? 'block' : 'blocks'} whose center falls inside the walkshed.{' '}
+        <span className="font-semibold text-dark-brown">Ridership propensity</span> and{' '}
+        <span className="font-semibold text-dark-brown">Transit need</span> are the two rows that
+        are <span className="font-semibold">not</span> counts. They are de-duplicated{' '}
+        <span className="font-semibold">unions</span>: someone who is both carless and low-income is
+        counted once, not twice. The ACS publishes no joint distribution below the PUMA level, so
+        that overlap is estimated from Census PUMS person records rather than assumed — the same
+        model, from the same pipeline, as the demand-dot map. Neither is a{' '}
+        <span className="font-semibold">ridership forecast</span>: they do not predict boardings.{' '}
         <span className="font-semibold text-dark-brown">Jobs</span> are counted at the workplace
         (LODES); every other row counts people where they live, so the two never add together.
-      </p>
-      <p className="text-[10px] leading-relaxed text-warm-gray">
-        Not yet reported:{' '}
-        {MISSING_CATEGORIES.map((m) => m.label).join(' and ')} — those columns aren't in the current
-        census-block layer, and back-filling them from a coarser source would mix methodologies. They
-        arrive when the coverage layer is regenerated.
       </p>
     </div>
   );

@@ -26,18 +26,30 @@
  * defensively too, so no caller can double-count by accident.
  *
  * ── The categories OVERLAP and DO NOT SUM
- * One person can be counted in `lowIncome`, `zeroVehicleHouseholds`, `seniors`
- * and `highPropensityRiders` at the same time. Never add the categories
- * together into a "total served" — there is no such number here. The UI must say
- * this out loud; see PROFILE_CATEGORIES.kind / .basis, which the panels render.
+ * One person can be counted in `lowIncome`, `carless`, `seniors` and
+ * `propensityAll` at the same time. Never add the categories together into a
+ * "total served" — there is no such number here. The UI must say this out loud;
+ * see PROFILE_CATEGORIES.kind / .basis, which the panels render.
  *
- * ── Counts vs. the one estimate
- * Every category is a straight count off the census blocks EXCEPT
- * `highPropensityRiders`, which is a modelled composite (renters + zero-vehicle
- * households + adults 18–24, scaled by an ad-hoc ×0.6 dedup factor in the
- * offline pipeline). It overlaps its own components and is an ESTIMATE. It is
- * flagged `kind: 'estimate'` so the UI can label it differently, and it is
- * never presented as a count.
+ * ── Counts vs. the two estimates
+ * Every category is a straight ACS count off the census blocks EXCEPT the two
+ * de-duplicated UNIONS:
+ *
+ *     propensityAll   ridership propensity = carless ∪ low-income
+ *     needAll         transit need         = + seniors + disability
+ *
+ * The ACS publishes marginals at block group and no joint distribution below
+ * PUMA, so "how many DISTINCT people are carless OR low-income" is not in any
+ * table — it is estimated offline (an independence backbone × a PUMA correction
+ * measured from PUMS person records, then Fréchet-clamped) by the same module
+ * that builds the demand-dot map, so the two features cannot disagree. Both are
+ * flagged `kind: 'estimate'`, are never presented as counts, and are NOT a
+ * ridership forecast — they say nothing about how many of these people board.
+ *
+ * The predecessor of these two — "high-propensity riders", renters ∪ carless ∪
+ * adults 18–24 scaled by an invented ×0.6 — is GONE. Its true dedup factor was
+ * 0.824, so it under-counted its own headline by 27%. Renters and the 18–24
+ * bracket are not in the model at all now: they are CUT, not pending.
  *
  * ── Residence vs. workplace
  * `jobs` is counted at the WORKPLACE (LODES). Every other category is counted
@@ -64,10 +76,13 @@ export type ProfileCountKey =
   | 'minority'
   | 'lowIncome'
   | 'zeroVehicleHouseholds'
+  | 'carless'
   | 'seniors'
   | 'youth'
+  | 'disability'
   | 'jobs'
-  | 'highPropensityRiders';
+  | 'propensityAll'
+  | 'needAll';
 
 /** Denominators carried alongside the counts so a share can be computed AFTER
  *  summing (never average pre-computed per-block shares). */
@@ -81,9 +96,9 @@ export interface ProfileCategory {
   key: ProfileCountKey;
   label: string;
   /**
-   * 'count'    — a straight tabulation of exact census-block values.
-   * 'estimate' — a modelled composite. Only `highPropensityRiders`. Must never
-   *              be labelled as a count in the UI.
+   * 'count'    — a straight tabulation of exact census-block ACS values.
+   * 'estimate' — a PUMS-derived de-duplicated union (`propensityAll`, `needAll`).
+   *              Must never be labelled as a count in the UI.
    */
   kind: 'count' | 'estimate';
   /**
@@ -157,7 +172,15 @@ export const PROFILE_CATEGORIES: readonly ProfileCategory[] = [
     kind: 'count',
     basis: 'residence',
     universe: 'occupiedHouseholds',
-    note: 'Occupied households with no vehicle available. Households, not people. Share is of occupied households.',
+    note: 'Occupied households with no vehicle available (ACS B25044). HOUSEHOLDS, not people — see "Carless residents" for the people. Share is of occupied households.',
+  },
+  {
+    key: 'carless',
+    label: 'Carless residents',
+    kind: 'count',
+    basis: 'residence',
+    universe: 'population',
+    note: 'PEOPLE living in zero-vehicle households — the household count (ACS B25044) scaled by the measured size of a zero-vehicle household in this PUMA (~1.8 people, not the ~2.4 of an average household). One of the two groups in the ridership-propensity union.',
   },
   {
     key: 'seniors',
@@ -165,7 +188,15 @@ export const PROFILE_CATEGORIES: readonly ProfileCategory[] = [
     kind: 'count',
     basis: 'residence',
     universe: 'population',
-    note: 'Residents aged 65 and over. Overlaps every other residence-based row.',
+    note: 'Residents aged 65 and over (ACS B01001). Counts toward transit need, but NOT toward ridership propensity — a car-owning senior is not a likely rider. Overlaps every other residence-based row.',
+  },
+  {
+    key: 'disability',
+    label: 'Residents with a disability',
+    kind: 'count',
+    basis: 'residence',
+    universe: 'population',
+    note: 'Civilian residents aged 18+ living with a disability (ACS C21007). Counts toward transit need, not toward ridership propensity. Overlaps every other residence-based row.',
   },
   {
     key: 'youth',
@@ -173,37 +204,26 @@ export const PROFILE_CATEGORIES: readonly ProfileCategory[] = [
     kind: 'count',
     basis: 'residence',
     universe: 'population',
-    note: 'Residents under 18. Overlaps every other residence-based row.',
+    note: 'Residents under 18 (ACS B01001). Reported for context; not part of either transit composite. Overlaps every other residence-based row.',
   },
   {
-    key: 'highPropensityRiders',
-    label: 'High-propensity residents',
+    key: 'propensityAll',
+    label: 'Ridership propensity',
     kind: 'estimate',
     basis: 'residence',
     universe: 'population',
     note:
-      'ESTIMATE, not a count. A modelled composite of renters, people in zero-vehicle households, ' +
-      'and adults 18–24, scaled by an ad-hoc ×0.6 factor to blunt (not eliminate) double-counting ' +
-      'between those three groups. It overlaps its own components. It is NOT a ridership forecast — ' +
-      'it says nothing about how many of these people will board.',
+      'ESTIMATE, not a count. The DE-DUPLICATED union of carless and low-income residents: a person who is both is counted ONCE. The ACS publishes no joint distribution below PUMA, so the overlap is estimated from PUMS person records rather than assumed. It is NOT a ridership forecast — it says nothing about how many of these people will board.',
   },
-] as const;
-
-/**
- * KNOWN GAP — categories the prebuilt block layer does not yet carry.
- *
- * TODO(coverage-layer): `renter` (renter-occupied households) and `age_18_24`
- * are NOT attributes of the `us.fgb` block layer, even though the offline
- * high-propensity model consumes them upstream. They arrive here only when the
- * coverage layer is regenerated with those two columns (demand-dots/
- * coverage-pipeline/). Until then we deliberately DO NOT report them:
- * back-filling either one from ACS block groups would silently mix a
- * tract-smeared estimate into an exact block-level tabulation, and the two
- * numbers would not be comparable. Report what exists; say what doesn't.
- */
-export const MISSING_CATEGORIES: readonly { label: string; field: string }[] = [
-  { label: 'Renter households', field: 'renter' },
-  { label: 'Adults 18–24', field: 'age_18_24' },
+  {
+    key: 'needAll',
+    label: 'Transit need',
+    kind: 'estimate',
+    basis: 'residence',
+    universe: 'population',
+    note:
+      'ESTIMATE, not a count. The DE-DUPLICATED union of carless, low-income, senior and disabled residents — everyone for whom no car, low income, age or disability limits their other options. Contains Ridership propensity by definition. Same PUMS-derived method; not a ridership forecast.',
+  },
 ] as const;
 
 /* ──────────────────────────── the profile ──────────────────────────── */
@@ -229,10 +249,13 @@ function zeroCounts(): Record<ProfileCountKey, number> {
     minority: 0,
     lowIncome: 0,
     zeroVehicleHouseholds: 0,
+    carless: 0,
     seniors: 0,
     youth: 0,
+    disability: 0,
     jobs: 0,
-    highPropensityRiders: 0,
+    propensityAll: 0,
+    needAll: 0,
   };
 }
 
@@ -276,10 +299,17 @@ export function profileFromBlocks(
     counts.minority += b.minority;
     counts.lowIncome += b.lowinc;
     counts.zeroVehicleHouseholds += b.zeroveh_hh;
+    counts.carless += b.carless;
     counts.seniors += b.senior;
     counts.youth += b.youth;
+    counts.disability += b.disability;
     counts.jobs += b.jobs;
-    counts.highPropensityRiders += b.riders;
+    // The unions are summed across blocks, which is exact: a block's union is the
+    // number of DISTINCT people in that block, and blocks are disjoint sets, so
+    // adding them cannot double-count anyone. Deduplication happens WITHIN a
+    // geography (offline, from PUMS), and blocks never share a person.
+    counts.propensityAll += b.prop_all;
+    counts.needAll += b.need_all;
 
     universes.population += b.pop;
     universes.raceUniverse += b.race_pop;
@@ -590,6 +620,10 @@ export async function analyzeWalkshedProfiles(
 /**
  * One CSV row per scope (System, then each route). Columns are the categories,
  * never a total — there is no honest total to print.
+ *
+ * The two union columns carry `_ESTIMATE` in their names, so the distinction
+ * survives leaving the app: a spreadsheet has no tooltips and no badges, and
+ * these are the two numbers a reader would otherwise assume were headcounts.
  */
 export function buildProfileCsvRows(
   result: WalkshedProfileResult,
@@ -609,9 +643,12 @@ export function buildProfileCsvRows(
     minority_residents: p.counts.minority,
     low_income_residents: p.counts.lowIncome,
     zero_vehicle_households: p.counts.zeroVehicleHouseholds,
+    carless_residents: p.counts.carless,
     residents_65_plus: p.counts.seniors,
+    residents_with_disability: p.counts.disability,
     residents_under_18: p.counts.youth,
-    high_propensity_residents_ESTIMATE: p.counts.highPropensityRiders,
+    ridership_propensity_ESTIMATE: p.counts.propensityAll,
+    transit_need_ESTIMATE: p.counts.needAll,
   });
 
   const rows = [row('System (union of all stops)', '', result.system)];

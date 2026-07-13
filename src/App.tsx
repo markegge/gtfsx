@@ -12,6 +12,7 @@ import { useStore } from './store';
 import { importGtfsZip, loadImportIntoStore } from './services/gtfsImport';
 import { NotFoundPage } from './components/misc/NotFoundPage';
 import { ConflictDialog } from './components/snapshots/ConflictDialog';
+import { Banner } from './components/ui/Banner';
 import { ImpersonationBanner } from './components/admin/ImpersonationBanner';
 import { RtBreakageDialog } from './components/distribution/RtBreakageDialog';
 import { captureGclidFromUrl, captureRefFromUrl, trackPageview } from './services/trackBeacon';
@@ -265,25 +266,15 @@ function ServerEditorRoute() {
   return (
     <div className="h-full flex flex-col">
       {locked && (
-        <div className="shrink-0 px-4 py-2 bg-gold-light text-amber-700 text-sm flex items-center gap-2 border-b border-amber-200">
-          <span aria-hidden>🔒</span>
-          <span className="flex-1">
-            Locked — changes won't be saved here. Use <strong>Save As</strong> to fork
-            this feed, or unlock it from the feed list to edit.
-          </span>
-        </div>
+        <Banner variant="warning" icon="🔒">
+          Locked — changes won't be saved here. Use <strong>Save As</strong> to fork
+          this feed, or unlock it from the feed list to edit.
+        </Banner>
       )}
       {restoredBanner && (
-        <div className="shrink-0 px-4 py-2 bg-teal-light text-teal text-sm flex items-center gap-3">
-          <span className="flex-1">{restoredBanner}</span>
-          <button
-            onClick={() => setRestoredBanner(null)}
-            className="w-7 h-7 rounded-md hover:bg-white/50"
-            aria-label="Dismiss"
-          >
-            ×
-          </button>
-        </div>
+        <Banner variant="info" onDismiss={() => setRestoredBanner(null)}>
+          {restoredBanner}
+        </Banner>
       )}
       <div className="flex-1 min-h-0">
         <AppShell />

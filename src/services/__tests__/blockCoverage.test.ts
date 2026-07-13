@@ -9,6 +9,7 @@ import {
   tabulateBlocks,
   loadBlocksInBbox,
   CoverageLayerSchemaError,
+  COVERAGE_REGION,
   type BlockPoint,
 } from '../blockCoverage';
 
@@ -66,12 +67,24 @@ function stop(id: string, lon: number, lat: number): Stop {
 }
 
 describe('regionForState / isInUS', () => {
-  it('maps the 50 states + DC to the us block region, territories/unknown to null', () => {
-    expect(regionForState('30')).toBe('us'); // Montana
-    expect(regionForState('06')).toBe('us'); // California
-    expect(regionForState('11')).toBe('us'); // DC
-    expect(regionForState('72')).toBeNull(); // Puerto Rico (territory, not in us.fgb)
+  it('maps the 50 states + DC to the versioned block region, territories/unknown to null', () => {
+    expect(regionForState('30')).toBe(COVERAGE_REGION); // Montana
+    expect(regionForState('06')).toBe(COVERAGE_REGION); // California
+    expect(regionForState('11')).toBe(COVERAGE_REGION); // DC
+    expect(regionForState('72')).toBeNull(); // Puerto Rico (territory, not in the layer)
     expect(regionForState('99')).toBeNull(); // unknown
+  });
+
+  it('pins the region to a versioned schema key, not the bare "us" the old-schema layer used', () => {
+    // The current schema retires `riders` and adds carless/disability/prop_all/
+    // need_all — a breaking change for any client still deployed against the
+    // old `coverage/us.fgb` object. If this ever reverts to bare 'us', a
+    // nationwide rebuild would overwrite that object out from under prod's
+    // currently-deployed (old-schema) client before it has a chance to
+    // redeploy. See COVERAGE_REGION's doc comment in blockCoverage.ts.
+    expect(COVERAGE_REGION).not.toBe('us');
+    expect(COVERAGE_REGION).toMatch(/^us-v\d+$/);
+    expect(regionForState('30')).toBe(COVERAGE_REGION);
   });
 
   it('bounds-checks US coordinates (CONUS + AK + HI)', () => {
@@ -103,9 +116,9 @@ describe('loadBlocksInBbox — stale-layer guard', () => {
         jobs: 10,
       }),
     ];
-    await expect(loadBlocksInBbox('us', bbox)).rejects.toBeInstanceOf(CoverageLayerSchemaError);
-    await expect(loadBlocksInBbox('us', bbox)).rejects.toThrow(/older schema/);
-    await expect(loadBlocksInBbox('us', bbox)).rejects.toThrow(/prop_all/);
+    await expect(loadBlocksInBbox(COVERAGE_REGION, bbox)).rejects.toBeInstanceOf(CoverageLayerSchemaError);
+    await expect(loadBlocksInBbox(COVERAGE_REGION, bbox)).rejects.toThrow(/older schema/);
+    await expect(loadBlocksInBbox(COVERAGE_REGION, bbox)).rejects.toThrow(/prop_all/);
   });
 
   it('accepts a layer carrying the union columns and parses them', async () => {
@@ -116,7 +129,7 @@ describe('loadBlocksInBbox — stale-layer guard', () => {
         carless: 10, disability: 8, prop_all: 35, need_all: 50, jobs: 10,
       }),
     ];
-    const blocks = await loadBlocksInBbox('us', bbox);
+    const blocks = await loadBlocksInBbox(COVERAGE_REGION, bbox);
     expect(blocks).toHaveLength(1);
     expect(blocks[0].prop_all).toBe(35);
     expect(blocks[0].need_all).toBe(50);

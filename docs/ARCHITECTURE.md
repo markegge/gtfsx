@@ -304,31 +304,48 @@ Design rationale is preserved in the decisions appendix of the archived
   - A **nationwide rebuild + `verify_tiles.py` pass is required** before
     `us-2026e` can be published. Do not consider the redesign live until then;
     see the Demand-dot regen runbook in Appendix A.
-- **⚠️ Coverage block layer (`us.fgb`) — PROD IS ON THE OLD SCHEMA (2026-07-13).**
-  The layer in R2 (`gtfs-builder-tiles/coverage/us.fgb`, served at
-  `/_coverage/us.fgb`) still carries the retired `riders` column and lacks
-  `carless`, `disability`, `prop_all`, `need_all`. The coverage pipeline and the
-  whole frontend now expect the new schema. Status:
-  - `coverage-pipeline/build_coverage_blocks.py` + the frontend consumers
-    (`blockCoverage.ts`, `walkshedProfile.ts`, `demographics.ts`,
-    `CoveragePanel.tsx`, `WalkshedProfileTable.tsx`) are rewritten in the working
-    tree and **uncommitted**. Validated on a single-state Montana build only.
-  - **A nationwide regen is required** (see the Coverage-layer regen runbook in
-    Appendix A). It has NOT been run — that is a deliberate, separate step:
+- **⚠️ Coverage block layer schema change — regen still pending (2026-07-13).**
+  The new schema retires `riders` and adds `carless`, `disability`,
+  `prop_all`, `need_all` (PUMS-derived ridership-propensity / transit-need
+  unions). `coverage-pipeline/build_coverage_blocks.py` and the frontend
+  consumers (`blockCoverage.ts`, `walkshedProfile.ts`, `demographics.ts`,
+  `CoveragePanel.tsx`, `WalkshedProfileTable.tsx`) are committed on this
+  branch, validated on a single-state Montana build only. Status:
+  - **The R2 key is now versioned, not overwritten in place.** The client
+    reads `COVERAGE_REGION` (`src/services/blockCoverage.ts`) = `us-v2`, not a
+    bare `us`, so the nationwide rebuild ships to a **new** object,
+    `coverage/us-v2.fgb`, leaving prod's currently-deployed old-schema client
+    reading its existing `coverage/us.fgb` untouched until it redeploys. This
+    covers the direction `CoverageLayerSchemaError` (below) cannot: an OLD,
+    already-deployed client reading a NEW layer would otherwise read a
+    missing `riders` column as `undefined → 0`, with no error surface,
+    because that client was built before this change existed. See the
+    Coverage-layer regen runbook in Appendix A and
+    `demand-dots/coverage-pipeline/README.md`'s "Deploy ordering" section for
+    the exact upload command and safe sequencing.
+  - **A nationwide regen is still required and has NOT been run** — that is a
+    deliberate, separate, ~3–5h step:
     ```
-    cd demand-dots/coverage-pipeline && ../.venv/bin/python build_us.py --out us.fgb --jobs 4
+    cd demand-dots/coverage-pipeline
+    ../.venv/bin/python build_us.py --out us-v2.fgb --jobs 4
+    wrangler r2 object put gtfs-builder-tiles/coverage/us-v2.fgb \
+      --file us-v2.fgb --content-type application/octet-stream --remote
     ```
-  - **Shipping the client without the regen does NOT silently lie.**
-    `loadBlocksInBbox()` throws `CoverageLayerSchemaError` when the served .fgb
-    lacks the union columns, so a stale layer degrades to the block-group path
-    (straight ACS counts, and the UI says the propensity/need estimate is
-    unavailable) rather than rendering `prop_all` as a confident `0`. The order
-    is still regen-then-ship; the guard is a safety net, not a plan.
-  - **The old layer also under-counted.** Independent per-column rounding in the
-    apportionment destroyed rare attributes: measured on Montana, the live
-    `us.fgb` is short **-10.2% of zero-vehicle households** (a Title VI equity
-    numerator) and **-5.7% of carless residents**. Fixed with largest-remainder
-    apportionment; the regen is what puts the fix into prod.
+  - **The other direction (new client / stale or missing layer) was already
+    defended before this fix, and still is:** `loadBlocksInBbox()` throws
+    `CoverageLayerSchemaError` when the served `.fgb` lacks the union
+    columns, so until the regen above is run and uploaded, this client
+    degrades to the block-group path (straight ACS counts, propensity/need
+    estimate marked unavailable) rather than rendering `prop_all` as a
+    confident `0`.
+  - **The old layer also under-counted.** Independent per-column rounding in
+    the apportionment destroyed rare attributes: measured on Montana, the
+    live `coverage/us.fgb` is short **-10.2% of zero-vehicle households** (a
+    Title VI equity numerator) and **-5.7% of carless residents**. Fixed with
+    largest-remainder apportionment; the regen is what puts the fix into
+    prod.
+  - Once prod is confirmed running the client that reads `us-v2`, the old
+    `coverage/us.fgb` object may be deleted from R2.
 - **GTFS-Realtime Service Alerts (BE-90..93)** live since 2026-05-30 — Agency+
   authoring under `/api/projects/:id/alerts`, public serving at
   `feeds.*/<slug>/alerts.pb` + `/alerts.json`.
@@ -632,7 +649,7 @@ release):
 | Layer | Builder | Output | Served as |
 |---|---|---|---|
 | **Demand dots** (display-only; not wired into the analysis pipeline) | `demand-dots/build_dots.py` | `<archive>.pmtiles` in `gtfs-builder-tiles` | `/_demand-tiles/<archive>/{z}/{x}/{y}.pbf`—the archive name is read out of the committed `demand-dots/demand-legend.json` (`demandLegend.ts`), not hardcoded in `DemandDotsLayer.tsx`; current schema `us-2026e`, prod still serving `us-2026b` (see §5) |
-| **Coverage blocks** (exact block-level counts behind the Coverage panel) | `demand-dots/coverage-pipeline/` (`build_coverage_blocks.py` per state, `build_us.py` to drive + merge) | `us.fgb` FlatGeobuf | `/_coverage/us.fgb`, bbox range-reads |
+| **Coverage blocks** (exact block-level counts behind the Coverage panel) | `demand-dots/coverage-pipeline/` (`build_coverage_blocks.py` per state, `build_us.py` to drive + merge) | `<region>.fgb` FlatGeobuf, `<region>` versioned per schema (`COVERAGE_REGION` in `blockCoverage.ts`; currently `us-v2`, prod still serving the old-schema `us` — see §5) | `/_coverage/<region>.fgb`, bbox range-reads |
 
 ### The ACS vintage is not a manual bump any more
 
@@ -1209,23 +1226,41 @@ prop_all, need_all, jobs`. `carless`/`disability` are straight ACS counts;
 
 ```bash
 cd demand-dots/coverage-pipeline
-../.venv/bin/python build_us.py --out us.fgb --jobs 4   # ~3-5 h cold, resumable
-wrangler r2 object put gtfs-builder-tiles/coverage/us.fgb \
-  --file us.fgb --content-type application/octet-stream --remote
+../.venv/bin/python build_us.py --out us-v2.fgb --jobs 4   # ~3-5 h cold, resumable
+wrangler r2 object put gtfs-builder-tiles/coverage/us-v2.fgb \
+  --file us-v2.fgb --content-type application/octet-stream --remote
 ```
+
+`us-v2` is the current value of `COVERAGE_REGION` in
+`src/services/blockCoverage.ts` — that constant, not this doc, is the source
+of truth for which key to upload to. **Do not upload to `coverage/us.fgb`**:
+that object is prod's CURRENTLY-DEPLOYED key, read by an old client that
+expects the (retired) `riders` column, and overwriting it in place would make
+prod render "High-propensity riders: 0" to real users before prod's own
+client ever redeploys — see the "Deploy ordering" note just below, and §5.
 
 The ACS block-group cache key embeds `puma_union.corrections_hash()`, so it
 busts automatically when the correction tables or schema change — no manual
 cache-dir wipe needed. The old `acs<year>_cov_bg_state_<fips>.csv` cache files
 (pre-union schema) are dead; delete them.
 
-**Deploy ordering:** regenerate and upload `us.fgb` before, or together with,
-shipping client code that depends on the new columns. The client
-(`src/services/blockCoverage.ts`) already checks every loaded layer for the
-union-schema columns and throws `CoverageLayerSchemaError` if they're missing,
-so a stale layer degrades to "counts only, no estimate" instead of rendering a
-confident wrong number — but regenerate promptly regardless; that guard is a
-safety net for the deploy window, not a reason to leave prod on an old layer.
+**Deploy ordering:** this schema change is breaking in both directions, and
+only one of them can be caught client-side. A NEW client reading a STALE/OLD
+layer is defended: `blockCoverage.ts` checks every loaded layer for the
+union-schema columns and throws `CoverageLayerSchemaError` if they're
+missing, so a stale layer degrades to "counts only, no estimate" instead of
+rendering a confident wrong number. But an OLD, already-deployed client
+reading a NEW layer canNOT be defended in code — that client was built before
+this change existed. The fix is at the R2-key level, not the client:
+1. Regenerate and upload the layer under the **new** key, `coverage/us-v2.fgb`
+   (commands above) — `coverage/us.fgb` is left untouched.
+2. Deploy the client (`COVERAGE_REGION = 'us-v2'`) and verify it in prod.
+3. Only once prod is confirmed on the new client, delete the old
+   `coverage/us.fgb` object from R2.
+Any future breaking schema change should repeat this pattern: bump
+`COVERAGE_REGION` again rather than overwriting the current key in place. See
+`demand-dots/coverage-pipeline/README.md`'s "Deploy ordering" section for the
+full detail.
 
 ### Nationwide rebuild cost, for planning
 

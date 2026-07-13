@@ -5,10 +5,12 @@
  * its parent tract's centroid and apportions population via overlapping discs —
  * effectively tract-resolution geometry. Instead we load a FlatGeobuf of one
  * POINT per census block (built by demand-dots/coverage-pipeline/, served from
- * R2 at /_coverage/us.fgb) carrying EXACT integer attributes, and tabulate the
- * blocks whose centroid falls inside the transit walkshed. That gives precise
- * population / jobs / equity counts instead of an apportioned estimate, and adds
- * block-level LODES jobs (which the disc method could not provide).
+ * R2 at /_coverage/{COVERAGE_REGION}.fgb — see that constant, below, for why the
+ * key is a versioned name and not a bare `us`) carrying EXACT integer
+ * attributes, and tabulate the blocks whose centroid falls inside the transit
+ * walkshed. That gives precise population / jobs / equity counts instead of an
+ * apportioned estimate, and adds block-level LODES jobs (which the disc method
+ * could not provide).
  *
  * Region gating lives with the caller: US feeds (50 states + DC) use this path;
  * territories / non-US feeds keep the unchanged block-group/disc method.
@@ -23,7 +25,7 @@ import type { CoverageResult } from './coverageAnalysis';
 
 /**
  * FIPS codes for the 50 states + DC — the geographies in the nationwide
- * `coverage/us.fgb` layer (the offline build excludes territories by default).
+ * coverage block layer (the offline build excludes territories by default).
  * A feed in any of these uses the exact block layer; anything else (territories,
  * outside the US) falls back to the block-group estimate.
  */
@@ -35,11 +37,46 @@ const US_STATE_FIPS = new Set([
 ]);
 
 /**
+ * R2 key / region name for the CURRENT coverage-block schema — the `{region}`
+ * in `/_coverage/{region}.fgb`, which the worker maps 1:1 to R2 object key
+ * `coverage/{region}.fgb` (worker/legacy/coverage.ts, `serveCoverage()`).
+ *
+ * THIS CONSTANT IS THE SINGLE PLACE THE VERSION LIVES. Every caller that needs
+ * the nationwide region — `regionForState()` just below, and the direct
+ * nationwide caller in `walkshedProfile.ts` — reads it from here. Never
+ * hardcode a region string anywhere else, or the client and the deployed
+ * artifact can silently disagree about which schema they mean.
+ *
+ * Why a VERSIONED name instead of the bare `us` the layer used to ship under:
+ * this schema retires the `riders` column and adds `carless` / `disability` /
+ * `prop_all` / `need_all` (see `BlockPoint` and `REQUIRED_UNION_FIELDS`,
+ * below) — a breaking change in BOTH directions:
+ *   - new client + OLD layer  → defended: `loadBlocksInBbox` throws
+ *     `CoverageLayerSchemaError` when the union columns are missing, and
+ *     callers fall back to the block-group estimate.
+ *   - OLD client + NEW layer  → NOT defended, and there is no way to defend it
+ *     client-side: an old, already-deployed client reads `riders`, and a
+ *     schema with no `riders` column coerces that lookup to `undefined → 0`
+ *     via `Number(undefined) || 0`. It would render a confident, specific,
+ *     wrong "High-propensity riders: 0" to real production traffic, silently,
+ *     before prod's own client ever redeploys.
+ * The only defense for that second direction is at the R2-key level: ship the
+ * new schema under a NEW key so prod's currently-deployed client keeps
+ * reading its old, untouched `coverage/us.fgb` until IT redeploys. Bump this
+ * string (`us-v2` → `us-v3` → …) on any future breaking schema change, upload
+ * the new build under the new key, and only delete the previous key's R2
+ * object once prod has been confirmed running the client that reads the new
+ * one. See the coverage-pipeline README's "Deploy ordering" section for the
+ * exact upload command and safe sequencing.
+ */
+export const COVERAGE_REGION = 'us-v2';
+
+/**
  * The block region key for a state FIPS, or null when no block-level layer
- * exists. Nationwide: the single `us` layer covers all 50 states + DC.
+ * exists. Nationwide: COVERAGE_REGION covers all 50 states + DC.
  */
 export function regionForState(stateFips: string): string | null {
-  return US_STATE_FIPS.has(stateFips) ? 'us' : null;
+  return US_STATE_FIPS.has(stateFips) ? COVERAGE_REGION : null;
 }
 
 /**

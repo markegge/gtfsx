@@ -62,6 +62,7 @@ import {
   bboxFromStops,
   isInUS,
   loadBlocksInBbox,
+  COVERAGE_REGION,
   type BlockPoint,
   type Bbox,
 } from './blockCoverage';
@@ -575,7 +576,9 @@ export async function analyzeWalkshedProfiles(
   const bbox = bboxFromStops([...stops]);
   if (!bbox) throw new WalkshedProfileError('No stops to analyse.');
 
-  const blocks = await loadBlocks('us', bbox);
+  // COVERAGE_REGION, not a bare 'us' — see its doc in blockCoverage.ts for why
+  // the nationwide layer's R2 key is versioned.
+  const blocks = await loadBlocks(COVERAGE_REGION, bbox);
 
   const t0 = Date.now();
   const index = buildBlockIndex(blocks);

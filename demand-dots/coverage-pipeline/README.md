@@ -3,8 +3,11 @@
 Builder for the GTFS·X **Coverage** layer: one POINT per populated or
 job-bearing US census block, carrying EXACT integer demographics, two
 PUMS-derived ridership-propensity / transit-need estimates, and LODES jobs,
-written as a single nationwide **`us.fgb`** FlatGeobuf with a spatial (R-tree)
-index that the GTFS·X worker serves for bbox queries.
+written as a single nationwide FlatGeobuf with a spatial (R-tree) index that
+the GTFS·X worker serves for bbox queries. Name the `--out` file after the R2
+key you intend to upload it under (currently **`us-v2.fgb`** — see *Host it*),
+not the historical `us.fgb`; that older name is a DIFFERENT, currently-live R2
+object with the old schema, and this pipeline no longer produces that schema.
 
 **Not copyable on its own any more.** `build_coverage_blocks.py` imports
 `../puma_union.py` — the same union estimator the demand-dot tiles are built
@@ -20,7 +23,7 @@ deliberately duplicated here rather than imported — see *Caveats*.
 
 ## What it produces
 
-`us.fgb` — ~5 million POINT features (EPSG:4326), one per census block where
+`us-v2.fgb` — ~5 million POINT features (EPSG:4326), one per census block where
 `pop>0` OR `jobs>0`, each at the block's official TIGER internal point
 (`INTPTLAT20/INTPTLON20`). Per-block integer attributes:
 
@@ -135,26 +138,27 @@ fails fast with a clear message pointing here.
 ../.venv/bin/python build_coverage_blocks.py --state MT --out states/mt.fgb
 ```
 
-**All of the US** (50 states + DC) → one merged `us.fgb`:
+**All of the US** (50 states + DC) → one merged `us-v2.fgb` (name it after the
+target R2 key — see *Host it*):
 
 ```bash
-../.venv/bin/python build_us.py --out us.fgb --jobs 4
+../.venv/bin/python build_us.py --out us-v2.fgb --jobs 4
 ```
 
 Useful flags:
 
 ```bash
 ../.venv/bin/python build_us.py --states "MT,WY" --out us-test.fgb   # subset (testing)
-../.venv/bin/python build_us.py --out us.fgb --jobs 4                # build 4 states at once
-../.venv/bin/python build_us.py --out us.fgb --territories           # also build Puerto Rico
-../.venv/bin/python build_us.py --out us.fgb --force                 # rebuild every state
-../.venv/bin/python build_us.py --out us.fgb --merge pyogrio         # force the pure-Python merge
+../.venv/bin/python build_us.py --out us-v2.fgb --jobs 4             # build 4 states at once
+../.venv/bin/python build_us.py --out us-v2.fgb --territories        # also build Puerto Rico
+../.venv/bin/python build_us.py --out us-v2.fgb --force              # rebuild every state
+../.venv/bin/python build_us.py --out us-v2.fgb --merge pyogrio      # force the pure-Python merge
 ```
 
 The driver builds each state into `states/<st>.fgb` in its own subprocess
 (per-state logs in `states/<st>.log`), is **resumable** (an existing
 `states/<st>.fgb` is skipped — re-run after any interruption; `--force` to
-rebuild), then **streams** every per-state file into `us.fgb` one state at a time
+rebuild), then **streams** every per-state file into the output (e.g. `us-v2.fgb`) one state at a time
 and verifies the result with a pyogrio bbox read. Final summary prints states
 built, total block points, total pop/jobs, and output size.
 
@@ -165,11 +169,11 @@ built, total block points, total pop/jobs, and output size.
 - **Re-runs (cache warm):** ~45–60 min — geometry/ACS/LODES are cached under
   `cache/`, so re-runs are CPU/IO-bound on apportionment + merge.
 - **Disk:** `cache/` grows to **several GB** (per-state TIGER GeoPackages
-  dominate); `us.fgb` is **a few hundred MB**.
+  dominate); the merged output is **a few hundred MB**.
 
 ### Merge backends (RAM note)
 
-- **pyogrio (default, no system deps):** appends each state into `us.fgb` one
+- **pyogrio (default, no system deps):** appends each state into the output one
   state at a time — peak RAM ≈ the **largest single state** (CA, ~1 GB), not the
   whole nation.
 - **ogr2ogr (`--merge ogr2ogr`, faster):** used automatically when the GDAL CLI
@@ -181,13 +185,28 @@ built, total block points, total pop/jobs, and output size.
 
 ## Host it
 
-Upload `us.fgb` to the GTFS·X tiles R2 bucket; the worker serves it at
-`/_coverage/us.fgb` with HTTP Range support (FlatGeobuf bbox queries):
+Upload the build to the GTFS·X tiles R2 bucket under the **versioned key that
+matches the client's `COVERAGE_REGION`** (`src/services/blockCoverage.ts`) —
+currently `us-v2` — NOT the bare `coverage/us.fgb` key:
 
 ```bash
-wrangler r2 object put gtfs-builder-tiles/coverage/us.fgb \
-  --file us.fgb --content-type application/octet-stream --remote
+wrangler r2 object put gtfs-builder-tiles/coverage/us-v2.fgb \
+  --file us-v2.fgb --content-type application/octet-stream --remote
 ```
+
+(Name the local `--out` file to match — `build_us.py --out us-v2.fgb` — so the
+upload command above needs no translation.) The worker serves whatever key it's
+asked for at `/_coverage/<region>.fgb` with HTTP Range support (FlatGeobuf bbox
+queries) — see `worker/legacy/coverage.ts`.
+
+**Do NOT overwrite `coverage/us.fgb`.** That object is prod's CURRENT,
+already-deployed key: production is running an old-schema client that reads
+`coverage/us.fgb` and expects the (retired) `riders` column. Overwrite it with
+this schema and prod immediately reads `riders` as `undefined → 0` and renders
+"High-propensity riders: 0" to real users — before prod's own client has even
+redeployed. There is no server-side error surface for that failure; it just
+looks like a real, wrong number. See the "Deploy ordering" section below for
+the full safe sequence.
 
 ---
 
@@ -228,27 +247,44 @@ wrangler r2 object put gtfs-builder-tiles/coverage/us.fgb \
 
 ---
 
-## Deploy ordering: regenerate the layer before shipping a schema change
+## Deploy ordering: version the R2 key, don't overwrite it in place
 
-The client (`src/services/blockCoverage.ts`) is already wired nationwide —
-`regionForState()` returns `'us'` for all 50 states + DC, and the layer is
-fetched from `/_coverage/us.fgb` — so there is no separate client-integration
-step left to do here. What's left is ordering the two halves of a release that
-changes the schema, like this one:
+The client (`src/services/blockCoverage.ts`) is wired nationwide —
+`regionForState()` returns `COVERAGE_REGION` (currently `us-v2`) for all 50
+states + DC, and the layer is fetched from `/_coverage/${COVERAGE_REGION}.fgb`.
+That constant, not a bare `'us'`, is what makes this schema change safe to
+ship, because the schema break cuts BOTH ways:
 
-**Regenerate and upload `us.fgb` before, or together with, shipping client
-code that expects the new columns.** The layer is a ~1.6 GB artifact built by
-a separate, hours-long, manually-triggered run (see *Run*) — it does not
-redeploy itself when the client ships, and a stale layer has no error surface
-of its own on the server side (a missing column just reads back as
-`undefined`).
+- **new client + OLD layer** — defended. `blockCoverage.ts` checks every
+  loaded layer for the union-schema columns (`prop_all`, `need_all`,
+  `carless`, `disability`) and throws `CoverageLayerSchemaError` if they're
+  missing, instead of letting a missing value coerce to `0` and render a
+  confident, specific, wrong "Ridership propensity: 0". Callers already fall
+  back to the block-group estimate on any load failure, so a stale layer
+  degrades to "counts only, no estimate available" — safe, just less precise.
+- **OLD client + NEW layer** — NOT defendable client-side, because the client
+  that would need to defend itself is the one already running in production,
+  built before this change existed. It reads `coverage/us.fgb` and expects
+  `riders`; there is no code to ship into the past. The only fix is to never
+  let that request land on the new schema: ship the new build under a
+  **different** R2 key (`coverage/us-v2.fgb`) and leave `coverage/us.fgb`
+  untouched. Prod's current client keeps reading its old object, unaffected,
+  for as long as it takes to redeploy.
 
-That failure mode is caught client-side, not silent: `blockCoverage.ts` checks
-every loaded layer for the union-schema columns (`prop_all`, `need_all`,
-`carless`, `disability`) and throws `CoverageLayerSchemaError` if they're
-missing, instead of letting a missing value coerce to `0` and render a
-confident, specific, wrong "Ridership propensity: 0". Callers already fall
-back to the block-group estimate on any load failure, so a stale layer
-degrades to "counts only, no estimate available" — safe, just less precise —
-rather than lying. Regenerate promptly regardless: that guard is a safety net
-for the deploy window, not a reason to leave prod on an old layer.
+**Safe order for this (or any future) breaking schema change:**
+
+1. Build the layer (see *Run*), naming the output after the NEW key
+   (`--out us-v2.fgb`).
+2. Upload it to the NEW key — `coverage/us-v2.fgb` — per *Host it*, above.
+   **Never** `wrangler r2 object put ... coverage/us.fgb` over the existing
+   object while a client that depends on the old schema is still deployed.
+3. Deploy the client change that points `COVERAGE_REGION` at the new key
+   (already done in this repo — see `src/services/blockCoverage.ts`) and
+   verify it in production against `/_coverage/us-v2.fgb`.
+4. Only once prod is confirmed running on the new client may `coverage/us.fgb`
+   be deleted from R2. Until then it costs a few hundred MB of R2 storage
+   (negligible) to keep as a rollback target.
+
+If a future schema change repeats this pattern, bump `COVERAGE_REGION` again
+(`us-v2` → `us-v3` → …) and repeat the same four steps — never edit an
+already-shipped key in place.

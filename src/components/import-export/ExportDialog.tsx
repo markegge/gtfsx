@@ -219,7 +219,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
             (r) => r._direction_0_name || r._direction_1_name,
           );
           const files: [string, boolean, string?][] = [
-            ['agency.txt', state.agencies.length > 0, `${state.agencies.length} agency${state.agencies.length !== 1 ? 'ies' : ''}`],
+            ['agency.txt', state.agencies.length > 0, `${state.agencies.length} agenc${state.agencies.length !== 1 ? 'ies' : 'y'}`],
             ['routes.txt', state.routes.length > 0, `${state.routes.length} routes`],
             ['stops.txt', state.stops.length > 0, `${state.stops.length} stops`],
             ['trips.txt', state.trips.length > 0 || exportableFlex.length > 0, `${state.trips.length + exportableFlex.length} trips`],

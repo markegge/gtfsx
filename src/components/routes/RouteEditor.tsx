@@ -8,6 +8,7 @@ export function RouteEditor() {
   const {
     routes, updateRoute,
     selectedRouteId,
+    agencies,
   } = useStore();
   // Flag-stop / continuous pickup-drop-off controls only appear when this
   // advanced feature is enabled for the feed (niche; off for most fixed-route).
@@ -44,6 +45,38 @@ export function RouteEditor() {
         onChange={(v) => updateRoute(route.route_id, { route_url: v })}
         placeholder="https://..."
       />
+
+      {/* Operating agency. Only shown on a joint feed: with a single agency the
+          spec lets routes.txt omit agency_id, and a one-option dropdown is
+          noise. With two or more, the spec REQUIRES agency_id on every route —
+          and FTA crosswalks the route to the operator's NTD ID through it — so
+          the assignment has to be editable. */}
+      {agencies.length > 1 && (
+        <div className="mb-3">
+          <label
+            htmlFor="route-agency"
+            className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1"
+          >
+            Operated by <span className="text-coral">*</span>
+          </label>
+          <select
+            id="route-agency"
+            value={route.agency_id || ''}
+            onChange={(e) => updateRoute(route.route_id, { agency_id: e.target.value })}
+            className="w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral"
+          >
+            {/* An imported route can arrive with no agency_id at all — keep that
+                state selectable so the dropdown shows the truth (the validator
+                flags it) instead of silently reassigning the route on render. */}
+            {!route.agency_id && <option value="">— none —</option>}
+            {agencies.map((a, i) => (
+              <option key={a.agency_id || i} value={a.agency_id}>
+                {a.agency_name || a.agency_id || `Agency ${i + 1}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Route Type */}
       <div className="mb-3">

@@ -69,7 +69,7 @@
 
       <figure>
         <img src="/assets/docs/agency-setup-hero.png" alt="GTFS·X editor with the Agency panel selected from the left sidebar." loading="lazy" />
-        <figcaption>The Agency panel in the editor sidebar. Required fields up top; multi-agency feeds add additional rows here.</figcaption>
+        <figcaption>The Agency panel in the editor sidebar. Required fields up top; a joint feed adds an <strong>Editing</strong> dropdown for switching between its agencies.</figcaption>
       </figure>
 
       <h2 id="required-fields">Required fields</h2>
@@ -81,7 +81,7 @@
 
       <h2 id="optional-fields">Optional fields</h2>
       <ul>
-        <li><strong><code>agency_id</code></strong> — required only when the feed has more than one agency. If you have a second agency on the feed, every route, fare, and (where relevant) attribution row needs to specify which agency it belongs to via <code>agency_id</code>. With a single agency, the field is optional and most agencies leave it blank.</li>
+        <li><strong><code>agency_id</code></strong> — shown at the top of the panel as <strong>Agency ID</strong>, and required only when the feed has more than one agency. If you have a second agency on the feed, every route, fare, and (where relevant) attribution row needs to specify which agency it belongs to via <code>agency_id</code>. With a single agency, the field is optional and most agencies leave it blank — though if you report to the NTD, set one anyway (<a href="/docs/ntd-id/">FTA crosswalks your feed on it</a>). Changing an existing Agency ID is a rename: confirm it with the button that appears, and GTFS·X updates the routes and fares that pointed at the old value so nothing is orphaned.</li>
         <li><strong><code>agency_lang</code></strong> — the primary language for the agency's text (BCP-47 code; <code>en</code> for English). Helps trip planners pick the right text-to-speech voice and date formatting.</li>
         <li><strong><code>agency_phone</code></strong> — public contact number. Shown by some apps; useful for riders trying to reach customer service.</li>
         <li><strong><code>agency_fare_url</code></strong> — link to a page describing fare policy. Useful when the fare data alone doesn't tell the whole story (transfer rules, fare-capping policies).</li>
@@ -92,11 +92,13 @@
       <h2 id="multi-agency">Multi-agency feeds (joint operators)</h2>
       <p>Joint feeds are common when a regional fixed-route operator and a separately-branded microtransit partner share GTFS publication, or when a state DOT publishes a unified feed across several rural operators. The pattern is:</p>
       <ol>
-        <li>Add a second (or third…) agency in the panel. Each gets a unique <code>agency_id</code>.</li>
-        <li>Edit each route in the Routes panel and assign it to the correct agency via the <strong>Agency</strong> dropdown.</li>
+        <li>Click <strong>+ Add Agency</strong> at the bottom of the Agency panel for the second (or third…) operator. GTFS·X gives it an <code>agency_id</code> — rename it to something you'll recognise, like <code>SVT</code>, and fill in the name, URL, and timezone.</li>
+        <li>Once the feed has more than one agency, an <strong>Editing</strong> dropdown appears at the top of the panel. Pick an agency there and the fields below it belong to that agency: its own name, URL, timezone, contact details, and its own NTD / External ID.</li>
+        <li>Open each route in the Routes panel and assign it to its operator with the <strong>Operated by</strong> dropdown (it appears on route details once the feed has two or more agencies). The GTFS spec requires <code>agency_id</code> on every route in a multi-agency feed, and the validator flags any route that's missing it.</li>
         <li>Fare records also carry an <code>agency_id</code>; the editor sets it automatically based on the route(s) the fare applies to.</li>
       </ol>
-      <p>Each agency also carries its own <strong>NTD / External ID</strong>, which is the right model when several operators in one feed report to the NTD separately. One caveat today: the Agency panel edits the first agency's fields, so additional agencies' IDs have to arrive via <a href="/docs/import-and-export/#import">import</a> (an <code>external_id</code> column on the imported <code>agency.txt</code>). See <a href="/docs/ntd-id/#multi-agency">NTD ID &amp; FTA reporting</a>.</p>
+      <p>Each agency carries its own <strong>NTD / External ID</strong>, which is the right model when several operators in one feed report to the NTD separately. Set each one in the panel after selecting that agency in the <strong>Editing</strong> dropdown; every ID is exported on its own row of <code>agency.txt</code>. See <a href="/docs/ntd-id/#multi-agency">NTD ID &amp; FTA reporting</a>.</p>
+      <p>Deleting an agency is offered only when nothing in the feed still points at it. If routes or fares belong to that agency, the panel says so and you reassign them first — that keeps a delete from quietly orphaning routes onto an <code>agency_id</code> that no longer exists.</p>
       <p>One thing to know: each agency has its <em>own</em> timezone. A feed with operators in two timezones (say, an interstate transit district) is valid, and <code>stop_times</code> are interpreted in the agency of the trip's route. This is the correct way to model service that crosses a timezone boundary — don't try to "normalize" everything to one timezone, because riders will see wrong departure times.</p>
 
       <h2 id="gotchas">Edge cases and gotchas</h2>

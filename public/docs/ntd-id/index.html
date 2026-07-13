@@ -88,9 +88,8 @@
       </div>
       <h3 id="multi-agency">Feeds with more than one agency</h3>
       <p>Each agency in a feed carries its own NTD ID. That's the right model: if three operators share one feed and each reports to the NTD separately, each row of <code>agency.txt</code> gets its own identifier, and the export, the published metadata, the DMFR file, and the P-50 helper all keep them distinct.</p>
-      <div class="callout">
-        <p><strong>Known limitation: the Agency panel currently edits only the first agency.</strong> So while a multi-agency feed can carry an ID per agency, there is at present no way to <em>type</em> the second and subsequent agencies' IDs into the editor. Today they have to arrive by <a href="/docs/import-and-export/#import">import</a>: put an <code>external_id</code> column on the <code>agency.txt</code> of the feed you import and every agency's value is read in, kept through editing, and written back out. Everything downstream handles all agencies correctly — this gap is in the editing UI only, and we're closing it.</p>
-      </div>
+      <p>You set them the same way you set the first one. Once a feed has more than one agency, the Agency panel shows an <strong>Editing</strong> dropdown at the top: choose the agency you want, and the fields below it — including <strong>NTD / External ID</strong> — are that agency's. Work through the operators one at a time and each ends up with its own ID. Add an operator with <strong>+ Add Agency</strong> at the bottom of the panel; see <a href="/docs/agency-setup/#multi-agency">Agency setup</a> for the full joint-feed workflow, including assigning each route to its operator.</p>
+      <p>IDs can also arrive by <a href="/docs/import-and-export/#import">import</a>: put an <code>external_id</code> column on the <code>agency.txt</code> of the feed you import and every agency's value is read in, kept through editing, and written back out. Either way, each agency's ID stays distinct all the way to the published feed.</p>
 
       <h2 id="where-it-goes">Where your NTD ID ends up</h2>
       <p>Once an agency has an NTD ID, it shows up in three places. The first is inside the feed itself; the other two are the machine-readable files published alongside it.</p>
@@ -167,7 +166,7 @@
         <li><strong>Setting an NTD ID does not file anything with FTA.</strong> The P-50 is still yours to submit. GTFS·X gets the values right and keeps them stable; the reporting cycle is between you and FTA.</li>
         <li><strong>Changing your feed's slug breaks the URL you gave FTA.</strong> The same caveat as any catalog submission — see <a href="/docs/hosted-publishing/#gotchas">hosted publishing</a>. Pick a slug you can live with before you file.</li>
         <li><strong>Importing a feed replaces the NTD IDs.</strong> Import is a whole-project replace, so importing a feed whose <code>agency.txt</code> has no <code>external_id</code> column clears whatever IDs were set. Re-enter them if you're importing into an existing published project.</li>
-        <li><strong>Only the first agency's ID is editable in the app today.</strong> See the <a href="#multi-agency">multi-agency note</a> above: additional agencies' IDs currently have to arrive by import.</li>
+        <li><strong>On a joint feed, set an ID for every agency that reports.</strong> Switch between them with the <strong>Editing</strong> dropdown in the Agency panel (see the <a href="#multi-agency">multi-agency note</a> above). An agency you skip simply has no <code>external_id</code>, and FTA has nothing to crosswalk it on.</li>
         <li><strong>Dismissing the <code>agency_id</code> warnings is safe if you don't report to the NTD.</strong> They're advisory for non-reporters. The multi-agency one, though, is a real spec violation regardless of NTD — fix that one.</li>
       </ul>
 

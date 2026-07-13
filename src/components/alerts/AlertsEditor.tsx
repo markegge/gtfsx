@@ -529,7 +529,7 @@ function AlertForm({
                 className="text-warm-gray hover:text-red-600 text-sm px-1"
                 title="Remove window"
               >
-                ✕
+                ×
               </button>
             </div>
           ))}
@@ -649,7 +649,7 @@ function EntityRow({
 
       {canRemove && (
         <button onClick={onRemove} className="text-warm-gray hover:text-red-600 text-sm px-1" title="Remove">
-          ✕
+          ×
         </button>
       )}
     </div>

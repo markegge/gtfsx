@@ -133,7 +133,7 @@ export function VariantSwitcher() {
                   title="Drop all variants and return the feed to the baseline"
                   className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left text-warm-gray hover:bg-cream hover:text-red-600 transition-colors"
                 >
-                  <span aria-hidden>✕</span> Discard variants
+                  <span aria-hidden>×</span> Discard variants
                 </button>
               </>
             )}

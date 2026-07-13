@@ -31,7 +31,7 @@ const TITLE_ID = 'shapes-from-stops-title';
 // Structure mirrors ExportDialog (fixed-inset overlay, rounded-2xl card,
 // scrollable body between a fixed header/footer) with the a11y additions from
 // TalkToSalesModal (role="dialog", focus trap, Escape, return focus on close).
-// One deliberate departure: while a generation is running, Escape/backdrop/✕
+// One deliberate departure: while a generation is running, Escape/backdrop/×
 // ABORT rather than silently close — the run is mutating the store in the
 // background, and closing without a way back to summary.undo() would strand
 // whatever it had already written.

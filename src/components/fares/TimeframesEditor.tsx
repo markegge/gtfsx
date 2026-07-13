@@ -120,7 +120,7 @@ export function TimeframesEditor() {
                       title="Remove this window"
                       className="text-warm-gray hover:text-red-500 text-xs font-bold transition-colors px-1"
                     >
-                      ✕
+                      ×
                     </button>
                   </div>
                 ))}

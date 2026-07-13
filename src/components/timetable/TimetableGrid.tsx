@@ -1402,7 +1402,7 @@ function ContinuousOverridePopover({
           aria-label="Close"
           className="text-warm-gray/60 hover:text-warm-gray text-xs leading-none"
         >
-          ✕
+          ×
         </button>
       </div>
       <p className="text-[10px] text-warm-gray/70 mb-2 font-normal leading-snug">

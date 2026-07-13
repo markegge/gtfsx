@@ -217,7 +217,7 @@ function RouteDetailHeader() {
           className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
           title="Close editor"
         >
-          ✕
+          ×
         </button>
       </div>
       {/* Title row */}
@@ -357,7 +357,7 @@ function StopEditHeader() {
             className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
             title="Close editor"
           >
-            ✕
+            ×
           </button>
         </div>
       </div>
@@ -429,7 +429,7 @@ function CreateStopHeader() {
           className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
           title="Close editor"
         >
-          ✕
+          ×
         </button>
       </div>
     </div>
@@ -465,7 +465,7 @@ function CalendarDetailHeader() {
           className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
           title="Close editor"
         >
-          ✕
+          ×
         </button>
       </div>
       <div className="px-5 pt-1 pb-3 flex items-center gap-3">
@@ -529,7 +529,7 @@ function FlexZoneDetailHeader() {
           className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
           title="Close editor"
         >
-          ✕
+          ×
         </button>
       </div>
       {/* Title row */}
@@ -574,7 +574,7 @@ function GenericHeader({ section }: { section: SidebarSection }) {
         className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
         title="Close editor"
       >
-        ✕
+        ×
       </button>
     </div>
   );

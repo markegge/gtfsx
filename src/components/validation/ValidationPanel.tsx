@@ -282,7 +282,7 @@ export function ValidationPanel() {
             title="Dismiss"
             aria-label="Dismiss"
           >
-            ✕
+            ×
           </button>
         </div>
       )}

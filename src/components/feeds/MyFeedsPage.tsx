@@ -613,7 +613,7 @@ export function MyFeedsPage() {
             title="Dismiss"
             aria-label="Dismiss"
           >
-            ✕
+            ×
           </button>
         </div>
       )}

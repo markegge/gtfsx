@@ -20,12 +20,25 @@ interface FormFieldProps {
   containerClassName?: string;
   /** Render a custom control (select / textarea / custom input) instead of the built-in input. */
   children?: ReactNode;
+  /** Override the auto-derived data-testid (slug of `label`). Only needed
+   *  when two fields on the same panel would otherwise share a label, or
+   *  when `label` isn't a plain string (no slug can be derived). */
+  testId?: string;
 }
 
 const labelClasses: Record<'default' | 'sub', string> = {
   default: 'block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1',
   sub: 'block text-[10px] text-warm-gray mb-0.5',
 };
+
+// FormField has no htmlFor/id pairing (the label text carries formatting
+// hints inline, e.g. the required asterisk), so it isn't reachable via
+// getByLabel(). Every string-labeled instance gets a stable data-testid
+// derived from its label instead, without having to thread a prop through
+// every call site.
+function slugify(label: string): string {
+  return label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
 
 export function FormField({
   label,
@@ -40,6 +53,7 @@ export function FormField({
   size = 'default',
   containerClassName = 'mb-3',
   children,
+  testId,
 }: FormFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -58,6 +72,7 @@ export function FormField({
       {children ?? (
         <input
           ref={inputRef}
+          data-testid={testId ?? (typeof label === 'string' ? `field-${slugify(label)}` : undefined)}
           type={type}
           value={value ?? ''}
           onChange={(e) => onChange?.(e.target.value)}

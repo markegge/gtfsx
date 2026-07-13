@@ -111,6 +111,7 @@ export function BottomPanel() {
 
   return (
     <div
+      data-testid="bottom-panel"
       className={
         isNarrow
           ? 'fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-sand flex flex-col'

@@ -18,6 +18,8 @@
     "test:frontend": "vitest run --config vitest.frontend.config.ts",
     "test:worker": "vitest run --fileParallelism=false",
     "test:editor": "tsx run-tests.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:staging": "E2E_STAGING=1 playwright test --project=staging",
     "test:external": "tsx tests/external/check.ts",
     "test:validator-parity": "tsx tests/external/validator-parity.ts"
   },

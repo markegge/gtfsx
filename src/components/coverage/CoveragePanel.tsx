@@ -40,6 +40,7 @@ import {
   tabulateBlocks,
   type BlockCoverageResult,
 } from '../../services/blockCoverage';
+import { WalkshedProfilePanel } from './WalkshedProfilePanel';
 
 function formatNumber(n: number): string {
   return n.toLocaleString();
@@ -566,6 +567,11 @@ export function CoveragePanel() {
           </PaywallOverlay>
         </>
       )}
+
+      {/* Exact census-block walkshed profile — a separate analysis with its own
+          run button, its own store slice, and its own (union, never summed)
+          aggregation. Independent of the block-group coverage run above. */}
+      <WalkshedProfilePanel />
     </div>
   );
 }

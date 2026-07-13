@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import distance from '@turf/distance';
 import { point } from '@turf/helpers';
-import type { Feature } from 'geojson';
 import { useStore } from '../../store';
-import { calculateCoverage, demographicShares, baselineShares, generateBufferGeoJSON } from '../../services/coverageAnalysis';
+import { calculateCoverage, demographicShares, baselineShares } from '../../services/coverageAnalysis';
 import { fetchCensusData, lookupFips, type BlockGroupData } from '../../services/demographics';
-import { isInUS, bboxFromStops, loadBlocksInBbox, unionWalkshedPolygons, tabulateBlocks } from '../../services/blockCoverage';
+import { StopWalkshedProfile } from '../coverage/WalkshedProfilePanel';
 import { directionName } from '../../utils/constants';
 
 // Module-level cache so navigating between stops in the same county doesn't
@@ -167,39 +166,11 @@ export function StopCoveragePanel() {
     })();
   }, [stop, coverageData, localBlockGroups]);
 
-  // Block-level jobs within THIS stop's buffer. Jobs aren't in the
-  // block-group/disc method, so they come from the exact census-block layer
-  // (nationwide `us` layer). When available we show Jobs in place of Workers.
-  // Best-effort: stops outside the US, a missing layer in local dev, or a fetch
-  // error leave jobs null and the panel keeps showing Workers.
-  const [stopJobs, setStopJobs] = useState<number | null>(null);
-  useEffect(() => {
-    if (!stop || !isInUS(stop.stop_lat, stop.stop_lon)) {
-      setStopJobs(null);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const bbox = bboxFromStops([stop]);
-        if (!bbox) {
-          if (!cancelled) setStopJobs(null);
-          return;
-        }
-        const blocks = await loadBlocksInBbox('us', bbox);
-        const bufferFc = generateBufferGeoJSON([stop], bufferMiles);
-        const features = bufferFc.features as Feature[];
-        const poly = unionWalkshedPolygons(features);
-        const result = tabulateBlocks(blocks, poly, features);
-        if (!cancelled) setStopJobs(result.totalJobs);
-      } catch {
-        if (!cancelled) setStopJobs(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [stop, bufferMiles]);
+  // NOTE: jobs (and the rest of the exact block-level demographic profile) come
+  // from the Demographic profile section below, which reads a feed-wide result
+  // computed by ONE fetch of the census-block layer. This panel used to issue
+  // its own `loadBlocksInBbox` HTTP range-read PER STOP, which doesn't scale
+  // past a handful of stops — never reintroduce a per-stop fetch here.
 
   const coverageResult = useMemo(() => {
     if (!stop || !blockGroups) return null;
@@ -325,17 +296,20 @@ export function StopCoveragePanel() {
             </div>
             <div>
               <div className="text-[10px] text-warm-gray uppercase tracking-wide mb-0.5">
-                {stopJobs != null ? 'Jobs' : 'Workers'}
+                Workers
               </div>
               <div className="text-sm font-heading font-bold text-dark-brown tabular-nums">
-                {fmtNum(stopJobs != null ? stopJobs : coverageResult.totalWorkers)}
+                {fmtNum(coverageResult.totalWorkers)}
               </div>
             </div>
           </div>
         ) : null}
         <p className="mt-1.5 text-[10px] text-warm-gray">
-          Estimated reach within a {bufferMiles === 0.25 ? '1/4-mile' : '1/2-mile'} straight-line buffer of this stop. Block-group apportionment uses the same circle-overlap method as the system Coverage panel.
-          {stopJobs != null && ' Jobs are workplace counts (LODES, census-block level) inside the buffer.'}
+          <span className="font-semibold text-dark-brown">Estimate.</span> Block-group apportionment
+          within a {bufferMiles === 0.25 ? '1/4-mile' : '1/2-mile'} straight-line buffer, using the
+          same circle-overlap method as the system Coverage panel. Block groups inherit their parent
+          tract's centroid, so at this scale adjacent stops can look alike — the exact census-block
+          profile below is the sharper instrument.
         </p>
 
         {shares && baseline && coverageResult && coverageResult.totalPopulation > 0 && (
@@ -360,6 +334,17 @@ export function StopCoveragePanel() {
             </table>
           </div>
         )}
+      </div>
+
+      {/* ─── Demographic profile (exact census blocks) ─── */}
+      <div className="border-t border-sand pt-4">
+        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-warm-gray">
+          Demographic profile
+          <span className="ml-1.5 rounded border border-teal/30 bg-teal-light px-1 text-[9px] font-bold normal-case tracking-wide text-teal">
+            census block · exact
+          </span>
+        </label>
+        <StopWalkshedProfile stopId={stop.stop_id} />
       </div>
     </div>
   );

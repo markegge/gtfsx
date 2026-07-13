@@ -51,6 +51,15 @@ export interface Env {
   STRIPE_PRICE_TEAM_ANNUAL?: string;
   STRIPE_PORTAL_CONFIG_ID?: string;
 
+  // Cloudflare Turnstile SITE key (public). Baked into the React bundle as
+  // VITE_TURNSTILE_SITE_KEY for signup; this copy is for the worker-rendered
+  // /book-demo lead form, which isn't part of the React build and so can't read
+  // the Vite var. Same public value; lives in `vars`, not as a secret. Empty =
+  // the widget is skipped (dev fallback) AND the POST handler skips server-side
+  // verification, mirroring how signup couples site key ⟺ TURNSTILE_SECRET_KEY
+  // per environment. Set it wherever TURNSTILE_SECRET_KEY is set.
+  TURNSTILE_SITE_KEY?: string;
+
   // Secrets (wrangler secret put)
   RESEND_API_KEY: string;
   MOBILITY_DATABASE_REFRESH_TOKEN: string;
@@ -75,7 +84,7 @@ export interface Env {
   // Get from Goals → Summary → click the action → URL contains the ID.
   GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED?: string;
   GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW?: string;
-  // demo_request (GET /book-demo → booking-page redirect). Unlike the two
+  // demo_request (the /book-demo lead-form submit). Unlike the two
   // above, this one is optional even when OCI is otherwise configured:
   // leaving it unset keeps the live feed_exported/paywall_view uploads
   // running while the new conversion action is created in the Ads UI —

@@ -1,6 +1,6 @@
 // Billing API client. Mirrors the request/error pattern from authApi.ts.
 
-import { ApiError, type ApiErrorCode } from './authApi';
+import { apiRequest, restParseError } from './apiClient';
 
 export type Plan =
   | 'free'
@@ -67,49 +67,11 @@ export interface PortalResponse {
   url: string;
 }
 
-async function request<T = unknown>(
+function request<T = unknown>(
   path: string,
   init: { method?: string; body?: unknown } = {},
 ): Promise<T> {
-  const { method = 'GET', body } = init;
-  const headers: Record<string, string> = { 'X-GB-Client': 'web' };
-  if (body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-  }
-  let res: Response;
-  try {
-    res = await fetch(path, {
-      method,
-      headers,
-      credentials: 'include',
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-  } catch (e) {
-    throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
-  }
-  if (res.status === 204) return undefined as T;
-  const isJson = (res.headers.get('content-type') ?? '').includes('application/json');
-  if (!res.ok) {
-    let code: ApiErrorCode = 'unknown';
-    let message = res.statusText || 'Request failed';
-    let extra: Record<string, unknown> = {};
-    if (isJson) {
-      try {
-        const data = await res.json();
-        if (data && typeof data === 'object') {
-          const { error, message: msg, ...rest } = data as Record<string, unknown>;
-          if (typeof error === 'string') code = error as ApiErrorCode;
-          if (typeof msg === 'string') message = msg;
-          extra = rest;
-        }
-      } catch {
-        // ignore
-      }
-    }
-    throw new ApiError(code, message, res.status, extra);
-  }
-  if (isJson) return (await res.json()) as T;
-  return undefined as T;
+  return apiRequest<T>(path, init, { parseError: restParseError });
 }
 
 export function fetchPlanCatalog(): Promise<PlansResponse> {

@@ -1,4 +1,4 @@
-import { ApiError, type ApiErrorCode } from './authApi';
+import { apiRequest, ApiError, type ApiErrorCode, DEFAULT_HEADERS as BASE_HEADERS } from './apiClient';
 
 export interface ProjectSummary {
   id: string;
@@ -95,8 +95,6 @@ export class ConflictError extends ApiError {
   }
 }
 
-const BASE_HEADERS = { 'X-GB-Client': 'web' };
-
 async function parseErrorResponse(res: Response): Promise<ApiError> {
   let code: ApiErrorCode = 'unknown';
   let message = res.statusText || 'Request failed';
@@ -120,34 +118,11 @@ async function parseErrorResponse(res: Response): Promise<ApiError> {
   return new ApiError(code, message, res.status);
 }
 
-async function requestJson<T>(
+function requestJson<T>(
   path: string,
   init: { method?: string; body?: unknown } = {},
 ): Promise<T> {
-  const { method = 'GET', body } = init;
-  const headers: Record<string, string> = { ...BASE_HEADERS };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
-
-  let res: Response;
-  try {
-    res = await fetch(path, {
-      method,
-      headers,
-      credentials: 'include',
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-  } catch (e) {
-    throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
-  }
-
-  if (!res.ok) throw await parseErrorResponse(res);
-  if (res.status === 204) return undefined as T;
-
-  const contentType = res.headers.get('content-type') ?? '';
-  if (contentType.includes('application/json')) {
-    return (await res.json()) as T;
-  }
-  return undefined as T;
+  return apiRequest<T>(path, init, { parseError: parseErrorResponse });
 }
 
 export function listProjects(

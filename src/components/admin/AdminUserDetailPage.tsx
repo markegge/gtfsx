@@ -109,7 +109,7 @@ export function AdminUserDetailPage() {
       )}
       <ErrorBanner>{error}</ErrorBanner>
 
-      {loading && !data && <div className="text-warm-gray text-sm">Loading…</div>}
+      {loading && !data && <p className="text-sm text-warm-gray">Loading…</p>}
 
       {data && (
         <div className="space-y-5">

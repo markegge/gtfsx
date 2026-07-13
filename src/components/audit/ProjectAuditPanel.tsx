@@ -81,7 +81,7 @@ export function ProjectAuditPanel() {
 
       <div className="flex-1 overflow-auto">
         {loading && events.length === 0 ? (
-          <div className="p-4 text-sm text-warm-gray">Loading…</div>
+          <p className="p-4 text-sm text-warm-gray">Loading…</p>
         ) : (
           <AuditTable events={events} currentUserId={currentUser?.id ?? null} />
         )}

@@ -208,7 +208,7 @@ export function SnapshotHistoryPanel() {
 
       <div className="flex-1 overflow-auto">
         {loading && snapshotList.length === 0 ? (
-          <div className="p-4 text-sm text-warm-gray">Loading…</div>
+          <p className="p-4 text-sm text-warm-gray">Loading…</p>
         ) : snapshotList.length === 0 ? (
           <div className="p-4 text-sm text-warm-gray">
             No saved snapshots yet. Click "Save snapshot" to capture the current feed.

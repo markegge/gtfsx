@@ -7,6 +7,7 @@ import { AuthButton } from '../auth/AuthButton';
 import { FormField } from '../ui/FormField';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Modal } from '../ui/Modal';
+import { EmptyState } from '../ui/EmptyState';
 import { Badge } from '../ui/Badge';
 import { AppBrand } from '../layout/AppBrand';
 import { UserMenu } from '../layout/UserMenu';
@@ -377,17 +378,17 @@ export function MyFeedsPage() {
         )}
 
         {loading ? (
-          <div className="text-warm-gray text-sm">Loading…</div>
+          <p className="text-sm text-warm-gray">Loading…</p>
         ) : feedsProjects.length === 0 ? (
-          <div className="bg-white border border-sand rounded-2xl p-10 text-center">
-            <div className="font-heading font-bold text-lg text-dark-brown mb-1">No feeds yet</div>
-            <p className="text-warm-gray text-sm mb-4">Create a feed, or import an existing GTFS feed to get started.</p>
-            <div className="flex items-center justify-center gap-2">
-              <AuthButton variant="secondary" onClick={() => setShowImport(true)}>
-                Import feed
-              </AuthButton>
-              <AuthButton onClick={() => setShowCreate(true)}>+ Create feed</AuthButton>
-            </div>
+          <div className="bg-white border border-sand rounded-2xl">
+            <EmptyState
+              title="No feeds yet"
+              description="Create a feed, or import an existing GTFS feed to get started."
+              secondaryActionLabel="Import feed"
+              onSecondaryAction={() => setShowImport(true)}
+              actionLabel="Create feed"
+              onAction={() => setShowCreate(true)}
+            />
           </div>
         ) : (
           <div className="grid gap-3">

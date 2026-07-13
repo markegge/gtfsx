@@ -9,6 +9,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// The ACS vintage is generated, not hardcoded (demand-dots/acs_vintage.py probes
+// the Census API and emits src/generated/acsVintage.ts). Assert against the same
+// constant the app uses, so bumping the vintage never means editing this test.
+import { ACS_YEAR } from '../../generated/acsVintage';
+
 // Stub the bundled tract-centroid file fetch. Three deterministic centroids
 // keyed by state+county+tract so every imported block group has coords.
 const TRACT_FILE = `STATE,COUNTY,TRACT,FOO,INTPTLAT,INTPTLON
@@ -60,7 +65,7 @@ describe('demographics.fetchCensusData', () => {
     await fetchCensusData('06', '001');
 
     const censusUrl = fetchMock.mock.calls[1][0] as string;
-    expect(censusUrl).toContain('api.census.gov/data/2022/acs/acs5');
+    expect(censusUrl).toContain(`api.census.gov/data/${ACS_YEAR}/acs/acs5`);
     expect(censusUrl).toContain('&key=secret-key-123');
   });
 

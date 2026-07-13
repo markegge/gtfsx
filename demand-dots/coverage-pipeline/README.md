@@ -26,8 +26,8 @@ zeroveh_hh, occ_hh, senior, youth, jobs
 
 - **Block population** comes from the BG demographics apportioned down to blocks
   (it is *not* raw POP20 — POP20 is only the apportionment weight).
-- **ACS block-group demographics (vintage 2022, ACS 5-year)** are fetched for the
-  full variable set and apportioned to each constituent block **dasymetrically**,
+- **ACS block-group demographics (5-year)** are fetched for the full variable set
+  and apportioned to each constituent block **dasymetrically**,
   weighted by 2020 decennial **POP20** (→ HOUSING20 → ALAND20 → even split), joined
   by the 12-char block-group GEOID prefix. The same per-block fraction is applied
   to every attribute, so block sums conserve the block-group totals (a
@@ -138,12 +138,21 @@ wrangler r2 object put gtfs-builder-tiles/coverage/us.fgb \
 
 1. **Households = ACS B25044 occupied households** (`hh` and `occ_hh`), not total
    housing units.
-2. **ACS vintage is 2022** (5-year) — pinned to match the on-screen
-   tract-centroid method (`src/services/demographics.ts`) so numbers stay
-   consistent, just at finer geography.
-3. **Negative Census sentinels** (`-666666666`, `-999999999`, …) for suppressed /
+2. **ACS vintage is auto-probed** — the builder walks back from an impossible
+   year until the Census API answers, so it always uses the newest published
+   5-year release. The gtfsx repo runs the same probe in
+   `demand-dots/acs_vintage.py`, which emits `src/generated/acsVintage.ts`; that
+   is how the on-screen tract-centroid method
+   (`src/services/demographics.ts`) stays on the same vintage as this layer.
+3. **Connecticut is pinned one year back** (`ACS_YEAR_BY_STATE = {"09": 2021}`).
+   CT swapped its 8 counties for 9 planning regions in ACS 2022+ (county codes
+   110-190), but TIGER TABBLOCK20 still codes CT blocks with the old counties
+   (001-015), so a current-vintage CT block-group GEOID prefix-matches nothing
+   and the state would apportion to zero blocks. ACS 2021 still uses the old
+   county codes and joins cleanly. CT is the only state affected.
+4. **Negative Census sentinels** (`-666666666`, `-999999999`, …) for suppressed /
    unavailable values are **clamped to 0**.
-4. **AK & PR have no LODES WAC** — those states build with population but `jobs=0`.
+5. **AK & PR have no LODES WAC** — those states build with population but `jobs=0`.
 
 ---
 

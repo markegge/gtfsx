@@ -14,10 +14,11 @@ coverage-pipeline/ folder can be copied to a fresh workstation and run on its
 own.
 
 Pipeline:
-  1. Fetch ACS 5-year (vintage 2022) block-group demographics (FULL variable set
-     mirroring src/services/demographics.ts) and derive the per-BG metrics
-     (population, occupied households, workers, high-propensity riders, equity
-     numerators / denominators).
+  1. Fetch ACS 5-year block-group demographics (FULL variable set mirroring
+     src/services/demographics.ts) and derive the per-BG metrics (population,
+     occupied households, workers, high-propensity riders, equity numerators /
+     denominators). The ACS vintage is auto-probed (newest published 5-year
+     release), except Connecticut, which is pinned — see ACS_YEAR_BY_STATE.
   2. Fetch TIGER TABBLOCK20 block geometries WITH the official internal point
      (INTPTLAT20 / INTPTLON20) — the block centroid we tabulate against.
   3. Apportion every BG attribute down to its constituent blocks, weighted by
@@ -48,24 +49,62 @@ import requests
 # ─── Vintages / endpoints ─────────────────────────────────────────────────────
 
 CENSUS_API_BASE = "https://api.census.gov/data"
-# ACS year MUST match src/services/demographics.ts (data/2022/acs/acs5) so the
-# block-level numbers stay consistent with the on-screen tract-centroid method —
-# just at finer geography.
-ACS_YEAR = 2022
-ACS_DATASET = f"{CENSUS_API_BASE}/{ACS_YEAR}/acs/acs5"
+
+# The ACS vintage is NOT hardcoded: we probe the Census API downward from a year
+# that cannot exist yet and take the newest release that answers. The same probe
+# runs in the repo's demand-dots/acs_vintage.py, which additionally emits
+# src/generated/acsVintage.ts so the GTFS·X frontend reads the identical year.
+#
+# This probe is DELIBERATELY DUPLICATED here rather than imported: this folder's
+# contract (see README) is that it can be copied to a fresh workstation and run
+# with nothing from the gtfsx repo but `pip install -r requirements.txt`. The two
+# copies cannot drift in practice — both resolve dynamically against the same
+# API, so they always land on the same year. demand-dots/acs_vintage.py remains
+# the single authoritative emitter of the frontend constant.
+ACS_PROBE_START = 2026
+ACS_PROBE_FLOOR = 2019
 
 # Connecticut (FIPS 09) replaced its 8 counties with 9 "planning regions" as
 # county-equivalents starting with the ACS 2022 5-yr release (county codes
 # 110-190). But the 2020 census BLOCKS in TIGER/Line still carry the OLD county
-# codes (001-015), so ACS 2022 CT block-group GEOIDs can't prefix-match the
-# blocks → 0 apportioned blocks. Pin CT to the ACS 2021 5-yr (old counties),
+# codes (001-015), so a current-vintage CT block-group GEOID can't prefix-match
+# the blocks → 0 apportioned blocks. Pin CT to the ACS 2021 5-yr (old counties),
 # which prefix-matches the TIGER blocks. One year older for CT ONLY; every other
-# state stays on ACS_YEAR. (CT is the only state that did this.)
+# state uses the probed year. (CT is the only state that did this.)
 ACS_YEAR_BY_STATE = {"09": 2021}
+
+_LATEST_ACS_YEAR: int | None = None
+
+
+def resolve_latest_acs_year() -> int:
+    """Newest ACS 5-year vintage the Census API actually serves. An unpublished
+    year 404s; the first year that answers wins. Memoized for the process."""
+    global _LATEST_ACS_YEAR
+    if _LATEST_ACS_YEAR is not None:
+        return _LATEST_ACS_YEAR
+
+    params = {"get": "NAME", "for": "state:30"}  # cheapest possible query
+    key = _census_key()
+    if key:
+        params["key"] = key
+    for year in range(ACS_PROBE_START, ACS_PROBE_FLOOR - 1, -1):
+        try:
+            resp = requests.get(f"{CENSUS_API_BASE}/{year}/acs/acs5", params=params, timeout=30)
+        except requests.RequestException:
+            continue
+        if resp.status_code == 200:
+            _LATEST_ACS_YEAR = year
+            return year
+    raise RuntimeError(
+        f"No ACS 5-year vintage responded between {ACS_PROBE_FLOOR} and {ACS_PROBE_START}. "
+        "The Census API may be down, or CENSUS_API_KEY may be missing/invalid."
+    )
 
 
 def _acs_year(state_fips: str) -> int:
-    return ACS_YEAR_BY_STATE.get(state_fips, ACS_YEAR)
+    """ACS vintage for a state: the newest published release, unless pinned."""
+    pinned = ACS_YEAR_BY_STATE.get(state_fips)
+    return pinned if pinned is not None else resolve_latest_acs_year()
 
 
 TIGER_YEAR = 2025
@@ -213,7 +252,7 @@ def fetch_block_group_full_state(state_fips: str) -> pd.DataFrame:
         print(f"  Using cached coverage ACS block-group data: {cache_file}")
         return pd.read_csv(cache_file, dtype={"GEOID": str})
 
-    note = " (pinned: CT planning-region transition)" if acs_year != ACS_YEAR else ""
+    note = " (pinned: CT planning-region transition)" if state_fips in ACS_YEAR_BY_STATE else ""
     print(f"  Fetching ACS {acs_year} 5-yr block-group data ({len(ACS_ALL_VARS)} vars, state {state_fips}){note}...")
     params = {
         "get": ",".join(ACS_ALL_VARS),
@@ -415,7 +454,8 @@ def build_state(state: str, out: str, cache_dir: str | None = None) -> dict:
 
     state_fips, abbr = resolve_state(state)
     print(f"Building block-level coverage layer for {abbr.upper()} (FIPS {state_fips})")
-    print(f"  ACS {ACS_YEAR} / TIGER {TIGER_YEAR} / LODES probe<= {LODES_PROBE_START} / cache {CACHE_DIR}")
+    print(f"  ACS {_acs_year(state_fips)} / TIGER {TIGER_YEAR} / "
+          f"LODES probe<= {LODES_PROBE_START} / cache {CACHE_DIR}")
 
     print("\n1. Fetching ACS block-group demographics (full var set)...")
     bg_data = fetch_block_group_full_state(state_fips)

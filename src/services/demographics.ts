@@ -1,3 +1,5 @@
+import { ACS_YEAR } from '../generated/acsVintage';
+
 export interface BlockGroupData {
   geoid: string;
   population: number;
@@ -32,7 +34,11 @@ export interface BlockGroupData {
 }
 
 /**
- * ACS 5-year (2022) detailed-table variables we request, grouped by metric.
+ * ACS 5-year detailed-table variables we request, grouped by metric. The
+ * vintage itself comes from the generated ACS_YEAR constant (see
+ * src/generated/acsVintage.ts) so the app, the demand-dot tiles and the
+ * coverage layer can never disagree about which release they are on.
+ *
  * Columns come back in this order, but we still resolve them by name from the
  * response header so a Census column reshuffle can't silently misalign values.
  *
@@ -139,7 +145,7 @@ export async function fetchCensusData(
   const [centroids, censusRes] = await Promise.all([
     fetchTractCentroids(stateFips),
     fetch(
-      `https://api.census.gov/data/2022/acs/acs5` +
+      `https://api.census.gov/data/${ACS_YEAR}/acs/acs5` +
         `?get=${ACS_ALL_VARS.join(',')}` +
         `&for=block%20group:*&in=state:${stateFips}&in=county:${countyFips}&in=tract:*` +
         keyParam,

@@ -4,13 +4,25 @@ Verifies that apportioning a block group's attributes down to its blocks
 (POP20-weighted) conserves the totals within rounding, and that the weight
 fallback chain (POP20 → HOUSING20 → ALAND20 → even) behaves as designed.
 
+This targets the CANONICAL coverage-pipeline/build_coverage_blocks.py — the
+self-contained implementation (with the Connecticut ACS pin) that actually
+built the live us.fgb served in production — via an explicit sys.path
+insert, NOT the top-level demand-dots/build_coverage_blocks.py, which was a
+superseded Montana POC and has been deleted. Do not repoint this back at a
+local copy in demand-dots/.
+
 Run:  ./.venv/bin/python test_apportion.py
 """
+
+import os
+import sys
 
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Point
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "coverage-pipeline"))
 from build_coverage_blocks import apportion_state, ATTR_KEYS
 from build_dots import build_bg_to_blocks_index
 

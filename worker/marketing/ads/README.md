@@ -99,7 +99,17 @@ Three conversion actions map to the three uploaded event kinds:
 |---|---|---|---|
 | `feed_exported` | Converted lead | `feed_exported` | exists (created 2026-05-26) |
 | `paywall_view` | Qualified lead | `paywall_view` | exists (created 2026-05-26) |
-| `demo_request` | Book appointment | `demo_request` (GET `/book-demo`) | exists (created 2026-07-12, ctId 7682006138) |
+| `demo_request` | Book appointment | `demo_request` (POST `/api/demo-leads`, the /book-demo lead-form submit) | exists (created 2026-07-12, ctId 7682006138) |
+
+> **`demo_request` now fires on the lead-form submit, not a redirect click.**
+> `/book-demo` used to 302 straight to the booking calendar and count the
+> conversion on that redirect. It now serves a lead form; the conversion is
+> emitted when the visitor submits it (POST `/api/demo-leads` →
+> `insertEvent('demo_request', …)`). Deliberate consequence: reported
+> conversion volume drops (a form submit is a higher bar than a redirect
+> click), but signal quality rises, so Google Ads optimizes on genuine intent
+> rather than every outbound click. The event name, gclid stamping, and
+> conversion action are unchanged, so the uploader needs no changes.
 
 Get each ID by: Goals → Summary → click the action → look at the URL,
 which contains `&ctId=NNNNNNNNNNN`. That number is the conversion action ID.

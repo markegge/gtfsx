@@ -241,20 +241,26 @@ Design rationale is preserved in the decisions appendix of the archived
 - **Repo transferred to the GTFS-X GitHub org (2026-07-12):** moved from
   `markegge/gtfsx` to `GTFS-X/gtfsx` (https://github.com/GTFS-X/gtfsx), same
   `main` default branch, still public.
-- 🚨 **PUSH-TO-MAIN AUTO-DEPLOY IS BROKEN as of the 2026-07-12 transfer.** The
-  Cloudflare Workers Builds GitHub App was connected to the OLD `markegge/gtfsx`
-  and did NOT follow the repo to the org. Verified: pushing `7db94fb` to `main`
-  gave a green CI run and no deploy, and prod kept serving the pre-transfer
-  bundle. **CI passing does NOT mean prod shipped.** Until someone re-authorizes
-  the Cloudflare GitHub App on the GTFS-X org and re-links the build, EVERY prod
-  ship must be done manually:
+- **Push-to-main auto-deploy: BROKEN by the transfer, now RECONNECTED and
+  verified (2026-07-12).** The Cloudflare Workers Builds GitHub App had been
+  connected to the old `markegge/gtfsx` and did not follow the repo to the org,
+  so for a window that day `main` pushes gave a green CI run and no deploy while
+  prod kept serving the pre-transfer bundle. The GitHub App has been
+  re-authorized on the GTFS-X org and the build re-linked. Verified with a real
+  push: `ce88751` landed at 22:57:16Z and Cloudflare created a deployment at
+  22:58:39Z (~83s later), and prod served a string unique to that commit.
+  Manual ship (still the fallback, and the only path for a hotfix that cannot
+  wait for the build):
   ```
   npm run build:prod && npx wrangler deploy   # wrangler does NOT build
   ```
-  `build:prod` (never a bare `npm run build`, which ships a Stripe test key: see
-  §5 deploy gotchas) validates the build vars and verifies the bundle. Then
-  confirm the prod bundle hash matches `dist/index.html`. Delete this warning
-  once auto-deploy is reconnected and verified with a real push.
+  Always `build:prod`, never a bare `npm run build`, which ships a Stripe test
+  key (see §5 deploy gotchas).
+  **Verifying a deploy actually shipped:** `npx wrangler@4 deployments list` and
+  compare the newest timestamp against your push. Do NOT try to fingerprint the
+  prod bundle by grepping the chunks linked from a page's HTML: that HTML lists
+  only the entry and preloaded chunks, so lazily-imported code (most components)
+  is absent from it and you will get confident false negatives.
 - `main` is protected by the **"main protection" ruleset** (blocks deletions and
   force-pushes; repo admins can bypass). It survived the org transfer intact.
   ⚠️ Check it with the RULESETS api, not the legacy branch-protection one:

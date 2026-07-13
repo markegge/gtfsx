@@ -1,21 +1,33 @@
 // Scheduled tasks run by the Worker's scheduled() handler.
 //
 // 1. `reapDeletedUsers` — hard-purge soft-deleted users past their 30-day
-//    grace period. Order matters: R2 blobs → projects (FK cascades handle
-//    versions/drafts/publications) → org memberships → credentials → audit
-//    (keep subject events, drop actor-only rows) → the user row itself.
+//    grace period. Order matters: projects (purgeProject: R2 blobs + every
+//    project-scoped row) → org memberships → credentials → audit (keep subject
+//    events, drop actor-only rows) → the user row itself.
 //
-// 2. `summarizeWeeklyMetrics` — cache top-level counters in KV so
+// 2. `reapDeletedProjects` — hard-purge individually-deleted projects (feeds in
+//    the trash) past their own 30-day grace period. Shares purgeProject() with
+//    the user reaper so "purge a project" has exactly one definition.
+//
+// 3. `summarizeWeeklyMetrics` — cache top-level counters in KV so
 //    /api/admin/stats can read them cheaply.
 
 import type { Env } from '../env';
-import { deleteProjectBlobs } from '../projects/r2';
+import { purgeProject } from '../projects/purge';
 import { performPublish } from '../publication/performPublish';
 import { requirePublishAccess } from '../billing/middleware';
 import type { OwnerType } from '../projects/quotas';
 import { sendOwnerDigest, type OwnerDigestMetrics } from '../email';
 
 export const DELETE_GRACE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+/**
+ * How long a soft-deleted PROJECT sits in the trash before it is purged for
+ * good. Deliberately the same 30 days as the account grace period above: a
+ * deleted feed is recoverable (GET /api/projects/deleted → POST /:id/restore)
+ * for a month, then reapDeletedProjects() erases it permanently.
+ */
+export const PROJECT_DELETE_GRACE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // ─── Comp grant expiry ──────────────────────────────────────────────────────
 //
@@ -126,33 +138,21 @@ interface PerUserReap {
 async function reapOne(env: Env, userId: string): Promise<PerUserReap> {
   const stats: PerUserReap = { r2Projects: 0, orgsDeleted: 0, orgMembershipsRemoved: 0 };
 
-  // 1) R2 blobs — all personally-owned project prefixes + their publication zips.
+  // 1) Personally-owned projects — purgeProject() erases the R2 blobs AND every
+  //    project-scoped row (see worker/projects/purge.ts). Same helper the trash
+  //    reaper uses, so the two paths can never diverge.
   const projects = await env.DB.prepare(
     `SELECT id FROM feed_project WHERE owner_type = 'user' AND owner_id = ?`,
   )
     .bind(userId)
     .all<{ id: string }>();
-  const projectIds = (projects.results ?? []).map((p) => p.id);
 
-  for (const pid of projectIds) {
-    // projects/<id>/** covers working-state + versions/<vid>/state + versions/<vid>/gtfs.zip
-    await deleteProjectBlobs(env, pid);
-    // publications/<id>/** covers published + rolled-back ZIPs
-    await deletePrefixedBlobs(env, `publications/${pid}/`);
-    // draft-links/<id>/** covers any draft preview ZIPs
-    await deletePrefixedBlobs(env, `draft-links/${pid}/`);
+  for (const p of projects.results ?? []) {
+    await purgeProject(env, p.id);
     stats.r2Projects += 1;
   }
 
-  // 2) Delete project rows — FK cascades take care of feed_version, draft_link,
-  //    publication, publication_history, project_catalog_submission, project_rt_feed.
-  await env.DB.prepare(
-    `DELETE FROM feed_project WHERE owner_type = 'user' AND owner_id = ?`,
-  )
-    .bind(userId)
-    .run();
-
-  // 3) Org memberships. If the user was the last remaining member of an org,
+  // 2) Org memberships. If the user was the last remaining member of an org,
   //    drop the org too (orphan cleanup). Otherwise just remove their row.
   const orgs = await env.DB.prepare(
     `SELECT org_id FROM organization_membership WHERE user_id = ?`,
@@ -167,21 +167,17 @@ async function reapOne(env: Env, userId: string): Promise<PerUserReap> {
       .bind(o.org_id, userId)
       .first<{ n: number }>();
     if ((remaining?.n ?? 0) === 0) {
-      // Last member — drop the org (its memberships and projects cascade via FKs).
-      // Scrub any org-owned project blobs first so we don't leave R2 orphans.
+      // Last member — drop the org. Purge its feeds the same way (blobs + rows)
+      // rather than leaning on the organization → project FK cascade.
       const orgProjects = await env.DB.prepare(
         `SELECT id FROM feed_project WHERE owner_type = 'org' AND owner_id = ?`,
       )
         .bind(o.org_id)
         .all<{ id: string }>();
       for (const p of orgProjects.results ?? []) {
-        await deleteProjectBlobs(env, p.id);
-        await deletePrefixedBlobs(env, `publications/${p.id}/`);
-        await deletePrefixedBlobs(env, `draft-links/${p.id}/`);
+        await purgeProject(env, p.id);
+        stats.r2Projects += 1;
       }
-      await env.DB.prepare(`DELETE FROM feed_project WHERE owner_type = 'org' AND owner_id = ?`)
-        .bind(o.org_id)
-        .run();
       await env.DB.prepare(`DELETE FROM organization_membership WHERE org_id = ?`)
         .bind(o.org_id)
         .run();
@@ -197,31 +193,68 @@ async function reapOne(env: Env, userId: string): Promise<PerUserReap> {
     }
   }
 
-  // 4) Credentials. The FK cascades via `credential.user_id ON DELETE CASCADE`
+  // 3) Credentials. The FK cascades via `credential.user_id ON DELETE CASCADE`
   //    but we clear explicitly for defence-in-depth.
   await env.DB.prepare(`DELETE FROM credential WHERE user_id = ?`).bind(userId).run();
 
-  // 5) Audit events: drop rows where this user is the actor, but KEEP events
+  // 4) Audit events: drop rows where this user is the actor, but KEEP events
   //    where they're the subject — those may matter for orgs/admins later.
   await env.DB.prepare(`DELETE FROM audit_event WHERE actor_user_id = ?`).bind(userId).run();
 
-  // 6) The user row itself. Sessions, auth tokens etc. cascade via FK.
+  // 5) The user row itself. Sessions, auth tokens etc. cascade via FK.
   await env.DB.prepare(`DELETE FROM user WHERE id = ?`).bind(userId).run();
 
   return stats;
 }
 
-async function deletePrefixedBlobs(env: Env, prefix: string): Promise<void> {
-  let cursor: string | undefined = undefined;
-  while (true) {
-    const listed: R2Objects = await env.FEEDS.list({ prefix, cursor });
-    if (listed.objects.length > 0) {
-      await env.FEEDS.delete(listed.objects.map((o) => o.key));
+// ─── Trash reaper: individually-deleted projects ────────────────────────────
+//
+// DELETE /api/projects/:id only sets feed_project.deleted_at — the feed drops
+// out of the owner's list but stays fully recoverable (POST /:id/restore) for
+// PROJECT_DELETE_GRACE_MS. This is what finally erases it. Without it, a deleted
+// feed sat in D1 forever: unreachable to its owner AND never purged.
+//
+// A project whose OWNER is also being reaped gets purged by reapDeletedUsers
+// instead; purgeProject is idempotent, so a project caught by both is harmless.
+
+export interface ProjectReapSummary {
+  candidates: number;
+  purged: number;
+  errors: number;
+}
+
+export async function reapDeletedProjects(env: Env): Promise<ProjectReapSummary> {
+  const cutoff = Date.now() - PROJECT_DELETE_GRACE_MS;
+  const candidates = await env.DB.prepare(
+    `SELECT id, slug, owner_type, owner_id FROM feed_project
+       WHERE deleted_at IS NOT NULL AND deleted_at < ?`,
+  )
+    .bind(cutoff)
+    .all<{ id: string; slug: string; owner_type: string; owner_id: string }>();
+
+  const rows = candidates.results ?? [];
+  const summary: ProjectReapSummary = { candidates: rows.length, purged: 0, errors: 0 };
+
+  for (const row of rows) {
+    try {
+      await purgeProject(env, row.id);
+      summary.purged += 1;
+      console.log(
+        `[reaper] purged project ${row.id} (${row.slug}, ${row.owner_type}:${row.owner_id})`,
+      );
+    } catch (err) {
+      summary.errors += 1;
+      console.error(`[reaper] failed to purge project ${row.id}`, err);
     }
-    if (!listed.truncated) break;
-    cursor = listed.truncated ? listed.cursor : undefined;
-    if (!cursor) break;
   }
+
+  if (summary.candidates > 0) {
+    console.log(
+      `[reaper] ${summary.purged}/${summary.candidates} deleted projects purged, ` +
+        `${summary.errors} errors`,
+    );
+  }
+  return summary;
 }
 
 // ─── Weekly metrics rollup ──────────────────────────────────────────────────

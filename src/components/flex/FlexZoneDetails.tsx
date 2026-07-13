@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useStore } from '../../store';
 import type { FlexZone, BookingRule } from '../../store/flexSlice';
 import {
@@ -5,6 +6,7 @@ import {
   flexZoneHasGroup, flexZoneHasPolygons,
 } from '../../store/flexSlice';
 import { RailSubHeading } from '../ui/RailHeadings';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 interface Props {
   zone: FlexZone;
@@ -103,6 +105,7 @@ export function FlexZoneDetails({ zone }: Props) {
   const library = flexBookingRules(flexZones);
   const ruleId = bookingRuleIdOf(zone);
   const sharedCount = ruleId ? bookingRuleZones(flexZones, ruleId).length : 0;
+  const [confirmRemoveRule, setConfirmRemoveRule] = useState(false);
   // What the exporter will actually write: with a window defined the spec
   // forbids pickup_type 0/3 and drop_off_type 0, so an imported feed carrying
   // one shows here as the 2 it exports as.
@@ -144,10 +147,11 @@ export function FlexZoneDetails({ zone }: Props) {
   const removeRule = () => {
     if (!ruleId) return;
     // Deleting a rule other zones rely on would break their booking info, so
-    // say who else loses it before doing anything.
-    if (sharedCount > 1 && !window.confirm(
-      `"${b.name || ruleId}" is used by ${sharedCount} zones. Delete it and leave all ${sharedCount} without a booking rule?`,
-    )) return;
+    // confirm who else loses it before doing anything.
+    if (sharedCount > 1) {
+      setConfirmRemoveRule(true);
+      return;
+    }
     deleteBookingRule(ruleId);
   };
 
@@ -859,6 +863,20 @@ export function FlexZoneDetails({ zone }: Props) {
           </p>
         )}
       </div>
+
+      {confirmRemoveRule && ruleId && (
+        <ConfirmDialog
+          danger
+          title="Delete shared booking rule?"
+          body={`"${b.name || ruleId}" is used by ${sharedCount} zones. Delete it and leave all ${sharedCount} without a booking rule?`}
+          confirmLabel="Delete rule"
+          onConfirm={() => {
+            deleteBookingRule(ruleId);
+            setConfirmRemoveRule(false);
+          }}
+          onCancel={() => setConfirmRemoveRule(false)}
+        />
+      )}
     </div>
   );
 }

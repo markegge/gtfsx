@@ -5,6 +5,8 @@ import { useStore } from '../../store';
 import { logout as apiLogout } from '../../services/authApi';
 import { createOrg, type OrgRole } from '../../services/orgsApi';
 import { FormField } from '../ui/FormField';
+import { Modal } from '../ui/Modal';
+import { AuthButton } from '../auth/AuthButton';
 import { PlanBadge } from '../billing/PlanBadge';
 import { shouldShowUpgradeEntry } from '../../services/proIntent';
 
@@ -336,46 +338,33 @@ function CreateOrgDialog({
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-sm w-full mx-4">
-        <h3 className="font-heading font-bold text-base text-dark-brown mb-3">Create organization</h3>
-        <form onSubmit={handleSubmit}>
-          <FormField label="Name" value={name} onChange={setName} placeholder="Streamline Transit" required />
-          <FormField
-            label="Slug"
-            value={effectiveSlug}
-            onChange={(v) => {
-              setSlug(v);
-              setSlugTouched(true);
-            }}
-            placeholder="streamline-transit"
-            required
-          />
-          {error && (
-            <div className="mb-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
-              {error}
-            </div>
-          )}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting || !name.trim() || !effectiveSlug}
-              className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50"
-            >
-              {submitting ? 'Creating…' : 'Create'}
-            </button>
+    <Modal open onClose={onClose} title="Create organization" dismissable={!submitting}>
+      <form onSubmit={handleSubmit}>
+        <FormField label="Name" value={name} onChange={setName} placeholder="Streamline Transit" required />
+        <FormField
+          label="Slug"
+          value={effectiveSlug}
+          onChange={(v) => {
+            setSlug(v);
+            setSlugTouched(true);
+          }}
+          placeholder="streamline-transit"
+          required
+        />
+        {error && (
+          <div className="mb-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
+            {error}
           </div>
-        </form>
-      </div>
-    </div>
+        )}
+        <div className="flex justify-end gap-2 mt-2">
+          <AuthButton type="button" variant="secondary" onClick={onClose} disabled={submitting}>
+            Cancel
+          </AuthButton>
+          <AuthButton type="submit" disabled={submitting || !name.trim() || !effectiveSlug}>
+            {submitting ? 'Creating…' : 'Create'}
+          </AuthButton>
+        </div>
+      </form>
+    </Modal>
   );
 }

@@ -5,6 +5,7 @@ import { useStore } from '../../store';
 import { AuthLayout } from '../auth/AuthLayout';
 import { AuthButton } from '../auth/AuthButton';
 import { FormField } from '../ui/FormField';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Badge } from '../ui/Badge';
 import { AppBrand } from '../layout/AppBrand';
 import { UserMenu } from '../layout/UserMenu';
@@ -1050,40 +1051,6 @@ function MoveFeedDialog({
           </AuthButton>
         </div>
       </form>
-    </div>
-  );
-}
-
-function ConfirmDialog({
-  title,
-  body,
-  confirmLabel,
-  onConfirm,
-  onCancel,
-  danger,
-}: {
-  title: string;
-  body: string;
-  confirmLabel: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-  danger?: boolean;
-}) {
-  return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={onCancel} />
-      <div className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-sm mx-4">
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-2">{title}</h3>
-        <p className="text-sm text-warm-gray mb-5">{body}</p>
-        <div className="flex justify-end gap-2">
-          <AuthButton variant="secondary" onClick={onCancel}>
-            Cancel
-          </AuthButton>
-          <AuthButton variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>
-            {confirmLabel}
-          </AuthButton>
-        </div>
-      </div>
     </div>
   );
 }

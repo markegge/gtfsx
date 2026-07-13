@@ -3,6 +3,8 @@ import buffer from '@turf/buffer';
 import { featureCollection, multiLineString } from '@turf/helpers';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
+import { Modal } from '../ui/Modal';
+import { AuthButton } from '../auth/AuthButton';
 import type { FlexZone } from '../../store/flexSlice';
 import { flexZoneShape } from '../../store/flexSlice';
 import { FlexZoneDetails } from './FlexZoneDetails';
@@ -437,38 +439,28 @@ export function FlexEditor() {
         if (!zone) { setConfirmDeleteZoneId(null); return null; }
         const doDelete = () => { deleteFlexZoneWithRoute(confirmDeleteZoneId); setConfirmDeleteZoneId(null); };
         return (
-          <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
-               onClick={() => setConfirmDeleteZoneId(null)}>
-            <div className="bg-white rounded-xl shadow-lg p-5 max-w-xs mx-4"
-                 onClick={(e) => e.stopPropagation()}>
-              <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
-                Delete this flex zone?
-              </h3>
-              <p className="text-sm text-warm-gray mb-4">
-                "{zone.name}" will be removed, along with its paired route. This can't be undone.
-              </p>
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={() => setConfirmDeleteZoneId(null)}
-                  className="w-full px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-cream transition-colors"
-                >
-                  No, keep it
-                </button>
-                <button
-                  onClick={doDelete}
-                  className="w-full px-3 py-2 bg-red-500 text-white rounded-lg font-heading font-bold text-sm hover:bg-red-600 transition-colors"
-                >
-                  Yes, delete
-                </button>
-                <button
-                  onClick={() => { skipDeleteConfirmRef.current = true; doDelete(); }}
-                  className="w-full px-3 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg font-heading font-semibold text-sm hover:bg-red-100 transition-colors"
-                >
-                  Yes, and don't ask again this session
-                </button>
-              </div>
+          <Modal
+            open
+            onClose={() => setConfirmDeleteZoneId(null)}
+            maxWidthClassName="max-w-xs"
+            title="Delete this flex zone?"
+            description={`"${zone.name}" will be removed, along with its paired route. This can't be undone.`}
+          >
+            <div className="flex flex-col gap-2">
+              <AuthButton variant="secondary" fullWidth onClick={() => setConfirmDeleteZoneId(null)}>
+                No, keep it
+              </AuthButton>
+              <AuthButton variant="danger" fullWidth onClick={doDelete}>
+                Yes, delete
+              </AuthButton>
+              <button
+                onClick={() => { skipDeleteConfirmRef.current = true; doDelete(); }}
+                className="w-full px-3 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg font-heading font-semibold text-sm hover:bg-red-100 transition-colors"
+              >
+                Yes, and don't ask again this session
+              </button>
             </div>
-          </div>
+          </Modal>
         );
       })()}
     </div>

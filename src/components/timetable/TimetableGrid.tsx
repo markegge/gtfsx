@@ -5,6 +5,9 @@ import { ensureDefaultCalendar } from '../../services/defaultCalendar';
 import { formatTimeShort, normalizeTimeInput, gtfsTimeToSeconds, secondsToGtfsTime } from '../../utils/time';
 import { directionName } from '../../utils/constants';
 import { PatternSelector } from '../ui/ShapePatternSelector';
+import { Modal } from '../ui/Modal';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { AuthButton } from '../auth/AuthButton';
 import { computeTimetablePatterns, isNoShapeBucket } from '../ui/shapePatterns';
 import type { Route, StopTime } from '../../types/gtfs';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
@@ -1121,228 +1124,191 @@ export function TimetableGrid() {
 
       {/* Duplicate trip prompt */}
       {dupPrompt && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="absolute inset-0 bg-black/20" onClick={() => setDupPrompt(null)} />
-          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-xs mx-4">
-            <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
-              Duplicate Trip
-            </h3>
-            <p className="text-sm text-warm-gray mb-3">
-              Start time for the new trip:
-            </p>
-            <input
-              autoFocus
-              value={dupStartTime}
-              onChange={(e) => setDupStartTime(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleDupConfirm(); }}
-              placeholder="e.g. 08:00"
-              className="w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral mb-3 tabular-nums"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => setDupPrompt(null)}
-                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
-              >
+        <Modal
+          open
+          onClose={() => setDupPrompt(null)}
+          title="Duplicate Trip"
+          description="Start time for the new trip:"
+          maxWidthClassName="max-w-xs"
+          footer={
+            <>
+              <AuthButton variant="secondary" onClick={() => setDupPrompt(null)}>
                 Cancel
-              </button>
-              <button
-                onClick={handleDupConfirm}
-                className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors"
-              >
-                Add Trip
-              </button>
-            </div>
-          </div>
-        </div>
+              </AuthButton>
+              <AuthButton onClick={handleDupConfirm}>Add Trip</AuthButton>
+            </>
+          }
+        >
+          <input
+            autoFocus
+            value={dupStartTime}
+            onChange={(e) => setDupStartTime(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleDupConfirm(); }}
+            placeholder="e.g. 08:00"
+            className="w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral tabular-nums"
+          />
+        </Modal>
       )}
 
       {/* Apply-to-all-trips confirm */}
       {applyPrompt && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="absolute inset-0 bg-black/20" onClick={() => setApplyPrompt(null)} />
-          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-sm mx-4">
-            <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
-              Apply to all trips
-            </h3>
-            <p className="text-sm text-warm-gray mb-4">
+        <ConfirmDialog
+          title="Apply to all trips"
+          body={
+            <>
               Re-lay the {applyTargets.length} other {directionName(route, directionId).toLowerCase()} trip
               {applyTargets.length === 1 ? '' : 's'} on this route to match this trip&rsquo;s stops and
               timing. Each keeps its own start time — headways and departures stay the same; only the
               stop sequence and run/dwell times change.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setApplyPrompt(null)}
-                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleApplyConfirm}
-                disabled={applyTargets.length === 0}
-                className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50"
-              >
-                Apply to {applyTargets.length}
-              </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+          confirmLabel={`Apply to ${applyTargets.length}`}
+          onConfirm={handleApplyConfirm}
+          onCancel={() => setApplyPrompt(null)}
+          confirmDisabled={applyTargets.length === 0}
+        />
       )}
 
       {/* Remove-all-trips confirm */}
       {removeAllPrompt && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="absolute inset-0 bg-black/20" onClick={() => setRemoveAllPrompt(false)} />
-          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-sm mx-4">
-            <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
-              Remove all trips
-            </h3>
-            <p className="text-sm text-warm-gray mb-4">
+        <ConfirmDialog
+          danger
+          title="Remove all trips"
+          body={
+            <>
               Delete all {routeTrips.length} {directionName(route, directionId).toLowerCase()} trip
               {routeTrips.length === 1 ? '' : 's'} shown for {route.route_short_name || route.route_long_name || route.route_id}?
               This also removes their stop times. The shape and its stops are kept, so you can add a
               fresh trip and replicate it by headway.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setRemoveAllPrompt(false)}
-                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleRemoveAllConfirm}
-                className="flex-1 px-3 py-2 bg-red-500 text-white rounded-lg font-heading font-bold text-sm hover:bg-red-600 transition-colors"
-              >
-                Remove {routeTrips.length}
-              </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+          confirmLabel={`Remove ${routeTrips.length}`}
+          onConfirm={handleRemoveAllConfirm}
+          onCancel={() => setRemoveAllPrompt(false)}
+        />
       )}
 
       {/* Estimate times dialog */}
       {estimatePrompt && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="absolute inset-0 bg-black/20" onClick={() => { if (!estimating) setEstimatePrompt(null); }} />
-          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-sm mx-4">
-            <h3 className="font-heading font-bold text-base text-dark-brown mb-1">
-              Estimate times
-            </h3>
-            <p className="text-sm text-warm-gray mb-4">
+        <Modal
+          open
+          onClose={() => setEstimatePrompt(null)}
+          dismissable={!estimating}
+          title="Estimate times"
+          description={
+            <>
               Fill this trip&rsquo;s stop times from the road driving time between your stops, in order,
               plus a dwell at each stop. Then use&nbsp;⇶ to apply it to the route&rsquo;s other trips.
-            </p>
-            <div className="space-y-3 mb-4">
-              <label className="block">
-                <span className="text-xs font-semibold text-dark-brown">Start time</span>
+            </>
+          }
+          footer={
+            <>
+              <AuthButton variant="secondary" onClick={() => setEstimatePrompt(null)} disabled={estimating}>
+                Cancel
+              </AuthButton>
+              <AuthButton onClick={handleEstimateConfirm} disabled={estimating}>
+                {estimating ? 'Estimating…' : 'Estimate'}
+              </AuthButton>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            <label className="block">
+              <span className="text-xs font-semibold text-dark-brown">Start time</span>
+              <input
+                autoFocus
+                value={estStart}
+                onChange={(e) => setEstStart(e.target.value)}
+                placeholder="08:00"
+                className="mt-1 w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral tabular-nums"
+              />
+            </label>
+            <div className="flex gap-3">
+              <label className="flex-1">
+                <span className="flex items-center gap-1 text-xs font-semibold text-dark-brown">
+                  Dwell / stop (sec)
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="text-warm-gray shrink-0"
+                    aria-hidden
+                  >
+                    <title>Seconds the vehicle waits at each stop for boarding. Added to the driving time between stops when filling in the schedule.</title>
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                </span>
                 <input
-                  autoFocus
-                  value={estStart}
-                  onChange={(e) => setEstStart(e.target.value)}
-                  placeholder="08:00"
+                  type="number"
+                  min={0}
+                  value={estDwell}
+                  onChange={(e) => setEstDwell(Math.max(0, Number(e.target.value)))}
                   className="mt-1 w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral tabular-nums"
                 />
               </label>
-              <div className="flex gap-3">
-                <label className="flex-1">
-                  <span className="flex items-center gap-1 text-xs font-semibold text-dark-brown">
-                    Dwell / stop (sec)
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      className="text-warm-gray shrink-0"
-                      aria-hidden
-                    >
-                      <title>Seconds the vehicle waits at each stop for boarding. Added to the driving time between stops when filling in the schedule.</title>
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="16" x2="12" y2="12" />
-                      <line x1="12" y1="8" x2="12.01" y2="8" />
-                    </svg>
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    value={estDwell}
-                    onChange={(e) => setEstDwell(Math.max(0, Number(e.target.value)))}
-                    className="mt-1 w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral tabular-nums"
-                  />
-                </label>
-                <label className="flex-1">
-                  <span className="flex items-center gap-1 text-xs font-semibold text-dark-brown">
-                    Speed factor
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      className="text-warm-gray shrink-0"
-                      aria-hidden
-                    >
-                      <title>Multiplier on the road-network driving time, to account for traffic, signals, and acceleration. e.g. 1.1 adds 10% to the free-flow estimate; higher = slower.</title>
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="16" x2="12" y2="12" />
-                      <line x1="12" y1="8" x2="12.01" y2="8" />
-                    </svg>
-                  </span>
-                  <input
-                    type="number"
-                    min={0.1}
-                    step={0.1}
-                    value={estSpeed}
-                    onChange={(e) => setEstSpeed(Math.max(0.1, Number(e.target.value)))}
-                    className="mt-1 w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral tabular-nums"
-                  />
-                </label>
-              </div>
+              <label className="flex-1">
+                <span className="flex items-center gap-1 text-xs font-semibold text-dark-brown">
+                  Speed factor
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="text-warm-gray shrink-0"
+                    aria-hidden
+                  >
+                    <title>Multiplier on the road-network driving time, to account for traffic, signals, and acceleration. e.g. 1.1 adds 10% to the free-flow estimate; higher = slower.</title>
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                </span>
+                <input
+                  type="number"
+                  min={0.1}
+                  step={0.1}
+                  value={estSpeed}
+                  onChange={(e) => setEstSpeed(Math.max(0.1, Number(e.target.value)))}
+                  className="mt-1 w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral tabular-nums"
+                />
+              </label>
             </div>
-            {estError && <p className="text-xs text-red-500 mb-3">{estError}</p>}
-            <div className="flex gap-2">
-              <button
-                onClick={() => setEstimatePrompt(null)}
-                disabled={estimating}
-                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEstimateConfirm}
-                disabled={estimating}
-                className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50"
-              >
-                {estimating ? 'Estimating…' : 'Estimate'}
-              </button>
-            </div>
+            {estError && <p className="text-xs text-red-500">{estError}</p>}
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* B1 Generate service — modal. Opened by the toolbar control and by the
           empty-state button. GenerateServiceForm is a self-contained card; we
-          drop it onto a backdrop (click-out or Esc dismisses). On generate it
-          closes and the populated grid renders. */}
+          drop it into the shared Modal with a bare container (the card carries
+          its own chrome + heading). On generate it closes and the grid renders. */}
       {showGenerate && hasStops && activeServiceId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setShowGenerate(false)} />
-          <div className="relative w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <GenerateServiceForm
-              routeId={selectedRouteId!}
-              directionId={directionId}
-              shapeId={noShapeBucket ? undefined : (effectiveShapeId ?? undefined)}
-              serviceId={activeServiceId}
-              headsign={route?.route_short_name || undefined}
-              variant="card"
-              onGenerated={() => setShowGenerate(false)}
-              onCancel={() => setShowGenerate(false)}
-            />
-          </div>
-        </div>
+        <Modal
+          open
+          onClose={() => setShowGenerate(false)}
+          title="Generate service"
+          hideTitle
+          showClose={false}
+          className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md mx-4"
+        >
+          <GenerateServiceForm
+            routeId={selectedRouteId!}
+            directionId={directionId}
+            shapeId={noShapeBucket ? undefined : (effectiveShapeId ?? undefined)}
+            serviceId={activeServiceId}
+            headsign={route?.route_short_name || undefined}
+            variant="card"
+            onGenerated={() => setShowGenerate(false)}
+            onCancel={() => setShowGenerate(false)}
+          />
+        </Modal>
       )}
     </div>
   );

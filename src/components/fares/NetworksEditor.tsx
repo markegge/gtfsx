@@ -142,7 +142,7 @@ export function NetworksEditor() {
           onClick={handleAdd}
           className="w-full py-2 rounded-lg border-2 border-dashed border-sand text-warm-gray text-sm font-medium hover:border-coral hover:text-coral transition-colors"
         >
-          + Add Network
+          + Add network
         </button>
       </div>
     );

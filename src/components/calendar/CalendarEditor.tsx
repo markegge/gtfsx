@@ -100,7 +100,7 @@ export function CalendarEditor() {
         icon="📅"
         title="No service patterns"
         description="Define when your transit service operates."
-        actionLabel="Add Service Pattern"
+        actionLabel="Add service pattern"
         onAction={handleAdd}
       />
     );
@@ -181,7 +181,7 @@ export function CalendarEditor() {
           onClick={handleAdd}
           className="w-full flex items-center gap-1.5 px-3 py-2 border-2 border-dashed border-sand rounded-lg text-sm font-semibold text-warm-gray hover:border-coral hover:text-coral hover:bg-coral-light transition-colors"
         >
-          + Add Service Pattern
+          + Add service pattern
         </button>
       </div>
     );

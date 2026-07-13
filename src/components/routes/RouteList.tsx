@@ -252,7 +252,7 @@ export function RouteList() {
             onClick={handleAdd}
             className="w-full flex items-center gap-1.5 px-3 py-2 border-2 border-dashed border-sand rounded-lg text-sm font-semibold text-warm-gray hover:border-coral hover:text-coral hover:bg-coral-light transition-colors"
           >
-            + Add Route
+            + Add route
           </button>
 
           {/* Import routes from another of your feeds. Signed-in only (anon

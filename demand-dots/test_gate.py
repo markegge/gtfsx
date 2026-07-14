@@ -65,8 +65,12 @@ def _write_state(d: Path, st: str, sidecar: dict | None) -> Path:
 
 
 def _fresh_sidecar() -> dict:
-    """What the CURRENT pipeline writes: has code_dots, current config_hash."""
-    return {"config_hash": config_hash(), "code_dots": {"0": 1, "16": 0},
+    """What the CURRENT pipeline writes: has code_dots, current config_hash.
+
+    code_dots must describe the ONE d=1 feature _write_state writes, or the
+    concat's content-vs-sidecar cross-check warns (rightly) that this state's
+    sidecar is lying about its own contents."""
+    return {"config_hash": config_hash(), "code_dots": {"1": 1},
             "schema": "attribute-dots-v1"}
 
 

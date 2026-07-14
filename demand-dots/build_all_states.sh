@@ -90,11 +90,21 @@ the frontend asked Mapbox for a z16 tile that never existed and the layer went
 blank from z16 in.)
 
 Note it pipes through '--cat-verified', not 'cat'. Do not "simplify" that back to
-a bare cat: it is the gate that refuses to concatenate a state whose sidecar does
-not match the current config ${CONFIG_HASH}. A bare cat cannot tell a stale state
-from a fresh one, and nothing downstream can either — the tiles come out
-internally consistent and wrong. If you want to check the inputs without
-building, that same gate runs standalone:
+a bare cat. It does two things a cat cannot:
+
+  1. It is the GATE that refuses to concatenate a state whose sidecar does not
+     match the current config ${CONFIG_HASH}. A bare cat cannot tell a stale
+     state from a fresh one, and nothing downstream can either — the tiles come
+     out internally consistent and wrong.
+  2. It sets the ZOOM LADDER'S PHASE across the whole archive. Each state was
+     built by its own process, so each one numbered its dots from 0 — and dot 0
+     is a z8 dot, the rarest rung on the ladder. Cat them raw and all 52 states
+     round their z8 count UP, over-filling the low-zoom tiles by up to +2.9% on
+     the rare flag combinations. --cat-verified re-tags every dot from ONE
+     ordinal per code, so the archive rounds once instead of 52 times.
+     (verify_tiles.py catches a bare cat, loudly. It already has, once.)
+
+If you want to check the inputs without building, that same gate runs standalone:
 
   ./.venv/bin/python build_dots.py --verify-inputs '../tiles/ldjson/*.ldjson'
 

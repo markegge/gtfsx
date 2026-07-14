@@ -138,7 +138,7 @@ import glob as globlib
 import hashlib
 import json
 import os
-import shutil
+import re
 import sys
 import tempfile
 import time
@@ -1145,6 +1145,15 @@ def iter_dot_features(
     every zoom: each cell is thinned by the same factor, so the z8 sample has the
     same carless share as the z15 one, and the legend is true at both.
 
+    This ordinal is 0-based PER STATE, because that is all one state's process can
+    know. It is therefore the slot the state would have as a standalone archive —
+    correct for a one-state build, and provisional for a nationwide one. The
+    NATIONWIDE phase is set by restride_lines() at the concatenation, where all 52
+    states are in one stream: 52 ordinals all starting at 0 all round their z8
+    count up, and the excess accumulates into a +2.9% over-count of the rarest
+    codes at z8. See the comment on restride_lines() — that is where the ladder's
+    phase is decided for a multi-state archive, and this is not.
+
     There is no class-gating minzoom any more. A flag rides on a person who is in
     the z8 tile regardless, so every segment is selectable at every zoom the
     layer draws at — the old schema's segments simply did not exist below z9.
@@ -1477,8 +1486,97 @@ def validate_tile_inputs(paths, scale: float = 1.0, quiet: bool = False) -> list
     return sorted(paths)
 
 
+# ─── The ladder's PHASE — why the concat assigns it, not the state build ─────
+#
+# The ladder says: at zoom z, exactly 1/stride(z) of each code's dots are drawn.
+# It delivers that by giving dot k of a code the slot LADDER_SLOTS[k % 128]. That
+# is a SYSTEMATIC (every-128th) sample, and systematic is the whole point: it is
+# exact to within one dot, where an independent coin-flip per dot would only be
+# right on average. (A 1-in-128 Bernoulli draw over the 121k dots of the rarest
+# code has a standard deviation of ±31 dots — ±3.2% — on the ~947 it should put
+# in the z8 tiles. The stride's error is <1. Do NOT "simplify" the ordinal into a
+# per-dot hash: it is 30x less accurate, and it fails verify_tiles.py.)
+#
+# But k is a RUNNING COUNT, and a running count has a phase. The nationwide build
+# runs one build_dots.py process per state (build_all_states.sh, 4 at a time), so
+# k restarted at 0 in every state — and slot 0 is the z8 slot, the rarest rung on
+# the ladder. Every state therefore rounded its z8 count UP:
+#
+#     state s emits ceil(N_s/128) dots into z8, not N_s/128
+#
+# and the ~0.5-dot excess accumulated 52 times. Measured on the real archive, for
+# carless+disability (121,221 dots): 52 x ~0.54 = +28 dots on an expected 947 —
+# +2.9%, six times the verify tolerance. It bites the RARE codes hardest (their
+# N_s/128 is small, so a whole extra dot is a big share) and only at LOW zooms
+# (z8/z9 are the only rungs with a stride big enough to have a remainder worth
+# rounding), which is exactly the signature verify_tiles.py reported. Nothing was
+# thinning the tiles: the tiles were faithfully carrying an over-count that the
+# EMITTER put there.
+#
+# The fix is to give the archive ONE ordinal per code instead of 52. It cannot be
+# done in the per-state processes — they are separate processes that cannot know
+# how many dots the other 51 states emitted — so it is done HERE, at the one point
+# in the pipeline where the whole archive exists: the concatenation. Every feature
+# is re-tagged from a per-code counter that runs across the whole stream, so the
+# archive carries exactly ceil(N/128) z8 dots per code — <1 dot from the ideal,
+# nationwide, instead of 52 independent round-ups — and that is precisely the
+# number verify_tiles.expected_at_zoom() predicts. The two now agree BY
+# CONSTRUCTION, which is what makes the 0.5% tolerance a real guard again.
+#
+# Properties worth keeping:
+#   * deterministic — validate_tile_inputs() returns the paths SORTED, so the same
+#     inputs always produce the same archive.
+#   * parallelism-proof — the slot no longer depends on how many processes the
+#     states were built in, or in what order they finished.
+#   * a single-state archive is unchanged: with one input, the global ordinal IS
+#     that state's own 0-based ordinal, so this re-tag is the identity. The
+#     per-state .ldjson stays self-sufficient and correct on its own.
+#   * the .ldjson bytes on disk are untouched, so this fix does NOT change
+#     config_hash and does NOT require the 52 states to be rebuilt.
+
+_RE_CODE = re.compile(rb'"' + re.escape(TILE_ATTR.encode()) + rb'"\s*:\s*(\d+)')
+_RE_MINZOOM = re.compile(rb'"minzoom"\s*:\s*(\d+)')
+_MZ_DIGITS = [b"%d" % z for z in range(TILE_MAX_ZOOM + 1)]
+
+
+def restride_lines(lines, ordinal: dict[int, int] | None = None):
+    """Re-tag each feature's `tippecanoe.minzoom` from an archive-wide per-CODE
+    ordinal. Pass the same `ordinal` dict across every input file — that shared
+    counter is the entire point (see above).
+
+    Operates on raw bytes, one line in, one line out: 97.7M features go through
+    here, so the lines are spliced, not parsed and re-serialised (~4 min for the
+    nationwide set, against a tippecanoe run measured in hours).
+    """
+    if ordinal is None:
+        ordinal = {}
+    for line in lines:
+        m = _RE_CODE.search(line)
+        if m is None:
+            yield line                        # blank line / not a dot feature
+            continue
+        code = int(m.group(1))
+        k = ordinal.get(code, 0)
+        ordinal[code] = k + 1
+        mz = _MZ_DIGITS[LADDER_SLOTS[k % LADDER_PERIOD]]
+        z = _RE_MINZOOM.search(line)
+        if z is not None:
+            yield line[:z.start(1)] + mz + line[z.end(1):]
+            continue
+        # No tippecanoe block at all. Add one rather than passing the feature
+        # through bare: a feature with no explicit minzoom is one tippecanoe
+        # feels free to thin with its own drop rate, which is the failure this
+        # whole ladder exists to prevent.
+        end = line.rfind(b"}")
+        if end < 0:
+            yield line
+            continue
+        yield line[:end] + b', "tippecanoe": {"minzoom": ' + mz + b"}" + line[end:]
+
+
 def cat_verified(pattern: str, scale: float = 1.0) -> None:
-    """Validate the input set, then stream it to stdout for tippecanoe.
+    """Validate the input set, re-phase the zoom ladder across it, and stream it
+    to stdout for tippecanoe.
 
     Nothing reaches stdout unless the whole set passed: validation runs to
     completion first, so a mismatched member cannot leak partial bytes into a
@@ -1486,10 +1584,36 @@ def cat_verified(pattern: str, scale: float = 1.0) -> None:
     """
     paths = validate_tile_inputs(globlib.glob(pattern), scale)
     out = sys.stdout.buffer
+    ordinal: dict[int, int] = {}
+    buf: list[bytes] = []
     for p in paths:
-        with open(p, "rb") as fh:
-            shutil.copyfileobj(fh, out, length=1024 * 1024)
+        with open(p, "rb", buffering=1 << 22) as fh:
+            for line in restride_lines(fh, ordinal):
+                buf.append(line)
+                if len(buf) >= 65536:
+                    out.write(b"".join(buf))
+                    buf.clear()
+    if buf:
+        out.write(b"".join(buf))
     out.flush()
+
+    # The sidecars' code_dots are what verify_tiles.py compares the built archive
+    # against. If they disagree with the bytes we just streamed, verify WILL fail
+    # after the (long) tiling run — so say so now, while it is still cheap.
+    declared: dict[int, int] = {}
+    for p in paths:
+        meta = json.loads((p.with_suffix(p.suffix + ".meta.json")).read_text())
+        for code, n in meta.get("code_dots", {}).items():
+            declared[int(code)] = declared.get(int(code), 0) + n
+    if declared != {c: n for c, n in ordinal.items() if n}:
+        print("⚠ the .ldjson contents do NOT match their sidecars' code_dots — "
+              "verify_tiles.py will fail on this archive.\n"
+              f"    streamed: {dict(sorted(ordinal.items()))}\n"
+              f"    sidecars: {dict(sorted(declared.items()))}", file=sys.stderr)
+    else:
+        print(f"✓ re-phased the zoom ladder across {len(paths)} input(s): "
+              f"{sum(ordinal.values()):,} dots, one ordinal per code",
+              file=sys.stderr)
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────

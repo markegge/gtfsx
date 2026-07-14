@@ -1,16 +1,42 @@
+import { ACS_YEAR } from '../generated/acsVintage';
+
+/**
+ * Live-ACS block-group demographics — STRAIGHT COUNTS ONLY.
+ *
+ * ── There is deliberately no propensity/need estimate here ────────────────────
+ * This module used to derive `highPropensityRiders` (renters ∪ zero-vehicle ∪
+ * adults 18–24, summed and scaled by an invented ×0.6). That model is GONE from
+ * the product: the real dedup factor for that composite is 0.824, so it
+ * under-counted its own headline by 27%, and the demand map now uses a
+ * PUMS-measured union instead (carless ∪ low-income for propensity; + seniors +
+ * disability for need).
+ *
+ * The replacement was NOT ported here, and that is the point. Two things stop it:
+ *
+ *  1. The union is a statistical model — an independence backbone times a
+ *     PUMA-specific correction measured from PUMS person records, then
+ *     Fréchet-clamped. Re-implementing that in TypeScript means maintaining one
+ *     estimator in two languages, hand-mirrored, and shipping the PUMA correction
+ *     table and a tract→PUMA crosswalk into the browser bundle. A second copy
+ *     that drifts is exactly how the Coverage panel and the dot map end up
+ *     disagreeing about what "likely rider" means.
+ *  2. This path is the WRONG INSTRUMENT for it anyway. Block groups here inherit
+ *     their PARENT TRACT's centroid and get smeared over a 0.5–3.0 mi disc
+ *     (coverageAnalysis.computeBgRadii), so the geometry is tract-resolution. A
+ *     de-duplicated propensity number computed on top of that would carry an
+ *     apportionment error far larger than the model error it is quoting.
+ *
+ * The propensity and transit-need figures therefore come from ONE place: the
+ * prebuilt census-block layer (blockCoverage.ts / `us.fgb`), where they are
+ * exact per-block integers produced by the same Python estimator that builds the
+ * dot tiles. Where that layer is unavailable, the UI reports counts and says the
+ * estimate is unavailable — it does not substitute a worse one.
+ */
 export interface BlockGroupData {
   geoid: string;
   population: number;
   households: number;
   workers: number;
-  /**
-   * Estimated residents most likely to use transit. Mirrors the demand-dot
-   * model exactly: renters ∪ zero-vehicle households ∪ adults 18–24, summed
-   * then scaled ×0.6 to discount the overlap between those groups, and capped
-   * at total population. A residence-based count, so it apportions into a
-   * walkshed the same way population does.
-   */
-  highPropensityRiders: number;
   lat: number;
   lon: number;
   /** Non-white / Hispanic population (B03002 total minus non-Hispanic White alone) */
@@ -32,7 +58,11 @@ export interface BlockGroupData {
 }
 
 /**
- * ACS 5-year (2022) detailed-table variables we request, grouped by metric.
+ * ACS 5-year detailed-table variables we request, grouped by metric. The
+ * vintage itself comes from the generated ACS_YEAR constant (see
+ * src/generated/acsVintage.ts) so the app, the demand-dot tiles and the
+ * coverage layer can never disagree about which release they are on.
+ *
  * Columns come back in this order, but we still resolve them by name from the
  * response header so a Census column reshuffle can't silently misalign values.
  *
@@ -68,26 +98,15 @@ const ACS_YOUTH_NUM = [
   'B01001_003E', 'B01001_004E', 'B01001_005E', 'B01001_006E', // male: <5, 5–9, 10–14, 15–17
   'B01001_027E', 'B01001_028E', 'B01001_029E', 'B01001_030E', // female: <5, 5–9, 10–14, 15–17
 ] as const;
-// High-propensity-rider model inputs (same definition as the demand dots):
-// renters ∪ zero-vehicle households ∪ adults 18–24. Renter share comes from
-// B25003 (tenure), the people-per-household multiplier from B25010, and the
-// 18–24 cells from B01001. Zero-vehicle households reuse ACS_NO_VEHICLE_NUM.
-const ACS_TENURE_TOTAL = 'B25003_001E';
-const ACS_TENURE_RENTER = 'B25003_003E';
-const ACS_AVG_HH_SIZE = 'B25010_001E';
-const ACS_AGE_18_24 = [
-  'B01001_007E', 'B01001_008E', 'B01001_009E', 'B01001_010E', // male: 18–19, 20, 21, 22–24
-  'B01001_031E', 'B01001_032E', 'B01001_033E', 'B01001_034E', // female: 18–19, 20, 21, 22–24
-] as const;
-
+// B25003 (tenure), B25010 (average household size) and the B01001 18–24 cells
+// were fetched only to feed the retired ×0.6 propensity model. Nothing reads
+// them now, so they are not requested — see the note on BlockGroupData.
 const ACS_ALL_VARS = [
   ...ACS_BASE_VARS,
   ACS_LOW_INCOME_DENOM, ...ACS_LOW_INCOME_NUM,
   ACS_HOUSEHOLDS_DENOM, ...ACS_NO_VEHICLE_NUM,
   ...ACS_SENIOR_NUM,
   ...ACS_YOUTH_NUM,
-  ACS_TENURE_TOTAL, ACS_TENURE_RENTER, ACS_AVG_HH_SIZE,
-  ...ACS_AGE_18_24,
 ];
 
 /**
@@ -139,7 +158,7 @@ export async function fetchCensusData(
   const [centroids, censusRes] = await Promise.all([
     fetchTractCentroids(stateFips),
     fetch(
-      `https://api.census.gov/data/2022/acs/acs5` +
+      `https://api.census.gov/data/${ACS_YEAR}/acs/acs5` +
         `?get=${ACS_ALL_VARS.join(',')}` +
         `&for=block%20group:*&in=state:${stateFips}&in=county:${countyFips}&in=tract:*` +
         keyParam,
@@ -169,11 +188,6 @@ export async function fetchCensusData(
     const i = col(v);
     return i < 0 ? 0 : parseInt(row[i], 10) || 0;
   };
-  // Float reader for ratio variables (e.g. B25010 average household size).
-  const flt = (row: string[], v: string) => {
-    const i = col(v);
-    return i < 0 ? 0 : parseFloat(row[i]) || 0;
-  };
   const sum = (row: string[], vars: readonly string[]) =>
     vars.reduce((acc, v) => acc + num(row, v), 0);
 
@@ -194,33 +208,13 @@ export async function fetchCensusData(
     const totalRacePop = num(row, 'B03002_001E');
     const nonHispanicWhite = num(row, 'B03002_003E');
     const population = num(row, 'B01003_001E');
-
-    // High-propensity riders — identical model to demand-dots/build_dots.py:
-    //   renter_pop  = renter share of tenure × population
-    //   zero_veh_pop = zero-vehicle households × avg household size
-    //   pop_18_24   = adults 18–24 from B01001
-    //   high = min(population, round((renter_pop + zero_veh_pop + pop_18_24) × 0.6))
-    // The ×0.6 discounts the overlap between the three (a young renter in a
-    // car-free household would otherwise be triple-counted).
     const zeroVehicleHouseholds = sum(row, ACS_NO_VEHICLE_NUM);
-    const tenureTotal = num(row, ACS_TENURE_TOTAL);
-    const renterUnits = num(row, ACS_TENURE_RENTER);
-    const renterPop = tenureTotal > 0 ? Math.round((renterUnits / tenureTotal) * population) : 0;
-    const avgHhSizeRaw = flt(row, ACS_AVG_HH_SIZE);
-    const avgHhSize = avgHhSizeRaw > 0 ? avgHhSizeRaw : 2.5; // US-average fallback
-    const zeroVehiclePop = Math.round(zeroVehicleHouseholds * avgHhSize);
-    const pop18to24 = sum(row, ACS_AGE_18_24);
-    const highPropensityRiders = Math.min(
-      population,
-      Math.round((renterPop + zeroVehiclePop + pop18to24) * 0.6),
-    );
 
     results.push({
       geoid,
       population,
       households:    num(row, 'B25001_001E'),
       workers:       num(row, 'B08301_001E'),
-      highPropensityRiders,
       lat:           centroid.lat,
       lon:           centroid.lon,
       totalRacePop,

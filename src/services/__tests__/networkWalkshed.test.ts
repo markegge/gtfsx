@@ -25,7 +25,7 @@ function stop(id: string, lat: number, lon: number): Stop {
 function bg(geoid: string, lat: number, lon: number, extra: Partial<BlockGroupData> = {}): BlockGroupData {
   return {
     geoid, lat, lon,
-    population: 0, households: 0, workers: 0, highPropensityRiders: 0,
+    population: 0, households: 0, workers: 0,
     minorityPop: 0, totalRacePop: 0,
     lowIncomePop: 0, povertyUniverse: 0,
     zeroVehicleHouseholds: 0, occupiedHouseholds: 0,

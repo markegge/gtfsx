@@ -22,6 +22,16 @@ import { createFlexZoneWithRoute, nextFlexZoneName } from '../flex/flexHelpers';
 import { shapeEditLabel } from './shapeEditLabel';
 import { stopsInsidePolygon, stopsInPolygonTurf } from '../fares/fareZoneHelpers';
 import type { MapStyleId } from './MapLayerControls';
+import {
+  DEFAULT_DEMAND_SELECTION,
+  setDemandBackdrop,
+  setDemandJobs,
+  setDemandMode,
+  setDemandSegment,
+  type DemandMode,
+  type DemandSegment,
+  type DemandSelection,
+} from './demandCategories';
 import type { MapMouseEvent, MapboxGeoJSONFeature } from 'mapbox-gl';
 import type { ShapePoint } from '../../types/gtfs';
 import { generateId } from '../../services/idGenerator';
@@ -147,6 +157,27 @@ export function MapView() {
   // Map layer controls
   const [mapStyleId, setMapStyleId] = useState<MapStyleId>('light');
   const [showDemandDots, setShowDemandDots] = useState(false);
+  // What the demand dots draw: a mode + the ONE segment selected within it, plus
+  // the two disjoint companions (backdrop, jobs). A discriminated union, so an
+  // illegal mode/segment pairing — `senior` under `propensity`, which would
+  // double-plot every senior against the propensity backdrop — cannot be
+  // represented, let alone rendered. Applied as a client-side filter against a
+  // single vector source, so changing it never refetches a tile.
+  const [demandSelection, setDemandSelection] = useState<DemandSelection>(
+    DEFAULT_DEMAND_SELECTION,
+  );
+  const handleDemandModeChange = useCallback((mode: DemandMode) => {
+    setDemandSelection((prev) => setDemandMode(prev, mode));
+  }, []);
+  const handleDemandSegmentChange = useCallback((segment: DemandSegment) => {
+    setDemandSelection((prev) => setDemandSegment(prev, segment));
+  }, []);
+  const handleDemandJobsChange = useCallback((show: boolean) => {
+    setDemandSelection((prev) => setDemandJobs(prev, show));
+  }, []);
+  const handleDemandBackdropChange = useCallback((show: boolean) => {
+    setDemandSelection((prev) => setDemandBackdrop(prev, show));
+  }, []);
   // Cursor: pointer when hovering over a clickable feature in select mode
   const [hoveringFeature, setHoveringFeature] = useState(false);
   const [hoveringStop, setHoveringStop] = useState(false);
@@ -191,6 +222,38 @@ export function MapView() {
     return { latitude: 45.68, longitude: -111.05, zoom: 12 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasAnyData]);
+
+  // True once react-map-gl has actually constructed the underlying Map. Any
+  // effect that needs `mapRef.current.getMap()` must depend on this: react-map-gl
+  // populates the ref while mounting its OWN child, which happens AFTER this
+  // component's mount effects run, so a `[]`-dep effect always sees a null ref
+  // and silently no-ops forever.
+  const [mapReady, setMapReady] = useState(false);
+
+  // Live map zoom, kept in React state so MapLayerControls can (a) state the
+  // EFFECTIVE "1 dot ≈ N people" for the zoom the user is actually at — the tiles
+  // carry only every Nth dot when zoomed out — and (b) warn when a selected class
+  // isn't in the tile at this zoom at all. Both come from the pipeline's zoom
+  // ladder; see perDotAtZoom in demandLegend.ts.
+  //
+  // `mapReady` is load-bearing, not defensive: with `[]` deps this effect ran
+  // once, before the Map existed, bailed on the null ref, and never attached the
+  // listeners — so currentZoom stayed pinned at initialView.zoom for the life of
+  // the session. The zoom warning could therefore never fire, and on a feed whose
+  // initial fit lands below z9 it would instead be stuck ON at every zoom.
+  const [currentZoom, setCurrentZoom] = useState(initialView.zoom);
+  useEffect(() => {
+    const map = mapRef.current?.getMap?.();
+    if (!map) return;
+    const recompute = () => setCurrentZoom(map.getZoom());
+    map.on('zoomend', recompute);
+    map.on('moveend', recompute);
+    // Seed from the map's REAL zoom at attach time. initialView.zoom is only a
+    // request — the data-driven fit may already have moved us elsewhere — so
+    // reading it here is what keeps the warning honest before the first gesture.
+    recompute();
+    return () => { map.off('zoomend', recompute); map.off('moveend', recompute); };
+  }, [mapReady]);
 
   // ESC key handler — use capture phase so we fire before mapbox-gl-draw
   useEffect(() => {
@@ -1257,6 +1320,8 @@ export function MapView() {
         }
         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
         cursor={cursor}
+        // Gates every effect that needs the underlying mapbox-gl Map (see mapReady).
+        onLoad={() => setMapReady(true)}
         onClick={handleMapClick}
         onDblClick={handleMapDblClick}
         // Disable native zoom-on-double-click while placing stops so the
@@ -1272,7 +1337,7 @@ export function MapView() {
           onCreate={handleDrawCreate}
           onUpdate={handleDrawUpdate}
         />
-        <DemandDotsLayer visible={showDemandDots} />
+        <DemandDotsLayer visible={showDemandDots} selection={demandSelection} />
         <CoverageLayer />
         <AccessIsochroneLayer />
         <FlexLayer />
@@ -1311,6 +1376,12 @@ export function MapView() {
         onMapStyleChange={setMapStyleId}
         showDemandDots={showDemandDots}
         onShowDemandDotsChange={setShowDemandDots}
+        demandSelection={demandSelection}
+        onDemandModeChange={handleDemandModeChange}
+        onDemandSegmentChange={handleDemandSegmentChange}
+        onDemandJobsChange={handleDemandJobsChange}
+        onDemandBackdropChange={handleDemandBackdropChange}
+        currentZoom={currentZoom}
       />
       <DrawingIndicator />
 

@@ -9,6 +9,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// The ACS vintage is generated, not hardcoded (demand-dots/acs_vintage.py probes
+// the Census API and emits src/generated/acsVintage.ts). Assert against the same
+// constant the app uses, so bumping the vintage never means editing this test.
+import { ACS_YEAR } from '../../generated/acsVintage';
+
 // Stub the bundled tract-centroid file fetch. Three deterministic centroids
 // keyed by state+county+tract so every imported block group has coords.
 const TRACT_FILE = `STATE,COUNTY,TRACT,FOO,INTPTLAT,INTPTLON
@@ -60,7 +65,7 @@ describe('demographics.fetchCensusData', () => {
     await fetchCensusData('06', '001');
 
     const censusUrl = fetchMock.mock.calls[1][0] as string;
-    expect(censusUrl).toContain('api.census.gov/data/2022/acs/acs5');
+    expect(censusUrl).toContain(`api.census.gov/data/${ACS_YEAR}/acs/acs5`);
     expect(censusUrl).toContain('&key=secret-key-123');
   });
 
@@ -144,47 +149,80 @@ describe('demographics.fetchCensusData', () => {
     expect(result[0].minorityPop).toBe(0);
   });
 
-  it('computes highPropensityRiders with the demand-dot model', async () => {
+  it('reports straight ACS counts and derives NO propensity figure', async () => {
+    // This module used to compute `highPropensityRiders` here: renters ∪ carless ∪
+    // adults 18–24, summed and scaled by an invented ×0.6. That model is retired
+    // (its true dedup factor was 0.824 — it under-counted its own headline by 27%),
+    // and the replacement was deliberately NOT ported into TypeScript:
+    //
+    //   1. The replacement is a PUMS-derived statistical union. Re-implementing it
+    //      client-side would mean maintaining one estimator in two languages and
+    //      shipping a PUMA correction table into the bundle — a second copy, free
+    //      to drift from the one the demand-dot map uses.
+    //   2. This path is tract-centroid-smeared anyway; it is the wrong instrument
+    //      for a de-duplicated propensity number regardless of who computes it.
+    //
+    // The propensity/need figures come from ONE place: the exact census-block
+    // layer. Here we report counts, and nothing else.
     vi.stubEnv('VITE_CENSUS_API_KEY', 'k');
-    // renterPop  = round(250/500 × 1000)      = 500
-    // zeroVehPop = (20 + 30) × 2.0            = 100
-    // pop_18_24  = 8 cells × 10               = 80
-    // high       = min(1000, round((500+100+80) × 0.6)) = min(1000, 408) = 408
-    const hpAcs = [
-      ['B01003_001E', 'B25003_001E', 'B25003_003E', 'B25044_003E', 'B25044_010E', 'B25010_001E',
-        'B01001_007E', 'B01001_008E', 'B01001_009E', 'B01001_010E',
-        'B01001_031E', 'B01001_032E', 'B01001_033E', 'B01001_034E',
+    const acs = [
+      ['B01003_001E', 'B25044_003E', 'B25044_010E', 'C17002_002E', 'C17002_001E',
         'state', 'county', 'tract', 'block group'],
-      ['1000', '500', '250', '20', '30', '2.0',
-        '10', '10', '10', '10', '10', '10', '10', '10',
-        '06', '001', '400100', '1'],
+      ['1000', '20', '30', '250', '900', '06', '001', '400100', '1'],
     ];
     mockFetchOnce([
       { body: TRACT_FILE, isText: true },
-      { body: hpAcs },
+      { body: acs },
     ]);
 
     const { fetchCensusData } = await import('../demographics');
     const result = await fetchCensusData('06', '001');
-    expect(result[0].highPropensityRiders).toBe(408);
+    const row = result[0];
+
+    // The counts are reported, straight from the tables.
+    expect(row.population).toBe(1000);
+    expect(row.zeroVehicleHouseholds).toBe(50);   // B25044 _003 + _010
+    expect(row.lowIncomePop).toBe(250);
+    expect(row.povertyUniverse).toBe(900);
+
+    // …and no modelled composite exists on the record at ALL. A regression that
+    // re-added one would fail here rather than quietly ship a second, divergent
+    // definition of "likely rider".
+    const keys = Object.keys(row);
+    expect(keys).not.toContain('highPropensityRiders');
+    expect(keys).not.toContain('propensityAll');
+    expect(keys).not.toContain('needAll');
   });
 
-  it('caps highPropensityRiders at total population', async () => {
+  it('no longer requests the ACS variables that only fed the retired ×0.6 model', async () => {
     vi.stubEnv('VITE_CENSUS_API_KEY', 'k');
-    // Everyone is a renter in a car-free household → scaled sum exceeds pop.
-    const cappedAcs = [
-      ['B01003_001E', 'B25003_001E', 'B25003_003E', 'B25044_003E', 'B25044_010E', 'B25010_001E',
-        'state', 'county', 'tract', 'block group'],
-      ['100', '100', '100', '90', '0', '3.0', '06', '001', '400100', '1'],
+    const acs = [
+      ['B01003_001E', 'state', 'county', 'tract', 'block group'],
+      ['1000', '06', '001', '400100', '1'],
     ];
-    mockFetchOnce([
+    const fetchMock = mockFetchOnce([
       { body: TRACT_FILE, isText: true },
-      { body: cappedAcs },
+      { body: acs },
     ]);
 
     const { fetchCensusData } = await import('../demographics');
-    const result = await fetchCensusData('06', '001');
-    expect(result[0].highPropensityRiders).toBe(100);
+    await fetchCensusData('06', '001');
+
+    // The Census call is the second fetch (the first is the tract-centroid file).
+    const url = String(fetchMock.mock.calls[1][0]);
+    // B25003 (tenure / renters), B25010 (avg household size) and the B01001 18–24
+    // cells existed ONLY to feed the retired model. Still asking for them would be
+    // a live hint that something is about to recompute it.
+    expect(url).not.toContain('B25003');
+    expect(url).not.toContain('B25010');
+    for (const cell of ['B01001_007E', 'B01001_008E', 'B01001_009E', 'B01001_010E',
+      'B01001_031E', 'B01001_032E', 'B01001_033E', 'B01001_034E']) {
+      expect(url).not.toContain(cell);
+    }
+    // The tables we DO still need are still requested.
+    expect(url).toContain('B25044_003E');  // zero-vehicle households
+    expect(url).toContain('C17002_002E');  // low income
+    expect(url).toContain('B01001_020E');  // seniors 65+
   });
 
   it('throws with response body excerpt when Census API returns non-ok', async () => {

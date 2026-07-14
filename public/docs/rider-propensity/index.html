@@ -78,7 +78,7 @@
     }
   },
   "datePublished": "2026-05-01",
-  "dateModified": "2026-05-22",
+  "dateModified": "2026-07-13",
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": "https://www.gtfsx.com/docs/rider-propensity/"
@@ -104,34 +104,59 @@
     <main>
       <div class="crumbs"><a href="/docs/">Docs</a> · Analysis tools · Rider propensity</div>
       <h1>Rider propensity <span class="tier-badge free">Free</span></h1>
-      <p class="lede">A nationwide Demand Dots map layer that surfaces likely transit demand — population most likely to ride and the jobs they could be commuting to — as dots rendered directly on the basemap. Use it to spot under-served demand pockets when sketching a new route or sizing a flex zone.</p>
+      <p class="lede">A nationwide Demand Dots map layer that draws transit-relevant population and the jobs they could be commuting to as dots on the basemap. It answers two separate questions — <em>who is likely to ride</em> and <em>who depends on transit</em> — and keeps them separate on purpose. Use it to spot under-served pockets when sketching a route or sizing a flex zone.</p>
 
       <figure>
-        <img src="/assets/docs/rider-propensity-dots-on.png" alt="GTFS·X editor with the Demand Dots layer enabled, showing colored dots representing high-propensity population and jobs across the Bozeman area." loading="lazy" />
-        <figcaption>Demand Dots overlaid on the demo feed. Blue dots: high-propensity adults. Orange dots: jobs. Gray dots: other adults. One dot represents five people (or five jobs).</figcaption>
+        <img src="/assets/docs/rider-propensity-dots-on.png" alt="GTFS·X editor with the Demand Dots layer enabled, showing colored population dots and job dots across the Bozeman area." loading="lazy" />
+        <figcaption>Demand Dots overlaid on the demo feed, with <strong>Low income</strong> picked in <strong>Ridership propensity</strong> mode: the segment you picked in strong blue, the rest of the propensity group in a muted blue, everyone else in gray, and jobs in orange. The legend's “1 dot ≈ 40 people” is the ratio in force at this zoom.</figcaption>
       </figure>
 
       <h2 id="where-to-find-it">Where to find it</h2>
-      <p>Demand Dots is a <strong>basemap layer toggle</strong>, not a sidebar panel. Open the basemap control on the top-right of the map (the small square icon below the zoom controls) and check the <strong>Demand Dots</strong> box. The dots appear at every zoom level; they're most legible from neighborhood-scale (zoom ~12) to corridor-scale (zoom ~15).</p>
+      <p>Demand Dots is a <strong>basemap layer toggle</strong>, not a sidebar panel. Open the basemap control on the top-right of the map (the small square icon below the zoom controls) and check the <strong>Demand Dots</strong> box. Once it's on you get a mode switch between <strong>Ridership propensity</strong> and <strong>Transit need</strong>, then a radio to draw either the whole group (<strong>All likely riders</strong>, or <strong>Everyone with transit need</strong>) or one segment at a time, and below that, checkboxes for <strong>Jobs</strong> and <strong>Everyone else</strong>. The layer draws from <strong>zoom 8</strong> (roughly a whole state on screen) all the way in, and every control works at every one of those zooms, including picking a single segment while zoomed out.</p>
 
       <figure>
         <img src="/assets/docs/rider-propensity-basemap-toggle.png" alt="Basemap control panel in the GTFS·X editor showing a Demand Dots checkbox." loading="lazy" />
         <figcaption>The basemap control with the Demand Dots checkbox. Toggling it doesn't change the underlying basemap style — it adds the dot layer on top.</figcaption>
       </figure>
 
-      <h2 id="what-the-dots-show">What the dots show</h2>
-      <p>The layer renders three categories of dots, each at a one-dot-equals-five-units density:</p>
+      <h2 id="what-it-measures">Two groups, two different questions</h2>
+      <p>The layer draws two population groups that transit planning routinely conflates, and that the evidence says genuinely diverge. Pick the wrong one and it will point you at the wrong neighborhoods.</p>
       <ul>
-        <li><strong>Blue — high-propensity adults.</strong> Population estimated to be more likely to ride transit than the general population: renters, members of zero-vehicle households, and adults 18–24. The three groups overlap, so a 0.6 deduplication factor is applied. Distributed within each Census block according to land area.</li>
-        <li><strong>Gray — other adults.</strong> The rest of the adult population, by the same block-level distribution. The contrast between blue and gray is the part that matters; areas where blue dots dominate are higher-propensity neighborhoods.</li>
-        <li><strong>Orange — jobs.</strong> Workplace locations from LEHD LODES workplace-area characteristics, distributed within each block. A dense cluster of orange dots is the demand side a commute route is feeding.</li>
+        <li><strong>Ridership propensity</strong> answers <em>who is more likely to actually ride</em>. It is the union of two segments: people in <strong>zero-vehicle households</strong> and people <strong>under 200% of the federal poverty line</strong>. It is deliberately narrow.</li>
+        <li><strong>Transit need</strong> answers <em>who depends on transit</em>. It adds <strong>adults 65+</strong> and <strong>adults with a disability</strong> to the two above. This is the tradition used for equity and service-gap work. It is deliberately broad.</li>
       </ul>
-      <p>The layer is <strong>nationwide</strong>: every state, plus DC. Alaska and Puerto Rico render the population layers (blue and gray) but not jobs, because LODES isn't published for those jurisdictions.</p>
+      <div class="callout">
+        <strong>These are not two flavors of the same thing.</strong> Two of the groups that belong in <em>need</em> are, in the ridership data, <em>under</em>-represented among actual riders. APTA's compilation of on-board surveys finds people 65+ are 17% of the population aged 15 and over but only 7% of riders. They belong in a need index precisely because they depend on transit, not because they ride more. If you use the need layer to pick a route on ridership grounds, you will over-build to retirement communities. Use <strong>propensity</strong> for ridership questions and <strong>need</strong> for equity and coverage questions.
+      </div>
+
+      <h2 id="what-the-dots-show">What the dots show</h2>
+      <p><strong>One dot is one person.</strong> Not one dot per group they belong to: one dot, for one resident, carrying whichever of the four memberships they actually have. A carless, low-income senior is a single dot, not three. Jobs are the one exception. A job is not a person, so it lives in its own universe with its own color, and is never mixed into or deduplicated against the residential population.</p>
+      <p>That has a consequence worth stating plainly, because it is the whole point of the layer: <strong>every resident is drawn exactly once, in every view.</strong> Changing the mode or picking a segment does not filter people off the map. It <em>recolors</em> the same dots. Nobody is ever double-drawn, and nobody ever silently disappears.</p>
+      <p>Under the mode switch sits a radio that chooses which group is highlighted, and under that, two independent checkboxes:</p>
+      <ul>
+        <li><strong>All likely riders</strong> in propensity mode, <strong>Everyone with transit need</strong> in need mode — the whole group as a single deduplicated union, in strong blue. Nobody is drawn twice, even though a person can be carless <em>and</em> low-income <em>and</em> disabled at once. Both are referred to as the <em>All</em> option below.</li>
+        <li><strong>A single segment</strong> — zero-vehicle households, low income, seniors 65+, or disability on its own. Picking one paints the people who have that membership in strong blue, and paints <em>the rest of the group</em>, meaning people who are in the propensity or need union but not in the segment you picked, in a <strong>muted blue</strong>. They stay on the map, because they are not "everyone else". This matters: with <strong>Carless</strong> selected in propensity mode, the low-income-but-not-carless residents are roughly a quarter of the population, and they belong in neither the strong blue nor the gray.</li>
+        <li><strong>Jobs</strong> (checkbox) — workplace locations from LEHD LODES, in orange. Jobs are counted at the <em>workplace</em>, a different universe from the residential population, so they are never deduplicated against it and can always be read alongside any segment.</li>
+        <li><strong>Everyone else</strong> (checkbox) — the neutral gray backdrop, and it means what it says: residents in <em>neither</em> the segment you picked nor the rest of the group. Strong blue plus muted blue plus gray is the entire resident population, always. The contrast is the part that matters; a neighborhood where the blue crowds out the gray is where the group concentrates.</li>
+      </ul>
+
+      <h3>How many people is a dot worth?</h3>
+      <p>It depends on the zoom, and the legend tells you which number is in force. Drawing every fifth person across a whole state at once would be an unreadable smear, so the tiles thin the dots as you zoom out and restore them as you zoom in:</p>
+      <ul>
+        <li>zoomed out to state scale (zoom 8), <strong>1 dot ≈ 640 people</strong>;</li>
+        <li>at metro scale (zoom 12), <strong>1 dot ≈ 40 people</strong>;</li>
+        <li>at corridor and stop scale (zoom 15 and deeper), <strong>1 dot ≈ 5 people</strong>, which is full density.</li>
+      </ul>
+      <p>The panel shows the ratio for the zoom you are actually at, and it is a real number rather than a nominal one: every dot the thinning removes at a coarse zoom comes back at the next zoom in, and the shipped tiles are checked against that claim before publication. Thinning also never changes the <em>mix</em>. The share of carless people among the dots you can see at zoom 8 is the same as at zoom 15.</p>
+
+      <p>The layer is <strong>nationwide</strong>: every state, plus DC. Alaska and Puerto Rico render the population groups but not jobs, because LODES isn't published for those jurisdictions.</p>
 
       <h2 id="how-to-use">How to use it</h2>
       <ul>
-        <li><strong>Sizing a new route.</strong> Zoom to the corridor you're considering, toggle Demand Dots on, and look at how the proposed alignment intersects the dot density. A route that runs through blue-and-orange together is going to perform better than the same mileage of road through neither.</li>
-        <li><strong>Locating a flex zone.</strong> Demand Dots is particularly useful for non-fixed-route service. A flex zone polygon drawn around a high blue-dot density gives you a defensible service area; the same polygon drawn around mostly empty space tells you the demographics don't support the service even before you crunch a single ridership number.</li>
+        <li><strong>Sizing a new route.</strong> Use <strong>Ridership propensity</strong>. Zoom to the corridor, and look at how the proposed alignment intersects the dot density. A route that runs through propensity dots and jobs together will perform better than the same mileage of road through neither.</li>
+        <li><strong>Locating a flex zone.</strong> Demand Dots is particularly useful for non-fixed-route service. A zone drawn around a dense propensity cluster gives you a defensible service area; the same polygon drawn around mostly empty space tells you the demographics don't support the service before you crunch a single number.</li>
+        <li><strong>Making an equity or coverage case.</strong> Use <strong>Transit need</strong>. This is the layer for "who are we leaving behind" — the population that depends on transit whether or not it currently rides. Do not read it as a ridership signal.</li>
+        <li><strong>Diagnosing <em>why</em> an area lights up.</strong> Step through the segments one at a time. A cluster driven by zero-vehicle households is a very different service problem from one driven by seniors, and it wants a different mode.</li>
         <li><strong>Comparing scenarios.</strong> Toggle the layer with your existing network visible, then with a proposed change visible. Where do the dots that <em>were</em> covered stop being covered? Where do new dots come into reach?</li>
         <li><strong>Telling the story.</strong> A map screenshot with Demand Dots overlaid often communicates "this is who we'd be serving" more directly to a board than the equivalent table of demographic figures.</li>
       </ul>
@@ -143,18 +168,148 @@
 
       <h2 id="methodology">Methodology</h2>
       <ul>
-        <li><strong>Population.</strong> ACS 2020–2024 5-year estimates at the Census block group level, allocated to 2020 Census blocks by land area. High-propensity population is the union of three indicators — renter households (B25003), zero-vehicle households (B25044), and adults 18–24 (B01001 age-by-sex) — with a 0.6 deduplication factor to correct for the overlap between the three groups. Total adult population is treated as 78% of total population (standard ACS-derived figure); other adults = total adults − high-propensity adults.</li>
-        <li><strong>Jobs.</strong> LEHD LODES 8 (2023) workplace-area characteristics, block-level. Reports total jobs per block; not split by sector or wage tier in this layer.</li>
-        <li><strong>Rendering.</strong> Vector tiles served from the GTFS·X tile origin. Each dot represents five people or five jobs, randomly placed within the block (consistent across zoom levels). At low zooms the layer downsamples to keep render time reasonable.</li>
-        <li><strong>Vintages.</strong> ACS 2020–2024 5-year, LODES 2023, TIGER 2025 block boundaries. Re-rendered when the underlying vintages refresh — annually for ACS, on LODES release cadence for jobs.</li>
+        <li>
+          <strong>Population.</strong> ACS 2020–2024 5-year estimates at the Census block group level, allocated to 2020 Census blocks by block population (falling back to housing units, then land area, where population data is unusable). The segments and their tables: zero-vehicle households (<code>B25044</code>), people under 200% of the federal poverty line (<code>C17002</code>), adults 65+ (<code>B01001</code>), and civilian adults 18+ with a disability (<code>C21007</code>). Every one of these is published at block-group geography; none is interpolated down from a coarser level.
+        </li>
+        <li>
+          <strong>Deduplication — measured, not assumed.</strong> A person can be carless <em>and</em> low-income <em>and</em> disabled. Published ACS tables give only the marginal counts, never the joint distribution, so the overlap cannot be read off them. We measure it directly from <strong>Census PUMS microdata</strong> (2020–2024 5-year, 2,462 PUMAs), which is person-level and therefore shows the intersections. Each block group inherits the overlap structure of the PUMA that contains it, so the <strong>All</strong> count is a real deduplicated union rather than a guess. Nationally the union runs to 30% of the population for propensity and 45% for need.
+        </li>
+        <li>
+          <strong>Which memberships each dot gets.</strong> Four yes/no memberships make sixteen possible combinations, and the PUMS microdata knows how many people are in each one, so we count all sixteen directly for every PUMA rather than inferring them. Those counts are then fitted to each block group's own published ACS numbers. The result reproduces the block group's ACS totals exactly, while the <em>correlation</em> between memberships, which is the part the ACS is silent about, is inherited from the surrounding PUMA. Assigning the memberships independently at random would have quietly assumed carlessness, poverty and disability are unrelated, which they are strongly not.
+        </li>
+        <li>
+          <strong>Jobs.</strong> LEHD LODES 8 (2023) workplace-area characteristics, block-level. Total jobs per block; not split by sector or wage tier in this layer.
+        </li>
+        <li>
+          <strong>Rendering.</strong> Vector tiles served from the GTFS·X tile origin. Each dot is placed at random within its census block and then stays put; a dot never moves as you zoom or pan. Each dot also carries its own memberships, which is what lets the map recolor rather than re-fetch when you change mode or segment: the whole resident population is in the tile either way, so switching views cannot double-draw anyone and cannot leave anyone out. Dot density is zoom-scaled (see above), and that thinning is baked into the tiles rather than applied in the browser.
+        </li>
+        <li>
+          <strong>Vintages.</strong> ACS 2020–2024 5-year, PUMS 2020–2024 5-year, LODES 2023, TIGER 2025 block boundaries. Re-rendered when the underlying vintages refresh.
+        </li>
+      </ul>
+
+      <div class="callout">
+        <strong>What changed, and why.</strong> Earlier versions of this layer drew a single "high propensity" class — renters, zero-vehicle households and adults 18–24 — multiplied by a flat <strong>0.6</strong> deduplication factor. That factor appears in no published work, and we could not reproduce it. Measured against PUMS, it was wrong by about <strong>34%</strong> on average, and wrong in a geographically structured way: because the true overlap varies from roughly 0.55 to 0.95 across PUMAs, a single constant over-counts in dense, heavily-overlapping places and under-counts almost everywhere else. Renters and adults 18–24 have been removed as segments; the reasoning is below.
+      </div>
+
+      <h2 id="evidence">What the evidence supports, segment by segment</h2>
+      <p>Every segment is here because a published source supports its inclusion in <em>that specific group</em>. Segments that are conventional but unsupported were cut, and what was cut is stated at the end. Figures attributed to "our PUMS measurement" are our own computation over the Census microdata, not a literature finding.</p>
+
+      <h3>Ridership propensity</h3>
+      <ul>
+        <li>
+          <strong>Zero-vehicle households</strong> — the best-corroborated predictor in the literature, by a wide margin. CUTR's per-capita propensity ratio puts people in zero-vehicle households at <strong>5.9×</strong> the national average rate of transit use (Polzin, Rey &amp; Chu 1998, from the 1995 NPTS). Independently, and two decades later, APTA's compilation of on-board surveys finds <strong>46%</strong> of riders report no vehicle available to their household at all, and <strong>61%</strong> had no vehicle available for the trip they were surveyed on. Car access is a hard constraint on mode choice rather than a taste proxy, which is why every deployed agency index we could read — LA Metro NextGen, NFTA Buffalo, and the Central Oregon/Redmond index — includes zero-car households.
+        </li>
+        <li>
+          <strong>Under 200% of the federal poverty line</strong> — supported, but a weaker effect than car access and partly mediated by it. APTA finds households under $15k are 13% of all US households but 21% of transit-using households; CUTR's propensity ratio for that income band is 2.3×. Income survives controlling for vehicle access: Chu's fitted stop-level Poisson model carries median household income (−0.0045, t = −5.63) <em>and</em> zero-vehicle households (+0.0028, t = 13.95) as simultaneously significant terms. Our PUMS measurement shows the two are related but far from redundant — <strong>58% of carless people are low-income, but only 12% of low-income people are carless</strong>.
+          <br>
+          <em>One caveat we will state rather than hide:</em> the income–transit relationship is not monotonic. TCRP Report 28 found transit use turning back upward above roughly $40,000, such that workers in households making $60–70k commuted by transit more than those making $25–30k. The 200%-of-poverty threshold sits below that turning point, so this indicator stays in the well-behaved region — but a higher income cut would not.
+        </li>
+      </ul>
+
+      <h3>Transit need</h3>
+      <ul>
+        <li><strong>Zero-vehicle households</strong> and <strong>under 200% FPL</strong> — as above. Both are also core need variables and appear in every deployed index we read.</li>
+        <li>
+          <strong>Adults 65+</strong> — included on dependence grounds, not ridership grounds. Seniors are one of the four inputs to the Central Oregon/Redmond Transit Propensity Index and one of LA Metro NextGen's transit-dependent variables. The mechanism is co-occurring disability, not an inability to drive: <strong>34% of people 65+ report a disability</strong> (our PUMS measurement), while FHWA's licensing statistics show <strong>70.6% of people 85 and over still hold a driver's license</strong>. Be clear-eyed about what this segment is: seniors are <em>under</em>-represented among actual riders (17% of the 15+ population, 7% of riders — APTA). It measures need. It does not predict ridership.
+        </li>
+        <li>
+          <strong>Civilian adults 18+ with a disability</strong> — a standard transit-need variable with the clearest institutional basis: the ADA requires complementary paratransit for riders unable to use fixed-route service. Disability is one of LA Metro NextGen's transit-dependent variables and one of the Central Oregon index's four.
+          <br>
+          <em>Two limits worth knowing.</em> First, the ACS concept is "any of six difficulty types," which includes hearing and independent-living difficulty — neither of which precludes driving. By our PUMS measurement about <strong>82%</strong> of this population reports a vision, cognitive, ambulatory or self-care difficulty, so roughly one in six is counted on a difficulty that has little bearing on whether they can drive. Second, the table (<code>C21007</code>) covers the <em>civilian population 18 and over for whom poverty status is determined</em>, so it excludes disabled children and people in nursing homes. Those people enter the <strong>All</strong> union only if they are also carless or low-income — so a disabled child in a car-owning, higher-income household is not counted anywhere in this layer.
+        </li>
+      </ul>
+
+      <h3>What we cut, and why</h3>
+      <ul>
+        <li>
+          <strong>Renters</strong> — <em>removed</em>. The raw association is strong (CUTR: renters 2.00 vs owners 0.55), but there is no mechanism by which holding a lease rather than a mortgage causes transit use, and the variable is heavily confounded: our PUMS measurement finds <strong>73% of carless people are renters</strong>, so tenure largely restates car access and urban form. This is not just our judgment. None of the deployed indices we read include tenure, and LA Metro's methodology says so explicitly: it did not use categories of individuals "who were primarily renters and non-licensed drivers" because those variables could not be controlled for income.
+        </li>
+        <li>
+          <strong>Adults 18–24</strong> — <em>removed</em>, and folded into the general-population backdrop. This runs against widespread practice, but the rider data does not support the segment: in APTA's surveys 20-to-24-year-olds are 9% of the 15+ population and 10% of riders, which is parity, not elevated demand. The peak transit cohort is 25–54 (50% of the population, 63% of riders).
+          <br>
+          <em>The university exception, and why it does not rescue the segment.</em> Student transit use in college towns is genuinely high, but the cause is fare and parking policy rather than age. UCLA's BruinGo unlimited-access evaluation found the student bus share inside the service area rose from 17% to 24% when fares were bought out — and a survey of BruinGo riders found <strong>56% owned a car</strong>, most saying they didn't drive because they couldn't get a parking permit or it cost too much (Shoup, Brown &amp; Hess). A layer that attributed this to being 18–24 would mislead any agency without a U-Pass agreement.
+        </li>
+        <li>
+          <strong>Youth under 18</strong> — <em>removed</em> from the need group. This one is a product judgment rather than an evidence claim: including it pushed the need union to 59% of the population, at which point the map is essentially a population map and tells you nothing. (Note also that APTA's rider shares understate young riders by construction — on-board surveys set a minimum age, typically 13 to 18, and often skip school trippers.)
+        </li>
+        <li>
+          <strong>Race and ethnicity</strong> — deliberately never included as a predictor, though LA Metro and NFTA both include it in theirs. FTA's Title VI Circular contemplates race data for disparate-impact analysis of a proposed change, not as an input to a forward-looking demand or resource-allocation model. Use the <a href="/docs/title-vi-analysis/">Title VI panel</a>, which is built for that purpose.
+        </li>
       </ul>
 
       <h2 id="limits">Limits</h2>
       <ul>
-        <li>The high-propensity indicators are national-average proxies. Calibrating them to a specific region (different car-ownership patterns, age structure, transit culture) isn't yet supported.</li>
-        <li>Jobs are by workplace, not by commute mode. A dense orange cluster could be a hospital where most employees drive; the layer can't distinguish.</li>
-        <li>The dots are a visual representation — not a hover-tooltip lookup. For exact population counts inside a buffer, use the <a href="/docs/demographic-coverage/">Coverage</a> panel; for an equity-style comparison, use the <a href="/docs/title-vi-analysis/">Title VI analysis</a> panel.</li>
+        <li>
+          <strong>The dedup is an approximation, and here is exactly what it assumes.</strong> Each block group inherits the overlap structure of its PUMA (a Census area of roughly 100,000 people). Where a block group's demographic mix differs sharply from its PUMA's average, the deduplicated <strong>All</strong> count is correspondingly less exact. Testing the same assumption one geographic level up — applying a whole <em>state's</em> overlap structure to each of its PUMAs, a far harsher test than PUMA-to-block-group — recovers the union to a median error of about <strong>1.3%</strong> (propensity) and <strong>1.7%</strong> (need), with 90th-percentile errors of 3.4% and 4.6%. That is a conservative upper bound on the error here. The same assumption governs which combination of memberships each individual dot carries: the totals in a block group are its own published ACS numbers, but the correlation between memberships is the PUMA's.
+        </li>
+        <li>
+          <strong>There is no published joint distribution below the PUMA level</strong>, from the Census or anyone else. The block-group union therefore cannot be verified against ground truth, by us or by anyone. We would rather report the assumption than imply a precision we cannot demonstrate.
+        </li>
+        <li>
+          <strong>Small-area ACS estimates carry real sampling error.</strong> Block-group 5-year estimates have wide margins of error, especially for small segments in sparsely-populated blocks. The dots are a density picture, not a count you should quote.
+        </li>
+        <li>
+          <strong>Propensity ratios are national averages.</strong> The 5.9× figure for zero-vehicle households is itself strongly density-dependent — CUTR reports 7.8× in dense urban areas but 1.0× in rural ones, where being carless mostly means being stranded rather than riding. The layer does not localize for this, so calibrating to a specific region isn't yet supported.
+        </li>
+        <li>
+          <strong>The rider evidence describes trips, not people.</strong> APTA's shares are shares of unlinked passenger trips, so frequent riders count more than once. That is the right denominator for "who is on the bus" and the wrong one for "how many people ride."
+        </li>
+        <li>
+          Jobs are by workplace, not by commute mode. A dense orange cluster could be a hospital where most employees drive; the layer can't distinguish.
+        </li>
+        <li>
+          The dots are a visual representation, not a hover-tooltip lookup. For exact population counts inside a buffer use the <a href="/docs/demographic-coverage/">Coverage</a> panel; for an equity comparison use the <a href="/docs/title-vi-analysis/">Title VI analysis</a> panel.
+        </li>
         <li>Alaska and Puerto Rico are population-only; LODES does not publish for those jurisdictions.</li>
+      </ul>
+
+      <h2 id="references">References</h2>
+      <ul>
+        <li>
+          American Public Transportation Association, <em>Who Rides Public Transportation</em> (2017) — rider demographics compiled from 695,748 on-board questionnaires, 2008–2015. Source of the age, income and vehicle-availability shares above. APTA has since removed this PDF from its site; the link is to the Internet Archive's copy.
+          <a href="https://web.archive.org/web/20260304094916/https://www.apta.com/wp-content/uploads/Resources/resources/reportsandpublications/Documents/APTA-Who-Rides-Public-Transportation-2017.pdf">archive.org</a>
+        </li>
+        <li>
+          Polzin, S., Rey, J. &amp; Chu, X. (1998), <em>Public Transit in America: Findings from the 1995 Nationwide Personal Transportation Survey</em>, CUTR — Appendix C, per-capita transit propensity ratios by population group.
+          <a href="https://www.cutr.usf.edu/wp-content/uploads/2012/08/propensity.pdf">cutr.usf.edu</a>
+        </li>
+        <li>
+          Chu, X. (2004), <em>Ridership Models at the Stop Level</em>, NCTR/FDOT — fitted stop-level Poisson model carrying zero-vehicle households and median household income as simultaneous significant terms.
+          <a href="https://rosap.ntl.bts.gov/view/dot/64250">rosap.ntl.bts.gov</a>
+        </li>
+        <li>
+          Transit Cooperative Research Program, <em>Report 28: Transit Markets of the Future — The Challenge of Change</em> — the non-monotonic income–ridership relationship.
+          <a href="https://onlinepubs.trb.org/onlinepubs/tcrp/tcrp_rpt_28-a.pdf">trb.org</a>
+        </li>
+        <li>
+          LA Metro, <em>NextGen Bus Study: Transit Propensity</em> (2019) — a deployed agency index. Its transit-dependent market is zero-car households, lower income, ages 10–19, ages 55+, single mothers, individuals with disabilities and minorities; it explicitly excludes renters.
+          <a href="https://media.metro.net/projects_studies/nextgen/images/Transit_Propensity_writeup_2019-0719.pdf">metro.net</a>
+        </li>
+        <li>
+          Central Oregon Intergovernmental Council, <em>Redmond Transit Propensity Index</em> — a deployed index built from low-income households, zero-car households, older adults 65+, and people with disabilities.
+          <a href="https://www.coic.org/wp-content/uploads/2020/01/redmond_tpi.pdf">coic.org</a>
+        </li>
+        <li>
+          Niagara Frontier Transportation Authority, <em>Transit Need Index</em> (2024 revision) — a deployed five-factor need index: median household income, minority density, poverty density, zero-car households, and low-wage job density.
+          <a href="https://www.nfta.com/sites/default/files/2025-02/transit-need-index-2024.pdf">nfta.com</a>
+        </li>
+        <li>
+          Federal Highway Administration, <em>Highway Statistics 2023</em>, Table DL-20 — licensed drivers as a percentage of population by age.
+          <a href="https://www.fhwa.dot.gov/policyinformation/statistics/2023/pdf/dl20.pdf">fhwa.dot.gov</a>
+        </li>
+        <li>
+          Shoup, D., Brown, J. &amp; Hess, D. B. (2003), <em>Unlimited Access: An Evaluation of the UCLA BruinGo Program</em> — student transit use as a fare-and-parking effect rather than an age effect.
+          <a href="https://escholarship.org/content/qt43h7z089/qt43h7z089.pdf">escholarship.org</a>
+        </li>
+        <li>
+          Federal Transit Administration, <em>Circular 4702.1B: Title VI Requirements and Guidelines for Federal Transit Administration Recipients</em> — the intended use of race data.
+          <a href="https://www.transit.dot.gov/regulations-and-guidance/fta-circulars/title-vi-requirements-and-guidelines-federal-transit">transit.dot.gov</a>
+        </li>
+        <li>
+          US Census Bureau, <em>American Community Survey Public Use Microdata Sample (PUMS)</em>, 2020–2024 5-year — the person-level microdata the segment overlaps and the deduplicated union are measured from.
+          <a href="https://www.census.gov/programs-surveys/acs/microdata.html">census.gov</a>
+        </li>
       </ul>
 
       <div class="see-also">

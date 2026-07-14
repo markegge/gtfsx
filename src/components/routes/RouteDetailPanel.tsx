@@ -5,6 +5,7 @@ import { RouteStopsTab } from './RouteStopsTab';
 import { RouteTripsTab } from './RouteTripsTab';
 import { RouteShapesTab } from './RouteShapesTab';
 import { RouteCostsTab } from './RouteCostsTab';
+import { RouteWalkshedProfileTab } from '../coverage/WalkshedProfilePanel';
 import type { RouteDetailTab } from '../../types/ui';
 
 type Bounds = [[number, number], [number, number]];
@@ -91,6 +92,8 @@ export function RouteDetailPanel() {
       return <RouteShapesTab />;
     case 'costs':
       return <RouteCostsTab />;
+    case 'coverage':
+      return <RouteWalkshedProfileTab />;
     default:
       return <RouteEditor />;
   }

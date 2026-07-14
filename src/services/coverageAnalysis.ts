@@ -5,12 +5,20 @@ import type { BlockGroupData } from './demographics';
 import type { Stop } from '../types/gtfs';
 import type { AppStore } from '../store';
 
+/**
+ * Coverage counts inside a walkshed. STRAIGHT COUNTS ONLY.
+ *
+ * There is no propensity / transit-need figure on this type, and there must not
+ * be one: this is the tract-centroid disc-apportionment path, and both composites
+ * are PUMS-derived statistical unions that only exist as exact per-block integers
+ * in the prebuilt census-block layer. `BlockCoverageResult` (blockCoverage.ts)
+ * extends this with them, and ONLY the exact block path can populate them. See
+ * the note on BlockGroupData in demographics.ts.
+ */
 export interface CoverageResult {
   totalPopulation: number;
   totalHouseholds: number;
   totalWorkers: number;
-  /** Apportioned high-propensity riders (see BlockGroupData.highPropensityRiders). */
-  totalHighPropensityRiders: number;
   // Apportioned demographic counts (numerators + denominators kept separate
   // so shares can be computed after summing — never average pre-computed
   // per-block-group shares). See demographicShares() below.
@@ -148,7 +156,6 @@ export function coverageFromFractions(
 ): CoverageResult {
   const bgMap = new Map(blockGroups.map((bg) => [bg.geoid, bg]));
   let totalPopulation = 0, totalHouseholds = 0, totalWorkers = 0;
-  let totalHighPropensityRiders = 0;
   let minorityPop = 0, totalRacePop = 0;
   let lowIncomePop = 0, povertyUniverse = 0;
   let zeroVehicleHouseholds = 0, occupiedHouseholds = 0;
@@ -163,7 +170,6 @@ export function coverageFromFractions(
     // meaningful denominator for transit coverage (Mark, 2026-06-27).
     totalHouseholds       += f * bg.occupiedHouseholds;
     totalWorkers          += f * bg.workers;
-    totalHighPropensityRiders += f * bg.highPropensityRiders;
     minorityPop           += f * bg.minorityPop;
     totalRacePop          += f * bg.totalRacePop;
     lowIncomePop          += f * bg.lowIncomePop;
@@ -178,7 +184,6 @@ export function coverageFromFractions(
     totalPopulation:       Math.round(totalPopulation),
     totalHouseholds:       Math.round(totalHouseholds),
     totalWorkers:          Math.round(totalWorkers),
-    totalHighPropensityRiders: Math.round(totalHighPropensityRiders),
     minorityPop:           Math.round(minorityPop),
     totalRacePop:          Math.round(totalRacePop),
     lowIncomePop:          Math.round(lowIncomePop),

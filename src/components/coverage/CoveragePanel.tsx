@@ -40,6 +40,7 @@ import {
   tabulateBlocks,
   type BlockCoverageResult,
 } from '../../services/blockCoverage';
+import { WalkshedProfilePanel } from './WalkshedProfilePanel';
 
 function formatNumber(n: number): string {
   return n.toLocaleString();
@@ -80,9 +81,21 @@ function pctCsv(v: number | null): string {
   return v == null ? '' : (v * 100).toFixed(1);
 }
 
+/** True when a coverage result came from the EXACT census-block layer, which is
+ *  the only source of jobs and of the two union estimates. */
+function isBlockResult(r: CoverageResult | BlockCoverageResult): r is BlockCoverageResult {
+  return 'totalJobs' in r;
+}
+
 /** One CSV row from a coverage result (system or per-route). Accepts an exact
- *  block-level result (adds a jobs count + block tally) or a block-group
- *  estimate; the `geography` column records which method produced the row. */
+ *  block-level result (adds jobs, the two union estimates and a block tally) or a
+ *  block-group estimate; the `geography` column records which method produced the
+ *  row.
+ *
+ *  The union columns are named `_ESTIMATE` and are left BLANK — never zero — for
+ *  a block-group row. A zero would read as "nobody", when the truth is "this
+ *  method cannot answer that question"; and a spreadsheet has no tooltip to
+ *  explain the difference. */
 function csvRow(
   scope: string,
   routeId: string,
@@ -90,20 +103,19 @@ function csvRow(
   result: CoverageResult | BlockCoverageResult,
 ): Record<string, string | number> {
   const s = demographicShares(result);
-  const isBlock = 'totalJobs' in result;
+  const block = isBlockResult(result) ? result : null;
   return {
     scope,
     route_id: routeId,
-    geography: isBlock ? 'block (exact)' : 'block group (estimate)',
+    geography: block ? 'block (exact)' : 'block group (estimate)',
     buffer,
-    units_covered: isBlock
-      ? (result as BlockCoverageResult).blocksCovered
-      : result.coveredBlockGroupIds.length,
+    units_covered: block ? block.blocksCovered : result.coveredBlockGroupIds.length,
     population: result.totalPopulation,
     households: result.totalHouseholds,
     workers: result.totalWorkers,
-    jobs: isBlock ? (result as BlockCoverageResult).totalJobs : '',
-    high_propensity_riders: result.totalHighPropensityRiders,
+    jobs: block ? block.totalJobs : '',
+    ridership_propensity_ESTIMATE: block ? block.propensityAll : '',
+    transit_need_ESTIMATE: block ? block.needAll : '',
     minority_pct: pctCsv(s.minority),
     low_income_pct: pctCsv(s.lowIncome),
     zero_vehicle_hh_pct: pctCsv(s.zeroVehicle),
@@ -131,16 +143,16 @@ function buildCoverageCsvRows(
   // County baseline: whole-county totals + unweighted baseline shares, the
   // denominator the on-screen equity ratios compare against. Always the
   // block-group estimate (occupied households, to match the System row's
-  // households definition).
+  // households definition), so it carries no union estimate — that number only
+  // exists in the exact block layer.
   const county = data.blockGroups.reduce(
     (a, bg) => {
       a.population += bg.population;
       a.households += bg.occupiedHouseholds;
       a.workers += bg.workers;
-      a.high += bg.highPropensityRiders;
       return a;
     },
-    { population: 0, households: 0, workers: 0, high: 0 },
+    { population: 0, households: 0, workers: 0 },
   );
   const base = baselineShares(data.blockGroups);
   rows.push({
@@ -153,7 +165,8 @@ function buildCoverageCsvRows(
     households: county.households,
     workers: county.workers,
     jobs: '',
-    high_propensity_riders: county.high,
+    ridership_propensity_ESTIMATE: '',
+    transit_need_ESTIMATE: '',
     minority_pct: pctCsv(base.minority),
     low_income_pct: pctCsv(base.lowIncome),
     zero_vehicle_hh_pct: pctCsv(base.zeroVehicle),
@@ -483,17 +496,30 @@ export function CoveragePanel() {
               <SummaryCard label="Population" value={summary.totalPopulation} />
               <SummaryCard label="Households" value={summary.totalHouseholds} />
               <SummaryCard label="Workers" value={summary.totalWorkers} />
-              <SummaryCard
-                label="High-propensity riders"
-                value={summary.totalHighPropensityRiders}
-                info="Residents most likely to use transit: renters, people in zero-vehicle households, and adults 18 to 24, combined and scaled to reduce double-counting. Same model as the orange demand dots."
-              />
+              {/* Jobs and the two union estimates exist ONLY in the exact block
+                  layer. In block-group mode they are omitted rather than zeroed:
+                  a 0 would read as "nobody", when the truth is "this method
+                  cannot answer that". */}
               {block && (
-                <SummaryCard
-                  label="Jobs"
-                  value={block.totalJobs}
-                  info="Jobs located inside the walkshed, counted at the workplace (LODES, census-block level). Only available in the exact block-level analysis."
-                />
+                <>
+                  <SummaryCard
+                    label="Jobs"
+                    value={block.totalJobs}
+                    info="Jobs located inside the walkshed, counted at the WORKPLACE (LODES, census-block level). A different universe from every resident count here — never add the two. Only available in the exact block-level analysis."
+                  />
+                  <SummaryCard
+                    label="Ridership propensity"
+                    value={block.propensityAll}
+                    estimate
+                    info="ESTIMATE, not a count. The de-duplicated union of carless and low-income residents: someone who is both is counted once. The ACS publishes no joint distribution below PUMA level, so the overlap is measured from Census PUMS person records. Same model as the demand-dot map. NOT a ridership forecast."
+                  />
+                  <SummaryCard
+                    label="Transit need"
+                    value={block.needAll}
+                    estimate
+                    info="ESTIMATE, not a count. The de-duplicated union of carless, low-income, senior and disabled residents — everyone whose other options are limited by no car, low income, age or disability. Contains Ridership propensity by definition. NOT a ridership forecast."
+                  />
+                </>
               )}
             </div>
             {block ? (
@@ -509,23 +535,40 @@ export function CoveragePanel() {
             )}
           </div>
 
-          {/* Definitions for the less-obvious counts. */}
+          {/* Definitions for the less-obvious counts, and — where it applies —
+              the count-vs-estimate distinction. */}
           <p className="text-[10px] text-warm-gray leading-relaxed">
             <span className="font-semibold text-dark-brown">Workers:</span> employed residents counted
             where they live (ACS means-of-transportation-to-work universe).{' '}
-            <span className="font-semibold text-dark-brown">High-propensity riders:</span> residents most
-            likely to use transit (renters, people in zero-vehicle households, and adults 18 to 24,
-            combined and scaled to reduce double-counting), the same model as the demand dots.{' '}
-            <span className="font-semibold text-dark-brown">Jobs</span> (the orange demand dots) are
-            counted at the workplace (LODES){block
-              ? ' and are summed inside the walkshed in this exact block-level analysis.'
-              : ' and are not summed into the walkshed here.'}
+            {block ? (
+              <>
+                <span className="font-semibold text-dark-brown">Ridership propensity</span> and{' '}
+                <span className="font-semibold text-dark-brown">Transit need</span> are{' '}
+                <span className="font-semibold">estimates, not counts</span>: de-duplicated unions,
+                so a carless low-income resident is counted once, with the overlap measured from
+                Census PUMS rather than assumed. Neither predicts boardings.{' '}
+                <span className="font-semibold text-dark-brown">Jobs</span> are counted at the
+                workplace (LODES) and are summed inside the walkshed in this exact block-level
+                analysis — a workplace universe, never added to residents.
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-dark-brown">Ridership propensity</span> and{' '}
+                <span className="font-semibold text-dark-brown">Transit need</span> are not reported
+                here. They come from the exact census-block layer, which is unavailable for this
+                feed; this block-group method pins each block group to its parent tract's centroid,
+                and a de-duplicated propensity figure computed on that geometry would be less
+                trustworthy than no figure at all. The counts above are unaffected.{' '}
+                <span className="font-semibold text-dark-brown">Jobs</span> are likewise
+                block-level only, and are not summed into the walkshed here.
+              </>
+            )}
           </p>
 
           {block && (
             <p className="text-[10px] text-teal leading-relaxed">
               Exact analysis: counts come from the individual census blocks whose center falls
-              inside the walkshed.
+              inside the walkshed. Categories overlap — do not add them together.
             </p>
           )}
 
@@ -558,7 +601,7 @@ export function CoveragePanel() {
                     population={r.totalPopulation}
                     households={r.totalHouseholds}
                     workers={r.totalWorkers}
-                    highPropensityRiders={r.totalHighPropensityRiders}
+                    propensityAll={isBlockResult(r) ? r.propensityAll : null}
                   />
                 );
               })}
@@ -566,6 +609,11 @@ export function CoveragePanel() {
           </PaywallOverlay>
         </>
       )}
+
+      {/* Exact census-block walkshed profile — a separate analysis with its own
+          run button, its own store slice, and its own (union, never summed)
+          aggregation. Independent of the block-group coverage run above. */}
+      <WalkshedProfilePanel />
     </div>
   );
 }
@@ -717,12 +765,38 @@ function DemographicProfile({ coverage, baseline }: { coverage: DemographicShare
   );
 }
 
-function SummaryCard({ label, value, info }: { label: string; value: number; info?: string }) {
+/**
+ * One headline number. `estimate` marks it as a modelled union rather than an
+ * ACS count and colors it accordingly — the same amber "est." affordance the
+ * walkshed profile table uses, and the same distinction the demand-dot layer
+ * control draws with its "estimate" / "ACS count" badges. Three surfaces, one
+ * vocabulary.
+ */
+function SummaryCard({
+  label,
+  value,
+  info,
+  estimate = false,
+}: {
+  label: string;
+  value: number;
+  info?: string;
+  estimate?: boolean;
+}) {
   return (
     <div className="text-center">
-      <p className="font-heading font-bold text-lg text-dark-brown">{formatNumber(value)}</p>
+      <p
+        className={`font-heading font-bold text-lg ${estimate ? 'text-amber-700' : 'text-dark-brown'}`}
+      >
+        {formatNumber(value)}
+      </p>
       <p className="text-[11px] text-warm-gray inline-flex items-center justify-center gap-0.5">
         {label}
+        {estimate && (
+          <span className="rounded border border-amber-300 bg-amber-50 px-1 text-[9px] font-bold uppercase tracking-wide text-amber-700">
+            est.
+          </span>
+        )}
         {info && (
           <span
             title={info}
@@ -746,7 +820,7 @@ function RouteRow({
   population,
   households,
   workers,
-  highPropensityRiders,
+  propensityAll,
 }: {
   routeName: string;
   routeColor: string;
@@ -756,7 +830,10 @@ function RouteRow({
   population: number;
   households: number;
   workers: number;
-  highPropensityRiders: number;
+  /** The de-duplicated propensity union, or null when this route was tabulated by
+   *  the block-group method, which cannot produce it. Rendered as an em-dash, not
+   *  a zero. */
+  propensityAll: number | null;
 }) {
   return (
     <div className="bg-cream rounded-lg p-2.5 space-y-1.5">
@@ -785,9 +862,21 @@ function RouteRow({
           <p className="font-heading font-bold text-sm text-dark-brown">{formatNumber(workers)}</p>
           <p className="text-[10px] text-warm-gray">Workers</p>
         </div>
-        <div title="High-propensity riders">
-          <p className="font-heading font-bold text-sm text-dark-brown">{formatNumber(highPropensityRiders)}</p>
-          <p className="text-[10px] text-warm-gray">Riders</p>
+        <div
+          title={
+            propensityAll == null
+              ? 'Ridership propensity needs the exact census-block layer, which is not available for this feed.'
+              : 'Ridership propensity — ESTIMATE, not a count. The de-duplicated union of carless and low-income residents. Not a ridership forecast.'
+          }
+        >
+          <p
+            className={`font-heading font-bold text-sm ${
+              propensityAll == null ? 'text-warm-gray' : 'text-amber-700'
+            }`}
+          >
+            {propensityAll == null ? '—' : formatNumber(propensityAll)}
+          </p>
+          <p className="text-[10px] text-warm-gray">Propensity{propensityAll != null && ' (est.)'}</p>
         </div>
       </div>
     </div>

@@ -52,7 +52,7 @@ export type MapMode =
 
 export type StopPlacementMode = 'snap_to_route' | 'freehand';
 
-export type RouteDetailTab = 'details' | 'stops' | 'trips' | 'shapes' | 'costs';
+export type RouteDetailTab = 'details' | 'stops' | 'trips' | 'shapes' | 'costs' | 'coverage';
 
 export type StopDetailTab = 'details' | 'trips' | 'coverage';
 

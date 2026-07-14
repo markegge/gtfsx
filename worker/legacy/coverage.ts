@@ -8,6 +8,15 @@
  *
  * Mirrors the R2 read pattern in ./tiles.ts. Objects live in the same `TILES`
  * bucket (gtfs-builder-tiles) under `coverage/<region>.fgb`.
+ *
+ * `<region>` is a versioned name (e.g. `us-v2`), not a fixed `us` — see
+ * `COVERAGE_REGION` in `src/services/blockCoverage.ts`. This route is
+ * intentionally dumb about that: it just maps whatever `<region>` the client
+ * asked for to that same key in R2, which is what lets a nationwide schema
+ * rebuild ship under a NEW key while an old, already-deployed client keeps
+ * reading its OLD key untouched (multiple `coverage/*.fgb` objects can coexist
+ * in R2 during that rollout window). `COVERAGE_RE` below permits hyphens and
+ * digits for exactly this reason.
  */
 import type { Env } from '../env';
 

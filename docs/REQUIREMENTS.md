@@ -228,17 +228,31 @@ The editor is also a planning tool. These features answer "where should we run s
 
 ### 2.1 Demand dot map
 
-A nationwide vector-tile layer of dot-density transit demand, served from R2 PMTiles via the Cloudflare Worker. Each dot represents one of:
+A nationwide vector-tile layer of dot-density transit demand, served from R2 PMTiles via the Cloudflare Worker.
 
-- **High transit propensity** (renters ∪ zero-vehicle households ∪ ages 18–24, deduplicated).
-- **Other adults**.
-- **Jobs** (LODES WAC, all sectors).
+The layer draws **two named groups**, because *propensity* (who will ride) and *need* (who depends on transit) are different questions and conflating them is what made the previous model wrong:
 
-Resolution: TIGER block (TABBLOCK20) geometries, with ACS variables apportioned from block group → block by land area. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) Appendix A for the build pipeline + yearly regen runbook.
+- **Ridership propensity** = zero-vehicle households (`B25044`) ∪ low income, <200% FPL (`C17002`). Car access is the one strongly-supported demand predictor (CUTR 1998: 5.9× the national per-capita transit-use rate); income is supported but weaker and partly mediated by it.
+- **Transit need** = the above ∪ seniors 65+ (`B01001`) ∪ adults 18+ with a disability (`C21007`). The transit-dependence tradition, used for equity/coverage work. Seniors and the disabled belong here on dependence grounds — seniors are *under*-represented among actual riders (0.41×, APTA) — so this group must never be read as a ridership signal.
+- **Jobs** (LODES WAC, all sectors) — a separate universe (counted at the workplace), never deduplicated against the population groups.
+- **Everyone else** — the neutral remainder backdrop.
 
-- ✅ Built and live: `us-2026b` archive served at `/_demand-tiles/<archive>/{z}/{x}/{y}.pbf`.
-- ✅ Toggleable map layer (`DemandDotsLayer.tsx`).
+**One dot = one PERSON, not one dot per group they belong to.** Every population dot in the tiles carries its four membership flags as a packed integer (`d`: bit 1 carless, 2 low_income, 4 senior, 8 disability; `d = 16` is a job). The composites are unions of those flags, **evaluated at render time**, so they are not tile classes at all. Consequence, and the reason the schema exists: **every person is drawn exactly once, in every view.**
+
+UI: a propensity/need mode switch, a radio for **All** (the deduplicated union) vs. a **single segment** at a time, plus independent Jobs and "Everyone else" checkboxes. Picking a segment **recolors rather than filters** — the selected flag goes strong blue, the *rest of the composite* goes muted blue (they are on the map; they are not "everyone else"), everyone else goes gray, jobs stay orange. Segment + rest-of-composite + backdrop is the whole resident population, always, at every zoom the layer draws at (z8 and in).
+
+Dot density is **zoom-scaled and baked into the tiles** (Mapbox GL forbids `["zoom"]` in a filter): 1 dot ≈ 640 people at z8, ≈ 40 at z12, ≈ 5 at z15+. The panel reports the ratio for the current zoom from the legend, never a hardcoded constant, and `verify_tiles.py` proves the tiles honor it before publication.
+
+**Deduplication is measured, not assumed.** The segments overlap (a person can be carless *and* low-income *and* disabled). Published ACS tables give only marginals, so the union is derived from **Census PUMS microdata** (2020–2024 5-yr, 2,462 PUMAs), which is person-level and shows the intersections directly; each block group inherits its PUMA's overlap structure. Validated against a state→PUMA hold-out (a harsher test than PUMA→block-group): median error ~1.3% (propensity) / ~1.7% (need). The full 16-cell **joint distribution** is tabulated straight from PUMS person records per PUMA (a headcount, not an inference) and fitted by IPF to each block group's own ACS marginals, which is what lets a dot carry a *combination* of flags without reimposing independence.
+
+> **The old ×0.6 dedup factor is gone.** It appears in no published work, and measured against PUMS it was wrong by ~34% and wrong in a *geographically structured* way — the true overlap ranges from ~0.55 to ~0.95 across PUMAs, so a single constant over-counts in dense high-overlap areas and under-counts nearly everywhere else. **Renters** were also cut (no causal mechanism; 73% of carless people are renters, so tenure largely restates car access — LA Metro's own index excludes tenure for the same reason), as were **adults 18–24** (APTA: 20–24s are at parity among riders, not elevated; the college-town effect is a fare/parking-policy effect, not an age effect) and **youth under 18** (it pushed the need union to 59% of the population, making the map read like a population map). Race/ethnicity is deliberately never a predictor — that's what the Title VI panel (§2.3) is for.
+
+Resolution: TIGER block (TABBLOCK20) geometries, with ACS variables apportioned from block group → block by 2020 block population, falling back to housing units then land area where population is unusable. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) Appendix A for the build pipeline + yearly regen runbook. Public docs, with the full literature citations: [`/docs/rider-propensity/`](https://www.gtfsx.com/docs/rider-propensity/).
+
+- ⚠️ **Live in prod: `us-2026b`** — the original 3-class tileset, served at `/_demand-tiles/<archive>/{z}/{x}/{y}.pbf`. The attribute-dot rebuild (`us-2026e`) is **code-complete but unpublished**: no nationwide archive has been built and nothing is in R2 under the new name. The two-group model described above is what the *pipeline* produces; prod does not serve it yet. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) §5.
+- ✅ Toggleable map layer (`DemandDotsLayer.tsx`), flag/mode/segment vocabulary in `demandCategories.ts`, legend + zoom ladder parsed from the pipeline's `demand-legend.json` by `demandLegend.ts` (which refuses to start if the flag bits disagree with the tiles, and disables the layer with a reason when the legend is an older schema).
 - 🚫 Demand dots are **display only** — explicitly not wired into coverage / Title VI analysis. The analysis pipeline uses ACS tract centroids for apportionment to keep methodology stable.
+- ✅ **Reconciled with the Coverage panel.** `src/services/demographics.ts` dropped the old `highPropensityRiders` metric (renters ∪ zero-vehicle ∪ 18–24, ×0.6) entirely rather than keep a second, hand-mirrored model. Coverage's propensity/need figures now come from the exact census-block layer (§2.2, `blockCoverage.ts` / `us.fgb`), computed by the same PUMS estimator (`puma_union.py`) as this dot layer, so Coverage and the dot map can no longer disagree about what "high propensity" means. `/docs/demographic-coverage/` (public docs) has been brought in line with the two-group model alongside this change.
 
 ### 2.2 Demographic coverage
 
@@ -250,6 +264,7 @@ Apportioned **buffer coverage** — for the system, each route, or a single stop
 - ✅ Per-stop Coverage tab (`StopCoveragePanel`) — distance to adjacent stops on each route, plus this stop's own buffer demographics and equity shares.
 - ✅ Map overlay shading the covered block-group buffers.
 - ✅ **Network-distance walksheds (Agency+)** — `network_walksheds` feature key (Agency/Enterprise, lockstep in `planConfig.ts` + `worker/billing/plans.ts`). The Coverage panel offers a "Network walksheds (street distance)" toggle + walk-time picker (5/10/15 min ≈ ¼/½/¾ mi); free users see a disabled control with the standard upgrade link. When on, `networkWalkshed.ts` fetches a Mapbox **walking Isochrone** per distinct stop (deduped by rounded coord, in-memory cached, capped at 200 requests/analysis), unions them with `@turf/union`, and apportions block groups against the polygon (ring-sampled circle–polygon overlap) through the **same** `coverageFromFractions` summation — so demographics update identically, just with tighter geometry. Graceful fallback to the straight-line buffer (with a notice) on API error/timeout or over the request cap; the result records which geometry was used so headers/labels stay honest.
+- ✅ **Exact block-level layer (nationwide, 50 states + DC)** — `blockCoverage.ts` loads a prebuilt FlatGeobuf of one point per census block (`us.fgb`, built by `demand-dots/coverage-pipeline/`, same PUMS estimator as the dot layer) and tabulates the blocks whose centroid falls inside the walkshed, for both the system-level and per-route Coverage totals. Gives precise population/jobs/equity counts — plus block-level LODES jobs — instead of the tract-centroid disc apportionment above; falls back to it silently on any load failure (layer not deployed locally, fetch error). Surfaces the `carless`/`disability` segment counts and the `prop_all`/`need_all` propensity/need estimates alongside the equity-share table. ⚠️ The client already expects the current two-group schema and throws `CoverageLayerSchemaError` on an older one; regenerating the live `us.fgb` is a separate, manual, hours-long step — see [`ARCHITECTURE.md`](./ARCHITECTURE.md) Appendix A for status and the regen runbook.
 
 ### 2.3 Title VI equity analysis
 

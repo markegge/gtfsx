@@ -313,6 +313,89 @@ Design rationale is preserved in the decisions appendix of the archived
 - D1 `gtfs-builder` (`cfb27d4e-…`), KV (`da2476e5…`), R2 `gtfs-builder-feeds`
   + `gtfs-builder-forum-images`, tiles in `gtfs-builder-tiles`. Migrations
   **0001–0023 applied** (the line previously said 0001–0018 and had drifted).
+- **Demand-dot pipeline rebuilt to ATTRIBUTE DOTS (2026-07-13), PUBLISHED and
+  serving.** Archive `us-2026e`. This is a **tile schema change, not
+  a reissue**: a dot is now one PERSON carrying a packed flag bitmask in an
+  integer `d` attribute, and the old composite/backdrop/segment CLASSES
+  (`prop_all`, `need_all`, `backdrop_prop`, `backdrop_need`, `carless`,
+  `low_income`, `senior`, `disability`) no longer exist in the tiles at all.
+  See Appendix A. Status:
+  - Pipeline (`build_dots.py`, `joint_flags.py`, `puma_union.py`,
+    `build_puma_corrections.py`, `verify_tiles.py`, `demand-legend.json`) and the
+    frontend consumer (`demandCategories.ts`, `demandLegend.ts`,
+    `DemandDotsLayer.tsx`, `MapLayerControls.tsx`) are rewritten in the working
+    tree and **entirely uncommitted**, on branch
+    `feat/demand-dots-demographic-layers`.
+  - **A nationwide re-tile is in progress.** The prior local artifacts
+    (`tiles/mt-2026d.pmtiles` 17.0 MB, `tiles/ldjson/dots_MT.ldjson` + sidecar)
+    were from the *previous* class-per-segment schema—sidecar `archive:
+    us-2026d`, `config_hash 0aec3e55aff8` against the current `6179fb9f9380`,
+    no `code_dots` key, so `verify_tiles.py` rejects it outright as "a
+    PRE-ATTRIBUTE-DOTS sidecar"—so `build_all_states.sh` is rebuilding all 51
+    states + DC + PR from scratch, as intended. (Montana was built and
+    measured under the new schema during development at **7.3 MB**, a 2.23x
+    shrink against the 17.0 MB `us-2026d` build, but that archive is not on
+    disk.)
+  - **`us-2026e` is published** to R2 `gtfs-builder-tiles` as `us-2026e.pmtiles`
+    (1,369,832,025 bytes, uploaded 2026-07-13 via rclone — wrangler cannot, see
+    Appendix A), and verified serving HTTP 200 from prod at
+    `/_demand-tiles/us-2026e/{z}/{x}/{y}.pbf`. It passed `verify_tiles.py`:
+    every zoom carries exactly the dots the ladder promises, so the legend's
+    "1 dot = N people" is true at every zoom. `us-2026b` (the original 3-class
+    tileset, 6.6 GB) is left in the bucket as a rollback; `us-2026c` and
+    `us-2026d` were never published.
+  - Publishing still requires the tile build (piped through `--cat-verified`,
+    never a bare `cat`—see Appendix A) to pass `verify_tiles.py`, then an
+    rclone upload (wrangler hard-fails above 300 MiB; the pmtiles archive is
+    ~1.28 GiB—see the Demand-dot regen runbook in Appendix A). Do not consider
+    the redesign live until both have happened.
+- **Coverage block layer schema change — BUILT, UPLOADED, VERIFIED
+  (2026-07-13).** The new schema retires `riders` and adds `carless`,
+  `disability`, `prop_all`, `need_all` (PUMS-derived ridership-propensity /
+  transit-need unions). `coverage-pipeline/build_coverage_blocks.py` and the
+  frontend consumers (`blockCoverage.ts`, `walkshedProfile.ts`,
+  `demographics.ts`, `CoveragePanel.tsx`, `WalkshedProfileTable.tsx`) are
+  committed on branch `feat/demand-dots-demographic-layers` (unmerged).
+  Status:
+  - **The R2 key is versioned, not overwritten in place.** The client reads
+    `COVERAGE_REGION` (`src/services/blockCoverage.ts`) = `us-v2`, not a bare
+    `us`, so the nationwide rebuild shipped to a **new** object,
+    `coverage/us-v2.fgb`, leaving prod's currently-deployed old-schema client
+    reading its existing `coverage/us.fgb` untouched. This covers the
+    direction `CoverageLayerSchemaError` (below) cannot: an OLD,
+    already-deployed client reading a NEW layer would otherwise read a
+    missing `riders` column as `undefined → 0`, with no error surface,
+    because that client was built before this change existed.
+  - **The nationwide regen is done.** `build_us.py --out us-v2.fgb --jobs 4`
+    ran to completion, and `us-v2.fgb` was uploaded to
+    `gtfs-builder-tiles/coverage/us-v2.fgb` via **rclone**, not wrangler—
+    wrangler hard-fails above 300 MiB ("Wrangler only supports uploading
+    files up to 300 MiB in size") and the file is ~1.7 GiB, so `wrangler r2
+    object put` has never been able to upload it. See the Coverage-layer
+    regen runbook in Appendix A and
+    `demand-dots/coverage-pipeline/README.md`'s "Host it" section for the
+    exact command (`--s3-no-check-bucket` is required, or the R2 token—
+    scoped to object read/write only—gets a 403 trying to `CreateBucket`).
+  - **Verified serving from prod:** `/_coverage/us-v2.fgb` returns **HTTP
+    206** (range request against the uploaded FlatGeobuf), confirmed against
+    the bucket listing (`rclone lsl r2:gtfs-builder-tiles/coverage/`), not
+    just the upload command's exit code—a piped `rclone … | tail` reports
+    `tail`'s exit status, not rclone's, so that distinction mattered today.
+  - **`coverage/us.fgb` (the old schema) is untouched** and is the rollback:
+    prod's currently-deployed client still reads it exclusively until the
+    client change (`COVERAGE_REGION = 'us-v2'`) merges and deploys.
+    `loadBlocksInBbox()` throws `CoverageLayerSchemaError` if a served `.fgb`
+    ever lacks the union columns, so a stale/old layer degrades to the
+    block-group path (counts only, no propensity/need estimate) rather than
+    rendering `prop_all` as a confident `0`.
+  - **The old layer also under-counted.** Independent per-column rounding in
+    the apportionment destroyed rare attributes: measured on Montana, the
+    live `coverage/us.fgb` is short **-10.2% of zero-vehicle households** (a
+    Title VI equity numerator) and **-5.7% of carless residents**. Fixed with
+    largest-remainder apportionment; `us-v2.fgb` carries the fix, but it only
+    reaches prod once the client redeploys reading the new key.
+  - Once prod is confirmed running the client that reads `us-v2`, the old
+    `coverage/us.fgb` object may be deleted from R2.
 - **GTFS-Realtime Service Alerts (BE-90..93)** live since 2026-05-30 — Agency+
   authoring under `/api/projects/:id/alerts`, public serving at
   `feeds.*/<slug>/alerts.pb` + `/alerts.json`.
@@ -633,38 +716,736 @@ The product backlog (undeveloped features) lives in GitHub issues
 
 ---
 
-## Appendix A — Demand-dot tiles: yearly regen runbook
+## Appendix A — Census data layers: yearly regen runbook
 
-The nationwide demand-dot layer (`us-2026b` archive in `gtfs-builder-tiles`,
-served at `/_demand-tiles/<archive>/{z}/{x}/{y}.pbf`, wired into
-`DemandDotsLayer.tsx`) is regenerated manually once a year (~January, after the
-December ACS 5-year release). Display-only; not wired into the analysis pipeline.
+Two prebuilt layers come out of `demand-dots/`, both fed by ACS + TIGER + LODES
+and both regenerated once a year (~January, after the December ACS 5-year
+release):
+
+| Layer | Builder | Output | Served as |
+|---|---|---|---|
+| **Demand dots** (display-only; not wired into the analysis pipeline) | `demand-dots/build_dots.py` | `<archive>.pmtiles` in `gtfs-builder-tiles` | `/_demand-tiles/<archive>/{z}/{x}/{y}.pbf`—the archive name is read out of the committed `demand-dots/demand-legend.json` (`demandLegend.ts`), not hardcoded in `DemandDotsLayer.tsx`; current schema `us-2026e`, prod still serving `us-2026b` (see §5) |
+| **Coverage blocks** (exact block-level counts behind the Coverage panel) | `demand-dots/coverage-pipeline/` (`build_coverage_blocks.py` per state, `build_us.py` to drive + merge) | `<region>.fgb` FlatGeobuf, `<region>` versioned per schema (`COVERAGE_REGION` in `blockCoverage.ts`; currently `us-v2`, prod still serving the old-schema `us` — see §5) | `/_coverage/<region>.fgb`, bbox range-reads |
+
+### The ACS vintage is not a manual bump any more
+
+`demand-dots/acs_vintage.py` probes `api.census.gov/data/<year>/acs/acs5`
+downward from an impossible year and takes the newest release that answers. Both
+builders call it, and it emits the same year into `src/generated/acsVintage.ts`,
+which `src/services/demographics.ts` imports. That generated file is **committed**
+— the Vite build imports it, and it is what guarantees the running app and the
+prebuilt tiles can never disagree about which ACS release they are on. The
+frontend does no runtime probing and pays no extra request.
+
+So there is nothing to edit for a new ACS year. Just regenerate the constant:
+
+```bash
+cd demand-dots && ./.venv/bin/python acs_vintage.py --emit   # rewrites src/generated/acsVintage.ts
+```
+
+The TIGER year (`TIGER_YEAR`) and the LODES probe start are still literals in
+both builders; check them when TIGER publishes a new vintage.
+
+### Connecticut is pinned, on purpose
+
+`ACS_YEAR_BY_STATE = {"09": 2021}` in **both** builders. Connecticut swapped its 8
+counties for 9 planning regions as county-equivalents in ACS 2022+ (county codes
+110-190), but TIGER `TABBLOCK20` still codes CT blocks with the old counties
+(001-015). Since both builders apportion ACS block groups down to TIGER blocks by
+12-char GEOID prefix, a current-vintage CT block group prefix-matches nothing and
+the state silently produces zero population records. ACS 2021 still uses the old
+county codes and joins cleanly, so CT builds one year behind. CT is the only state
+affected. Retire the pin only when TIGER re-codes `TABBLOCK20` onto planning
+regions — and retire the separate CT workaround in `public/census/TR09.txt` at the
+same time (see `public/census/README.md`; that file has the *opposite* problem,
+because the app joins ACS to tract centroids rather than to blocks).
+
+### ATTRIBUTE DOTS: one dot = one person, carrying a flag bitmask (`us-2026e`)
+
+**There are no dot classes any more.** The tiles carry ONE integer attribute,
+`d`, on every feature in the single `demand` source-layer:
+
+| `d` | meaning |
+|---|---|
+| `0`–`15` | a **person**, as the bitwise OR of their four membership flags: **1** carless (`B25044`), **2** low_income (`C17002`), **4** senior (`B01001`), **8** disability (`C21007`). `0` = none of the four; `15` = all four. |
+| `16` | a **job** (LODES WAC C000). A workplace universe — never deduped against, mixed into, or drawn from the residential population. Its own code, its own color, forever. |
+
+The composites are **evaluated at render time from the flags**, and exist
+nowhere in the tiles:
+
+```
+propensity composite = carless OR low_income
+need composite       = carless OR low_income OR senior OR disability
+```
+
+`prop_all`, `need_all`, `backdrop_prop`, `backdrop_need`, `carless`,
+`low_income`, `senior` and `disability` were all tile CLASSES in `us-2026d` and
+earlier. **They are gone.** A `us-2026d` tile has a string `class`; a `us-2026e`
+tile has an integer `d`. The two share not one attribute name or value, which is
+why the archive name had to move (`TILESET_ARCHIVE` in `build_dots.py`).
+
+#### Why: the old schema drew a quarter of the population NOWHERE
+
+The class-per-segment schema emitted a separate dot per (person, class) pair —
+about **2.65 dots per person** — plus a backdrop computed as
+`population − composite`. So with the **Carless** segment selected the map drew:
+
+```
+carless (blue)  +  population − (carless ∪ low_income) (gray)
+```
+
+Look at what is missing. The backdrop was population minus the *composite*, not
+population minus the *selection*, so the low-income-but-not-carless people —
+**24.6% of the population** — were drawn nowhere at all. Nothing was
+double-counted, so every disjointness invariant passed; a quarter of the town
+simply vanished, and a planner reading gray as "everyone else" was misled.
+
+With flags on the dot the UI **recolors instead of reclassing**, and the roles
+partition the population by construction:
+
+| role | who | color |
+|---|---|---|
+| segment | the flag you selected (or the whole composite, with **All**) | strong blue `#2563eb` |
+| composite | in the mode's composite, but NOT the selected flag | muted blue `#60a5fa` |
+| backdrop | in neither | gray `#9ca3af` |
+| jobs | `d == 16` | orange `#f97316` |
+
+`segment ∪ composite ∪ backdrop == every population dot, always.` Every person
+is drawn **exactly once in every view**. Double-counting and vanishing are now
+STRUCTURAL impossibilities rather than properties maintained by careful
+bookkeeping — there is no representation of "the same person twice" left in the
+tiles. `demandCategories.roleForCode()` is the whole model in one function, and
+a test walks all 16 codes × every selection to prove no population code is ever
+undrawn.
+
+Two more things fell out of this for free:
+
+- **2.23x smaller tiles.** One dot per person instead of ~2.65 (Montana:
+  17.0 MB → 7.3 MB).
+- **Segments work at z8.** The old schema held the four segment classes back to
+  `OVERLAY_MINZOOM = 9` because they were extra dots competing for the tile
+  budget, so picking "Carless" while zoomed out drew *nothing*. A flag is not an
+  extra dot — it rides on a person who is in the z8 tile anyway — so there is no
+  per-class minzoom left to gate anything.
+
+#### Packing, and why the frontend enumerates
+
+`d` is a single packed integer rather than four boolean properties on purpose: in
+the MVT wire format each property costs a (key index, value index) varint pair,
+so four booleans cost ~4x what one small integer does, per feature, across ~200M
+features.
+
+The cost of packing is that **Mapbox GL expressions have no bitwise operators** —
+the frontend cannot ask for "dots where bit 1 is set". It does not have to: the
+set of codes matching any predicate over 4 flags is at most 16 literals, so
+`demandCategories.ts` **enumerates** them into an `['in', …]` filter and a
+`['match', …]` color. Those enumerations are built from bit values that
+`demandLegend.ts` verifies against the pipeline's own `demand-legend.json` at
+import, and **throws** on mismatch. That check is not decoration: a wrong bit
+value does not break the map, it silently colors the *wrong people*, plausibly,
+forever.
+
+`demand-legend.json` (emitted by `build_dots.py --emit-legend`, committed) is the
+single source of truth for the flag bits, the jobs code, the archive name, the
+zoom envelope and the zoom→density ladder. Never hardcode any of them in the UI.
+`MapLayerControls.tsx` renders `1 dot ≈ {ratio} {unit}` computed live per role
+and per zoom (`perDotAtZoom`), not a hardcoded string. When the legend is an
+older schema entirely (no `flags`/`attribute` key), `demandLegend.ts` returns
+`stale` and disables the layer with a reason rather than crashing or drawing a
+plausible-looking empty map.
+
+Race/ethnicity is deliberately NOT a flag: it isn't a transit-propensity
+predictor, using it as one is ethically fraught, and the Title VI equity
+panel (fed by the coverage pipeline, which does fetch B03002) already serves
+that need properly. Don't add a minority flag.
+
+### The union is measured, not invented
+
+A dot is a PERSON, so `prop_all` and `need_all` have to be UNIONS, not sums—a
+carless, low-income senior is ONE dot, not three. The old pipeline
+solved this by summing the marginals and multiplying by an invented 0.6.
+That constant is gone. `puma_union.py` now supplies an estimator built from
+actual PUMS microdata:
+
+```
+indep     = pop * (1 - Π(1 - share_i))       independence backbone
+union_hat = clamp(c(PUMA) * indep, lo, hi)   c() measured from PUMS, Fréchet-clamped
+```
+
+`c(PUMA)` (the correction on the independence backbone) and the
+zero-vehicle-household→person scale both come from
+`demand-dots/data/puma_corrections.csv` (2,462 PUMAs), which is **baked
+into the repo**—`build_dots.py` reads it and never touches PUMS at build
+time. Regenerate it with `build_puma_corrections.py` (a ~1.2 GB, 51-state
+PUMS pull—slow) only when the ACS vintage rolls over; the overlap
+structure it measures is stable year to year, so this is not a per-regen
+step. Hold-out validation (fit on the state, predict its PUMAs, score
+against PUMS truth): 1.66% MAPE for `prop`, ~2% for `need`, against 34% for
+the old ×0.6.
+
+Dropping the composite CLASSES did not drop the composite NUMBERS. `prop_all` and
+`need_all` are still computed exactly as before; they are simply **constraints on
+the flag fit** now (below) rather than classes of their own.
+
+`puma_union.reconcile()` is the mandatory, idempotent choke point: it clips each
+union to its Fréchet bounds and re-derives the backdrops as `pop − union`. It runs
+at BLOCK-GROUP level, on the raw estimate. It no longer needs a second pass after
+apportionment: a block's 16 flag cells are its block group's cells times one
+scalar weight, so the block's marginals, both unions and the backdrop are all
+roll-ups of a REAL SET SYSTEM and every invariant holds **by construction rather
+than by clamping**. The build still asserts them over every block of every state
+(`check_invariants(atol=1e-6)` — the `atol` is a float-noise allowance, nothing
+more). Running `reconcile()` again on its own output is a no-op by design.
+
+#### BUG FIXED — the Fréchet upper bound on `need_all` was WRONG. Do not revert it.
+
+The obvious bound is Fréchet over all four marginals, `min(Σm, pop)`. It is **not
+tight**, and the slack is not harmless:
+
+```
+need = prop ∪ (senior ∪ disability)
+     ⇒ |need| ≤ |prop| + |senior| + |disability|
+```
+
+because the only people `need` can ADD to `prop` are seniors and disabled people.
+`Σm = carless + low_income + senior + disability` can exceed
+`prop_all + senior + disability` by exactly `min(carless, low_income)` — the
+carless ∩ low_income overlap that `prop_all` already deduplicated. Bounding `need`
+by `Σm` therefore let `need_all` be clamped to a number **that counts that overlap
+twice, and that no set system on earth realizes.**
+
+The correct bound, now in `reconcile()`:
+
+```python
+need_hi = np.minimum(prop_all + senior + disability, pop)
+```
+
+(It subsumes `min(Σm, pop)`, since `prop_all ≤ carless + low_income` always.)
+
+Under the old class-per-segment schema this was **invisible**: `need_all` was just
+a count, nothing cross-checked it against the others, and every disjointness
+invariant still passed. Under attribute dots it is **fatal and loud**, because
+`need_all` is a feasibility constraint on the 16-cell IPF and the fit simply
+cannot converge on an infeasible system. That is how it was found. The schema made
+a latent arithmetic lie impossible to hold.
+
+### The JOINT is measured too: 16 cells per PUMA, IPF'd onto each block group
+
+Attribute dots pose a question the class schema never had to answer: **for THIS
+dot, which combination of the four flags is it in?** Four flags = 16 combinations,
+and the ACS publishes marginals at block group and *no joint distribution below
+PUMA*.
+
+Rolling each flag independently at its marginal rate would silently reimpose the
+very independence assumption `c()` exists to remove (nationally it inflates the
+union by ~10%). So:
+
+1. **Tabulate, don't infer.** `build_puma_corrections.py` counts all 16 cells
+   directly from PUMS *person* microdata, weighted by `PWGTP`, per PUMA →
+   `data/puma_joint.csv` (2,463 rows: 2,462 PUMAs + a pooled `__default__`). This
+   is a **headcount of the joint**, not an estimate: the person file knows every
+   person's true combination.
+2. **Fit, don't impose.** `joint_flags.fit()` IPFs that PUMA seed onto each block
+   group's own six constraints — the four ACS marginals plus both PUMS-derived
+   unions — so:
+
+   ```
+   Σ cells with flag f    == the block group's ACS marginal for f
+   Σ cells with any flag  == its need_all      (nobody vanishes)
+   Σ all 16 cells         == its total_pop     (nobody is invented)
+   ```
+
+   IPF converges to the distribution satisfying every constraint while staying as
+   close as possible to the seed, which is exactly what is wanted: reproduce the
+   block group's own ACS numbers exactly, and where the ACS is silent (the joint
+   structure) inherit the PUMA's *measured* correlations rather than invent
+   independence.
+
+**Fit at BLOCK GROUP, not at block.** The block group is the geography the ACS
+actually publishes: its marginals are DATA. A block's marginals are an artifact of
+our own apportionment, so fitting a joint to them would be fitting to our own
+rounding. It is also ~150x fewer rows, which is what makes a tight tolerance
+affordable. The joint is then apportioned DOWN to blocks.
+
+#### Honest limits of the joint (state these; do not quietly drop them)
+
+- **The correlation structure is assumed uniform WITHIN a PUMA** (~100k people).
+  The marginals do all the local work. This is an assumption — the same *class* of
+  assumption `c()` already makes, but far weaker than independence, and it is the
+  strongest thing the published data supports. **Block-group joint distributions
+  do not exist in any public product**, so it cannot be validated at that scale by
+  us or anyone.
+- **Where a block group's marginals are extreme relative to its PUMA, IPF drifts a
+  long way from the seed.** It still hits the marginals exactly; it is the residual
+  *correlation* that degrades toward whatever the marginals force.
+- **50 of the 2,463 PUMA rows have at least one empty cell** (nobody in that PUMA
+  is, say, carless + disabled + not-poor + under-65). IPF cannot move mass into a
+  zero cell, so the seed is floored at `SEED_FLOOR = 1e-9` of a geography's
+  population before fitting. **That floor is the only invented number in the
+  module**, and it exists so the fit is always feasible rather than silently
+  stalling.
+- Convergence tolerance is ABSOLUTE, in people (`TOLERANCE_PEOPLE = 0.05`), not
+  relative — a relative tolerance would demand the most precision exactly where
+  the numbers are smallest and arithmetic has already forced the answer. The build
+  **raises rather than shipping** an unconverged fit.
+
+`joint_flags.py` has no RNG anywhere: same inputs → same cells, bitwise.
+
+National (population-weighted) values, used only as the fallback default—
+every build uses the PUMA-specific row:
+
+| value | measured | old pipeline used instead | error corrected |
+|---|---|---|---|
+| persons per zero-vehicle household | 1.802 | ~2.43 (block group's average household size) | ~35% overcount of `carless` |
+| c_prop (carless ∪ low_income) | 0.9485 | 1.0, implicit (summed the marginals) |—|
+| c_need (+ senior + disability) | 0.9085 | 1.0, implicit |—|
+
+Puerto Rico publishes no PUMS person file, so its PUMAs fall back to this
+national default row (and to the pooled `__default__` joint row) rather than a
+measured one—its carless/poverty structure is unlike the mainland's, so its dot
+counts are lower-confidence than any state with its own measured PUMA rows.
+
+### Zoom ladder: density is baked into the tiles, and the stride must be the ONLY thinning
+
+There is one grain, `PEOPLE_PER_DOT = 5`, for the whole population universe,
+because a population dot is a PERSON and people do not come in grains. (The old
+schema had a `per_dot` per class and had to be kept uniform by hand or the map
+lied about relative density.)
+
+"1 dot = N people" instead varies with **zoom**, via `ZOOM_DENSITY_LADDER`:
+
+| zoom | stride | 1 dot = |
+|---|---|---|
+| 8 | 128 | 640 people |
+| 9 | 64 | 320 |
+| 10 | 32 | 160 |
+| 11 | 16 | 80 |
+| 12 | 8 | 40 |
+| 13 | 4 | 20 |
+| 14 | 2 | 10 |
+| 15 | 1 | **5** (full density; overzoomed at z16+) |
+
+This has to be baked into the tiles at build time: **Mapbox GL forbids `["zoom"]`
+inside a filter expression**, so there is no client-side way to say "draw every
+128th dot at z8". Each dot carries a per-CODE running ordinal, and the ordinal's
+slot sets a per-feature `tippecanoe: {minzoom}`. The strides form a nesting chain
+(each divides the one before it, asserted at import by `_validate_ladder()`), so
+the z8 dots are a SUBSET of the z9 dots and a dot never pops out of existence as
+you zoom in. Striding **per code** is what keeps the flag mix intact: every cell is
+thinned by the same factor, so the z8 sample has the same carless share as the z15
+one.
+
+**Why these numbers.** The ladder is sized against the DENSEST TILE IN THE COUNTRY
+(Manhattan/Midtown), not a comfortable one, so that no tile ever exceeds the
+byte/feature caps and `--drop-densest-as-needed` never has to fire. The cost is
+real and worth stating: full density (1:5) now arrives at **z15 rather than z12**.
+If the ladder is ever retuned, retune it against the same measurement and re-run
+`verify_tiles.py`.
+
+#### BUG FIXED — tippecanoe's default `--drop-rate=2.5` was silently decimating the low zooms
+
+`--drop-rate` is a **global geometric thinning** applied below `--base-zoom` in
+every tile, everywhere. It has nothing to do with tile size, and the legend knew
+nothing about it. With the old `--base-zoom=12` it kept only `1/2.5^(12-z)` of any
+feature that had no explicit per-feature minzoom. Measured over a fixed Missoula
+footprint: **the z8 tiles carried 2% of what the legend claimed** (1 dot ≈ 1,850
+people, not the advertised 40).
+
+The build is now generated from constants by `build_dots.tippecanoe_command()` so
+the runbook cannot hand-type a flag that disagrees with the legend:
+
+```
+./.venv/bin/python build_dots.py --cat-verified '../tiles/ldjson/*.ldjson' \
+  | tippecanoe --output=../tiles/us-2026e.pmtiles \
+    --layer=demand --minimum-zoom=8 --maximum-zoom=15 \
+    --drop-rate=1 --base-zoom=8 \
+    --maximum-tile-bytes=1500000 --maximum-tile-features=300000 \
+    --drop-densest-as-needed \
+    --read-parallel --force
+```
+
+- `--drop-rate=1` — no dropping. `--base-zoom` is pinned to `TILE_MIN_ZOOM` as
+  well, so there is no zoom below base zoom for a drop rate to apply to even if
+  someone changes it back.
+- **`--extend-zooms-if-still-dropping` is GONE.** It silently extended the pyramid
+  past `--maximum-zoom` whenever tiles were still dropping, which is where the
+  phantom "z16" came from. The ladder is now sized so nothing drops, which makes
+  the built maxzoom deterministic and equal to `TILE_MAX_ZOOM = 15`.
+- `--drop-densest-as-needed` is kept as a **safety net only**. The ladder is sized
+  so it never fires, and `verify_tiles.py` fails the build if it ever does.
+
+#### CRITICAL: the input is piped through `--cat-verified`, NEVER a bare `cat`
+
+A bare `cat ../tiles/ldjson/*.ldjson | tippecanoe …` is wrong in two ways, both
+found the hard way in production, and either alone is enough to block a
+publish:
+
+- **It bypasses the staleness gate.** `--cat-verified` checks every input's
+  `.meta.json` sidecar against the pipeline's current `config_hash` before it
+  emits a single byte, and refuses outright if any input is missing its
+  sidecar, unreadable, pre-attribute-dots, or built under a different config
+  (`validate_tile_inputs()`/`StaleInputError` in `build_dots.py`). Fifty-two
+  leftover `.ldjson` files from a previous schema are exactly the kind of thing
+  a bare `cat` would happily splice into a tileset that comes out internally
+  consistent and entirely wrong—with no error raised anywhere, because once
+  the bytes are concatenated no downstream check can tell a stale state from a
+  fresh one.
+- **It re-phases the zoom ladder across the whole stream, and a bare `cat`
+  reintroduces a real dot bias.** Each dot's per-feature `minzoom` comes from
+  its code's running ordinal, taken modulo the ladder's period (128, the z8
+  stride)—see `restride_lines()`. That ordinal has to run across the ENTIRE
+  archive, not restart per state, or every state's z8 slot (ordinal 0, the
+  rarest rung) rounds its count up by an extra dot, and the ~0.5-dot excess per
+  code accumulates once per state. `--cat-verified` does this re-phasing at
+  concatenation time, the one point where the whole archive exists as a single
+  stream. A bare `cat` leaves each of the 52 states' ordinals restarting at
+  zero: measured on the real archive, `carless+disability` (121,221 dots)
+  carried 28 extra dots at z8 against an expected 947—**+2.9%**, six times
+  `verify_tiles.py`'s 0.5% tolerance—and it hits the rarest codes hardest, at
+  the lowest zooms only, which is exactly the signature a bare `cat` produces.
+
+Both failures produce a tileset that **passes casual inspection**—it renders,
+it looks internally consistent, the totals are plausible—**and fails
+verification**. Do not "simplify" the generated command back to a bare `cat`;
+that is precisely the bug this flag exists to close.
+
+The mandatory verify step—an archive that fails it must not be published:
+
+```
+./.venv/bin/python verify_tiles.py ../tiles/us-2026e.pmtiles \
+  --meta '../tiles/ldjson/*.ldjson.meta.json' --legend demand-legend.json
+```
+
+#### CRITICAL: EVERY feature carries an explicit minzoom—do not revert this
+
+`iter_dot_features()` stamps `tippecanoe: {minzoom}` on **every dot, always**, even
+when the value equals `TILE_MIN_ZOOM`. A feature with no explicit minzoom is one
+tippecanoe feels free to thin with its own `--drop-rate`; the dots in the z8 slot
+are exactly the ones that used to go unstamped, which is precisely why they were
+the ones getting decimated (2% survived) while the rest of the ladder came through
+fine. Stating the minzoom on every feature makes the ladder the only thing that
+decides what a tile carries.
+
+There is **no per-class minzoom** any more (`OVERLAY_MINZOOM` is gone with the
+classes). A flag rides on a person who is in the z8 tile on their own merits.
+
+#### `verify_tiles.py` is MANDATORY after every build
+
+```bash
+./.venv/bin/python verify_tiles.py ../tiles/us-2026e.pmtiles \
+  --meta '../tiles/ldjson/*.ldjson.meta.json'
+```
+
+It re-decodes the built archive and proves **retained == emitted**, per zoom and
+per CODE, against what the ladder promises — attributing every feature to the one
+tile its coordinates actually fall in, so the tile buffer's ~7% duplicates are not
+counted twice. It also checks the archive's own zoom header against the legend and
+the pipeline, and the legend's flag bits and jobs code against the pipeline's.
+
+Nothing caught the `--drop-rate` bug for an entire release because **nothing ever
+compared what went in to what came out**. A pass means the legend's "1 dot ≈ N" is
+true by measurement, not by hope. If it fails, the legend is lying: fix the build,
+do not publish.
+
+It has already earned its keep twice. The second catch:
+
+> **zsh gotcha — an unquoted `$FLAGS` variable does NOT word-split.** A build that
+> assembled the tippecanoe flags into a shell variable and passed it unquoted had
+> them silently ignored, and tippecanoe fell back to its defaults (z0–14, drop-rate
+> 2.5). Everything looked fine. `verify_tiles.py` caught it. **Without it, a wrong
+> archive would have shipped quietly.** Use the generated command
+> (`build_dots.py --emit-tile-cmd`) verbatim; do not template the flags through a
+> variable.
+
+The legend's stated "1 dot = N people" is now **true within ±3% at every zoom**,
+verified by counting rendered dots.
+
+### Apportionment: it now rounds ONCE, and NOT with largest-remainder
+
+`APPORTION_VERSION = 3`. There used to be two rounding steps and they compounded.
+Now there is one.
+
+**Block group → block is an EXACT FLOAT split.** `apportion_state_dots()` multiplies
+the block group's 16 flag cells by one scalar weight per block (`POP20` →
+`HOUSING20` → `ALAND20` → even split). Nothing rounds there at all. That is what
+makes every invariant hold exactly: a block's cells are non-negative, sum to the
+block's population, and the weights sum to 1 within each block group, so the
+state's totals come back to the ACS totals EXACTLY. (The old code apportioned each
+*marginal* to integers here — needed only because a dot count was then derived per
+class, per block.)
+
+**The one rounding step is a block's dot budget across its 16 cells** — and
+largest-remainder is BIASED there. Do not put it back.
+
+Largest-remainder (Hamilton) is right for apportioning ONE quantity across MANY
+units: the remainders vary from unit to unit, so over a state the leftovers land
+fairly. It is **wrong** for splitting one block's dots across 16 cells whose shares
+are FIXED and wildly unequal, because then the same cells are small in *every*
+block and they lose the leftovers *every* time. A block of 125 people gets 25 dots;
+the no-flags cell (~55%) wants 13.75 and the carless-only cell (~1.7%) wants 0.42.
+Floors hand out 13 and 0; 0.75 beats 0.42 in that block, and in the next block, and
+in every block, forever. The rare cells are systematically starved.
+
+Measured on Gallatin County, with largest-remainder here:
+
+| flag | error |
+|---|---|
+| carless | **−50.7%** |
+| disability | **−31.9%** |
+| senior | −10.0% |
+| low_income | −6.6% |
+
+Every flag under-counted, the rarest ones catastrophically — a map whose "Carless"
+layer draws half the carless people it claims. **Every total balanced perfectly,
+which is exactly why it would have shipped.**
+
+`_apportion_dots()` now uses **systematic (Cox) randomized apportionment**: walk the
+cumulative wanted-dots line and cut it at integer boundaries offset by one seeded
+uniform draw.
+
+```python
+cum   = cumsum(shares × budget)          # ends exactly at budget
+out_c = floor(cum_c - u) - floor(cum_{c-1} - u)
+```
+
+Each cell gets `floor(v_c)` or `ceil(v_c)`, with the fractional part decided by
+where the cut lands, so `E[out_c] = v_c` **exactly** — no cell is ever
+systematically rounded down. The cuts are shared across all 16 cells rather than
+drawn independently, so the budget still comes back exact AND the variance is far
+below an independent multinomial draw.
+
+### Rounding a block's count into dots: stochastic is the default (densifies rural areas)
+
+This is the step *upstream* of the 16-cell split above: turning a block's
+POPULATION into a dot budget at all.
+
+The old `count // per_dot` floor division silently discards each block's
+remainder. The loss is proportional to `per_dot` and inversely proportional
+to block size, so it hits rural, sparse blocks hardest—measured on the
+old 3-class `us-2026b` build, Montana's `high` class (now retired; 1:5)
+shipped 24% under-drawn: 43,173 dots where 57,042 was correct, while dense
+Massachusetts was off by only about 5%.
+
+The default is now stochastic rounding (`--rounding stochastic`,
+`iter_dot_features()`): a block's budget is `floor(q) + 1` with probability
+`frac(q)`, so the dot count is correct in expectation for every block and
+"1 dot = N" holds nationwide, not just in dense areas. It draws from its own
+RNG stream (seed 1337, separate from the placement RNG's seed 42), so
+placement of whatever dots do get drawn is unaffected.
+
+**This will visibly densify rural areas relative to `us-2026b`**—that's
+the under-draw being corrected, not a bug. `--rounding floor` reproduces
+the old (biased) output exactly, if that's ever wanted for an A/B or a
+rollback.
+
+### build_all_states.sh: don't revert the fingerprint check
+
+`demand-dots/build_all_states.sh` used to skip any existing non-empty
+`dots_{ST}.ldjson`, on the assumption a present file meant "already built."
+That broke the moment the class vocabulary changed: a partial nationwide
+rebuild would silently keep the old 3-class `.ldjson` for any state it
+hadn't reached yet and `cat` it together with freshly-built files from the
+new vocabulary—producing a tileset with the new classes present in some
+states and missing in others, with no error raised anywhere.
+
+It now fingerprints the full config (flag bits, jobs code, per-universe density,
+zoom-density ladder, ACS variable list, PUMS corrections **and** joint tables,
+apportionment version, tile zoom envelope—`config_hash()` in `build_dots.py`) into
+each state's `.meta.json` sidecar, and only skips a state if the sidecar's
+`config_hash` matches the current script's. Any change to the flags, to
+`ZOOM_DENSITY_LADDER`, to `ACS_VARS`, or a `puma_corrections.csv` /
+`puma_joint.csv` regen invalidates every sidecar and forces a full rebuild on the
+next run. Keep this check—do not restore "skip if the file exists."
+
+**As of 2026-07-13 the current fingerprint is `6179fb9f9380` and NO state matches
+it.** Every `.ldjson` on disk is pre-attribute-dots (the newest, `dots_MT.ldjson`,
+carries `0aec3e55aff8` / `archive: us-2026d`), so the next run rebuilds all 51
+states + DC + PR. `verify_tiles.py` independently refuses any sidecar without a
+`code_dots` key, so a stale one cannot slip into a verification pass either.
+
+### Demand-dot regen
 
 ```bash
 # Prereqs: uv, tippecanoe (brew install tippecanoe), CLOUDFLARE_API_TOKEN with R2 Object Write, CENSUS_API_KEY
 cd /Users/clippy2/proj/gtfsx
-YEAR=2027; ACS_YEAR=2025
-rm -rf demand-dots/cache/*                        # 1. clear cache
-# 2-3. bump ACS_YEAR and the TIGER year in demand-dots/build_dots.py
-mkdir -p tiles/ldjson                              # 4. build all states (≤4 parallel)
-for st in AL AK AZ … WY PR; do
-  (cd demand-dots && uv run python build_dots.py --state $st --output ../tiles/ldjson/dots_$st.ldjson --ldjson) &
-  while [ $(jobs -rp | wc -l) -ge 4 ]; do sleep 5; done
-done; wait
-cat tiles/ldjson/*.ldjson | tippecanoe --output=tiles/us-${YEAR}.pmtiles \
-  --layer=demand --minimum-zoom=4 --maximum-zoom=15 \
-  --drop-densest-as-needed --extend-zooms-if-still-dropping --base-zoom=12 --read-parallel --force   # 5
-npx wrangler r2 object put gtfs-builder-tiles/us-${YEAR}.pmtiles --file=tiles/us-${YEAR}.pmtiles \
-  --remote --content-type=application/vnd.pmtiles --cache-control="public, max-age=31536000, immutable"  # 6
-# 7. bump the ARCHIVE constant in src/components/map/DemandDotsLayer.tsx, commit, push (CI deploys)
-# 8. verify: toggle the layer, spot-check 3 metros. 9. (later) delete the prior year's pmtiles.
+# 1. if the tile SCHEMA or the density/zoom config changed, bump TILESET_ARCHIVE
+#    in demand-dots/build_dots.py (e.g. us-2026d -> us-2026e)—it is a literal in
+#    code, not a shell variable; the tiles and demand-legend.json always ship
+#    under whatever name is baked in there.
+(cd demand-dots && ./.venv/bin/python acs_vintage.py --emit)   # 2. refresh the ACS vintage constant
+# 3. check TIGER_YEAR in demand-dots/build_dots.py against the newest TIGER release
+(cd demand-dots && ./build_all_states.sh)          # 4. build all states (≤4 parallel, resumable,
+                                                    #    fingerprinted—also regens demand-legend.json).
+                                                    #    No manual cache clear needed: the ACS cache
+                                                    #    filename already folds in the vintage, the
+                                                    #    derived columns and the PUMS-table hash, so a
+                                                    #    stale cache from a different config just can't
+                                                    #    be reused (rm -rf demand-dots/cache/* is only
+                                                    #    for reclaiming disk).
+
+# 5. TILE. Do NOT retype this and do NOT copy an older one out of a runbook: the
+#    command is GENERATED from build_dots.py's zoom + ladder constants, which are
+#    the same constants the per-feature minzooms and the legend come from. Paste it
+#    verbatim — piping it through an unquoted shell variable does NOT word-split in
+#    zsh, so tippecanoe silently ignores every flag and falls back to its defaults.
+(cd demand-dots && ./.venv/bin/python build_dots.py --emit-tile-cmd)   # then run what it prints
+
+# 6. VERIFY — MANDATORY. Proves retained == emitted per zoom and per code, i.e.
+#    that the legend's "1 dot = N people" is what the map actually draws. If this
+#    fails, the legend is lying: fix the build, do NOT publish.
+(cd demand-dots && ./.venv/bin/python verify_tiles.py ../tiles/us-2026e.pmtiles \
+   --meta '../tiles/ldjson/*.ldjson.meta.json')
+
+ARCHIVE="$(cd demand-dots && ./.venv/bin/python -c 'import build_dots; print(build_dots.TILESET_ARCHIVE)')"
+# 7. UPLOAD via rclone, NOT wrangler. wrangler hard-fails above 300 MiB
+#    ("Wrangler only supports uploading files up to 300 MiB in size") and the
+#    pmtiles archive is ~1.28 GiB, so `wrangler r2 object put` cannot do this
+#    upload (same ceiling that blocks the coverage .fgb—see "Coverage-layer
+#    regen" below and coverage-pipeline/README.md "Host it"). rclone is already
+#    configured with an `r2:` remote. `--s3-no-check-bucket` is REQUIRED:
+#    without it rclone calls CreateBucket first, and the R2 token (object
+#    read/write only) returns 403 AccessDenied on that call—not on the upload,
+#    which is misleading if you don't already know the flag is missing.
+rclone copyto "tiles/${ARCHIVE}.pmtiles" "r2:gtfs-builder-tiles/${ARCHIVE}.pmtiles" \
+  --s3-no-check-bucket --s3-chunk-size 64M --s3-upload-concurrency 4
+# Verify against the bucket, not the exit code—a piped `| tail` reports tail's
+# exit status, not rclone's, so a failed upload can still report success:
+rclone lsl r2:gtfs-builder-tiles/ | grep "${ARCHIVE}.pmtiles"
+# 8. commit demand-dots/demand-legend.json (it names the archive the frontend fetches,
+#    and carries the flag bits every client-side filter is enumerated from)
+#    alongside any TILESET_ARCHIVE bump, and push—CI deploys. No DemandDotsLayer.tsx
+#    edit needed: it reads the archive name from the committed legend
+#    (demandLegend.ts), with VITE_DEMAND_TILES_ARCHIVE as a build-env override for
+#    pointing a dev/staging build somewhere else.
+# 9. verify in-browser: toggle the layer, spot-check 3 metros, pick a segment at z8
+#    (it must draw — the old schema drew nothing there). 10. (later) delete the
+#    prior archive's pmtiles.
 ```
 
-Sanity checks: total dots within ~5% YoY; file size within ~10%. Known
-breakages: LODES lags ACS ~1 yr (label only); TIGER block system changes every
-decennial (next 2030); validate ACS variable IDs still return data; bump
-`LODES_BASE` if LODES9 ships. Full decision log preserved in the archived
-`demand-dots-nationwide-plan.md`.
+Other CLI notes: the class-selection flag is now **`--universes`** (`population`,
+`jobs`); there are no classes to select. `--emit-legend PATH` writes the legend and
+exits.
+
+The tileset's zoom envelope is `TILE_MIN_ZOOM = 8` / `TILE_MAX_ZOOM = 15` in
+`build_dots.py`, and it is now **exactly what gets built** — no
+`--extend-zooms-if-still-dropping`, so no phantom z16. `DemandDotsLayer.tsx` reads
+its `<Source minzoom/maxzoom>` from the legend, and the source maxzoom **must** be a
+zoom that exists: declare one deeper and Mapbox requests tiles that were never
+built and draws a BLANK layer from that zoom in (this shipped once, when the legend
+said 16 and the build said 15). Mapbox overzooms the deepest tiles by itself, so
+dots persist at z16+ at their full-density ratio. `verify_tiles.py` asserts the
+built archive's own header agrees with both.
+
+### Coverage-layer regen
+
+`demand-dots/coverage-pipeline/` is **no longer standalone**: it imports
+`../puma_union.py` — the same union estimator the demand-dot tiles are built
+with, not a second copy of it — plus `../data/puma_corrections.csv` and the
+tract→PUMA crosswalk. Copy the whole `demand-dots/` directory, not just
+`coverage-pipeline/`, to run this elsewhere. It still carries its own copy of
+the vintage probe and the CT pin (both inert lookups that resolve dynamically
+against the same API and can't drift, unlike the estimator). Keep those two in
+sync. See its README for the schema, the largest-remainder apportionment fix,
+runtime/RAM, and merge-backend notes.
+
+The `.fgb` schema (2026-07): `geoid, pop, hh, workers, minority, race_pop,
+lowinc, pov_univ, zeroveh_hh, occ_hh, senior, youth, carless, disability,
+prop_all, need_all, jobs`. `carless`/`disability` are straight ACS counts;
+`prop_all` (ridership propensity = carless ∪ low-income) and `need_all`
+(transit need = + senior + disability) are the PUMS-derived estimates. The old
+`riders` column (renters ∪ carless ∪ adults 18–24, × an invented ×0.6) is gone.
+
+```bash
+cd demand-dots/coverage-pipeline
+../.venv/bin/python build_us.py --out us-v2.fgb --jobs 4   # ~3-5 h cold, resumable
+# Upload via rclone, NOT wrangler—wrangler hard-fails above 300 MiB
+# ("Wrangler only supports uploading files up to 300 MiB in size") and
+# us-v2.fgb is ~1.7 GiB, so `wrangler r2 object put` has never worked for this
+# file. --s3-no-check-bucket is REQUIRED: without it rclone calls CreateBucket
+# first, and the R2 token (object read/write only) returns 403 AccessDenied—
+# pointing at bucket creation, not the upload. See
+# coverage-pipeline/README.md "Host it" for the full detail.
+rclone copyto us-v2.fgb r2:gtfs-builder-tiles/coverage/us-v2.fgb \
+  --s3-no-check-bucket --s3-chunk-size 64M --s3-upload-concurrency 4
+# Verify against the bucket, not the exit code (a piped `| tail` reports
+# tail's exit status, not rclone's—a failed upload can still report success):
+rclone lsl r2:gtfs-builder-tiles/coverage/
+```
+
+`us-v2` is the current value of `COVERAGE_REGION` in
+`src/services/blockCoverage.ts` — that constant, not this doc, is the source
+of truth for which key to upload to. **Do not upload to `coverage/us.fgb`**:
+that object is prod's CURRENTLY-DEPLOYED key, read by an old client that
+expects the (retired) `riders` column, and overwriting it in place would make
+prod render "High-propensity riders: 0" to real users before prod's own
+client ever redeploys — see the "Deploy ordering" note just below, and §5.
+
+The ACS block-group cache key embeds `puma_union.corrections_hash()`, so it
+busts automatically when the correction tables or schema change — no manual
+cache-dir wipe needed. The old `acs<year>_cov_bg_state_<fips>.csv` cache files
+(pre-union schema) are dead; delete them.
+
+**Deploy ordering:** this schema change is breaking in both directions, and
+only one of them can be caught client-side. A NEW client reading a STALE/OLD
+layer is defended: `blockCoverage.ts` checks every loaded layer for the
+union-schema columns and throws `CoverageLayerSchemaError` if they're
+missing, so a stale layer degrades to "counts only, no estimate" instead of
+rendering a confident wrong number. But an OLD, already-deployed client
+reading a NEW layer canNOT be defended in code — that client was built before
+this change existed. The fix is at the R2-key level, not the client:
+1. Regenerate and upload the layer under the **new** key, `coverage/us-v2.fgb`
+   (commands above) — `coverage/us.fgb` is left untouched.
+2. Deploy the client (`COVERAGE_REGION = 'us-v2'`) and verify it in prod.
+3. Only once prod is confirmed on the new client, delete the old
+   `coverage/us.fgb` object from R2.
+Any future breaking schema change should repeat this pattern: bump
+`COVERAGE_REGION` again rather than overwriting the current key in place. See
+`demand-dots/coverage-pipeline/README.md`'s "Deploy ordering" section for the
+full detail.
+
+### Nationwide rebuild cost, for planning
+
+**No `us-2026e` archive exists yet, nationwide or per-state** (see §5). The only
+attribute-dot measurement taken so far is Montana during development:
+
+| build | schema | dots/person | Montana pmtiles |
+|---|---|---|---|
+| `us-2026d` | class-per-segment (9 classes) | ~2.65 | 17.0 MB |
+| `us-2026e` | attribute dots | **1.0** | **7.3 MB** (2.23x smaller) |
+
+Attribute dots write one dot per person instead of ~2.65, so the nationwide archive
+should come out **roughly 2.2x smaller than the equivalent `us-2026d` build** — but
+that is an extrapolation from one rural state, so re-measure on the first dense
+state that finishes rather than trusting it. Do NOT reuse the old 10-class
+projection (~125M dots, ~11 GiB pmtiles): it was for a vocabulary that never
+shipped. R2 storage cost is negligible at any of these sizes (order $0.20/mo for a
+tens-of-GB archive).
+
+### Sanity checks and known breakages
+
+Total dots within ~5% YoY; file size within ~10%—**except this
+attribute-dots regen, which is expected to blow both, and in a known
+direction**: total dots FALL by ~2.65x (one dot per person, not per
+(person, class)) and file size falls with them. That is the schema change, not a
+breakage. Treat the 5%/10% guardrails as active again starting the regen after
+this one.
+
+The build's own gates, all of which **raise rather than shipping** a violation:
+
+- `puma_union.check_invariants()` over every block group AND every block of every
+  state (partition, ordering, subset, both Fréchet bounds).
+- The IPF must converge (`joint_flags.fit` diagnostics); an unconverged fit means
+  the tiles would not reproduce the ACS marginals or the PUMS union.
+- Cells → marginals reconciliation: the 16 fitted cells must roll back up to the
+  ACS numbers they were fitted to, within 0.05%.
+- **`verify_tiles.py`**, after tiling — the only check that compares what went IN
+  to what came OUT. Not optional. Not a formality.
+
+Per-state population conservation is asserted inside the coverage build and fails
+it on drift. Known breakages: LODES lags ACS ~1 yr (label only); the TIGER block
+system changes every decennial (next 2030); validate that ACS variable IDs still
+return data at block group geography; bump `LODES_BASE` if LODES9 ships. Full
+decision log preserved in the archived `demand-dots-nationwide-plan.md`.
 
 ## Appendix B — Google Ads offline-conversion (OCI) pipeline
 

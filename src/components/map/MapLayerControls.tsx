@@ -253,7 +253,15 @@ export function MapLayerControls({
               {/* Legend. The "1 dot ≈ N" is the EFFECTIVE ratio at the current
                   zoom: the tiles carry only every Nth dot when zoomed out, so a
                   z8 dot stands for many more people than a z13 one. It updates as
-                  the user zooms. */}
+                  the user zooms.
+
+                  Below the source's minzoom NOTHING is mounted — the ratio would
+                  describe dots that are not on screen, which is a number a
+                  planner could put in a memo. `row.hiddenAtZoom` is exactly that
+                  condition, so the ratio is dropped rather than shown false; the
+                  zoom-warning paragraph below already says "zoom in to level N+"
+                  once for the whole panel, so this doesn't repeat that text per
+                  row. */}
               <div className="mt-1.5 pt-1.5 border-t border-cream flex flex-col gap-0.5">
                 {legendRows.map((row) => (
                   <div
@@ -267,9 +275,11 @@ export function MapLayerControls({
                     <span className="flex-1 text-dark-brown truncate" title={row.label}>
                       {row.label}
                     </span>
-                    <span className="text-warm-gray shrink-0 tabular-nums">
-                      1 dot ≈ {formatPerDot(row.perDot)} {row.unit}
-                    </span>
+                    {!row.hiddenAtZoom && (
+                      <span className="text-warm-gray shrink-0 tabular-nums">
+                        1 dot ≈ {formatPerDot(row.perDot)} {row.unit}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>

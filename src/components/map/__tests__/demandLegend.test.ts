@@ -336,6 +336,36 @@ describe('legend rows — what the panel actually shows', () => {
     expect(rows.find((r) => r.role === 'jobs')!.unit).toBe('jobs');
     expect(rows.find((r) => r.role === 'segment')!.unit).toBe('people');
   });
+
+  // ── below the source minzoom: nothing is mounted, so no row may claim a ratio ──
+  //
+  // The layer's vector source carries `minzoom: legend.minZoom` — below that, zero
+  // tiles are requested and zero dots are drawn, whatever the selection. A row's
+  // `1 dot ≈ N` is only honest when its dot is actually on screen, so every row
+  // must come back `hiddenAtZoom` here — the caller (MapLayerControls) uses this
+  // flag to withhold the ratio text rather than state one for dots that don't
+  // exist on screen. This regressed once: `hiddenAtZoom` was computed correctly
+  // but only used to fade the row's opacity, never to hide the ratio.
+  it('marks every row hiddenAtZoom below the source minzoom', () => {
+    const rows = demandLegendRows(DEFAULT_DEMAND_SELECTION, 6, LEGEND);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) expect(row.hiddenAtZoom).toBe(true);
+  });
+
+  it('still marks rows hiddenAtZoom on a fractional zoom below the gate', () => {
+    const rows = demandLegendRows(DEFAULT_DEMAND_SELECTION, 7.9, LEGEND);
+    for (const row of rows) expect(row.hiddenAtZoom).toBe(true);
+  });
+
+  it('clears hiddenAtZoom at and above the source minzoom, for every selection', () => {
+    const rows = demandLegendRows(DEFAULT_DEMAND_SELECTION, 8, LEGEND);
+    for (const row of rows) expect(row.hiddenAtZoom).toBe(false);
+
+    const carless = demandLegendRows(
+      { mode: 'propensity', segment: 'carless', jobs: true, backdrop: true }, 8, LEGEND,
+    );
+    for (const row of carless) expect(row.hiddenAtZoom).toBe(false);
+  });
 });
 
 describe('THE RECONCILIATION: the panel\'s rows account for everybody', () => {

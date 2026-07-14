@@ -1,6 +1,9 @@
 # GTFS·X CI — runs on every push and PR. All jobs are blocking.
 #
-#   1. typecheck — frontend + worker tsc --noEmit
+#   1. typecheck — frontend + worker, per-project (`tsc -p <project> --noEmit`).
+#      NB: a BARE `tsc --noEmit` is a no-op here—the root tsconfig.json is a
+#      solution file with "files": [], so it checks nothing and exits 0. Use
+#      `tsc -b`, or the two -p invocations below.
 #   2. editor-tests — npx tsx run-tests.ts (330 GTFS import/export assertions)
 #   3. frontend-service-tests — vitest (mocked fetch for demographics/snapToRoad)
 #   4. worker-tests — vitest (490 worker integration tests)

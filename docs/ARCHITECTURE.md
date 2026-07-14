@@ -554,6 +554,46 @@ Staging runs test-mode Stripe and both `*_ENABLED` flags true.
   correct for dev and staging, which legitimately use the test key.
 - **Resend sending domain.** The prod key must be scoped to `gtfsx.com` (a
   legacy `gtfsbuilder.net`-scoped key fails signup email with "domain not verified").
+- <a id="tsc-noemit-noop"></a>**`npx tsc --noEmit` is a NO-OP here—it is not a
+  typecheck.** The root `tsconfig.json` is a *solution file*: `"files": []` plus
+  three project references. A bare `tsc --noEmit` therefore compiles an empty file
+  list and **exits 0 no matter how broken the code is** (`npx tsc --noEmit
+  --listFiles` prints zero files). Using it as a gate is how a full session of
+  "typecheck clean" verification turned out to be hollow. The real typechecks:
+  ```bash
+  npx tsc -b                                    # all three projects (--force bypasses the incremental cache)
+  npx tsc -p tsconfig.app.json --noEmit         # what CI runs (frontend)
+  npx tsc -p tsconfig.worker.json --noEmit      # what CI runs (worker)
+  ```
+  `tsc -b` with no args reads `./tsconfig.json` from the **CWD**, so a stray `cd`
+  into a subdirectory fails with `error TS5083: Cannot read file
+  '.../<subdir>/tsconfig.json'`—that is a wrong working directory, not a broken
+  config. Run it from the repo root.
+- <a id="large-r2-uploads"></a>**Large R2 uploads (>300 MiB) cannot use wrangler.**
+  `wrangler r2 object put` hard-fails above 300 MiB ("Wrangler only supports
+  uploading files up to 300 MiB in size"). Both census artifacts have always been
+  far over that ceiling (`tiles/us-2026f.pmtiles` ~2.2 GB; `coverage-pipeline/us-v2.fgb`
+  ~1.7 GB), so any runbook showing a `wrangler r2 object put` for them documented a
+  command that could never have worked. **Use rclone**, which is already configured
+  with an `r2:` remote (S3 endpoint, Cloudflare provider):
+  ```bash
+  rclone copyto us-2026f.pmtiles r2:gtfs-builder-tiles/us-2026f.pmtiles \
+    --s3-no-check-bucket --s3-chunk-size 64M --s3-upload-concurrency 4
+  rclone lsl r2:gtfs-builder-tiles/          # verify HERE, not by exit code
+  ```
+  Three ways this bites, all observed:
+  - **`--s3-no-check-bucket` is REQUIRED.** Without it rclone calls `CreateBucket`
+    first, and our R2 token is scoped to object read/write but *not* bucket
+    creation, so it dies with `403 AccessDenied`—an error that points at bucket
+    creation rather than at the upload.
+  - **Verify against the bucket listing, never the exit code.** `rclone … | tail`
+    reports *tail's* exit status, so a failed upload reports success. This
+    happened: an upload "completed, exit 0" having transferred nothing after three
+    403s. `rclone lsl` is the source of truth.
+  - **Upload to the key something actually reads.** Tilesets live at the bucket
+    **ROOT** (`us-2026f.pmtiles`)—`worker/legacy/tiles.ts` reads `${archive}.pmtiles`.
+    The coverage layer lives at `coverage/<region>.fgb`, where `<region>` is
+    `COVERAGE_REGION` in `src/services/blockCoverage.ts`. Full runbooks: Appendix A.
 
 ---
 
@@ -638,9 +678,14 @@ npx tsx scripts/dev-seed-user.ts you@test.com "You" hunter2-hunter2   # pre-veri
 ```bash
 npx tsx run-tests.ts                          # editor integration tests
 npx vitest run --fileParallelism=false        # worker tests (serial — workerd WS-disconnect flake under parallel)
-npx tsc -p tsconfig.app.json --noEmit         # frontend typecheck
-npx tsc -p tsconfig.worker.json --noEmit      # worker typecheck
+npx tsc -p tsconfig.app.json --noEmit         # frontend typecheck   ⎫ what CI runs;
+npx tsc -p tsconfig.worker.json --noEmit      # worker typecheck     ⎭ `npx tsc -b` covers both
 ```
+
+⚠️ **A bare `npx tsc --noEmit` typechecks NOTHING and exits 0**—the root
+`tsconfig.json` is a solution file (`"files": []`). Never use it as a gate; run
+`npx tsc -b` from the repo root, or the two `-p` commands above.
+[Details](#tsc-noemit-noop).
 
 ### Shipping to prod (pre-push checklist)
 
@@ -1337,15 +1382,11 @@ ARCHIVE="$(cd demand-dots && ./.venv/bin/python -c 'import build_dots; print(bui
 (cd demand-dots && ./.venv/bin/python verify_tiles.py "../tiles/${ARCHIVE}.pmtiles" \
    --meta '../tiles/ldjson/*.ldjson.meta.json')
 
-# 7. UPLOAD via rclone, NOT wrangler. wrangler hard-fails above 300 MiB
-#    ("Wrangler only supports uploading files up to 300 MiB in size") and the
-#    pmtiles archive is ~1.28 GiB, so `wrangler r2 object put` cannot do this
-#    upload (same ceiling that blocks the coverage .fgb—see "Coverage-layer
-#    regen" below and coverage-pipeline/README.md "Host it"). rclone is already
-#    configured with an `r2:` remote. `--s3-no-check-bucket` is REQUIRED:
-#    without it rclone calls CreateBucket first, and the R2 token (object
-#    read/write only) returns 403 AccessDenied on that call—not on the upload,
-#    which is misleading if you don't already know the flag is missing.
+# 7. UPLOAD via rclone, NOT wrangler: the archive is ~2.2 GB and wrangler hard-fails
+#    above 300 MiB. --s3-no-check-bucket is REQUIRED (without it: 403 AccessDenied on
+#    CreateBucket). Tilesets go at the bucket ROOT—worker/legacy/tiles.ts reads
+#    `${archive}.pmtiles`. Why, and the two ways this silently no-ops:
+#    §5 deploy gotchas, "Large R2 uploads".
 rclone copyto "tiles/${ARCHIVE}.pmtiles" "r2:gtfs-builder-tiles/${ARCHIVE}.pmtiles" \
   --s3-no-check-bucket --s3-chunk-size 64M --s3-upload-concurrency 4
 # Verify against the bucket, not the exit code—a piped `| tail` reports tail's
@@ -1398,17 +1439,13 @@ prop_all, need_all, jobs`. `carless`/`disability` are straight ACS counts;
 ```bash
 cd demand-dots/coverage-pipeline
 ../.venv/bin/python build_us.py --out us-v2.fgb --jobs 4   # ~3-5 h cold, resumable
-# Upload via rclone, NOT wrangler—wrangler hard-fails above 300 MiB
-# ("Wrangler only supports uploading files up to 300 MiB in size") and
-# us-v2.fgb is ~1.7 GiB, so `wrangler r2 object put` has never worked for this
-# file. --s3-no-check-bucket is REQUIRED: without it rclone calls CreateBucket
-# first, and the R2 token (object read/write only) returns 403 AccessDenied—
-# pointing at bucket creation, not the upload. See
-# coverage-pipeline/README.md "Host it" for the full detail.
+# Upload via rclone, NOT wrangler: us-v2.fgb is ~1.7 GB and wrangler hard-fails above
+# 300 MiB. --s3-no-check-bucket is REQUIRED (without it: 403 AccessDenied on
+# CreateBucket). Why, and the two ways this silently no-ops: §5 deploy gotchas,
+# "Large R2 uploads". Schema/ordering detail: coverage-pipeline/README.md "Host it".
 rclone copyto us-v2.fgb r2:gtfs-builder-tiles/coverage/us-v2.fgb \
   --s3-no-check-bucket --s3-chunk-size 64M --s3-upload-concurrency 4
-# Verify against the bucket, not the exit code (a piped `| tail` reports
-# tail's exit status, not rclone's—a failed upload can still report success):
+# Verify against the bucket listing, NOT the exit code:
 rclone lsl r2:gtfs-builder-tiles/coverage/
 ```
 

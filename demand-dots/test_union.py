@@ -211,9 +211,17 @@ def test_zoom_ladder_nests_and_thins():
         sa = {r for r in range(period) if slots[r] <= a}
         sb = {r for r in range(period) if slots[r] <= b}
         assert sa <= sb, (a, b)
-    assert B.zoom_stride(B.TILE_MIN_ZOOM) == 128
+    assert B.zoom_stride(B.TILE_MIN_ZOOM) == 32
     assert B.zoom_stride(B.FULL_DENSITY_ZOOM) == 1
     assert B.zoom_stride(B.TILE_MAX_ZOOM) == 1
+    # FULL_DENSITY_ZOOM is the SHALLOWEST full-density rung, not the deepest zoom
+    # on the ladder — the frontend stops scaling its "1 dot = N" from here in, so
+    # naming z15 while the tiles are already full at z13 would under-report the
+    # density the map is actually drawing at z13 and z14.
+    assert B.FULL_DENSITY_ZOOM == 13
+    assert all(s == 1 for z, s in B.ZOOM_DENSITY_LADDER.items()
+               if z >= B.FULL_DENSITY_ZOOM)
+    assert B.ZOOM_DENSITY_LADDER[B.FULL_DENSITY_ZOOM - 1] > 1
     # Full density has to land ON a zoom the archive actually has, or the legend
     # promises a 1:5 ratio at a zoom whose tiles were never built.
     assert B.FULL_DENSITY_ZOOM <= B.TILE_MAX_ZOOM
@@ -268,8 +276,8 @@ def test_the_tile_schema_is_seventeen_integer_codes():
     assert legend["attribute"] == "d"
     assert legend["flags"] == B.FLAG_BITS
     assert legend["jobs_code"] == 16
-    assert legend["zoom_ladder"]["strides"]["8"] == 128
-    assert legend["zoom_ladder"]["full_density_zoom"] == 15
+    assert legend["zoom_ladder"]["strides"]["8"] == 32
+    assert legend["zoom_ladder"]["full_density_zoom"] == 13
     # The frontend builds its tile URL from this and refuses to guess; without it
     # the whole demand-dots layer stays disabled.
     assert legend["archive"] == B.TILESET_ARCHIVE and legend["archive"]

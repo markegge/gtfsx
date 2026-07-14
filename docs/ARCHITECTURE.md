@@ -344,6 +344,17 @@ Design rationale is preserved in the decisions appendix of the archived
     "1 dot = N people" is true at every zoom. `us-2026b` (the original 3-class
     tileset, 6.6 GB) is left in the bucket as a rollback; `us-2026c` and
     `us-2026d` were never published.
+  - **`us-2026f` — BUILT + VERIFIED LOCALLY, NOT YET UPLOADED (2026-07-14).**
+    Same tile schema as `us-2026e`; the ZOOM LADDER is 4x denser (full density at
+    z13 instead of z15 — see the ladder table above). `us-2026e`'s ladder had been
+    sized against a model of the worst tile that was ~3x too conservative, so the
+    map was far sparser than the tile budget required; the new ladder is sized
+    against the decoded archive and the heaviest tile in the country is 313k
+    features / 1.06 MB (Manhattan) against caps of 400k / 2.0 MB. It passes
+    `verify_tiles.py` — nothing thinned. **`demand-legend.json` in this repo now
+    names `us-2026f`, so prod will 404 every demand tile until the archive is
+    uploaded to R2.** Upload it (rclone — see Appendix A) BEFORE this lands on
+    `main`, or ship the two together. `us-2026e` stays in the bucket as rollback.
   - Publishing still requires the tile build (piped through `--cat-verified`,
     never a bare `cat`—see Appendix A) to pass `verify_tiles.py`, then an
     rclone upload (wrangler hard-fails above 300 MiB; the pmtiles archive is
@@ -724,7 +735,7 @@ release):
 
 | Layer | Builder | Output | Served as |
 |---|---|---|---|
-| **Demand dots** (display-only; not wired into the analysis pipeline) | `demand-dots/build_dots.py` | `<archive>.pmtiles` in `gtfs-builder-tiles` | `/_demand-tiles/<archive>/{z}/{x}/{y}.pbf`—the archive name is read out of the committed `demand-dots/demand-legend.json` (`demandLegend.ts`), not hardcoded in `DemandDotsLayer.tsx`; current schema `us-2026e`, prod still serving `us-2026b` (see §5) |
+| **Demand dots** (display-only; not wired into the analysis pipeline) | `demand-dots/build_dots.py` | `<archive>.pmtiles` in `gtfs-builder-tiles` | `/_demand-tiles/<archive>/{z}/{x}/{y}.pbf`—the archive name is read out of the committed `demand-dots/demand-legend.json` (`demandLegend.ts`), not hardcoded in `DemandDotsLayer.tsx`; the legend currently names `us-2026f` (built + verified, **upload pending** — see §5) |
 | **Coverage blocks** (exact block-level counts behind the Coverage panel) | `demand-dots/coverage-pipeline/` (`build_coverage_blocks.py` per state, `build_us.py` to drive + merge) | `<region>.fgb` FlatGeobuf, `<region>` versioned per schema (`COVERAGE_REGION` in `blockCoverage.ts`; currently `us-v2`, prod still serving the old-schema `us` — see §5) | `/_coverage/<region>.fgb`, bbox range-reads |
 
 ### The ACS vintage is not a manual bump any more
@@ -1016,14 +1027,28 @@ lied about relative density.)
 
 | zoom | stride | 1 dot = |
 |---|---|---|
-| 8 | 128 | 640 people |
-| 9 | 64 | 320 |
-| 10 | 32 | 160 |
-| 11 | 16 | 80 |
-| 12 | 8 | 40 |
-| 13 | 4 | 20 |
-| 14 | 2 | 10 |
-| 15 | 1 | **5** (full density; overzoomed at z16+) |
+| 8 | 32 | 160 people |
+| 9 | 16 | 80 |
+| 10 | 8 | 40 |
+| 11 | 4 | 20 |
+| 12 | 2 | 10 |
+| 13 | 1 | **5** (full density) |
+| 14 | 1 | 5 |
+| 15 | 1 | 5 (overzoomed at z16+) |
+
+The ladder is sized against the **densest tile in the country** (Manhattan at every
+zoom from z8 to z14; the Chicago Loop at z15), because the legend states ONE number
+and it has to be true there too. It is measured against the BUILT ARCHIVE, not a
+model: decode the last archive, bin the real dots into web-mercator tiles with the
+tile buffer included, and scale. The `us-2026e` ladder (128/64/…/1) was sized
+against an estimate that was ~3x too conservative — its heaviest tile came out at
+78k features / 0.30 MB against caps of 300k / 1.5 MB, which is why the map was so
+sparse. `us-2026f` spends that headroom: worst tile 313k features / 1.06 MB, and
+full density arrives at z13 instead of z15.
+
+The ceiling, for whoever retunes this next: the next rung down (full density at
+**z12**) needs a 625k-feature / ~2.4 MB Manhattan tile — 8x today's heaviest. Do not
+adopt it without a render measurement.
 
 This has to be baked into the tiles at build time: **Mapbox GL forbids `["zoom"]`
 inside a filter expression**, so there is no client-side way to say "draw every
@@ -1056,10 +1081,10 @@ the runbook cannot hand-type a flag that disagrees with the legend:
 
 ```
 ./.venv/bin/python build_dots.py --cat-verified '../tiles/ldjson/*.ldjson' \
-  | tippecanoe --output=../tiles/us-2026e.pmtiles \
+  | tippecanoe --output=../tiles/us-2026f.pmtiles \
     --layer=demand --minimum-zoom=8 --maximum-zoom=15 \
     --drop-rate=1 --base-zoom=8 \
-    --maximum-tile-bytes=1500000 --maximum-tile-features=300000 \
+    --maximum-tile-bytes=2000000 --maximum-tile-features=400000 \
     --drop-densest-as-needed \
     --read-parallel --force
 ```
@@ -1112,7 +1137,7 @@ that is precisely the bug this flag exists to close.
 The mandatory verify step—an archive that fails it must not be published:
 
 ```
-./.venv/bin/python verify_tiles.py ../tiles/us-2026e.pmtiles \
+./.venv/bin/python verify_tiles.py ../tiles/us-2026f.pmtiles \
   --meta '../tiles/ldjson/*.ldjson.meta.json' --legend demand-legend.json
 ```
 
@@ -1132,7 +1157,7 @@ classes). A flag rides on a person who is in the z8 tile on their own merits.
 #### `verify_tiles.py` is MANDATORY after every build
 
 ```bash
-./.venv/bin/python verify_tiles.py ../tiles/us-2026e.pmtiles \
+./.venv/bin/python verify_tiles.py ../tiles/us-2026f.pmtiles \
   --meta '../tiles/ldjson/*.ldjson.meta.json'
 ```
 
@@ -1248,19 +1273,29 @@ hadn't reached yet and `cat` it together with freshly-built files from the
 new vocabulary—producing a tileset with the new classes present in some
 states and missing in others, with no error raised anywhere.
 
-It now fingerprints the full config (flag bits, jobs code, per-universe density,
-zoom-density ladder, ACS variable list, PUMS corrections **and** joint tables,
-apportionment version, tile zoom envelope—`config_hash()` in `build_dots.py`) into
-each state's `.meta.json` sidecar, and only skips a state if the sidecar's
-`config_hash` matches the current script's. Any change to the flags, to
-`ZOOM_DENSITY_LADDER`, to `ACS_VARS`, or a `puma_corrections.csv` /
-`puma_joint.csv` regen invalidates every sidecar and forces a full rebuild on the
-next run. Keep this check—do not restore "skip if the file exists."
+It now fingerprints everything that decides a `.ldjson`'s CONTENT (flag bits, jobs
+code, per-universe density, ACS variable list, PUMS corrections **and** joint
+tables, apportionment version—`config_hash()` in `build_dots.py`) into each state's
+`.meta.json` sidecar, and only skips a state if the sidecar's `config_hash` matches
+the current script's. Any change to the flags, to `ACS_VARS`, or a
+`puma_corrections.csv` / `puma_joint.csv` regen invalidates every sidecar and forces
+a full rebuild on the next run. Keep this check—do not restore "skip if the file
+exists."
 
-**As of 2026-07-13 the current fingerprint is `6179fb9f9380` and NO state matches
-it.** Every `.ldjson` on disk is pre-attribute-dots (the newest, `dots_MT.ldjson`,
-carries `0aec3e55aff8` / `archive: us-2026d`), so the next run rebuilds all 51
-states + DC + PR. `verify_tiles.py` independently refuses any sidecar without a
+**The ZOOM LADDER and the zoom envelope are deliberately NOT in the fingerprint**
+(they were, until 2026-07-14). They are TILING parameters, not content: the ladder
+does decide each dot's baked `tippecanoe.minzoom`, but `--cat-verified` overwrites
+that on every feature at concat time (`restride_lines`), and `--cat-verified` is
+the only path from `.ldjson` to tileset—`test_gate.py` asserts the generated
+tippecanoe command still pipes through it. So **changing the ladder costs a
+~60-minute re-tile, not a ~2-hour 52-state rebuild**: leave the `.ldjson` alone and
+just re-run the tippecanoe command. The corollary, which must not be lost: if the
+concat is ever "simplified" back to a bare `cat`, the ladder has to go BACK into
+`config_hash()` in the same commit, or every state will silently tile itself at
+whatever ladder it happened to be born with.
+
+**As of 2026-07-14 the current fingerprint is `4e2a79420914` and all 52 states
+match it.** `verify_tiles.py` independently refuses any sidecar without a
 `code_dots` key, so a stale one cannot slip into a verification pass either.
 
 ### Demand-dot regen
@@ -1274,7 +1309,12 @@ cd /Users/clippy2/proj/gtfsx
 #    under whatever name is baked in there.
 (cd demand-dots && ./.venv/bin/python acs_vintage.py --emit)   # 2. refresh the ACS vintage constant
 # 3. check TIGER_YEAR in demand-dots/build_dots.py against the newest TIGER release
-(cd demand-dots && ./build_all_states.sh)          # 4. build all states (≤4 parallel, resumable,
+# 4. build all states (≤4 parallel, resumable, fingerprinted—also regens
+#    demand-legend.json). SKIP THIS ENTIRELY IF THE ONLY THING YOU CHANGED IS THE
+#    ZOOM LADDER (or the zoom envelope): those are not in config_hash, the .ldjson
+#    on disk are still valid, and the ladder is applied at concat time. Go to 5 —
+#    but run `--emit-legend` first, or the legend will still name the old ladder.
+(cd demand-dots && ./build_all_states.sh)          #    (≤4 parallel, resumable,
                                                     #    fingerprinted—also regens demand-legend.json).
                                                     #    No manual cache clear needed: the ACS cache
                                                     #    filename already folds in the vintage, the
@@ -1293,10 +1333,10 @@ cd /Users/clippy2/proj/gtfsx
 # 6. VERIFY — MANDATORY. Proves retained == emitted per zoom and per code, i.e.
 #    that the legend's "1 dot = N people" is what the map actually draws. If this
 #    fails, the legend is lying: fix the build, do NOT publish.
-(cd demand-dots && ./.venv/bin/python verify_tiles.py ../tiles/us-2026e.pmtiles \
+ARCHIVE="$(cd demand-dots && ./.venv/bin/python -c 'import build_dots; print(build_dots.TILESET_ARCHIVE)')"
+(cd demand-dots && ./.venv/bin/python verify_tiles.py "../tiles/${ARCHIVE}.pmtiles" \
    --meta '../tiles/ldjson/*.ldjson.meta.json')
 
-ARCHIVE="$(cd demand-dots && ./.venv/bin/python -c 'import build_dots; print(build_dots.TILESET_ARCHIVE)')"
 # 7. UPLOAD via rclone, NOT wrangler. wrangler hard-fails above 300 MiB
 #    ("Wrangler only supports uploading files up to 300 MiB in size") and the
 #    pmtiles archive is ~1.28 GiB, so `wrangler r2 object put` cannot do this
@@ -1405,13 +1445,17 @@ full detail.
 
 ### Nationwide rebuild cost, for planning
 
-**No `us-2026e` archive exists yet, nationwide or per-state** (see §5). The only
-attribute-dot measurement taken so far is Montana during development:
+Nationwide archives now exist and have been measured end to end:
 
-| build | schema | dots/person | Montana pmtiles |
+| build | schema / ladder | dots/person | nationwide pmtiles |
 |---|---|---|---|
-| `us-2026d` | class-per-segment (9 classes) | ~2.65 | 17.0 MB |
-| `us-2026e` | attribute dots | **1.0** | **7.3 MB** (2.23x smaller) |
+| `us-2026d` | class-per-segment (9 classes) | ~2.65 | — (never published) |
+| `us-2026e` | attribute dots, ladder 128…1 (full density z15) | **1.0** | 1.37 GB |
+| `us-2026f` | attribute dots, ladder 32…1 (full density z13) | **1.0** | see §5 |
+
+The state builds (~2h, 52 states) are what produce the 13 GB of `.ldjson`; the
+re-tile is ~60-90 min on top. A LADDER-ONLY change needs the re-tile ONLY — the
+`.ldjson` are not invalidated by it (see the concat-gate section).
 
 Attribute dots write one dot per person instead of ~2.65, so the nationwide archive
 should come out **roughly 2.2x smaller than the equivalent `us-2026d` build** — but

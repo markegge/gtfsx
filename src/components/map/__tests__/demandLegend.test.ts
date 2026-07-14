@@ -467,6 +467,6 @@ describe('the legend on disk', () => {
 
   it('names the archive the pipeline built (the tile URL is derived from it)', () => {
     if (!DEMAND_LEGEND) return;
-    expect(DEMAND_LEGEND.archive).toBe('us-2026e');
+    expect(DEMAND_LEGEND.archive).toBe('us-2026f');
   });
 });

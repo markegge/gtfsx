@@ -30,8 +30,16 @@ mkdir -p ../tiles/ldjson
 STATES=(AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY PR)
 
 # Fingerprint of everything that determines a dot file's CONTENT: the flag bits,
-# per-universe density, the zoom ladder, the ACS vars, the PUMA corrections and
-# the apportionment version. Any change to those changes this.
+# per-universe density, the ACS vars, the PUMA corrections and the apportionment
+# version. Any change to those changes this, and every state gets rebuilt.
+#
+# The ZOOM LADDER is deliberately NOT in it. The ladder decides each dot's
+# `tippecanoe.minzoom`, but --cat-verified OVERWRITES that on every feature at
+# concat time (restride_lines), so the ladder is consumed by the ~80-minute
+# re-tile, not by the ~2-hour state build. Changing the ladder therefore does not
+# invalidate a single .ldjson: skip this script entirely and just re-run the
+# tippecanoe command below. See config_hash() in build_dots.py for the full
+# argument — including what would make it unsafe.
 CONFIG_HASH="$(./.venv/bin/python -c 'import build_dots; print(build_dots.config_hash())')"
 export CONFIG_HASH
 echo "Config fingerprint: $CONFIG_HASH"

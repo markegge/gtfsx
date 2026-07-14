@@ -232,7 +232,14 @@ TILE_MAX_ZOOM = 15
 #              composites and backdrops stop being classes and become render-time
 #              expressions, so a us-2026d tile and a us-2026e tile share not one
 #              attribute name or value — this is a schema change, not a reissue.
-TILESET_ARCHIVE = "us-2026e"
+#   us-2026f = SAME SCHEMA, 4x DENSER. us-2026e's ladder was sized against a
+#              MODEL of the worst tile that was ~3x too pessimistic; the real
+#              archive's heaviest tile came out at 78k features / 0.30 MB against
+#              caps of 300k / 1.5 MB. The ladder is now sized against the archive
+#              itself (see ZOOM_DENSITY_LADDER). A us-2026e and a us-2026f tile
+#              are byte-compatible — only the ladder differs — so the frontend
+#              needs no change beyond the legend it already reads.
+TILESET_ARCHIVE = "us-2026f"
 
 # ─── The tile schema: ONE integer attribute, `d` ─────────────────────────────
 #
@@ -387,14 +394,14 @@ APPORTION_KEYS = [POP_KEY, *MARGINALS, *UNIONS]
 # existence as you zoom IN. Asserted below.
 #
 #   zoom   stride   effective ratio (at PEOPLE_PER_DOT = 5)
-#   8      128      1 dot = 640 people
-#   9      64       1 dot = 320
-#   10     32       1 dot = 160
-#   11     16       1 dot = 80
-#   12     8        1 dot = 40
-#   13     4        1 dot = 20
-#   14     2        1 dot = 10
-#   15     1        1 dot = 5 people   (full density; overzoomed at z16+)
+#   8      32       1 dot = 160 people
+#   9      16       1 dot = 80
+#   10     8        1 dot = 40
+#   11     4        1 dot = 20
+#   12     2        1 dot = 10
+#   13     1        1 dot = 5 people   (full density)
+#   14     1        1 dot = 5
+#   15     1        1 dot = 5          (overzoomed at z16+)
 #
 # WHY THESE NUMBERS — the ladder is sized so tippecanoe never has to drop
 # ─────────────────────────────────────────────────────────────────────────────
@@ -404,35 +411,64 @@ APPORTION_KEYS = [POP_KEY, *MARGINALS, *UNIONS]
 # becomes fiction in whatever city the user happens to be looking at.
 #
 # So the ladder is sized against the DENSEST TILE IN THE COUNTRY, not against a
-# comfortable one. Measured (every state's dots binned into web-mercator tiles;
-# see the report in the ladder-fix change) at 5.0 bytes/feature, the full-density
-# feature count of the worst tile in the US is:
+# comfortable one. THE MEASUREMENT IS OF THE BUILT ARCHIVE, NOT OF A MODEL. That
+# distinction is the whole reason this ladder changed: the previous one (128, 64,
+# 32, 16, 8, 4, 2, 1) was sized against an ESTIMATE of the worst tile — 5.0
+# bytes/feature and a z11 full-density count of 2.8M — and both numbers were
+# wrong. Decoding the archive that estimate produced (us-2026e) shows what a dot
+# actually costs and where the dots actually are:
 #
-#     z8  10.1M    z9  9.4M    z10  5.0M    z11  2.8M    z12  1.2M    z13  0.47M
+#   real compressed bytes per dot feature      3.4 - 4.0 B      (est. was 5.0)
+#   real full-density worst-tile occupancy, buffer included:
+#     z8 5.13M   z9 3.78M   z10 2.08M   z11 1.22M   z12 0.63M   z13 0.31M
+#     z14 0.13M  z15 0.07M                          (est. z11 was 2.8M — 2.3x off)
 #
-# (all of them Manhattan/Midtown, where ~900k residents and ~2M jobs land in one
-# z12 tile). The tile carries ~3 dots per person — the propensity partition, the
-# need partition, and the four segments — plus jobs, so those are big numbers.
+# Compounded, the old ladder was ~3x more conservative than it needed to be: its
+# heaviest tile in the entire country came out at 78k features / 0.30 MB against
+# caps of 300k / 1.5 MB. It was spending 26% of its feature budget. That unspent
+# headroom is exactly what made the map "VERY sparse" — full density did not
+# arrive until z15.
 #
-# With the OLD ladder (8,4,2,2,1) the worst z8 tile came out at 1.27M features /
-# 6.3 MB against a 500 KB limit. tippecanoe therefore thinned it — and it thinned
-# the z8 tile of every metro in the country: 59% OF THE US POPULATION lived in a
-# z8 tile that got dropped. The legend was fiction for most Americans.
+# The worst tile at every zoom is Manhattan (z8 8/75/96 through z14 14/4825/6157;
+# the worst z15 tile is the Chicago Loop). ~900k residents and ~2M jobs land in
+# one z12 tile there, and the whole national ladder is sized by it: at z12 the
+# SECOND-worst tile in the country holds 284k dots to Manhattan's 597k, and the
+# p99.9 tile holds 8k. We throttle the entire country for Midtown, because the
+# legend states ONE number and it has to be true there too.
 #
-# This ladder is the shallowest nesting chain under which NO tile in the country
-# exceeds the limits below — 0 over-budget tiles at every zoom, worst tile
-# 177k features / 0.89 MB (Manhattan, z11). Nothing drops, so the legend is
-# honest BY CONSTRUCTION, and verify_tiles.py proves it after each build.
+# This ladder is the shallowest nesting chain whose worst tile stays inside the
+# caps below. MEASURED on the built archive, not predicted — heaviest tile in the
+# country is 312,541 features (z12, Manhattan) and 1.06 MB (z11, Manhattan), i.e.
+# 78% of the feature cap and 53% of the byte cap. That is 4x the dots of us-2026e
+# at z8-z12 and 8x at z13, and full density (1:5) arrives at z13 instead of z15.
+# Nothing drops, so the legend is honest BY CONSTRUCTION, and verify_tiles.py
+# proves it after each build.
 #
-# The cost is real and worth stating: full density (1:5) now arrives at z15
-# rather than z12, so a rural city at z12 draws 8x fewer dots than the old
-# (over-claimed) tiles did. That is the price of a true number — a shallower
-# ladder cannot be honored in any dense metro. If this is ever retuned, retune
-# it against the same measurement, and re-run verify_tiles.py.
+# (Bytes come in ~10% BELOW what a flat bytes/feature model predicts, because a
+# denser tile delta-encodes better: the same footprint, more points, shorter
+# zigzag deltas between them. Model the features exactly; treat the bytes as an
+# upper bound.)
+#
+# WHERE THE CEILING IS, stated plainly. The next rung down (16, 8, 4, 2, 1, …),
+# which would put full density at z12 — what the pre-fix ladder CLAIMED, and never
+# delivered, because tippecanoe was thinning it — needs a 625k-feature / 2.4 MB
+# Manhattan tile. That is 8x the heaviest tile the map ships today; a z12 viewport
+# over Midtown would load ~1.5M points (~105 MB of GPU buffers) instead of ~770k.
+# It is not impossible, but it is not free either, and it should not be adopted
+# without a render measurement. z13 full density is the densest rung that keeps
+# the worst tile close to a megabyte.
+#
+# If this is ever retuned, retune it the same way: decode the archive, bin the
+# real dots into web-mercator tiles (buffer included), and re-run verify_tiles.py.
 ZOOM_DENSITY_LADDER: dict[int, int] = {
-    8: 128, 9: 64, 10: 32, 11: 16, 12: 8, 13: 4, 14: 2, 15: 1,
+    8: 32, 9: 16, 10: 8, 11: 4, 12: 2, 13: 1, 14: 1, 15: 1,
 }
-FULL_DENSITY_ZOOM = max(ZOOM_DENSITY_LADDER)
+# The SHALLOWEST zoom that carries every dot — not the deepest rung on the ladder.
+# The legend hands this to the frontend, which short-circuits its stride lookup to
+# 1 at or beyond it, so naming z15 here when the tiles are already full at z13
+# would not be wrong, merely useless. Naming z13 tells the UI to stop scaling the
+# "1 dot = N" it prints two zooms earlier — which is the honest thing to print.
+FULL_DENSITY_ZOOM = min(z for z, s in ZOOM_DENSITY_LADDER.items() if s == 1)
 
 # ─── tippecanoe: the flags the archive is actually built with ────────────────
 #
@@ -445,12 +481,25 @@ FULL_DENSITY_ZOOM = max(ZOOM_DENSITY_LADDER)
 # about. --base-zoom is pinned to TILE_MIN_ZOOM as well, so there is no zoom
 # below base zoom for a drop rate to apply to even if someone changes it back.
 TIPPECANOE_DROP_RATE = 1
-# Headroom over the 0.89 MB worst tile the ladder allows, so the model's ~20%
-# uncertainty (it is calibrated from one state's floor-rounding loss) cannot push
-# a real tile over the limit and silently reintroduce dropping. These are CAPS,
-# not targets: the archive's actual tiles are far below them.
-TIPPECANOE_MAX_TILE_BYTES = 1_500_000
-TIPPECANOE_MAX_TILE_FEATURES = 300_000
+# CAPS, NOT TARGETS — and specifically, they are the TRIPWIRE, not the design.
+#
+# What decides how heavy a tile gets is the LADDER; these two numbers only decide
+# what tippecanoe does if the ladder is ever wrong. Set them too tight and a real
+# tile silently gets thinned (the legend starts lying); set them absurdly loose
+# and a mis-sized ladder ships a 10 MB tile with nothing to stop it. So: sit them
+# ~30-60% above the worst tile the ladder actually produces (313k features /
+# 1.19 MB, measured), high enough that the model's uncertainty cannot trip them
+# and low enough that a ladder mistake still does.
+#
+# Raising them from 300k/1.5MB is what buys the last rung of density: the old
+# ladder's worst tile used 26% of the feature budget, so the budget was never the
+# thing binding — but 4x-ing the ladder pushes Manhattan's z12 tile to 313k
+# features, which the old 300k cap would have thinned by a hair. Note it is the
+# FEATURE cap that binds, not bytes: at ~3.5 B/feature a 400k-feature tile is only
+# ~1.4 MB, so the byte cap is the looser of the two and is here as a backstop.
+# verify_tiles.py is what proves neither of them ever fired.
+TIPPECANOE_MAX_TILE_BYTES = 2_000_000
+TIPPECANOE_MAX_TILE_FEATURES = 400_000
 
 
 def _validate_ladder() -> None:
@@ -1253,6 +1302,14 @@ def iter_dot_features(
                 # the ones getting decimated (2% survived) while the rest of the
                 # ladder came through. Stating the minzoom on every feature makes
                 # the ladder the only thing that decides what a tile carries.
+                #
+                # This value is PROVISIONAL. restride_lines() overwrites it at
+                # concatenation time from the archive-wide per-code ordinal, so an
+                # .ldjson built under an older ladder still tiles correctly under
+                # the current one, and a ladder change costs a re-tile rather than
+                # a rebuild (see config_hash). It is written anyway so that a
+                # single-state .ldjson remains self-sufficient — and so that no
+                # feature ever reaches tippecanoe without an explicit minzoom.
                 feat["tippecanoe"] = {"minzoom": mz}
                 yield feat
                 idx += 1
@@ -1262,8 +1319,8 @@ def iter_dot_features(
 
 def config_hash(scale: float = 1.0) -> str:
     """Fingerprint of everything that determines the CONTENT of a dot file: the
-    class vocabulary, each class's density and minzoom, the zoom-density ladder,
-    the ACS variables, the PUMA correction table and the derivation version.
+    class vocabulary, each universe's density, the ACS variables, the PUMA
+    correction table and the derivation version.
 
     build_all_states.sh writes this into each state's sidecar and refuses to
     reuse an existing .ldjson whose fingerprint doesn't match. Without that, a
@@ -1271,6 +1328,33 @@ def config_hash(scale: float = 1.0) -> str:
     cat them together with the new ones — a tileset with one class vocabulary in
     the states that happened to get rebuilt and another in the rest, with no
     error emitted anywhere.
+
+    THE ZOOM LADDER IS DELIBERATELY NOT IN HERE, and that is a change. It used to
+    be, on the reasoning that the ladder decides each dot's baked
+    `tippecanoe.minzoom` — which it does. But that baked value is PROVISIONAL:
+    restride_lines() overwrites the minzoom of every single feature at
+    concatenation time, from the archive-wide per-code ordinal, using whatever
+    ladder is in force THEN (see the phase-fix note above cat_verified). The only
+    path from .ldjson to tileset is `--cat-verified`, which always restrides, and
+    test_gate.py asserts the generated tile command still uses it. Nothing else
+    reads the baked minzoom: verify_tiles.py derives what it expects from
+    LADDER_SLOTS and the sidecar's `code_dots`, never from the .ldjson bytes.
+
+    So the ladder is a TILING parameter, not a CONTENT parameter — as is the zoom
+    envelope (TILE_MIN_ZOOM/TILE_MAX_ZOOM), which reaches the .ldjson only through
+    the ladder and otherwise only becomes a tippecanoe flag. Both are out.
+    Fingerprinting them here forced a full 52-state rebuild (~2h) to change
+    numbers that only the ~80-minute re-tile consumes. It no longer does. What IS
+    still fingerprinted is everything the .ldjson bytes actually depend on — the
+    ACS vintage and variables, the flag bit assignment, the jobs code, the
+    per-universe grain, the density scale and the apportionment version. Change
+    any of those and the gate correctly refuses to reuse a state.
+
+    (The corollary, stated so nobody has to rediscover it: an .ldjson on disk may
+    carry minzooms from an older ladder. That is fine and expected. It is fine
+    only because of the restride — so if you ever "simplify" the concat back to a
+    bare `cat`, put the ladder BACK in this hash in the same commit, or every
+    state on disk will silently tile itself at whatever ladder it was born with.)
     """
     payload = "|".join([
         _acs_cache_key(),
@@ -1279,9 +1363,7 @@ def config_hash(scale: float = 1.0) -> str:
         ";".join(f"{f}:{d['bit']}" for f, d in FLAG_DEFS.items()),
         f"jobs:{JOBS_CODE}",
         ";".join(f"{u}:{unit_per_dot(u, scale)}" for u in UNITS),
-        ",".join(f"{z}:{s}" for z, s in sorted(ZOOM_DENSITY_LADDER.items())),
         f"apportion{APPORTION_VERSION}",
-        f"z{TILE_MIN_ZOOM}-{TILE_MAX_ZOOM}",
     ])
     return hashlib.sha1(payload.encode()).hexdigest()[:12]
 
@@ -1873,6 +1955,16 @@ def main():
 
     # 7. Sidecar metadata — the legend's source of truth for "1 dot = N people".
     meta = legend_payload(args.density_scale)
+    # ...minus the keys that describe the TILESET rather than this state's dots.
+    # The archive name, the zoom envelope and the zoom ladder are all decided at
+    # RE-TILE time now (config_hash no longer fingerprints them, precisely so a
+    # ladder change costs a re-tile and not a 52-state rebuild). A sidecar that
+    # restated them would be a field that goes quietly stale the first time the
+    # ladder moves — and sidecars are the thing verify_tiles.py trusts. So the
+    # sidecar states only what the .ldjson bytes actually are; demand-legend.json,
+    # which is regenerated on every build, states what the tileset is.
+    for tileset_key in ("archive", "zoom_ladder", "min_zoom", "max_zoom"):
+        meta.pop(tileset_key, None)
     meta.update({
         "state": abbr.upper(),
         "fips": state_fips,

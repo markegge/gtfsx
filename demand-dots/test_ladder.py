@@ -5,15 +5,16 @@ WHAT IS BEING DEFENDED HERE
 ───────────────────────────
 The ladder's promise is arithmetic, not aspiration: at zoom z, exactly 1/stride(z)
 of each code's dots are in the tiles. It keeps that promise with a SYSTEMATIC
-sample — dot k of a code goes in at LADDER_SLOTS[k % 128] — which is exact to
-within one dot. verify_tiles.py checks the built archive against exactly that
-arithmetic (expected_at_zoom), so the emitter and the checker have to be counting
-the same thing or the guard is measuring nothing.
+sample — dot k of a code goes in at LADDER_SLOTS[k % LADDER_PERIOD] — which is
+exact to within one dot. verify_tiles.py checks the built archive against exactly
+that arithmetic (expected_at_zoom), so the emitter and the checker have to be
+counting the same thing or the guard is measuring nothing.
 
 They were not. `k` is a running count, and the nationwide build runs one process
 per state, so k restarted at 0 in all 52 of them. Slot 0 is the z8 slot — the
 rarest rung — so every state independently rounded its z8 count UP to
-ceil(N_s/128), and 52 half-dot excesses accumulated:
+ceil(N_s/period), and 52 half-dot excesses accumulated (measured on the ladder of
+the day, whose period was 128):
 
     carless+disability, z8:  expected 947, the archive carried 975  (+2.9%)
 
@@ -70,7 +71,7 @@ HERE = Path(__file__).parent
 PY = str(HERE / ".venv" / "bin" / "python")
 
 # 52 states, shaped like the real ones: two common codes, two RARE ones, jobs —
-# and a per-state count that VARIES and is never a multiple of the 128-period.
+# and a per-state count that VARIES and is never a multiple of the ladder period.
 # Both of those matter. A multiple of the period has no remainder to round up, and
 # equal states would all round up by the same amount, which is a tidier bug than
 # the real one (there, the 52 remainders are scattered and average about half a
@@ -224,9 +225,9 @@ def test_the_bias_signature_is_rare_codes_at_low_zooms():
     The law: each state rounds its own count up by <1 dot, so the archive's excess
     is ~n_states/2 dots at every zoom — a FIXED number of dots, spread over the
     N/stride dots that zoom carries. The relative bias is therefore proportional to
-    the STRIDE (128x worse at z8 than at z15) and inversely proportional to the
-    code's population (worst on the rarest). It is exactly zero at full density,
-    where the stride is 1 and there is no remainder to round.
+    the STRIDE (so, worst at z8 by exactly the ladder's period) and inversely
+    proportional to the code's population (worst on the rarest). It is exactly zero
+    at full density, where the stride is 1 and there is no remainder to round.
     """
     rare, common = 13, 0
     prev = {}
@@ -253,13 +254,18 @@ def test_the_bias_signature_is_rare_codes_at_low_zooms():
 def test_a_per_dot_hash_would_be_far_worse_than_the_ordinal():
     """The tempting "just make it stateless" fix: drop the running ordinal and
     take the slot from a hash of the dot's own identity. It is unbiased — and it
-    is 30x less accurate, because an independent draw per dot has multinomial
-    variance where a systematic every-128th sample has none.
+    is ~30x less accurate, because an independent draw per dot has multinomial
+    variance where a systematic every-Nth sample has none.
 
-    sd = sqrt(N x p x (1-p)) with p = 1/128. For the real rarest code
-    (carless+disability, 121,221 dots) that is ±31 dots on the 947 the z8 tiles
-    should carry — ±3.2%, six times verify's tolerance, and WORSE than the +2.9%
-    bug it would be replacing. Measured here on the real N, with a real hash.
+    sd = sqrt(N x p x (1-p)) with p = 1/LADDER_PERIOD. For the real rarest code
+    (carless+disability, 121,221 dots) that is ±61 dots (1 sigma) on the 3,788 the
+    z8 tiles should carry — ±1.6%, three times verify's 0.5% tolerance, where the
+    running ordinal is off by 0.02%. Measured here on the real N, with a real hash.
+
+    (Under the previous 128-period ladder the same argument gave ±3.2% against a
+    947-dot z8 count — worse in relative terms, because the coarser the stride,
+    the fewer dots there are for the variance to average out over. The ladder got
+    denser, so this got less bad; it did not stop being true.)
     """
     n = 121_221                                # real: carless+disability
     ideal = n / LADDER_PERIOD

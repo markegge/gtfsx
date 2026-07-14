@@ -107,20 +107,36 @@ export function MapLayerControls({
           <div className="text-[10px] font-bold text-warm-gray uppercase tracking-wider mb-1.5">
             Transit Demand
           </div>
-          <label
-            className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] font-semibold transition-colors
-              ${LEGEND ? 'cursor-pointer hover:bg-cream' : 'opacity-40 cursor-not-allowed'}`}
-            title={DEMAND_UNAVAILABLE_REASON ?? 'Dot-density map of residents and jobs'}
-          >
-            <input
-              type="checkbox"
-              checked={showDemandDots && !!LEGEND}
-              disabled={!LEGEND}
-              onChange={(e) => onShowDemandDotsChange(e.target.checked)}
-              className="accent-coral"
-            />
-            <span className="text-dark-brown">Demand Dots</span>
-          </label>
+          <div className="flex items-center gap-1">
+            <label
+              className={`flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] font-semibold transition-colors
+                ${LEGEND ? 'cursor-pointer hover:bg-cream' : 'opacity-40 cursor-not-allowed'}`}
+              title={DEMAND_UNAVAILABLE_REASON ?? 'Dot-density map of residents and jobs'}
+            >
+              <input
+                type="checkbox"
+                checked={showDemandDots && !!LEGEND}
+                disabled={!LEGEND}
+                onChange={(e) => onShowDemandDotsChange(e.target.checked)}
+                className="accent-coral"
+              />
+              <span className="text-dark-brown">Demand Dots</span>
+            </label>
+            {/* Docs link — a sibling of the label rather than nested inside it,
+                because the label wraps the checkbox: a nested <a> would risk
+                also toggling the checkbox on click. Same "i" badge treatment as
+                the NTD/External ID docs link in AgencyEditor. */}
+            <a
+              href="/docs/rider-propensity/"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="About the demand dot layer"
+              aria-label="About the demand dot layer. Opens the docs in a new tab"
+              className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full border border-warm-gray/50 text-[9px] font-bold text-warm-gray hover:border-coral hover:text-coral transition-colors"
+            >
+              i
+            </a>
+          </div>
 
           {/* The tiles predate the new categories: say so instead of offering a
               control that would draw an empty map. */}

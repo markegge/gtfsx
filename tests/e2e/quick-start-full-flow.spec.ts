@@ -49,21 +49,23 @@ test('quick start: agency through export produces a valid GTFS zip', async ({ pa
   await placeStopsOnMap(page, 3);
   await expect(page.getByText(/stops \(\d+\)/i)).toBeVisible();
 
-  // 6. Trips tab -> open timetable editor -> Generate service. Two distinct
-  // "Generate service" buttons exist once the bottom panel is open (the
-  // Trips-tab shortcut in the right rail, and the timetable's own empty-state
-  // button, which opens the actual form) — scope to the bottom panel for the
-  // second one so the click can't land on the wrong control.
+  // 6. Trips tab -> open the timetable editor -> generate trips. The right-rail
+  // Trips tab's shortcut ("✨ Generate service" / "Open timetable editor") opens
+  // the bottom-panel timetable; the timetable itself then uses the refreshed UI:
+  // a "Generate trips…" tool (and an empty-state "Generate trips" CTA) that opens
+  // an inline drawer — no longer a modal.
   await openRouteTab(page, /^trips$/i);
   await page.getByRole('button', { name: /generate service|open timetable editor/i }).first().click();
-  // Both the toolbar icon-button and the big empty-state CTA open the same
-  // "Generate service" modal — either match works.
+  // In the bottom panel, both the Trip-tools "Generate trips…" button and the
+  // empty-state "Generate trips" CTA open the same inline drawer — either match.
   const bottomPanel = page.getByTestId('bottom-panel');
-  await bottomPanel.getByRole('button', { name: /generate service/i }).first().click();
-  // The shared Modal renders an sr-only Radix Dialog.Title alongside the form's
-  // visible heading, so assert the dialog by its accessible name instead.
-  await expect(page.getByRole('dialog', { name: /generate service/i })).toBeVisible();
-  const generateButton = page.getByRole('button', { name: /^generate/i });
+  await bottomPanel.getByRole('button', { name: /generate trips/i }).first().click();
+  // The bulk-tool form is an inline drawer (a labelled region), not a Radix
+  // dialog, so assert it by its accessible name rather than role=dialog.
+  const generateDrawer = page.getByRole('region', { name: /generate trips/i });
+  await expect(generateDrawer).toBeVisible();
+  // The drawer's primary action is "Generate N trips"; commit it.
+  const generateButton = generateDrawer.getByRole('button', { name: /generate .*trip/i });
   await expect(generateButton).toBeEnabled();
   await generateButton.click();
   // Trips exist now — the tab label picks up a count ("Trips 33"), so match

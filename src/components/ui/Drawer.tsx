@@ -35,7 +35,7 @@ export function Drawer({
   children,
 }: DrawerProps) {
   return (
-    <div className="shrink-0 flex items-start gap-3.5 px-4 py-3.5 bg-cream border-b border-sand">
+    <div role="region" aria-label={title} className="shrink-0 flex items-start gap-3.5 px-4 py-3.5 bg-cream border-b border-sand">
       <div
         className={`shrink-0 mt-0.5 w-[34px] h-[34px] rounded-[10px] flex items-center justify-center text-base ${iconClassName}`}
       >

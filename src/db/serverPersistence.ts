@@ -114,6 +114,53 @@ export function resetStoreEntities() {
   state.setLicenseSpdx(null);
 }
 
+/**
+ * Full "clean editor" reset for a feed boundary. Does everything
+ * resetStoreEntities does, PLUS the transient view state that is not a feed
+ * entity but still renders (or edits) per-feed: selection, any in-progress
+ * drawing/editing, map mode, the per-feed visibility filters, and the derived
+ * overlays (validation, coverage, access isochrone, walkshed profile, stop
+ * analysis).
+ *
+ * Use this at EVERY point a feed is opened, replaced, created, or left —
+ * server load, replace-import, create-new-feed, and leaving the read-only
+ * /demo preview — so no in-memory geometry or editing buffer from the previous
+ * feed can leak onto the next feed's map (#42). Resetting map mode to 'select'
+ * with no editing ids also makes MapView's draw-sync effect deleteAll() the
+ * imperative Mapbox Draw layer, so a half-drawn shape/zone can't survive either.
+ */
+export function resetEditorState() {
+  const state = useStore.getState();
+  // Selection + in-progress drawing/editing.
+  state.selectRoute(null);
+  state.selectStop(null);
+  state.selectTrip(null);
+  state.setEditingStopId(null);
+  state.setDrawingRouteId(null);
+  state.setDrawingNewRoute(false);
+  state.setEditingRouteId(null);
+  state.setEditingShapeId(null);
+  state.setEditingFlexZoneId(null);
+  state.setFlexZoneDetailId(null);
+  state.setMapMode('select');
+  // Per-feed visibility filters reference ids of the outgoing feed's rows.
+  useStore.setState((s) => {
+    s.hiddenRouteIds = [];
+    s.hiddenShapeIds = [];
+  });
+  // Derived overlays / analytics — recomputed per feed, never inherited.
+  state.setValidationMessages([]);
+  state.setCoverageData(null);
+  state.setCoverageError(null);
+  state.clearAccessIsochrone();
+  state.setWalkshedProfiles(null);
+  state.setIsProfilingWalksheds(false);
+  state.setWalkshedProfileError(null);
+  state.setStopAnalysisOverlay(null);
+  // Feed entities last.
+  resetStoreEntities();
+}
+
 export function applySnapshotToStore(snapshot: Record<string, unknown>) {
   // Loading a snapshot (server load, snapshot restore, variant switch) replaces
   // the whole feed — suppress undo capture and reset history so undo/redo can't
@@ -124,28 +171,13 @@ export function applySnapshotToStore(snapshot: Record<string, unknown>) {
 function applySnapshotToStoreInner(snapshot: Record<string, unknown>) {
   const state = useStore.getState();
 
-  // Reset UI selection / editing state (mirrors loadImportIntoStore behaviour).
-  state.selectRoute(null);
-  state.selectStop(null);
-  state.selectTrip(null);
-  state.setDrawingRouteId(null);
-  state.setEditingRouteId(null);
-  state.setEditingShapeId(null);
-  state.setEditingFlexZoneId(null);
-  state.setFlexZoneDetailId(null);
-  state.setMapMode('select');
-  useStore.setState((s) => {
-    s.hiddenRouteIds = [];
-    s.hiddenShapeIds = [];
-  });
-  state.setValidationMessages([]);
-  state.setCoverageData(null);
-  state.setCoverageError(null);
-
-  // Pre-clear every entity slice so a partial snapshot (missing a key)
-  // doesn't leak the previous project's rows. The per-key Array.isArray
-  // guards below then refill from whatever the snapshot does carry.
-  resetStoreEntities();
+  // Clean-slate the editor first: selection, in-progress editing, map mode,
+  // visibility filters, derived overlays, AND every entity slice. A partial
+  // snapshot (missing a key) then can't leak the previous feed's rows, and no
+  // stale geometry / editing buffer survives onto the new feed's map (#42).
+  // The per-key Array.isArray guards below refill from whatever the snapshot
+  // does carry.
+  resetEditorState();
 
   const g = (k: DataKey) => snapshot[k];
   if (Array.isArray(g('agencies'))) state.setAgencies(g('agencies') as never);
@@ -185,13 +217,13 @@ function applySnapshotToStoreInner(snapshot: Record<string, unknown>) {
   if (g('featureSettings') && typeof g('featureSettings') === 'object') {
     state.setFeatureSettings(g('featureSettings') as never);
   }
-  // Per-feed dismissed validation rules. resetStoreEntities() above already
+  // Per-feed dismissed validation rules. resetEditorState() above already
   // cleared this to [], so an absent key correctly leaves a fresh feed showing
   // every rule (no cross-feed leak).
   if (Array.isArray(g('dismissedValidations'))) {
     state.setDismissedValidations(g('dismissedValidations') as never);
   }
-  // resetStoreEntities() above already cleared this to null, so an absent or
+  // resetEditorState() above already cleared this to null, so an absent or
   // explicitly-null key correctly leaves a fresh/cleared feed rather than
   // leaking the previous project's license.
   if (typeof g('licenseSpdx') === 'string') state.setLicenseSpdx(g('licenseSpdx') as string);

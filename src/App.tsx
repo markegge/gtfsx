@@ -5,7 +5,9 @@ import { SaveAsDialog } from './components/feeds/SaveAsDialog';
 import { setupAutoSave, LAST_PROJECT_KEY } from './db/persistence';
 import {
   loadProjectFromServer,
+  resetEditorState,
 } from './db/serverPersistence';
+import { loadingFeed } from './store/history';
 import { listProjects } from './services/projectsApi';
 import { ApiError } from './services/authApi';
 import { useStore } from './store';
@@ -121,7 +123,13 @@ function EditorRoute({ demo = false }: { demo?: boolean }) {
   useEffect(() => {
     if (demo) {
       loadDemoFeed().catch(console.error);
-      return;
+      // /demo is a read-only preview of the published SVT feed loaded into the
+      // shared editor store. Leaving it must tear that feed back out, or its
+      // geometry (route shapes, flex zones, half-drawn lines) leaks onto the
+      // next feed the user opens — including a brand-new empty feed (#42).
+      // loadingFeed() suppresses undo capture and clears the history stacks so
+      // the teardown isn't itself undoable.
+      return () => loadingFeed(() => resetEditorState());
     }
     // Refresh = fresh start. Anonymous drafts are NOT auto-restored from
     // IndexedDB on mount — the beforeunload prompt is the only line of

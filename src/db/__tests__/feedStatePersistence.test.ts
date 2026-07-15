@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useStore } from '../../store';
-import { applySnapshotToStore, buildSnapshot, resetStoreEntities } from '../serverPersistence';
+import { applySnapshotToStore, buildSnapshot, resetEditorState, resetStoreEntities } from '../serverPersistence';
 import type { Agency } from '../../types/gtfs';
 
 const AGENCY: Agency = {
@@ -73,5 +73,92 @@ describe('feed-state persistence (license + agency external_id)', () => {
   it('normalizes a blank licenseSpdx to null', () => {
     useStore.getState().setLicenseSpdx('  ');
     expect(useStore.getState().licenseSpdx).toBeNull();
+  });
+});
+
+// Regression for #42: opening a feed must not leak the previous feed's
+// in-memory geometry or editing/view state onto the new feed's map. Every
+// feed-boundary path funnels through resetEditorState (server load, replace
+// import, create-new-feed, leaving /demo), so it is the seam to lock down.
+describe('feed-open editor reset (issue #42 state leak)', () => {
+  beforeEach(() => {
+    resetEditorState();
+  });
+
+  // Populate the transient geometry + view state the way an open feed would.
+  function seedDirtyEditor() {
+    const s = useStore.getState();
+    s.setShapes([
+      { shape_id: 's1', points: [{ shape_pt_lat: 45, shape_pt_lon: -111, shape_pt_sequence: 0 }] },
+    ] as never);
+    s.setFlexZones([
+      { id: 'z1', name: 'Zone 1', geojson: { type: 'FeatureCollection', features: [] } },
+    ] as never);
+    s.setRoutes([{ route_id: 'r1', route_short_name: '1', route_type: 3 }] as never);
+    s.selectRoute('r1');
+    s.selectStop('st1');
+    s.selectTrip('t1');
+    s.setEditingShapeId('s1');
+    s.setEditingFlexZoneId('z1');
+    s.setDrawingRouteId('r1');
+    s.setEditingStopId('st1');
+    s.setMapMode('edit_shape');
+    useStore.setState((st) => {
+      st.hiddenRouteIds = ['r9'];
+      st.hiddenShapeIds = ['s9'];
+    });
+    s.setCoverageData({} as never);
+    s.setValidationMessages([{ id: 'v1' }] as never);
+    s.setAccessResult({} as never);
+    s.setWalkshedProfiles({} as never);
+    s.setStopAnalysisOverlay({} as never);
+  }
+
+  it('resetEditorState clears geometry AND all transient view/editing state', () => {
+    seedDirtyEditor();
+    // Sanity: everything is dirty before the reset.
+    expect(useStore.getState().shapes.length).toBe(1);
+    expect(useStore.getState().mapMode).toBe('edit_shape');
+
+    resetEditorState();
+
+    const s = useStore.getState();
+    // Entities
+    expect(s.shapes).toHaveLength(0);
+    expect(s.flexZones).toHaveLength(0);
+    expect(s.routes).toHaveLength(0);
+    // Selection + in-progress editing
+    expect(s.selectedRouteId).toBeNull();
+    expect(s.selectedStopId).toBeNull();
+    expect(s.selectedTripId).toBeNull();
+    expect(s.editingShapeId).toBeNull();
+    expect(s.editingFlexZoneId).toBeNull();
+    expect(s.drawingRouteId).toBeNull();
+    expect(s.editingStopId).toBeNull();
+    // Map mode back to select — this is what makes MapView tear down the
+    // imperative Mapbox Draw layer, so a half-drawn shape can't survive.
+    expect(s.mapMode).toBe('select');
+    // Per-feed visibility filters
+    expect(s.hiddenRouteIds).toHaveLength(0);
+    expect(s.hiddenShapeIds).toHaveLength(0);
+    // Derived overlays / analytics
+    expect(s.coverageData).toBeNull();
+    expect(s.validationMessages).toHaveLength(0);
+    expect(s.accessResult).toBeNull();
+    expect(s.walkshedProfiles).toBeNull();
+    expect(s.stopAnalysisOverlay).toBeNull();
+  });
+
+  it('opening an empty feed (applySnapshotToStore with no geometry) drops the previous feed\'s shapes + flex zones', () => {
+    seedDirtyEditor();
+    // Re-open a feed whose snapshot carries no shapes/flexZones keys at all —
+    // the exact /demo-round-trip → empty-feed case in the bug report. The
+    // per-key guards must NOT leave the demo's geometry behind.
+    applySnapshotToStore({});
+    const s = useStore.getState();
+    expect(s.shapes).toHaveLength(0);
+    expect(s.flexZones).toHaveLength(0);
+    expect(s.routes).toHaveLength(0);
+    expect(s.mapMode).toBe('select');
   });
 });

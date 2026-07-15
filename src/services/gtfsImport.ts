@@ -3,6 +3,7 @@
 // re-export it here so existing import sites keep importing from one place.
 import { useStore } from '../store';
 import { loadingFeed } from '../store/history';
+import { resetEditorState } from '../db/serverPersistence';
 import type { AdvancedFeature } from '../store/featuresSlice';
 import {
   importGtfsZip,
@@ -49,33 +50,14 @@ export function loadImportIntoStore(data: Awaited<ReturnType<typeof importGtfsZi
 }
 
 function applyImportToStore(data: Awaited<ReturnType<typeof importGtfsZip>>) {
-  const store = useStore.getState();
-  // Reset UI selection / editing / visibility state so stale references to
-  // routes/stops/shapes from the previous project don't linger across a
-  // "Replace project" import. Map mode returns to 'select' and any in-flight
-  // drawing or editing is cancelled. This makes a replace-import behave
-  // identically to loading a feed into a fresh project.
-  store.selectRoute(null);
-  store.selectStop(null);
-  store.selectTrip(null);
-  store.setDrawingRouteId(null);
-  store.setEditingRouteId(null);
-  store.setEditingShapeId(null);
-  store.setEditingFlexZoneId(null);
-  store.setFlexZoneDetailId(null);
-  store.setMapMode('select');
-  // Drop any hidden-route / hidden-shape lists — the ids belong to routes
-  // and shapes that no longer exist.
-  useStore.setState((s) => {
-    s.hiddenRouteIds = [];
-    s.hiddenShapeIds = [];
-  });
-  // Clear derived analytics so the Coverage / Validation panels don't
-  // display stale numbers from the previous feed.
-  store.setValidationMessages([]);
-  store.setCoverageData(null);
-  store.setCoverageError(null);
+  // Clean-slate the editor before loading the imported feed so no selection,
+  // in-progress drawing/editing, visibility filter, derived overlay, or
+  // leftover entity from the previous project survives a "Replace project"
+  // import. This makes a replace-import behave identically to the server load
+  // path (applySnapshotToStore) — one shared reset, no drift (#42).
+  resetEditorState();
 
+  const store = useStore.getState();
   store.setAgencies(data.agencies);
   store.setCalendars(data.calendars);
   store.setCalendarDates(data.calendarDates);

@@ -28,7 +28,7 @@ import { ApiError } from '../../services/authApi';
 import { fireProNudge } from '../../services/proIntent';
 import { roleAtLeast } from '../../services/orgsApi';
 import { ImportDialog } from '../import-export/ImportDialog';
-import { buildSnapshot, resetStoreEntities, setCurrentWorkingStateVersion, wipeLocalProject } from '../../db/serverPersistence';
+import { buildSnapshot, resetEditorState, setCurrentWorkingStateVersion, wipeLocalProject } from '../../db/serverPersistence';
 import { generateId } from '../../services/idGenerator';
 import {
   formatPurgeCountdown,
@@ -462,12 +462,13 @@ export function MyFeedsPage() {
             if (feedsProjects.length + 1 > FREE_FEED_CAP) {
               fireFeedCapNudge('create_over_cap');
             }
-            // The previous project's routes/stops/calendars are still in the
-            // in-memory store and in IndexedDB. Without a wipe, the new
-            // editor would briefly render that stale data before the empty
-            // server snapshot loads — and an autosave could even persist
-            // the old data under the new project's id. Clear both.
-            resetStoreEntities();
+            // The previous project's routes/stops/calendars — plus any active
+            // selection, in-progress edit, or map overlay — are still in the
+            // in-memory store, and its data is still in IndexedDB. Without a
+            // wipe, the new editor would briefly render that stale feed before
+            // the empty server snapshot loads, and an autosave could even
+            // persist the old data under the new project's id. Clear both.
+            resetEditorState();
             await wipeLocalProject(p.id);
 
             // Org-owned feeds: pre-seed an agency stamped with the org's name.

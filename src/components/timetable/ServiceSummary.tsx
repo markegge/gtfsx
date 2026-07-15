@@ -94,7 +94,6 @@ function SummaryView() {
   // are added/removed externally. Pure derivation via useMemo would lose
   // the user's drag order.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRouteOrder((prev) => {
       const visibleIds = new Set(visibleRoutes.map((r) => r.route_id));
       const kept = prev.filter((id) => visibleIds.has(id));

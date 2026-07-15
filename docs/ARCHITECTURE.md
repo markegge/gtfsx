@@ -491,9 +491,9 @@ Design rationale is preserved in the decisions appendix of the archived
   the NTD `agency_id` validator warnings, the P-50 helper panel, and the
   scheduled-publish gate-hole fix (schedule endpoint runs the same
   `rt_breakage`/`agency_id_churn` gates; acks persist on `scheduled_publish`
-  and the cron replays them). **Residual gap:** svt-demo has not been
-  republished with an example `external_id`/license, so no live feed
-  demonstrates the crosswalk yet (the routes serve, with those keys omitted).
+  and the cron replays them). svt-demo carries a live example since
+  2026-07-15 (`external_id: 99999`, license `CC0-1.0` — visible in its
+  `dmfr.json` and `feed_info.json`).
 - The project owner's account (`mark@gtfsx.com`) is staff + enterprise.
   Pre-launch D1 backup under `backups/` (gitignored).
 - **Rollback:** `BILLING_ENABLED=false` disables paid checkout/portal but leaves

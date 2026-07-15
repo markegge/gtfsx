@@ -61,6 +61,18 @@ export type OurNoticeId =
   | 'expired_calendar'
   | 'no_fares'
   | 'duplicate_area_id'
+  // Distance / geometry quality (#50 — ported to MobilityData parity)
+  | 'shape_dist_decreasing'
+  | 'stop_time_dist_not_increasing'
+  | 'fast_travel_consecutive'
+  | 'fast_travel_far'
+  | 'stop_too_far_from_shape'
+  // Feed-expiry heads-up (#50)
+  | 'feed_expiry_soon'
+  // Route-naming polish (#50)
+  | 'route_long_name_contains_short_name'
+  | 'route_same_name_and_desc'
+  | 'duplicate_route_name'
   // GTFS-Flex — zone geography (locations.geojson / location_groups.txt)
   | 'flex_duplicate_geography_id'
   | 'flex_unsupported_geometry'
@@ -170,6 +182,21 @@ const OUR_NOTICE_RULES: OurNoticeRule[] = [
   { id: 'expired_calendar', test: /is expired — end_date/i },
   { id: 'no_fares', test: /no fare information defined/i },
   { id: 'duplicate_area_id', test: /area_id must be unique/i },
+
+  // Distance / geometry quality (#50).
+  { id: 'shape_dist_decreasing', test: /shape ".*" has a shape_dist_traveled that decreases/i },
+  { id: 'stop_time_dist_not_increasing', test: /has a shape_dist_traveled that does not increase at stop/i },
+  { id: 'fast_travel_consecutive', test: /travels implausibly fast between stops/i },
+  { id: 'fast_travel_far', test: /averages an implausible .* km\/h across/i },
+  { id: 'stop_too_far_from_shape', test: / m from shape ".*" on route/i },
+
+  // Feed-expiry heads-up (#50). Both the 7-day and 30-day tiers classify here.
+  { id: 'feed_expiry_soon', test: /this feed (expires|expired)/i },
+
+  // Route-naming polish (#50).
+  { id: 'route_long_name_contains_short_name', test: /restates its own short name .* at the start of route_long_name/i },
+  { id: 'route_same_name_and_desc', test: /has a route_desc identical to its (short|long) name/i },
+  { id: 'duplicate_route_name', test: /share the same name .* agency, and type/i },
 ];
 
 /**
@@ -266,6 +293,24 @@ export const MOBILITY_TO_OURS: Record<string, OurNoticeId[]> = {
   unusable_trip: ['trip_no_stop_times'],
   expired_calendar: ['expired_calendar'],
 
+  // ── Distance / geometry quality (#50 — ported to parity) ───────────────
+  // shape_dist_traveled must increase along a shape, and strictly increase
+  // across a trip's stop_times. Previously we only warned on the all-zero case.
+  decreasing_shape_distance: ['shape_dist_decreasing'],
+  // Implausible travel speed between stops — per-route_type ceiling.
+  fast_travel_between_consecutive_stops: ['fast_travel_consecutive'],
+  fast_travel_between_far_stops: ['fast_travel_far'],
+  // A stop projected >100 m off its trip's shape (geometry pass). The
+  // _using_user_distance variant stays deferred (see TODO_MOBILITY_CODES).
+  stop_too_far_from_shape: ['stop_too_far_from_shape'],
+  // Feed-expiry heads-up: both tiers map to our single soft nudge.
+  feed_expiration_date7_days: ['feed_expiry_soon'],
+  feed_expiration_date30_days: ['feed_expiry_soon'],
+  // Route-naming polish.
+  duplicate_route_name: ['duplicate_route_name'],
+  route_long_name_contains_short_name: ['route_long_name_contains_short_name'],
+  same_name_and_description_for_route: ['route_same_name_and_desc'],
+
   // ── Known gaps (no equivalent yet) — also in TODO_MOBILITY_CODES ───────
   // All codes below were observed live on our own streamline feed (v8.0.1) and
   // are real rules we don't yet flag. Empty array = accepted gap; the parity
@@ -274,14 +319,12 @@ export const MOBILITY_TO_OURS: Record<string, OurNoticeId[]> = {
   // mapped above to our specific required-field checks, but on a given feed the
   // canonical validator may flag a *different* field than any of ours — in which
   // case it shows up as a per-feed gap and lives in the baseline.
-  decreasing_or_equal_stop_time_distance: [],
+  decreasing_or_equal_stop_time_distance: ['stop_time_dist_not_increasing'],
   equal_shape_distance_same_coordinates: [],
   leading_or_trailing_whitespaces: [],
   missing_feed_info_date: [],
   missing_recommended_field: [],
   route_color_contrast: [],
-  route_long_name_contains_short_name: [],
-  same_name_and_description_for_route: [],
   stop_without_stop_time: [],
   trip_distance_exceeds_shape_distance_below_threshold: [],
 };
@@ -297,20 +340,15 @@ export const MOBILITY_TO_OURS: Record<string, OurNoticeId[]> = {
  * on real feeds and deliberately deferred.
  */
 export const TODO_MOBILITY_CODES: string[] = [
-  // Shape / stop-time distance quality (we only warn on all-zero
-  // shape_dist_traveled today; these need real geometry/distance checks).
+  // Shape / stop-time distance quality. The equal-distance and user-distance
+  // stop-matching variants remain deferred (#50 ported the decreasing-distance,
+  // fast-travel, and geometry stop_too_far_from_shape checks — see the mapping
+  // table above). stop_too_far_from_shape_using_user_distance needs the user-
+  // distance matcher and rarely applies (editor feeds don't set stop_times
+  // shape_dist_traveled), so it's a documented deferral, not a gap we owe.
   'equal_shape_distance_diff_coordinates',
-  'decreasing_shape_distance',
-  'stop_too_far_from_shape',
   'stop_too_far_from_shape_using_user_distance',
-  // Speed/time plausibility between stops (we cap at 48:00 only).
-  'fast_travel_between_consecutive_stops',
-  'fast_travel_between_far_stops',
-  // Naming / styling best practices.
-  'duplicate_route_name',
-  // Feed-info / metadata / expiration.
-  'feed_expiration_date_seven_days',
-  'feed_expiration_date_thirty_days',
+  // Feed service window — INFO counterpart to the expiry nudge, deferred.
   'service_extends_far_in_the_future', // INFO
   // Hygiene: unknown files/columns, non-printables, dup keys.
   'unknown_file',     // INFO

@@ -97,12 +97,12 @@ delivered once.
 | `session` | Active login (HTTP-only cookie scoped to the editor origin). |
 | `auth_token` | Single-use hashed tokens: `verify_email`, `magic_link`, `password_reset`, `invitation`. |
 | `organization` + `organization_membership` | Shared workspace + **many-to-many** user↔org with per-org role (critical for consultants). Includes org brand-logo columns. |
-| `feed_project` | One feed. Owned by a user or org (`owner_type`+`owner_id`); slug unique per owner; `brand_primary_color`; thumbnail pointer; `locked`. Also `license_spdx` (0024) — a **projection** written at publish time, not the source of truth: the editor's feed state (`licenseSpdx`) is. There is deliberately **no `ntd_id` column**: an agency's NTD ID is `agency.external_id`, which lives *inside the feed*, so publication reads it per agency straight out of the snapshot state. A single project-level ID could not describe a multi-agency feed. |
+| `feed_project` | One feed. Owned by a user or org (`owner_type`+`owner_id`); slug unique per owner; `brand_primary_color`; thumbnail pointer; `locked`. Also `license_spdx` (0024) — a **projection** written at publish time, not the source of truth: the editor's feed state (`licenseSpdx`) is. There is deliberately **no `ntd_id` column**: an agency's NTD ID is `agency.external_id`, which lives *inside the feed*, so publication reads it per agency straight out of the snapshot state. A single project-level ID could not describe a multi-agency feed. Also `catalog_publisher_type` + `mdb_source_id` (0027) — the open-catalog opt-in/declaration and the Mobility DB switcher id (see `/catalog.json`). |
 | `project_membership` *(future, BE-95)* | Per-project access inside an org without org-wide visibility. Not built. |
 | `feed_snapshot` | Immutable point-in-time editor state. Two R2 blobs (gzipped JSON + rendered ZIP) + a summary row. *(Renamed from `feed_version` in 0012.)* |
 | `draft_link` | Unguessable hashed token → a specific snapshot; time-limited, revocable. |
 | `publication` / `publication_history` | Canonical-publish pointer (≤1 live snapshot per project) + append-only publish/unpublish/rollback log. |
-| `project_catalog_submission` | Opt-in record per (project, catalog) for Mobility DB / transit.land; stores external feed id. |
+| `project_catalog_submission` | **Legacy PUSH** opt-in per (project, catalog) for the abandoned direct Mobility DB / transit.land submission (`submit.ts`; the MDB v1 API `405`s on third-party writes). Superseded by the PULL open catalog (`feed_project.catalog_publisher_type` → `/catalog.json`); kept, not removed. |
 | `project_rt_feed` | GTFS-RT feed URLs forwarded in `feed_info.json`. `managed=0` = externally-hosted feeds the agency registers; `managed=1` = the auto-wired pointer at our own generated Service Alerts feed (RT coexistence, BE-92). |
 | `service_alert` | One GTFS-Realtime Service Alert per row, project-scoped (BE-90). Rendered to protobuf on demand; decoupled from publish. |
 | `subscription` | Stripe-synced plan/status/renewal for a user or org. |
@@ -139,6 +139,8 @@ delivered once.
 | `0023_pro_intent` | `pro_intent` (pricing-funnel intent log) |
 | `0024_feed_license` | `feed_project.license_spdx` (SPDX short id, NULL when undeclared) — projected at publish; feed state remains the source of truth. **License only.** No NTD-ID column: the ID belongs to the agency (`agency.external_id`) and rides inside the feed state. |
 | `0025_scheduled_publish_acks` | `scheduled_publish.ignore_rt_breakage` + `.ignore_agency_churn` (both `INTEGER NOT NULL DEFAULT 0`) — the ID-stability gates the user acknowledged **at schedule time**, replayed by the cron at fire time. Without them a scheduled publish that tripped either gate could only fail unattended. (`ignore_warnings` was already on the row from 0019.) |
+| `0026_demo_leads` | `demo_leads` (captured `/book-demo` lead-form submissions). |
+| `0027_open_catalog` | `feed_project.catalog_publisher_type` (NULL / `official` / `community` — the open-catalog opt-in + declaration) + `feed_project.mdb_source_id` (Mobility DB source id for the switcher/update path); `publication.catalog_meta_json` (per-publish geography/metadata for `/catalog.json`, computed once at publish). See `docs/catalog-spec.md`. |
 
 ---
 
@@ -173,10 +175,10 @@ origin. This list is the source of truth.
 
 ### Feeds origin (no auth)
 
-`GET feeds.*/<slug>/gtfs.zip` · `/feed_info.json` · `/dmfr.json` · `/alerts.pb` ·
-`/alerts.json` · `/draft/<token>.zip` · `/<slug>` (mini-site) · `/embed/route/<id>` ·
-`/embed/stop/<id>` · `/embed/system-map` · `/_/orgs/<org_id>/logo` ·
-`/robots.txt` (`Disallow: /`).
+`GET feeds.*/catalog.json` · `feeds.*/<slug>/gtfs.zip` · `/feed_info.json` ·
+`/dmfr.json` · `/alerts.pb` · `/alerts.json` · `/draft/<token>.zip` ·
+`/<slug>` (mini-site) · `/embed/route/<id>` · `/embed/stop/<id>` ·
+`/embed/system-map` · `/_/orgs/<org_id>/logo` · `/robots.txt` (`Disallow: /`).
 
 - **`/feed_info.json`** — sidecar metadata. Adds an **`agencies[]`** array, one entry per
   agency in the published snapshot state:
@@ -206,6 +208,21 @@ origin. This list is the source of truth.
   an ambiguous crosswalk). A companion `gtfs-rt` feed entry is emitted only when the
   project has registered RT feeds. `buildDmfrDocument()` is pure (no env, no I/O) so the
   schema test drives it directly and the route stays a thin loader.
+- **`/catalog.json`** — the GTFS-X **open catalog** (`worker/publication/catalog.ts`;
+  spec at `docs/catalog-spec.md`; tests in `publication.catalog.test.ts`). One
+  origin-level document (no slug) listing **every published feed whose owner opted into
+  public listing** (`feed_project.catalog_publisher_type IN ('official','community')`),
+  for MobilityData / TransitLand to **pull** on their own cadence — the successor to the
+  dead **push** integration (`submit.ts` → the MDB v1 API, which `405`s on third-party
+  writes). Self-healing: the query `JOIN`s `publication`, so unpublish drops a feed, and
+  opt-out clears the column. Field names mirror MDB's `add_gtfs_schedule_source`; source
+  authority is the publisher-declared `is_official` boolean (**no silent default** — an
+  undeclared feed is omitted). `Cache-Control: public, max-age=3600` +
+  `Access-Control-Allow-Origin: *`. Built from **D1 only**: the per-feed geography/metadata
+  it needs (`bounding_box`, features, `feed_publisher_name`, `feed_contact_email`) is
+  computed **once at publish** and persisted (`publication.catalog_meta_json`), so the
+  route never loads N feed blobs per request. `buildCatalogDocument()` is pure. The
+  canonical URL is the `feeds.` host; `www.*/catalog.json` **301**s here (see §5).
 
 ---
 
@@ -516,11 +533,22 @@ D1/KV/R2) but is **not auto-deployed**. Use as a manual rehearsal env for risky
 changes: `npm run build && unset CLOUDFLARE_API_TOKEN && npx wrangler deploy --env staging`.
 Staging runs test-mode Stripe and both `*_ENABLED` flags true. Staging D1 is
 migrated through 0026 (checked 2026-07-15). Last manual deploy 2026-07-15:
-current `main` plus an UNTRACKED `public/catalog.json` (the static
-MobilityData catalog-endpoint demo from `feat/catalog-endpoint-demo`, kept
-alive at `staging.gtfsx.com/catalog.json` for the catalog-ingestion
-conversation — issue #47). Any staging redeploy that matters to that URL must
-re-add the file before building, or the demo 404s again.
+current `main`.
+
+**Open catalog — the `public/catalog.json` hack is obsolete (issue #47, branch
+`feat/catalog-endpoint`).** `/catalog.json` is now a **dynamic worker route** on
+the feeds origin (`worker/publication/catalog.ts`), so it serves on staging
+(`staging-feeds.gtfsx.com/catalog.json`) and prod (`feeds.gtfsx.com/catalog.json`)
+with no static file. `staging.gtfsx.com/catalog.json` (the app-host URL
+MobilityData was shown) **301**s to the feeds-origin URL; `feeds.` is canonical.
+**Do NOT re-add `public/catalog.json`** — it would only serve stale demo data.
+*Shadowing truth (tested):* on the **feeds** host the static-assets binding is
+never consulted — `feedsHandler` owns every path — so a static `catalog.json`
+cannot shadow the canonical route at all; on the **app** host the worker's 301
+runs *before* `env.ASSETS.fetch`, so it wins over a re-added file there too (the
+file would be dead, never served). That branch adds migration **0027**
+(`catalog_publisher_type`, `mdb_source_id`, `catalog_meta_json`) — **apply it to
+staging and prod D1 BEFORE deploying the branch** (per §7).
 
 ### Deploy gotchas (these tripped past deploys)
 

@@ -116,7 +116,13 @@ export async function handleSearch(request: Request, env: Env): Promise<Response
 
 const MAX_FEED_BYTES = 250 * 1024 * 1024; // 250 MiB cap
 
-export async function handleProxy(request: Request, ctx: ExecutionContext): Promise<Response> {
+// Only needs waitUntil. Typed structurally rather than as ExecutionContext so
+// Hono's bundled c.executionCtx (which omits workers-types 5's required
+// `tracing` member) remains assignable at the call site.
+export async function handleProxy(
+  request: Request,
+  ctx: Pick<ExecutionContext, 'waitUntil'>,
+): Promise<Response> {
   const url = new URL(request.url);
   const target = url.searchParams.get('url');
   if (!target) {

@@ -1,21 +1,34 @@
 // Scheduled tasks run by the Worker's scheduled() handler.
 //
 // 1. `reapDeletedUsers` — hard-purge soft-deleted users past their 30-day
-//    grace period. Order matters: R2 blobs → projects (FK cascades handle
-//    versions/drafts/publications) → org memberships → credentials → audit
-//    (keep subject events, drop actor-only rows) → the user row itself.
+//    grace period. Order matters: projects (purgeProject: R2 blobs + every
+//    project-scoped row) → org memberships → credentials → audit (keep subject
+//    events, drop actor-only rows) → the user row itself.
 //
-// 2. `summarizeWeeklyMetrics` — cache top-level counters in KV so
+// 2. `reapDeletedProjects` — hard-purge individually-deleted projects (feeds in
+//    the trash) past their own 30-day grace period. Shares purgeProject() with
+//    the user reaper so "purge a project" has exactly one definition.
+//
+// 3. `summarizeWeeklyMetrics` — cache top-level counters in KV so
 //    /api/admin/stats can read them cheaply.
 
 import type { Env } from '../env';
-import { deleteProjectBlobs } from '../projects/r2';
+import { purgeProject } from '../projects/purge';
 import { performPublish } from '../publication/performPublish';
+import { ApiError } from '../util/errors';
 import { requirePublishAccess } from '../billing/middleware';
 import type { OwnerType } from '../projects/quotas';
 import { sendOwnerDigest, type OwnerDigestMetrics } from '../email';
 
 export const DELETE_GRACE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+/**
+ * How long a soft-deleted PROJECT sits in the trash before it is purged for
+ * good. Deliberately the same 30 days as the account grace period above: a
+ * deleted feed is recoverable (GET /api/projects/deleted → POST /:id/restore)
+ * for a month, then reapDeletedProjects() erases it permanently.
+ */
+export const PROJECT_DELETE_GRACE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // ─── Comp grant expiry ──────────────────────────────────────────────────────
 //
@@ -126,33 +139,21 @@ interface PerUserReap {
 async function reapOne(env: Env, userId: string): Promise<PerUserReap> {
   const stats: PerUserReap = { r2Projects: 0, orgsDeleted: 0, orgMembershipsRemoved: 0 };
 
-  // 1) R2 blobs — all personally-owned project prefixes + their publication zips.
+  // 1) Personally-owned projects — purgeProject() erases the R2 blobs AND every
+  //    project-scoped row (see worker/projects/purge.ts). Same helper the trash
+  //    reaper uses, so the two paths can never diverge.
   const projects = await env.DB.prepare(
     `SELECT id FROM feed_project WHERE owner_type = 'user' AND owner_id = ?`,
   )
     .bind(userId)
     .all<{ id: string }>();
-  const projectIds = (projects.results ?? []).map((p) => p.id);
 
-  for (const pid of projectIds) {
-    // projects/<id>/** covers working-state + versions/<vid>/state + versions/<vid>/gtfs.zip
-    await deleteProjectBlobs(env, pid);
-    // publications/<id>/** covers published + rolled-back ZIPs
-    await deletePrefixedBlobs(env, `publications/${pid}/`);
-    // draft-links/<id>/** covers any draft preview ZIPs
-    await deletePrefixedBlobs(env, `draft-links/${pid}/`);
+  for (const p of projects.results ?? []) {
+    await purgeProject(env, p.id);
     stats.r2Projects += 1;
   }
 
-  // 2) Delete project rows — FK cascades take care of feed_version, draft_link,
-  //    publication, publication_history, project_catalog_submission, project_rt_feed.
-  await env.DB.prepare(
-    `DELETE FROM feed_project WHERE owner_type = 'user' AND owner_id = ?`,
-  )
-    .bind(userId)
-    .run();
-
-  // 3) Org memberships. If the user was the last remaining member of an org,
+  // 2) Org memberships. If the user was the last remaining member of an org,
   //    drop the org too (orphan cleanup). Otherwise just remove their row.
   const orgs = await env.DB.prepare(
     `SELECT org_id FROM organization_membership WHERE user_id = ?`,
@@ -167,21 +168,17 @@ async function reapOne(env: Env, userId: string): Promise<PerUserReap> {
       .bind(o.org_id, userId)
       .first<{ n: number }>();
     if ((remaining?.n ?? 0) === 0) {
-      // Last member — drop the org (its memberships and projects cascade via FKs).
-      // Scrub any org-owned project blobs first so we don't leave R2 orphans.
+      // Last member — drop the org. Purge its feeds the same way (blobs + rows)
+      // rather than leaning on the organization → project FK cascade.
       const orgProjects = await env.DB.prepare(
         `SELECT id FROM feed_project WHERE owner_type = 'org' AND owner_id = ?`,
       )
         .bind(o.org_id)
         .all<{ id: string }>();
       for (const p of orgProjects.results ?? []) {
-        await deleteProjectBlobs(env, p.id);
-        await deletePrefixedBlobs(env, `publications/${p.id}/`);
-        await deletePrefixedBlobs(env, `draft-links/${p.id}/`);
+        await purgeProject(env, p.id);
+        stats.r2Projects += 1;
       }
-      await env.DB.prepare(`DELETE FROM feed_project WHERE owner_type = 'org' AND owner_id = ?`)
-        .bind(o.org_id)
-        .run();
       await env.DB.prepare(`DELETE FROM organization_membership WHERE org_id = ?`)
         .bind(o.org_id)
         .run();
@@ -197,31 +194,68 @@ async function reapOne(env: Env, userId: string): Promise<PerUserReap> {
     }
   }
 
-  // 4) Credentials. The FK cascades via `credential.user_id ON DELETE CASCADE`
+  // 3) Credentials. The FK cascades via `credential.user_id ON DELETE CASCADE`
   //    but we clear explicitly for defence-in-depth.
   await env.DB.prepare(`DELETE FROM credential WHERE user_id = ?`).bind(userId).run();
 
-  // 5) Audit events: drop rows where this user is the actor, but KEEP events
+  // 4) Audit events: drop rows where this user is the actor, but KEEP events
   //    where they're the subject — those may matter for orgs/admins later.
   await env.DB.prepare(`DELETE FROM audit_event WHERE actor_user_id = ?`).bind(userId).run();
 
-  // 6) The user row itself. Sessions, auth tokens etc. cascade via FK.
+  // 5) The user row itself. Sessions, auth tokens etc. cascade via FK.
   await env.DB.prepare(`DELETE FROM user WHERE id = ?`).bind(userId).run();
 
   return stats;
 }
 
-async function deletePrefixedBlobs(env: Env, prefix: string): Promise<void> {
-  let cursor: string | undefined = undefined;
-  while (true) {
-    const listed: R2Objects = await env.FEEDS.list({ prefix, cursor });
-    if (listed.objects.length > 0) {
-      await env.FEEDS.delete(listed.objects.map((o) => o.key));
+// ─── Trash reaper: individually-deleted projects ────────────────────────────
+//
+// DELETE /api/projects/:id only sets feed_project.deleted_at — the feed drops
+// out of the owner's list but stays fully recoverable (POST /:id/restore) for
+// PROJECT_DELETE_GRACE_MS. This is what finally erases it. Without it, a deleted
+// feed sat in D1 forever: unreachable to its owner AND never purged.
+//
+// A project whose OWNER is also being reaped gets purged by reapDeletedUsers
+// instead; purgeProject is idempotent, so a project caught by both is harmless.
+
+export interface ProjectReapSummary {
+  candidates: number;
+  purged: number;
+  errors: number;
+}
+
+export async function reapDeletedProjects(env: Env): Promise<ProjectReapSummary> {
+  const cutoff = Date.now() - PROJECT_DELETE_GRACE_MS;
+  const candidates = await env.DB.prepare(
+    `SELECT id, slug, owner_type, owner_id FROM feed_project
+       WHERE deleted_at IS NOT NULL AND deleted_at < ?`,
+  )
+    .bind(cutoff)
+    .all<{ id: string; slug: string; owner_type: string; owner_id: string }>();
+
+  const rows = candidates.results ?? [];
+  const summary: ProjectReapSummary = { candidates: rows.length, purged: 0, errors: 0 };
+
+  for (const row of rows) {
+    try {
+      await purgeProject(env, row.id);
+      summary.purged += 1;
+      console.log(
+        `[reaper] purged project ${row.id} (${row.slug}, ${row.owner_type}:${row.owner_id})`,
+      );
+    } catch (err) {
+      summary.errors += 1;
+      console.error(`[reaper] failed to purge project ${row.id}`, err);
     }
-    if (!listed.truncated) break;
-    cursor = listed.truncated ? listed.cursor : undefined;
-    if (!cursor) break;
   }
+
+  if (summary.candidates > 0) {
+    console.log(
+      `[reaper] ${summary.purged}/${summary.candidates} deleted projects purged, ` +
+        `${summary.errors} errors`,
+    );
+  }
+  return summary;
 }
 
 // ─── Weekly metrics rollup ──────────────────────────────────────────────────
@@ -384,17 +418,35 @@ export async function runOwnerDigest(env: Env): Promise<OwnerDigestResult> {
 // uses. Each row is isolated — a failure marks just that row 'failed' (with a
 // reason) and never blocks the others. Access is re-checked at execution time
 // because the owner's plan/quota can change after scheduling.
+//
+// ID-stability acknowledgements: the schedule endpoint runs the same
+// rt_breakage / agency_id_churn gates the publish route does, so the user
+// acknowledges them while they're present; the acks land on the row
+// (ignore_rt_breakage / ignore_agency_churn, migration 0025) and we replay
+// EXACTLY those here — never more. performPublish re-runs the gates against the
+// CURRENT publication, so if the baseline moved after scheduling (someone
+// published something else in between) and un-acknowledged churn appears, the
+// gate still fires and this row fails with the reason recorded.
+interface DueSchedule {
+  id: string;
+  project_id: string;
+  snapshot_id: string;
+  ignore_warnings: number;
+  ignore_rt_breakage: number;
+  ignore_agency_churn: number;
+}
+
 export async function publishDueSchedules(env: Env): Promise<{ published: number; failed: number }> {
   const now = Date.now();
   const due = await env.DB.prepare(
-    `SELECT id, project_id, snapshot_id, ignore_warnings
+    `SELECT id, project_id, snapshot_id, ignore_warnings, ignore_rt_breakage, ignore_agency_churn
        FROM scheduled_publish
       WHERE status = 'pending' AND scheduled_for <= ?
       ORDER BY scheduled_for ASC
       LIMIT 100`,
   )
     .bind(now)
-    .all<{ id: string; project_id: string; snapshot_id: string; ignore_warnings: number }>();
+    .all<DueSchedule>();
 
   let published = 0;
   let failed = 0;
@@ -407,7 +459,7 @@ export async function publishDueSchedules(env: Env): Promise<{ published: number
       published += 1;
     } catch (err) {
       failed += 1;
-      const reason = err instanceof Error ? err.message : String(err);
+      const reason = scheduleFailureReason(err);
       console.error(`[scheduled-publish] ${row.id} failed:`, reason);
       await env.DB.prepare(
         `UPDATE scheduled_publish SET status = 'failed', failure_reason = ?, executed_at = ? WHERE id = ?`,
@@ -417,10 +469,19 @@ export async function publishDueSchedules(env: Env): Promise<{ published: number
   return { published, failed };
 }
 
-async function runOneScheduledPublish(
-  env: Env,
-  row: { id: string; project_id: string; snapshot_id: string; ignore_warnings: number },
-): Promise<void> {
+/**
+ * A human-readable failure reason for the scheduled_publish row — this is what
+ * the Publish panel shows the user next time they look. API errors (a tripped
+ * ID-stability gate, a plan downgrade, a missing ZIP) carry their machine code
+ * so the reason is unambiguous: "agency_id_churn: This snapshot removes …".
+ */
+function scheduleFailureReason(err: unknown): string {
+  if (err instanceof ApiError) return `${err.code}: ${err.message}`;
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+async function runOneScheduledPublish(env: Env, row: DueSchedule): Promise<void> {
   const project = await env.DB.prepare(
     `SELECT id, slug, name, owner_type, owner_id FROM feed_project WHERE id = ? AND deleted_at IS NULL`,
   )
@@ -459,6 +520,11 @@ async function runOneScheduledPublish(
     snapshot,
     existingPublication,
     ignoreWarnings: row.ignore_warnings === 1,
+    // Replay only what the user acknowledged at schedule time. NOT a blanket
+    // auto-ack: performPublish still evaluates both gates, so churn introduced
+    // after scheduling (a moved baseline) throws and fails this row.
+    ignoreRtBreakage: row.ignore_rt_breakage === 1,
+    ignoreAgencyChurn: row.ignore_agency_churn === 1,
     actorUserId: null, // system-initiated
     feedsOrigin: env.FEEDS_ORIGIN,
     runBackground: (p) => background.push(p),

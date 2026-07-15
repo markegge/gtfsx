@@ -96,11 +96,6 @@
     // keeps working for already-posted images. See worker/index.ts (img-host
     // dispatch) and worker/forum/uploads.ts (publicUrl).
     "IMAGES_ORIGIN": "https://img.gtfsx.com",
-    // Kill switch. Originally disabled 2026-05-08 after premature launch;
-    // re-enabled 2026-05-15 alongside live billing.
-    "BACKEND_ENABLED": "true",
-    // Billing path kill switch. Live since 2026-05-15.
-    "BILLING_ENABLED": "true",
     "HARD_LIMITS": "false",
     // Public Mapbox token — same as VITE_MAPBOX_TOKEN. Used by the embed
     // pages on feeds.gtfsx.com to render the system + per-route maps.
@@ -111,8 +106,6 @@
     // on 2026-05-26 — see docs/PRICING_RESTRUCTURE.md. v1 prices stay active
     // in Stripe so existing $199 subscribers keep their original billing. The
     // STRIPE_PRICE_TEAM_* var names below intentionally keep the old word.
-    "STRIPE_PRICE_PRO_MONTHLY": "price_1TXTFcJHDvzBbFH9B1BaGXCH",
-    "STRIPE_PRICE_PRO_ANNUAL": "price_1Thu0FJHDvzBbFH9qCxCnS2f",
     "STRIPE_PRICE_TEAM_MONTHLY": "price_1TbRauJHDvzBbFH9a7IfPEfq",
     "STRIPE_PRICE_TEAM_ANNUAL": "price_1Thu0FJHDvzBbFH9nngOQDOe",
     "STRIPE_PORTAL_CONFIG_ID": "bpc_1TXTFdJHDvzBbFH9qciNWCsV",
@@ -122,7 +115,13 @@
     // Cloud console (the one whose authorized redirect URIs include
     // https://www.gtfsx.com/auth/google/callback). Empty = the /auth/google/*
     // routes redirect to /login?error=google instead of running.
-    "GOOGLE_CLIENT_ID": "304043605957-q5okm9i8jvdm4f6boha8fktjvi49h8oq.apps.googleusercontent.com"
+    "GOOGLE_CLIENT_ID": "304043605957-q5okm9i8jvdm4f6boha8fktjvi49h8oq.apps.googleusercontent.com",
+    // Cloudflare Turnstile SITE key (public) for the worker-rendered /book-demo
+    // lead form. SAME public value as the bundle's VITE_TURNSTILE_SITE_KEY (the
+    // signup widget). ⚠️ Empty here => the /book-demo widget is skipped AND the
+    // POST /api/demo-leads handler skips Turnstile verification. Populate it
+    // wherever TURNSTILE_SECRET_KEY is set so the form is bot-gated.
+    "TURNSTILE_SITE_KEY": "0x4AAAAAADLpCWm4g4Q3zl6V"
     // Secrets (set via `wrangler secret put`):
     //   RESEND_API_KEY
     //   MOBILITY_DATABASE_REFRESH_TOKEN  (already set)
@@ -200,19 +199,20 @@
         "APP_ORIGIN": "https://staging.gtfsx.com",
         "FEEDS_ORIGIN": "https://staging-feeds.gtfsx.com",
         "IMAGES_ORIGIN": "https://staging-img.gtfsx.com",
-        "BACKEND_ENABLED": "true",
-        "BILLING_ENABLED": "true",
         "HARD_LIMITS": "false",
         "MAPBOX_TOKEN": "pk.eyJ1IjoibWFya2VnZ2UiLCJhIjoiY21wYjlrdnhlMDRuZjJzb21mMXQwZTJlaSJ9.qCTIAgzwRD4nt6F2YA4OuQ",
-        "STRIPE_PRICE_PRO_MONTHLY": "price_1TVzRAJThEbTJMIVZjGyn24F",
-        "STRIPE_PRICE_PRO_ANNUAL": "price_1TVzRBJThEbTJMIVu3BX60VV",
         "STRIPE_PRICE_TEAM_MONTHLY": "price_1TbQW1JThEbTJMIV2YHbLXuf",
         "STRIPE_PRICE_TEAM_ANNUAL": "price_1TbQW2JThEbTJMIVPs4ya76m",
         "STRIPE_PORTAL_CONFIG_ID": "bpc_1TVzRDJThEbTJMIVVFsRoSaM",
         // Google OAuth client ID (public). Redirect URI for this env is
         // https://staging.gtfsx.com/auth/google/callback. Set to the OAuth
         // client ID; GOOGLE_CLIENT_SECRET is a wrangler secret on --env staging.
-        "GOOGLE_CLIENT_ID": "304043605957-q5okm9i8jvdm4f6boha8fktjvi49h8oq.apps.googleusercontent.com"
+        "GOOGLE_CLIENT_ID": "304043605957-q5okm9i8jvdm4f6boha8fktjvi49h8oq.apps.googleusercontent.com",
+        // Turnstile SITE key (public) for the /book-demo lead form; same public
+        // value the staging SPA build bakes as VITE_TURNSTILE_SITE_KEY, so the
+        // widget renders and (with the staging TURNSTILE_SECRET_KEY) the submit
+        // is verified server-side. See the prod block above (still empty there).
+        "TURNSTILE_SITE_KEY": "0x4AAAAAADLpCWm4g4Q3zl6V"
       },
       "routes": [
         { "pattern": "staging.gtfsx.com", "custom_domain": true },

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Banner } from '../ui/Banner';
 
 /**
  * Dismissible "Loaded from <partner>" banner shown in the editor after a
@@ -30,18 +31,8 @@ export function PartnerBanner() {
   };
 
   return (
-    <div className="bg-teal-light border-b border-sand px-5 py-2 flex items-center gap-3 shrink-0">
-      <span className="text-sm text-teal">
-        Loaded from <strong className="font-semibold">{partner}</strong>
-      </span>
-      <div className="flex-1" />
-      <button
-        onClick={handleDismiss}
-        className="text-teal hover:opacity-70 text-lg leading-none px-2"
-        aria-label="Dismiss partner banner"
-      >
-        ×
-      </button>
-    </div>
+    <Banner variant="info" onDismiss={handleDismiss} dismissLabel="Dismiss partner banner">
+      Loaded from <strong className="font-semibold">{partner}</strong>
+    </Banner>
   );
 }

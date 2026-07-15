@@ -1,0 +1,126 @@
+{
+  "archive": "us-2026f",
+  "schema": "attribute-dots-v1",
+  "source_layer": "demand",
+  "attribute": "d",
+  "min_zoom": 8,
+  "max_zoom": 15,
+  "density_scale": 1.0,
+  "config_hash": "4e2a79420914",
+  "schema_note": "ONE DOT = ONE PERSON. Every population dot carries the bitwise OR of its membership flags in the integer attribute `d` (0-15); jobs carry `d` = jobs_code. There are no composite or backdrop CLASSES: the composites are unions of flags, evaluated at render time, so every person is drawn exactly once in every view and the 'everyone else' backdrop is population MINUS THE SELECTION, not population minus the composite. (It used to be the latter, which drew nobody at all for the ~24% of people who were in the composite but not the selected segment.) Mapbox GL has no bitwise operators \u2014 enumerate the codes.",
+  "flags": {
+    "carless": 1,
+    "low_income": 2,
+    "senior": 4,
+    "disability": 8
+  },
+  "jobs_code": 16,
+  "population_codes": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "zoom_ladder": {
+    "strides": {
+      "8": 32,
+      "9": 16,
+      "10": 8,
+      "11": 4,
+      "12": 2,
+      "13": 1,
+      "14": 1,
+      "15": 1
+    },
+    "full_density_zoom": 13,
+    "note": "Effective people-per-dot at zoom z = per_dot x strides[z] (1 at or above full_density_zoom). Baked into the tiles as per-feature minzoom; it cannot be a client-side filter because Mapbox GL forbids [\"zoom\"] in filters. The stride is the ONLY thinning applied: tippecanoe is run with --drop-rate=1 and a tile budget the ladder never exceeds, and verify_tiles.py re-decodes the built archive to prove that retained == emitted for every zoom and every code. That is what makes this ratio true rather than aspirational. The stride is applied PER CODE, so the flag mix is the same at z8 as at z15."
+  },
+  "modes": {
+    "propensity": {
+      "segments": [
+        "carless",
+        "low_income"
+      ]
+    },
+    "need": {
+      "segments": [
+        "carless",
+        "low_income",
+        "senior",
+        "disability"
+      ]
+    }
+  },
+  "units": {
+    "population": {
+      "label": "Residents",
+      "description": "One dot = one person (at full density), carrying their membership flags. Every resident is drawn exactly once.",
+      "unit": "people",
+      "per_dot": 5,
+      "source": "acs"
+    },
+    "jobs": {
+      "label": "Jobs",
+      "description": "All jobs at the workplace (LODES WAC C000). A workplace universe \u2014 never deduped against residents.",
+      "unit": "jobs",
+      "per_dot": 5,
+      "source": "lodes"
+    }
+  },
+  "segments": {
+    "carless": {
+      "bit": 1,
+      "label": "Carless",
+      "description": "People in households with no vehicle available (B25044, scaled by the PUMA's measured zero-vehicle household size)",
+      "modes": [
+        "propensity",
+        "need"
+      ],
+      "source": "acs",
+      "unit": "people"
+    },
+    "low_income": {
+      "bit": 2,
+      "label": "Low income",
+      "description": "People below 200% of the federal poverty line (C17002)",
+      "modes": [
+        "propensity",
+        "need"
+      ],
+      "source": "acs",
+      "unit": "people"
+    },
+    "senior": {
+      "bit": 4,
+      "label": "Age 65+",
+      "description": "Adults aged 65 and over (B01001)",
+      "modes": [
+        "need"
+      ],
+      "source": "acs",
+      "unit": "people"
+    },
+    "disability": {
+      "bit": 8,
+      "label": "Disability",
+      "description": "Civilian adults 18+ living with a disability (C21007)",
+      "modes": [
+        "need"
+      ],
+      "source": "acs",
+      "unit": "people"
+    }
+  }
+}

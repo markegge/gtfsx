@@ -8,6 +8,7 @@ export function RouteEditor() {
   const {
     routes, updateRoute,
     selectedRouteId,
+    agencies,
   } = useStore();
   // Flag-stop / continuous pickup-drop-off controls only appear when this
   // advanced feature is enabled for the feed (niche; off for most fixed-route).
@@ -44,6 +45,38 @@ export function RouteEditor() {
         onChange={(v) => updateRoute(route.route_id, { route_url: v })}
         placeholder="https://..."
       />
+
+      {/* Operating agency. Only shown on a joint feed: with a single agency the
+          spec lets routes.txt omit agency_id, and a one-option dropdown is
+          noise. With two or more, the spec REQUIRES agency_id on every route —
+          and FTA crosswalks the route to the operator's NTD ID through it — so
+          the assignment has to be editable. */}
+      {agencies.length > 1 && (
+        <div className="mb-3">
+          <label
+            htmlFor="route-agency"
+            className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1"
+          >
+            Operated by <span className="text-coral">*</span>
+          </label>
+          <select
+            id="route-agency"
+            value={route.agency_id || ''}
+            onChange={(e) => updateRoute(route.route_id, { agency_id: e.target.value })}
+            className="w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral"
+          >
+            {/* An imported route can arrive with no agency_id at all — keep that
+                state selectable so the dropdown shows the truth (the validator
+                flags it) instead of silently reassigning the route on render. */}
+            {!route.agency_id && <option value="">— none —</option>}
+            {agencies.map((a, i) => (
+              <option key={a.agency_id || i} value={a.agency_id}>
+                {a.agency_name || a.agency_id || `Agency ${i + 1}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Route Type */}
       <div className="mb-3">
@@ -107,24 +140,22 @@ export function RouteEditor() {
           Direction Labels
         </label>
         <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="block text-[10px] text-warm-gray mb-0.5">Direction 0</label>
+          <FormField label="Direction 0" size="sub" containerClassName="">
             <input
               value={route._direction_0_name || ''}
               onChange={(e) => updateRoute(route.route_id, { _direction_0_name: e.target.value })}
               placeholder="Outbound"
               className="w-full px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
             />
-          </div>
-          <div>
-            <label className="block text-[10px] text-warm-gray mb-0.5">Direction 1</label>
+          </FormField>
+          <FormField label="Direction 1" size="sub" containerClassName="">
             <input
               value={route._direction_1_name || ''}
               onChange={(e) => updateRoute(route.route_id, { _direction_1_name: e.target.value })}
               placeholder="Inbound"
               className="w-full px-2 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
             />
-          </div>
+          </FormField>
         </div>
       </div>
 
@@ -135,8 +166,7 @@ export function RouteEditor() {
           <RailSubHeading>Flag-Stop Service</RailSubHeading>
           <div className="mb-4">
             <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[10px] text-warm-gray mb-0.5">Pickup</label>
+              <FormField label="Pickup" size="sub" containerClassName="">
                 <select
                   value={route.continuous_pickup ?? ''}
                   onChange={(e) => updateRoute(route.route_id, {
@@ -151,9 +181,8 @@ export function RouteEditor() {
                   <option value="2">2 — Must phone agency</option>
                   <option value="3">3 — Coordinate with driver</option>
                 </select>
-              </div>
-              <div>
-                <label className="block text-[10px] text-warm-gray mb-0.5">Drop-off</label>
+              </FormField>
+              <FormField label="Drop-off" size="sub" containerClassName="">
                 <select
                   value={route.continuous_drop_off ?? ''}
                   onChange={(e) => updateRoute(route.route_id, {
@@ -168,7 +197,7 @@ export function RouteEditor() {
                   <option value="2">2 — Must phone agency</option>
                   <option value="3">3 — Coordinate with driver</option>
                 </select>
-              </div>
+              </FormField>
             </div>
             <p className="text-[10px] text-warm-gray/80 mt-1">
               Allows passengers to board or alight anywhere along the route, not just at fixed stops. Leave unset unless this is flag-stop / deviated fixed-route service.

@@ -39,7 +39,7 @@
     }
   },
   "datePublished": "2026-05-01",
-  "dateModified": "2026-05-30",
+  "dateModified": "2026-07-12",
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": "https://www.gtfsx.com/docs/validation/"
@@ -94,6 +94,7 @@
         <li><strong>Stops served by no trips.</strong> Stops that exist in the feed but no trip visits. Usually leftover from a deleted route. Either delete the stop or attach it to a trip.</li>
         <li><strong>Route with no fare.</strong> A route exists but no <code>fare_rule</code> covers it. Either the flat-fare default should apply (and you can ignore the warning) or the route needs a specific fare assigned.</li>
         <li><strong>Stale date range.</strong> A service's end_date is in the past or within two weeks. Refresh the dates and re-publish.</li>
+        <li><strong>Missing <code>agency_id</code>.</strong> Two warnings, both dismissible: one for a multi-agency feed where an agency or route has no <code>agency_id</code> (a real spec violation), and one advisory for a single-agency feed that omits it (spec-legal, but FTA can't crosswalk your feed to your NTD ID without it). See <a href="/docs/ntd-id/#agency-id-warnings">NTD ID &amp; FTA reporting</a>.</li>
       </ul>
 
       <h2 id="errors-that-block-export">Common errors that block export</h2>
@@ -116,6 +117,7 @@
         <ul>
           <li><a href="/docs/import-and-export/">Import &amp; export</a> — validation runs at both ends.</li>
           <li><a href="/docs/fares/">Fares</a> — most-common warning category.</li>
+          <li><a href="/docs/ntd-id/">NTD ID &amp; FTA reporting</a> — why the <code>agency_id</code> warnings exist.</li>
           <li><a href="https://gtfs-validator.mobilitydata.org/" rel="external">MobilityData GTFS Validator</a> — the canonical external validator.</li>
         </ul>
       </div>
@@ -148,7 +150,7 @@ footer.gx-footer .gx-mono { font-family: "JetBrains Mono", ui-monospace, "SF Mon
         <div class="gx-social">
           <a href="https://twitter.com/gtfsxapp" aria-label="GTFS·X on X">X</a>
           <a href="https://www.linkedin.com/company/gtfsx" aria-label="GTFS·X on LinkedIn">in</a>
-          <a href="https://github.com/markegge/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
+          <a href="https://github.com/GTFS-X/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
         </div>
       </div>
       <div class="gx-col">

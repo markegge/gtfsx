@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { FormField } from '../ui/FormField';
+import { Breadcrumb } from '../ui/Breadcrumb';
 import { RailSubHeading } from '../ui/RailHeadings';
 import { EditActions } from '../ui/EditActions';
 import { generateId } from '../../services/idGenerator';
@@ -105,11 +106,13 @@ export function FareLegRulesEditor() {
   // ── Detail view ───────────────────────────────────────────────────────────
   return (
     <div>
-      <nav className="text-[13px] text-warm-gray flex items-center gap-1.5 mb-1">
-        <button onClick={() => setSelectedIndex(null)} className="hover:text-coral transition-colors">‹</button>
-        <button onClick={() => setSelectedIndex(null)} className="hover:text-coral transition-colors">Leg Rules</button>
-        <span className="opacity-50">›</span>
-        <span className="text-dark-brown font-semibold truncate">{productLabel(selected.fare_product_id)}</span>
+      <nav className="text-[13px] text-warm-gray mb-1">
+        <Breadcrumb
+          items={[
+            { label: 'Leg Rules', onClick: () => setSelectedIndex(null) },
+            { label: productLabel(selected.fare_product_id), className: 'truncate' },
+          ]}
+        />
       </nav>
 
       <div className="flex items-center justify-between gap-3 mb-4">

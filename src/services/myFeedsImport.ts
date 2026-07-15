@@ -104,6 +104,8 @@ export function workingStateToImportData(snapshot: Record<string, unknown>): Imp
     fareLegRules: asArray(snapshot.fareLegRules),
     fareTransferRules: asArray(snapshot.fareTransferRules),
     flexZones: asArray(snapshot.flexZones),
+    // An agency's `external_id` (its NTD ID) needs nothing here — it is a field
+    // on the Agency entity, so it rides along inside `agencies` above.
     warnings: [],
   };
 }

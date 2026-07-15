@@ -1,3 +1,8 @@
+import { apiRequest, restParseError, ApiError, type ApiErrorCode } from './apiClient';
+// Re-exported so the ~25 existing component imports of `ApiError`/`ApiErrorCode`
+// from './authApi' keep working; apiClient.ts is now the canonical source.
+export { ApiError, type ApiErrorCode };
+
 export interface AuthedUser {
   id: string;
   email: string;
@@ -6,7 +11,6 @@ export interface AuthedUser {
   staff: boolean;
   plan?:
     | 'free'
-    | 'pro'
     | 'agency'
     | 'enterprise';
   planStatus?: 'active' | 'past_due' | 'canceled' | 'trialing';
@@ -17,92 +21,11 @@ export interface MeResponse {
   usage: unknown;
 }
 
-export type ApiErrorCode =
-  | 'unauthenticated'
-  | 'invalid_credentials'
-  | 'email_unverified'
-  | 'email_send_failed'
-  | 'forbidden'
-  | 'not_found'
-  | 'conflict'
-  | 'validation_failed'
-  | 'rate_limited'
-  | 'token_invalid'
-  | 'token_expired'
-  | 'internal'
-  | 'network_error'
-  | 'unknown';
-
-export class ApiError extends Error {
-  code: ApiErrorCode;
-  status: number;
-  /** Extra fields from the server's error payload (e.g. `email` on email_unverified). */
-  extra: Record<string, unknown>;
-
-  constructor(code: ApiErrorCode, message: string, status: number, extra: Record<string, unknown> = {}) {
-    super(message);
-    this.name = 'ApiError';
-    this.code = code;
-    this.status = status;
-    this.extra = extra;
-  }
-}
-
-async function request<T = unknown>(
+function request<T = unknown>(
   path: string,
   init: { method?: string; body?: unknown } = {}
 ): Promise<T> {
-  const { method = 'GET', body } = init;
-  const headers: Record<string, string> = {
-    'X-GB-Client': 'web',
-  };
-  if (body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-  }
-
-  let res: Response;
-  try {
-    res = await fetch(path, {
-      method,
-      headers,
-      credentials: 'include',
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-  } catch (e) {
-    throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
-  }
-
-  if (res.status === 204) {
-    return undefined as T;
-  }
-
-  const contentType = res.headers.get('content-type') ?? '';
-  const isJson = contentType.includes('application/json');
-
-  if (!res.ok) {
-    let code: ApiErrorCode = 'unknown';
-    let message = res.statusText || 'Request failed';
-    let extra: Record<string, unknown> = {};
-    if (isJson) {
-      try {
-        const data = await res.json();
-        if (data && typeof data === 'object') {
-          const { error, message: msg, ...rest } = data as Record<string, unknown>;
-          if (typeof error === 'string') code = error as ApiErrorCode;
-          if (typeof msg === 'string') message = msg;
-          extra = rest;
-        }
-      } catch {
-        // ignore
-      }
-    }
-    throw new ApiError(code, message, res.status, extra);
-  }
-
-  if (isJson) {
-    return (await res.json()) as T;
-  }
-  return undefined as T;
+  return apiRequest<T>(path, init, { parseError: restParseError });
 }
 
 export interface SignupResponse {

@@ -1,10 +1,14 @@
 import { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { flexZoneHasGroup, flexZoneHasPolygons } from '../../store/flexSlice';
 import { exportGtfsZip, downloadBlob } from '../../services/gtfsExport';
+import { exportFeedGeoJSON, feedHasGeoJSONGeometry } from '../../services/geojsonExport';
 import { runValidation } from '../../services/validation';
 import { trackFeedExported } from '../../services/trackBeacon';
 import { useProNudge } from '../billing/useProNudge';
+import { useEditorPlan } from '../billing/useEditorPlan';
+import { planHasFeature, cheapestPlanFor, planDisplayName } from '../billing/planConfig';
 import { Badge } from '../ui/Badge';
 
 interface ExportDialogProps {
@@ -15,10 +19,18 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
   const [exporting, setExporting] = useState(false);
   const [warningsExpanded, setWarningsExpanded] = useState(false);
   const fireNudge = useProNudge();
+  const navigate = useNavigate();
   const state = useStore();
   const [fileName, setFileName] = useState(
     () => state.projectName.replace(/\s+/g, '_').toLowerCase()
   );
+  // GeoJSON export is free on every plan (geojson_export feature) — the gate
+  // below stays for safety if the matrix ever changes; a locked user is routed
+  // to /pricing for the feature.
+  const plan = useEditorPlan();
+  const canGeoExport = planHasFeature(plan, 'geojson_export');
+  const geoTargetPlan = planDisplayName(cheapestPlanFor('geojson_export'));
+  const hasGeoGeometry = feedHasGeoJSONGeometry(state);
 
   const messages = runValidation(state);
   const errors = messages.filter((m) => m.severity === 'error');
@@ -83,7 +95,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
       trackFeedExported();
       // Publish/hosting-intent nudge: a free user just produced the artifact —
       // exactly the moment to offer stable hosting. Shows a one-time toast and
-      // records the pro-intent signal (no-op for pro/agency and logged-out).
+      // records the pro-intent signal (no-op for paid plans and logged-out).
       fireNudge('publish_intent', 'export_zip');
       // Update project name to match exported filename
       if (fileName.trim() && fileName.trim() !== state.projectName.replace(/\s+/g, '_').toLowerCase()) {
@@ -93,6 +105,28 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
     } finally {
       setExporting(false);
     }
+  };
+
+  // GeoJSON export (free on every plan). A plan without the feature is routed
+  // to /pricing instead of downloading. Geometry-only, so it's allowed even
+  // when the feed has validation errors that would block the GTFS .zip.
+  const handleExportGeoJSON = () => {
+    const s = useStore.getState();
+    if (!canGeoExport) {
+      navigate(
+        s.currentUser
+          ? '/pricing?feature=geojson_export'
+          : `/signup?next=${encodeURIComponent('/pricing?feature=geojson_export')}`,
+      );
+      return;
+    }
+    const name = fileName.trim() || s.projectName.replace(/\s+/g, '_').toLowerCase();
+    exportFeedGeoJSON(s, name);
+    trackFeedExported();
+    if (fileName.trim() && fileName.trim() !== s.projectName.replace(/\s+/g, '_').toLowerCase()) {
+      s.setProjectName(fileName.trim());
+    }
+    onClose();
   };
 
   return (
@@ -185,7 +219,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
             (r) => r._direction_0_name || r._direction_1_name,
           );
           const files: [string, boolean, string?][] = [
-            ['agency.txt', state.agencies.length > 0, `${state.agencies.length} agency${state.agencies.length !== 1 ? 'ies' : ''}`],
+            ['agency.txt', state.agencies.length > 0, `${state.agencies.length} agenc${state.agencies.length !== 1 ? 'ies' : 'y'}`],
             ['routes.txt', state.routes.length > 0, `${state.routes.length} routes`],
             ['stops.txt', state.stops.length > 0, `${state.stops.length} stops`],
             ['trips.txt', state.trips.length > 0 || exportableFlex.length > 0, `${state.trips.length + exportableFlex.length} trips`],
@@ -232,20 +266,37 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
         })()}
         </div>
 
-        <div className="px-6 py-4 border-t border-sand shrink-0 flex gap-2">
+        <div className="px-6 py-4 border-t border-sand shrink-0 flex flex-col gap-2">
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleExport}
+              disabled={hasErrors || exporting}
+              className="flex-1 px-4 py-2.5 bg-coral text-white rounded-lg font-heading font-bold text-sm
+                hover:bg-[#d4603a] transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              {exporting ? 'Exporting...' : 'Export GTFS'}
+            </button>
+          </div>
+          {/* Subtle secondary export — routes + stops as a GeoJSON FeatureCollection
+              for GIS (free on every plan). Geometry-only, so it's allowed even with
+              validation errors. Kept understated below the primary actions. */}
           <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2.5 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light transition-colors"
+            onClick={handleExportGeoJSON}
+            disabled={exporting || !hasGeoGeometry}
+            title="Export route shapes (LineStrings) and stops (Points) as a GeoJSON FeatureCollection for QGIS, ArcGIS, Mapbox, etc."
+            className="self-center inline-flex items-center gap-1.5 text-xs text-warm-gray hover:text-coral
+              transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-warm-gray"
           >
-            Cancel
-          </button>
-          <button
-            onClick={handleExport}
-            disabled={hasErrors || exporting}
-            className="flex-1 px-4 py-2.5 bg-coral text-white rounded-lg font-heading font-bold text-sm
-              hover:bg-[#d4603a] transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-          >
-            {exporting ? 'Exporting...' : 'Export'}
+            <span className="underline decoration-dotted underline-offset-2">Export routes &amp; stops as GeoJSON</span>
+            {!canGeoExport && (
+              <span className="text-[10px] font-semibold uppercase tracking-wide">🔒 {geoTargetPlan}</span>
+            )}
           </button>
         </div>
       </div>

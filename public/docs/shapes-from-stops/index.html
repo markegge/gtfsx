@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Generate shapes from stops — GTFS·X</title>
+    <meta name="description" content="Generate GTFS shapes.txt route geometry for a feed that has none, by routing between each stop sequence along the street network or connecting stops with straight lines. Fixes the common empty-shapes.txt gap in feeds from Excel-based builders like National RTAP's GTFS Builder." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/shapes-from-stops/" />
+    <meta property="og:title" content="Generate shapes from stops — GTFS·X" />
+    <meta property="og:description" content="Auto-build route geometry for a feed with no shapes.txt: route between each stop sequence along the street network, or connect them with straight lines. One shape per unique stop pattern, fully undoable." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/shapes-from-stops/" />
+    <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@gtfsxapp" />
+    <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
+    <link rel="stylesheet" href="/assets/docs/docs.css" />
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Generate shapes from stops — GTFS·X",
+  "description": "Generate GTFS shapes.txt route geometry for a feed that has none, by routing between each stop sequence along the street network or connecting stops with straight lines.",
+  "image": "https://www.gtfsx.com/og-default.png",
+  "author": {
+    "@type": "Organization",
+    "name": "GTFS·X",
+    "url": "https://www.gtfsx.com/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "GTFS·X",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://www.gtfsx.com/gtfsx-lockup.svg"
+    }
+  },
+  "datePublished": "2026-07-12",
+  "dateModified": "2026-07-12",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://www.gtfsx.com/docs/shapes-from-stops/"
+  }
+}
+  </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Validation &amp; I/O · Generate shapes from stops</div>
+      <h1>Generate shapes from stops</h1>
+      <p class="lede">For a feed with no route geometry, GTFS·X can build <code>shapes.txt</code> automatically: group trips into unique stop patterns, route each one along the street network (or connect the stops with straight lines), and link the result back onto every trip that follows it. One recipe, reachable from two places in the editor, fully undoable.</p>
+
+      <h2 id="what-it-is">What it is</h2>
+      <p>Without <code>shapes.txt</code>, a rider-facing trip planner draws a straight line between consecutive stops instead of following the street a bus actually drives. <strong>Generate shapes from stops</strong> closes that gap. It groups every trip that lacks usable geometry by its exact ordered sequence of served stops (same route, same direction, same stops in the same order), then builds one shape per unique sequence and writes the new <code>shape_id</code> back onto every trip that shares it.</p>
+      <p>The result is real geometry where there was none: instant if you pick straight lines, or road-following if you let it snap.</p>
+
+      <h2 id="who-needs-this">Who needs this</h2>
+      <p>Feeds authored in a spreadsheet-style GTFS builder frequently ship with an empty <code>shapes.txt</code>, because drawing route geometry is an optional, more advanced step those tools don't require. <strong>National RTAP's GTFS Builder</strong> is the common example: an agency fills in routes, stops, and schedules in a guided Excel workbook, exports a feed, and never touches shapes.</p>
+      <p>That feed isn't broken. It's valid GTFS, and it will import and validate cleanly in GTFS·X. It just renders as crow-flies straight lines between stops in every consumer app until it has geometry, which looks unfinished next to services whose map shows the bus following the actual street.</p>
+
+      <h2 id="how-to-run-it">How to run it</h2>
+      <p>Two entry points open the same dialog:</p>
+      <h3 id="on-import">Right after importing a shapeless feed</h3>
+      <p>When GTFS·X detects, on import, that the feed has no usable route geometry, a callout offers to generate shapes right away, before you start editing.</p>
+      <h3 id="from-validation">Any time, from Validation</h3>
+      <p>A feed with no route geometry always carries a "no route geometry" warning in the <a href="/docs/validation/">Validation</a> panel. Select it and the right-rail fix recipe shows a <strong>Generate shapes</strong> button; click it to open the dialog on demand, whenever you're ready.</p>
+      <p>Both paths land on the same preview: how many stop patterns need geometry, across how many routes, and how many trips will be linked once you run it.</p>
+
+      <h2 id="modes">Choosing a mode</h2>
+      <ul>
+        <li><strong>Snap to roads (recommended, the default).</strong> Each pattern's ordered stops are routed along the street network via the Mapbox Directions API (the same road routing the timetable's Estimate times uses), producing geometry that follows the actual streets between stops.</li>
+        <li><strong>Straight lines between stops.</strong> Connects the stops directly, with no network call, so it's instant. Choose this when the alignment genuinely doesn't follow the mapped road network: a ferry crossing, a rail alignment in its own right-of-way, or a rural road that isn't in the road graph.</li>
+      </ul>
+
+      <h2 id="one-shape-per-pattern">One shape per stop pattern</h2>
+      <p>Trips are grouped by route, direction, and the exact ordered list of served stops, not one shape per trip. Two trips that visit the same stops in the same order (the normal case for most scheduled service) share a single generated shape; only trips whose stop sequence actually differs (a short-turn, an express that skips stops, a loop) get their own. On a real National RTAP feed used to validate this recipe, 86 trips collapsed to 19 unique stop patterns, so 19 shapes covered the whole feed.</p>
+
+      <h2 id="reviewing-the-result">Reviewing the result</h2>
+      <p>When the run finishes, the summary reports how many shapes were created and how many trips were linked, plus three outcomes worth a second look:</p>
+      <ul>
+        <li><strong>Matched cleanly.</strong> Snapped to the road network with no gap.</li>
+        <li><strong>Matched only partially.</strong> The road network had a gap the router couldn't bridge; these are flagged for review.</li>
+        <li><strong>Fell back to straight lines.</strong> Either the snap failed for that specific pattern, or straight-line mode was chosen for the whole run.</li>
+      </ul>
+      <p>The whole run is undoable in one step from the result screen. After committing, a generated shape is just a shape: open the route in <a href="/docs/routes-and-shapes/">Routes &amp; shapes</a>, find it under that route's Shapes tab, and use Edit Shape, Simplify, Trim, or re-Snap on it like anything you'd drawn by hand.</p>
+
+      <h2 id="limits">Limits</h2>
+      <ul>
+        <li><strong>It's a best guess from stop positions alone.</strong> Routing between stops can't know which of two parallel one-way streets the driver actually takes, a turn restriction the schedule assumes, a deviation made to serve one rider, or a loop that revisits the same street twice.</li>
+        <li><strong>Truncated routes are caught automatically.</strong> Generated geometry is checked against the straight-line distance through the stops; if the routing service returns something implausibly short (a sign the route got cut off), GTFS·X discards it and falls back to a straight line for that pattern instead of writing a broken shape. This is why a pattern can come back as a straight line even when you chose Snap to roads.</li>
+        <li><strong>Spot-check before you rely on it.</strong> Treat generated geometry as a strong starting point, not a final answer, especially any pattern flagged as a partial match; hand-correct where the routed path doesn't match the real route.</li>
+        <li><strong>Snap mode needs an internet connection</strong> (the Directions API call is online); straight-line mode doesn't.</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/routes-and-shapes/">Routes &amp; shapes</a>: draw, edit, and manage shape variants by hand.</li>
+          <li><a href="/docs/validation/">Validation</a>: where the "no route geometry" warning and its fix recipe live.</li>
+          <li><a href="/docs/import-and-export/">Import &amp; export</a>: the other entry point, right after bringing in a feed.</li>
+        </ul>
+      </div>
+    </main>
+    <style>
+footer.gx-footer { max-width: none; width: 100%; margin: 0; padding: 0; background: #3D2E22; color: #FFF8F0; font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif; box-sizing: border-box; }
+footer.gx-footer * { box-sizing: border-box; }
+footer.gx-footer a { text-decoration: none; }
+footer.gx-footer .gx-wrap { max-width: 1180px; margin: 0 auto; padding: 64px 28px 36px; }
+footer.gx-footer .gx-top { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 36px; }
+footer.gx-footer .gx-lockup { height: 28px; width: auto; display: block; margin-bottom: 16px; }
+footer.gx-footer .gx-blurb { font-size: 13.5px; color: rgba(255,248,240,0.6); line-height: 1.55; max-width: 240px; margin: 0; }
+footer.gx-footer .gx-social { display: flex; gap: 10px; margin-top: 18px; }
+footer.gx-footer .gx-social a { width: 34px; height: 34px; border-radius: 9px; background: rgba(255,248,240,0.08); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #FFF8F0; transition: background 0.12s; }
+footer.gx-footer .gx-social a:hover { background: #E8734A; }
+footer.gx-footer .gx-col h4 { font-family: "Nunito", ui-rounded, system-ui, sans-serif; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.07em; color: rgba(255,248,240,0.5); margin: 0 0 16px; }
+footer.gx-footer .gx-col a { display: block; font-size: 14px; color: rgba(255,248,240,0.82); margin-bottom: 11px; transition: color 0.12s; }
+footer.gx-footer .gx-col a:hover { color: #E8734A; }
+footer.gx-footer .gx-bottom { max-width: 1180px; margin: 48px auto 0; padding: 24px 28px 0; border-top: 1px solid rgba(255,248,240,0.12); display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 13px; color: rgba(255,248,240,0.5); }
+footer.gx-footer .gx-mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+@media (max-width: 780px) { footer.gx-footer .gx-top { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 480px) { footer.gx-footer .gx-top { grid-template-columns: 1fr; } }
+</style>
+<footer class="gx-footer">
+  <div class="gx-wrap">
+    <div class="gx-top">
+      <div>
+        <img class="gx-lockup" src="/gtfsx-lockup-on-dark.svg" alt="GTFS·X" width="100" height="28">
+        <p class="gx-blurb">The fast, easy GTFS editor and service planner. Built for transit agencies, planners, and consultants.</p>
+        <div class="gx-social">
+          <a href="https://twitter.com/gtfsxapp" aria-label="GTFS·X on X">X</a>
+          <a href="https://www.linkedin.com/company/gtfsx" aria-label="GTFS·X on LinkedIn">in</a>
+          <a href="https://github.com/GTFS-X/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
+        </div>
+      </div>
+      <div class="gx-col">
+        <h4>Product</h4>
+        <a href="/editor">Editor</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/planning">Planning</a>
+        <a href="/docs/hosted-publishing/">Publishing</a>
+      </div>
+      <div class="gx-col">
+        <h4>Learn</h4>
+        <a href="/learn/gtfs/">What is GTFS</a>
+        <a href="/learn/gtfs-flex/">What is GTFS-Flex</a>
+        <a href="/learn/publish-gtfs-feed/">Publish a GTFS feed</a>
+        <a href="/docs/">Docs</a>
+      </div>
+      <div class="gx-col">
+        <h4>Compare</h4>
+        <a href="/compare/trillium/">vs Trillium</a>
+        <a href="/compare/remix/">vs Remix</a>
+        <a href="/compare/gtfs-builder-rtap/">vs RTAP</a>
+      </div>
+      <div class="gx-col">
+        <h4>Company</h4>
+        <a href="/about/">About</a>
+        <a href="/feed-health/">GTFS Dashboard</a>
+        <a href="/community/announcements">Announcements</a>
+        <a href="mailto:hello@gtfsx.com">Contact</a>
+        <a href="/use-cases/state-dot/">State DOTs</a>
+      </div>
+    </div>
+    <div class="gx-bottom">
+      <span>© 2026 GTFS·X · Vector &amp; Vertex</span>
+      <span class="gx-mono">hello@gtfsx.com</span>
+    </div>
+  </div>
+</footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+    <script src="/assets/site-nav.js"></script>
+      <script src="/assets/docs/docs-nav.js"></script>
+</body>
+</html>

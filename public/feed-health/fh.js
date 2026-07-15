@@ -10,8 +10,8 @@
   // (used to preview the agency table UI before real per-state data ships)
   const DEMO_AGENCIES = new URLSearchParams(location.search).has("demo-agencies");
 
-  // Statewide-program consult link (same Fantastical link used elsewhere on the site).
-  const CONSULT_URL = "https://fantastical.app/markegge/gtfsx-feed-consult";
+  // Statewide-program demo-booking link (tracked redirect to the founder's calendar).
+  const CONSULT_URL = "/book-demo?src=feed_health";
 
   // ---- Colour scale (matches FHMap.jsx) ----
   const GAP_STOPS = ["#FBE4D8", "#F4B393", "#E8734A", "#C9491F"];
@@ -477,6 +477,23 @@
       }, short);
     }
 
+    // NTD ↔ Mobility Database crosswalk sub-line, e.g. "NTD 90157 · MDB mdb-223".
+    // Rendered as a muted third line under the agency name rather than as new
+    // columns, so the table still fits ~390px. Agencies with no MDB-matched feed
+    // show the muted dash. Users copy these two ids straight into FTA's P-50 form.
+    function agencyIdLine(ag) {
+      const title = ag.mdbId
+        ? "NTD ID " + ag.ntdId + " · Mobility Database feed ID " + ag.mdbId
+          + " — the identifiers FTA's P-50 form asks for"
+        : "NTD ID " + ag.ntdId
+          + " — no Mobility Database feed is matched to this agency";
+      return h("span", { className: "ag-sub ag-id-line", title: title },
+        "NTD " + ag.ntdId,
+        " · MDB ",
+        ag.mdbId ? ag.mdbId : h("span", { className: "ag-muted-dash" }, "–")
+      );
+    }
+
     function getSorted() {
       return data.agencies.slice().sort(function (a, b) {
         if (agSortKey === "name") {
@@ -554,6 +571,8 @@
           // City · organization-type summary.
           const summary = agencySummary(ag);
           if (summary) nameCell.appendChild(h("span", { className: "ag-sub" }, summary));
+          // NTD / MDB identifier crosswalk.
+          nameCell.appendChild(agencyIdLine(ag));
         } else {
           nameCell.appendChild(h("span", { className: "nm" }, ag.name));
           if (ag.city) nameCell.appendChild(h("span", { className: "ag-city" }, ag.city));
@@ -1063,8 +1082,12 @@
                 copyBtn
               ),
               h("div", { className: "txt" }, citation)
-            )
+            ),
             // Item 14: removed companion article / gtfsfeeds.net sentence
+            h("dd", { style: { marginTop: "14px", paddingTop: "14px", borderTop: "1px solid var(--gtfs-sand)" } },
+              "Looking for TransitFeeds? That registry is gone; the Mobility Database (linked above) is its successor. ",
+              h("a", { href: "/transitfeeds/" }, "See where GTFS feed data lives now →")
+            )
           )
         )
       )

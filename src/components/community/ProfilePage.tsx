@@ -4,6 +4,7 @@ import { getPublicProfile, banForumUser, unbanForumUser, type PublicProfile } fr
 import { useStore } from '../../store';
 import { Avatar } from './Avatar';
 import { relativeTime } from './time';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 const INDEFINITE_BAN_UNTIL = 4_102_444_800_000; // mirrors worker/forum/routes.ts
 
@@ -14,22 +15,20 @@ export function ProfilePage() {
   const currentUser = useStore((s) => s.currentUser);
   const [banPending, setBanPending] = useState(false);
   const [banError, setBanError] = useState<string | null>(null);
+  // Holds the pending confirmation's `currentlyBanned` value; null when closed.
+  const [confirmBan, setConfirmBan] = useState<boolean | null>(null);
 
-  async function toggleBan(currentlyBanned: boolean) {
+  async function performBan(currentlyBanned: boolean) {
     if (!userId) return;
-    const ok = window.confirm(
-      currentlyBanned
-        ? "Lift this member's forum ban? They'll be able to post again."
-        : "Ban this member from the forum? They won't be able to post until you lift it.",
-    );
-    if (!ok) return;
     setBanPending(true);
     setBanError(null);
     try {
       const res = currentlyBanned ? await unbanForumUser(userId) : await banForumUser(userId);
       setData((prev) => (prev ? { ...prev, bannedUntil: res.bannedUntil } : prev));
+      setConfirmBan(null);
     } catch (e) {
       setBanError(e instanceof Error ? e.message : 'Action failed');
+      setConfirmBan(null);
     } finally {
       setBanPending(false);
     }
@@ -89,7 +88,7 @@ export function ProfilePage() {
             </div>
             <button
               type="button"
-              onClick={() => toggleBan(isBanned)}
+              onClick={() => setConfirmBan(isBanned)}
               disabled={banPending}
               className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-50 ${
                 isBanned ? 'bg-sand text-brown hover:bg-coral-light hover:text-coral' : 'bg-red-600 text-white hover:bg-red-700'
@@ -148,6 +147,22 @@ export function ProfilePage() {
           </div>
         )}
       </section>
+
+      {confirmBan !== null && (
+        <ConfirmDialog
+          danger={!confirmBan}
+          title={confirmBan ? 'Lift forum ban?' : 'Ban from forum?'}
+          body={
+            confirmBan
+              ? "Lift this member's forum ban? They'll be able to post again."
+              : "Ban this member from the forum? They won't be able to post until you lift it."
+          }
+          confirmLabel={confirmBan ? 'Lift ban' : 'Ban from forum'}
+          onConfirm={() => performBan(confirmBan)}
+          onCancel={() => setConfirmBan(null)}
+          busy={banPending}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AuthButton } from '../auth/AuthButton';
+import { Modal } from '../ui/Modal';
 import { ConfirmDialog } from './adminShared';
 import { PlanPill } from './AdminUsersPage';
 import { planDisplayName } from '../billing/planConfig';
@@ -201,17 +202,31 @@ function PlanGrantDialog({
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={busy ? undefined : onCancel} />
-      <div className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-md mx-4">
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-1">Grant plan</h3>
-        <p className="text-sm text-warm-gray mb-4">
-          Comp this {label} a plan with no Stripe subscription.
-        </p>
-
-        <label className="block text-xs font-semibold uppercase tracking-wide text-warm-gray mb-1">
-          Plan
-        </label>
+    <Modal
+      open
+      onClose={onCancel}
+      dismissable={!busy}
+      maxWidthClassName="max-w-md"
+      title="Grant plan"
+      description={`Comp this ${label} a plan with no Stripe subscription.`}
+      footer={
+        <>
+          <AuthButton variant="secondary" onClick={onCancel} disabled={busy}>
+            Cancel
+          </AuthButton>
+          <AuthButton
+            variant="primary"
+            onClick={submit}
+            disabled={busy || customInvalid || (isCustom && customDate === '')}
+          >
+            {busy ? 'Working…' : `Grant ${planDisplayName(plan)}`}
+          </AuthButton>
+        </>
+      }
+    >
+      <label className="block text-xs font-semibold uppercase tracking-wide text-warm-gray mb-1">
+        Plan
+      </label>
         <select
           value={plan}
           onChange={(e) => setPlan(e.target.value as GrantPlan)}
@@ -272,24 +287,10 @@ function PlanGrantDialog({
         />
 
         {error && (
-          <p className="mb-4 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
+          <p className="px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
             {error}
           </p>
         )}
-
-        <div className="flex justify-end gap-2">
-          <AuthButton variant="secondary" onClick={onCancel} disabled={busy}>
-            Cancel
-          </AuthButton>
-          <AuthButton
-            variant="primary"
-            onClick={submit}
-            disabled={busy || customInvalid || (isCustom && customDate === '')}
-          >
-            {busy ? 'Working…' : `Grant ${planDisplayName(plan)}`}
-          </AuthButton>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

@@ -9,9 +9,8 @@
  * Rounds to the nearest whole dollar (matches the design aesthetic
  * where all prices are whole numbers).
  *
- * Examples:
- *   Pro:    annualToMonthlyEquivalent(468)  → 39   (468 / 12 = 39)
- *   Agency: annualToMonthlyEquivalent(2988) → 249  (2988 / 12 = 249)
+ * Example:
+ *   Planner: annualToMonthlyEquivalent(2988) → 249  (2988 / 12 = 249)
  */
 export function annualToMonthlyEquivalent(annualTotal: number): number {
   return Math.round(annualTotal / 12);
@@ -21,9 +20,8 @@ export function annualToMonthlyEquivalent(annualTotal: number): number {
  * Annual savings vs. paying month-to-month.
  * Returns 0 when annual costs as much or more (shouldn't happen, but defensive).
  *
- * Examples:
- *   Pro:    annualSavings(49, 468)   → 120  (49*12=588, 588-468=120)
- *   Agency: annualSavings(299, 2988) → 600  (299*12=3588, 3588-2988=600)
+ * Example:
+ *   Planner: annualSavings(299, 2988) → 600  (299*12=3588, 3588-2988=600)
  */
 export function annualSavings(monthlyPrice: number, annualTotal: number): number {
   return Math.max(0, monthlyPrice * 12 - annualTotal);

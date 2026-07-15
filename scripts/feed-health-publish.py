@@ -398,6 +398,11 @@ def write_agency_jsons(rows_by_state, mdb_by_id, as_of_iso):
             #   serviceEnd ← service_end of the matched MDB feed (date portion of the
             #                ISO timestamp in mdb_us_feeds.json), None when unmatched
             #   expired    ← mdb_expired (service period already ended)
+            #   mdbId      ← mdb_id (Mobility Database feed id, e.g. "mdb-223"),
+            #                None when the agency has no MDB match. Together with
+            #                ntdId this is the NTD↔MDB crosswalk users need for
+            #                FTA's P-50 form; both stay STRINGS (NTD ids carry
+            #                leading zeros — never coerce an id to a number).
             mdb_id = r.get("mdb_id", "").strip()
             service_end = None
             last_feed_update = None
@@ -413,6 +418,7 @@ def write_agency_jsons(rows_by_state, mdb_by_id, as_of_iso):
             agencies.append({
                 "name":         r["agency_name"],
                 "ntdId":        r["ntd_id"],
+                "mdbId":        mdb_id or None,
                 "city":         r["city"] or None,
                 "reporterType": REPORTER_MAP.get(r["reporter_type"], r["reporter_type"]),
                 "status":       status,

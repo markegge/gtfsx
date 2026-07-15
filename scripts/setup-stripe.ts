@@ -66,24 +66,20 @@ interface ProductSpec {
   metadata: Record<string, string>;
 }
 
+// Pricing v4 (Jul 2026): the Pro tier ('gtfsb_pro') is retired — removed here
+// so a re-run never recreates it. Archive the live Pro product + prices in the
+// Stripe dashboard separately.
 const PRODUCTS: ProductSpec[] = [
   {
-    id: 'gtfsb_pro',
-    name: 'GTFS·X Pro',
-    description:
-      'For individual transit agencies and small operators. Save up to 10 feeds, publish 1 feed to a stable URL, plus demographic coverage and cost estimation analysis.',
-    metadata: { app_id: 'gtfsb_pro', tier: 'pro' },
-  },
-  {
     // Internal product id stays 'gtfsb_team' so existing subscriptions and the
-    // price lookup keys continue to resolve. Customer-facing name was renamed
-    // Team → Agency in the May-2026 pricing v2 — receipts and portal copy
-    // pick up the new name from the Product.name field. The tier metadata now
-    // matches the worker's internal plan id ('agency').
+    // price lookup keys continue to resolve. Customer-facing name renamed
+    // Team → Agency (May 2026, pricing v2) → Planner (Jul 2026, pricing v4) —
+    // receipts and portal copy pick up the new name from the Product.name
+    // field. The tier metadata matches the worker's internal plan id ('agency').
     id: 'gtfsb_team',
-    name: 'GTFS·X Agency',
+    name: 'GTFS·X Planner',
     description:
-      'For transit agencies and consultants planning routes and service. Unlimited saved feeds, publish up to 5, the full planning suite (demographic coverage, cost estimation, Title VI, ridership propensity), unlimited team members in your organization, and cross-org membership for consultants serving multiple clients.',
+      'The service-planning suite for transit agencies. Feed publishing and hosting, unlimited saved feeds, the full planning suite (demographic coverage, cost estimation, Title VI, ridership propensity), unlimited team members in your organization, and cross-org membership for consultants serving multiple clients.',
     metadata: { app_id: 'gtfsb_team', tier: 'agency' },
   },
   {
@@ -134,21 +130,35 @@ interface PriceSpec {
   interval: 'month' | 'year';
 }
 
-// Pricing v2 (May 2026): Agency tier moved $199→$299/mo and $1,999→$2,499/yr.
-// Stripe Prices are immutable — to bump the amount we create new Price objects
-// under fresh lookup keys (`_v2`), keep the originals around (active=true) so
-// existing subscribers continue to bill at the old amount, and point the env
-// vars at the new IDs so all new checkouts go through the v2 prices.
+// Stripe Prices are immutable — each amount bump creates a new Price object
+// under a fresh lookup key and points the env vars at the new ID. History:
+// v1 $199/$1,999 (May 2026) → v2 $299/$2,499 (May 2026) → v3 annual only,
+// $2,988 (Jun 2026; created in the dashboard without a lookup key —
+// `gtfsb_team_annual_v3` was assigned to it during the Jul 2026 pricing-v4
+// cleanup, which also archived the superseded v1/v2 prices; zero
+// subscriptions existed on them).
 const PRICES: PriceSpec[] = [
-  { lookupKey: 'gtfsb_pro_monthly',     productId: 'gtfsb_pro',  envName: 'STRIPE_PRICE_PRO_MONTHLY',  unitAmount: 4900,   interval: 'month' },
-  { lookupKey: 'gtfsb_pro_annual',      productId: 'gtfsb_pro',  envName: 'STRIPE_PRICE_PRO_ANNUAL',   unitAmount: 49900,  interval: 'year'  },
   { lookupKey: 'gtfsb_team_monthly_v2', productId: 'gtfsb_team', envName: 'STRIPE_PRICE_TEAM_MONTHLY', unitAmount: 29900,  interval: 'month' },
-  { lookupKey: 'gtfsb_team_annual_v2',  productId: 'gtfsb_team', envName: 'STRIPE_PRICE_TEAM_ANNUAL',  unitAmount: 249900, interval: 'year'  },
+  { lookupKey: 'gtfsb_team_annual_v3',  productId: 'gtfsb_team', envName: 'STRIPE_PRICE_TEAM_ANNUAL',  unitAmount: 298800, interval: 'year'  },
 ];
 
 async function upsertPrice(spec: PriceSpec): Promise<Stripe.Price> {
   const existing = await stripe.prices.list({ lookup_keys: [spec.lookupKey], active: true, limit: 1 });
-  if (existing.data.length > 0) return existing.data[0];
+  if (existing.data.length > 0) {
+    const p = existing.data[0];
+    // Drift guard: a spec amount that disagrees with the live price under the
+    // same lookup key means this file is stale — creating or reusing would
+    // silently put checkouts on the wrong amount. Fix the spec (or bump to a
+    // new lookup key) before re-running.
+    if (p.unit_amount !== spec.unitAmount || p.recurring?.interval !== spec.interval) {
+      throw new Error(
+        `Drift: live price ${p.id} (lookup_key=${spec.lookupKey}) is ` +
+        `$${(p.unit_amount ?? 0) / 100}/${p.recurring?.interval} but this spec says ` +
+        `$${spec.unitAmount / 100}/${spec.interval}. Refusing to proceed.`,
+      );
+    }
+    return p;
+  }
   return stripe.prices.create({
     product: spec.productId,
     unit_amount: spec.unitAmount,
@@ -175,7 +185,6 @@ console.log('Customer Portal:');
 const existingConfigs = await stripe.billingPortal.configurations.list({ limit: 20 });
 const ourConfig = existingConfigs.data.find((c) => c.metadata?.app_id === `gtfsb_default_${liveMode ? 'live' : 'test'}`);
 
-const proPrices = PRICES.filter((p) => p.productId === 'gtfsb_pro').map((p) => priceIds[p.envName]);
 const teamPrices = PRICES.filter((p) => p.productId === 'gtfsb_team').map((p) => priceIds[p.envName]);
 
 const portalFeatures: Stripe.BillingPortal.ConfigurationCreateParams.Features = {
@@ -207,7 +216,6 @@ const portalFeatures: Stripe.BillingPortal.ConfigurationCreateParams.Features = 
     default_allowed_updates: ['price'],
     proration_behavior: 'create_prorations',
     products: [
-      { product: 'gtfsb_pro', prices: proPrices },
       { product: 'gtfsb_team', prices: teamPrices },
     ],
   },
@@ -328,8 +336,7 @@ console.log();
 for (const [envName, priceId] of Object.entries(priceIds)) {
   console.log(`     "${envName}": "${priceId}",`);
 }
-console.log(`     "STRIPE_PORTAL_CONFIG_ID": "${portalConfig.id}",`);
-console.log(`     "BILLING_ENABLED": "true"`);
+console.log(`     "STRIPE_PORTAL_CONFIG_ID": "${portalConfig.id}"`);
 console.log();
 console.log('2. Set Worker secrets on staging:');
 console.log();
@@ -352,5 +359,6 @@ if (signingSecret) {
 }
 console.log();
 console.log('4. Append to .env (frontend):');
-console.log('     VITE_BILLING_ENABLED=true');
+console.log('     VITE_STRIPE_PUBLISHABLE_TEST_KEY=pk_test_…   # staging/dev');
+console.log('     VITE_STRIPE_PUBLISHABLE_LIVE_KEY=pk_live_…   # prod (npm run build:prod)');
 console.log();

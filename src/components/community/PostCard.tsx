@@ -7,6 +7,7 @@ import { UpvoteButton } from './UpvoteButton';
 import { MarkSolvedButton } from './MarkSolvedButton';
 import { Composer } from './Composer';
 import { relativeTime } from './time';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { editPost, deletePost, type ForumPost, type ForumThread } from '../../services/forumApi';
 import { postPermalink } from './permalinks';
 
@@ -181,17 +182,20 @@ export function PostCard({ post, thread, isOp, onUpdate, onDelete, onMarkSolved,
                 </button>
               )}
               {canDelete && (
-                confirmDelete ? (
-                  <span className="flex items-center gap-2">
-                    <span className="text-red-700">Delete this post?</span>
-                    <button onClick={handleDelete} disabled={pending} className="text-red-700 font-semibold hover:underline">Yes</button>
-                    <button onClick={() => setConfirmDelete(false)} className="hover:text-coral">No</button>
-                  </span>
-                ) : (
-                  <button onClick={() => setConfirmDelete(true)} className="hover:text-red-700">Delete</button>
-                )
+                <button onClick={() => setConfirmDelete(true)} className="hover:text-red-700">Delete</button>
               )}
             </div>
+          )}
+          {confirmDelete && (
+            <ConfirmDialog
+              danger
+              title="Delete this post?"
+              body="This removes the post from the thread. This cannot be undone."
+              confirmLabel="Delete"
+              onConfirm={handleDelete}
+              onCancel={() => setConfirmDelete(false)}
+              busy={pending}
+            />
           )}
         </div>
       </div>

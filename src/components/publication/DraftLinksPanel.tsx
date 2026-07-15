@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useStore } from '../../store';
 import { AuthButton } from '../auth/AuthButton';
+import { Modal } from '../ui/Modal';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import {
   createDraftLink,
   listDraftLinks,
@@ -251,7 +253,7 @@ export function DraftLinksSection({
       )}
 
       {revokeTarget && (
-        <ConfirmModal
+        <ConfirmDialog
           title="Revoke draft link?"
           body="Anyone holding this link will immediately get a 410 Gone response."
           confirmLabel="Revoke"
@@ -279,45 +281,14 @@ function CreateDraftDialog({
   const [snapshotId, setSnapshotId] = useState<string>(snapshotList[0]?.id ?? '');
   const [ttlDays, setTtlDays] = useState(30);
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={onCancel} />
-      <div className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-md mx-4">
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-3">Create draft link</h3>
-        <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-          Snapshot
-        </label>
-        <select
-          value={snapshotId}
-          onChange={(e) => setSnapshotId(e.target.value)}
-          className="w-full px-3 py-2 border-2 border-sand rounded-lg bg-cream text-sm text-dark-brown focus:outline-none focus:border-coral focus:bg-white mb-3"
-        >
-          {snapshotList.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.label || 'untitled'} — {new Date(v.createdAt).toLocaleDateString()}
-            </option>
-          ))}
-        </select>
-
-        <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-          Expires after
-        </label>
-        <div className="flex gap-2 mb-4">
-          {[7, 30, 90].map((d) => (
-            <button
-              key={d}
-              onClick={() => setTtlDays(d)}
-              className={`flex-1 px-3 py-2 rounded-lg text-sm font-heading font-bold transition-colors ${
-                ttlDays === d
-                  ? 'bg-coral text-white'
-                  : 'bg-sand text-brown hover:bg-coral-light hover:text-coral'
-              }`}
-            >
-              {d} days
-            </button>
-          ))}
-        </div>
-
-        <div className="flex justify-end gap-2">
+    <Modal
+      open
+      onClose={onCancel}
+      dismissable={!busy}
+      maxWidthClassName="max-w-md"
+      title="Create draft link"
+      footer={
+        <>
           <AuthButton variant="secondary" onClick={onCancel} disabled={busy}>
             Cancel
           </AuthButton>
@@ -327,44 +298,42 @@ function CreateDraftDialog({
           >
             {busy ? 'Creating…' : 'Create link'}
           </AuthButton>
-        </div>
-      </div>
-    </div>
-  );
-}
+        </>
+      }
+    >
+      <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
+        Snapshot
+      </label>
+      <select
+        value={snapshotId}
+        onChange={(e) => setSnapshotId(e.target.value)}
+        className="w-full px-3 py-2 border-2 border-sand rounded-lg bg-cream text-sm text-dark-brown focus:outline-none focus:border-coral focus:bg-white mb-3"
+      >
+        {snapshotList.map((v) => (
+          <option key={v.id} value={v.id}>
+            {v.label || 'untitled'} — {new Date(v.createdAt).toLocaleDateString()}
+          </option>
+        ))}
+      </select>
 
-function ConfirmModal({
-  title,
-  body,
-  confirmLabel,
-  onConfirm,
-  onCancel,
-  busy,
-  danger,
-}: {
-  title: string;
-  body: string;
-  confirmLabel: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-  busy: boolean;
-  danger?: boolean;
-}) {
-  return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={onCancel} />
-      <div className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-sm mx-4">
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-2">{title}</h3>
-        <p className="text-sm text-warm-gray mb-5">{body}</p>
-        <div className="flex justify-end gap-2">
-          <AuthButton variant="secondary" onClick={onCancel} disabled={busy}>
-            Cancel
-          </AuthButton>
-          <AuthButton variant={danger ? 'danger' : 'primary'} onClick={onConfirm} disabled={busy}>
-            {busy ? 'Working…' : confirmLabel}
-          </AuthButton>
-        </div>
+      <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
+        Expires after
+      </label>
+      <div className="flex gap-2">
+        {[7, 30, 90].map((d) => (
+          <button
+            key={d}
+            onClick={() => setTtlDays(d)}
+            className={`flex-1 px-3 py-2 rounded-lg text-sm font-heading font-bold transition-colors ${
+              ttlDays === d
+                ? 'bg-coral text-white'
+                : 'bg-sand text-brown hover:bg-coral-light hover:text-coral'
+            }`}
+          >
+            {d} days
+          </button>
+        ))}
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -477,7 +477,7 @@ function RecentActivitySection({ currentUserId }: { currentUserId: string }) {
       )}
       <div className="border border-sand rounded-lg overflow-hidden">
         {loading && events.length === 0 ? (
-          <div className="p-4 text-sm text-warm-gray">Loading…</div>
+          <p className="p-4 text-sm text-warm-gray">Loading…</p>
         ) : (
           <div className="max-h-80 overflow-auto">
             <AuditTable

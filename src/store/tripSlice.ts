@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { Trip, StopTime } from '../types/gtfs';
+import type { Trip, StopTime, Frequency } from '../types/gtfs';
 import type { RouteSlice } from './routeSlice';
 import type { ShapeSlice } from './shapeSlice';
 import type { StopSlice } from './stopSlice';
@@ -15,6 +15,21 @@ export interface TripEdgeTimeFill {
   prevArrival: string;
   prevDeparture: string;
 }
+
+/**
+ * Snapshot returned by removeTripWithSnapshot so the deletion can be undone.
+ * Captures the trip row plus its stop_times and any frequency windows, which
+ * are all removed together when a trip is deleted.
+ */
+export interface TripRemovalSnapshot {
+  trip: Trip | undefined;
+  stopTimes: StopTime[];
+  frequencies: Frequency[];
+}
+
+/** Narrow cross-slice type used only by the trip removal snapshot helpers to
+ *  cascade-remove/restore frequencies (which live in FrequenciesSlice). */
+type TripWithFreqState = TripSlice & { frequencies?: Frequency[] };
 
 export interface TripSlice {
   trips: Trip[];
@@ -54,6 +69,13 @@ export interface TripSlice {
   /** Revert a fillTripEdgeTimes using its returned snapshot (unconditional set —
    *  restores exactly what those rows had before). */
   restoreTripEdgeTimes: (entries: TripEdgeTimeFill[]) => void;
+  /** Delete a trip and cascade into stop_times and frequencies, capturing a
+   *  snapshot of every removed row so the deletion can be undone.
+   *  Returns the snapshot; call restoreTrip(snapshot) to reverse it. */
+  removeTripWithSnapshot: (trip_id: string) => TripRemovalSnapshot;
+  /** Revert a removeTripWithSnapshot: restores the trip, its stop_times, and
+   *  its frequency windows. No-op if snapshot.trip is undefined. */
+  restoreTrip: (snapshot: TripRemovalSnapshot) => void;
 }
 
 function addMinutesToGtfsTime(time: string, minutes: number): string {
@@ -320,13 +342,43 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
     return changed;
   },
   restoreTripEdgeTimes: (entries) => set((state) => {
-    const byKey = new Map(entries.map((e) => [`${e.trip_id} ${e.stop_sequence}`, e]));
+    const byKey = new Map(entries.map((e) => [`${e.trip_id} ${e.stop_sequence}`, e]));
     for (const st of state.stopTimes) {
-      const e = byKey.get(`${st.trip_id} ${st.stop_sequence}`);
+      const e = byKey.get(`${st.trip_id} ${st.stop_sequence}`);
       if (e) {
         st.arrival_time = e.prevArrival;
         st.departure_time = e.prevDeparture;
       }
+    }
+  }),
+  removeTripWithSnapshot: (trip_id) => {
+    const snapshot: TripRemovalSnapshot = { trip: undefined, stopTimes: [], frequencies: [] };
+    set((state) => {
+      // Capture a clean (pre-mutation) view via get() to avoid storing immer
+      // draft proxies in the snapshot (plain objects survive the set boundary).
+      const cur = get() as unknown as TripWithFreqState;
+      snapshot.trip = cur.trips.find((t) => t.trip_id === trip_id);
+      if (!snapshot.trip) return;
+      snapshot.stopTimes = cur.stopTimes.filter((st) => st.trip_id === trip_id);
+      snapshot.frequencies = (cur.frequencies ?? []).filter((f) => f.trip_id === trip_id);
+      // Mutate draft: remove trip + stop_times + any frequency windows.
+      state.trips = state.trips.filter((t) => t.trip_id !== trip_id);
+      state.stopTimes = state.stopTimes.filter((st) => st.trip_id !== trip_id);
+      const cross = state as unknown as TripWithFreqState;
+      if (cross.frequencies) {
+        cross.frequencies = cross.frequencies.filter((f) => f.trip_id !== trip_id);
+      }
+    });
+    return snapshot;
+  },
+  restoreTrip: (snapshot) => set((state) => {
+    if (!snapshot.trip) return;
+    state.trips.push(snapshot.trip);
+    for (const st of snapshot.stopTimes) state.stopTimes.push(st);
+    const cross = state as unknown as TripWithFreqState;
+    if (cross.frequencies && snapshot.frequencies.length > 0) {
+      const cur = get() as unknown as TripWithFreqState;
+      cross.frequencies = [...(cur.frequencies ?? []), ...snapshot.frequencies];
     }
   }),
 });

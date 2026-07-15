@@ -101,7 +101,7 @@ export async function seedUser(opts: {
    * embeds, org operations, etc.) without each one having to opt in. Pass
    * `'free'` explicitly when testing paywall enforcement.
    */
-  plan?: 'free' | 'pro' | 'agency' | 'enterprise';
+  plan?: 'free' | 'agency' | 'enterprise';
 } = {}): Promise<SeededUser> {
   const id = ulid();
   const email = opts.email ?? `user-${id.toLowerCase()}@example.com`;

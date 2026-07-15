@@ -12,13 +12,6 @@
 // action returns a data snapshot of what it changed, and a paired restore action
 // reverses it. Here `apply` wraps that into a generic `{ changed, label, undo }`
 // so the panel stays fix-agnostic.
-//
-// FOLLOW-UP: the Stop Analysis accessibility bulk-fill (wheelchair_boarding) is
-// a natural second entry — it already has the store action + undo snapshot. It
-// is intentionally NOT migrated here yet (its UI lives in StopAnalysisPanel and
-// is keyed off a stop-id set, not a single ValidationMessage). When migrating,
-// add a `fill-missing-wheelchair` id + a fix whose apply reads the gap stop ids,
-// and have the validation panel's accessibility warning carry that fix id.
 import type { ValidationFixId, ValidationMessage } from '../types/ui';
 import { useStore } from '../store';
 
@@ -38,8 +31,18 @@ export interface ValidationFix {
   label: string;
   /** Tooltip / a11y description of what the fix does. */
   description: string;
-  /** Mutate the store to resolve `message`; return an undo handle. */
-  apply: (message: ValidationMessage) => ValidationFixResult;
+  /**
+   * True when this recipe needs a dedicated dialog rather than a one-click
+   * mutation (e.g. it's async, needs user-chosen options, or shows progress).
+   * The panel opens that dialog instead of calling `apply` — see the
+   * `interactive` special-case in components/validation/ValidationPanel.tsx,
+   * which mirrors the existing wheelchair-picker special-case. `apply` is
+   * absent on these fixes so the batch "Fix all" path can never invoke them.
+   */
+  interactive?: boolean;
+  /** Mutate the store to resolve `message`; return an undo handle. Omitted
+   *  for `interactive` fixes (there's no one-click mutation to run). */
+  apply?: (message: ValidationMessage) => ValidationFixResult;
 }
 
 const FIXES: Record<ValidationFixId, ValidationFix> = {
@@ -66,6 +69,106 @@ const FIXES: Record<ValidationFixId, ValidationFix> = {
       };
     },
   },
+
+  'fill-missing-wheelchair': {
+    id: 'fill-missing-wheelchair',
+    label: 'Fix',
+    description:
+      'Fill wheelchair_boarding on every board point that is missing a value. Choose '
+      + 'which value to apply: 1 (accessible) or 2 (not accessible) records the status '
+      + 'and clears the warning; 0 (no information) marks the stops reviewed without '
+      + 'asserting a status. You can undo this.',
+    // The validation panel renders a VALUE PICKER for this fix and calls
+    // applyWheelchairFill(value) directly. This generic apply is the fallback
+    // (e.g. the batch path): it fills 0 = "no information", the non-asserting
+    // default.
+    apply: () => applyWheelchairFill(0),
+  },
+
+  'remove-orphan-trips': {
+    id: 'remove-orphan-trips',
+    label: 'Fix',
+    description:
+      'Removes this trip (and its stop_times and any frequency windows) because its '
+      + 'service_id does not match any calendar. The trip cannot run without a '
+      + 'calendar — delete it or reassign it to a valid service_id first. You can undo this.',
+    apply: (message) => {
+      const tripId = message.entity_id ?? '';
+      const snapshot = useStore.getState().removeTripWithSnapshot(tripId);
+      const stCount = snapshot.stopTimes.length;
+      const fqCount = snapshot.frequencies.length;
+      return {
+        fixId: 'remove-orphan-trips',
+        changed: snapshot.trip !== undefined,
+        label: snapshot.trip
+          ? `Removed orphan trip "${tripId}" (${stCount} stop time${stCount === 1 ? '' : 's'}`
+            + `${fqCount > 0 ? `, ${fqCount} frequency window${fqCount === 1 ? '' : 's'}` : ''}).`
+          : `Trip "${tripId}" not found — nothing removed.`,
+        undo: () => useStore.getState().restoreTrip(snapshot),
+      };
+    },
+  },
+
+  'remove-ghost-trips': {
+    id: 'remove-ghost-trips',
+    label: 'Fix',
+    description:
+      "Removes this trip (and its stop_times and any frequency windows) because it "
+      + "can't be reached in the timetable editor: its route has shapes but this trip "
+      + 'has no matching shape, so the grid hides it. Delete it here, or assign it a '
+      + 'shape to make it visible. You can undo this.',
+    apply: (message) => {
+      const tripId = message.entity_id ?? '';
+      const snapshot = useStore.getState().removeTripWithSnapshot(tripId);
+      const stCount = snapshot.stopTimes.length;
+      const fqCount = snapshot.frequencies.length;
+      return {
+        fixId: 'remove-ghost-trips',
+        changed: snapshot.trip !== undefined,
+        label: snapshot.trip
+          ? `Removed unreachable trip "${tripId}" (${stCount} stop time${stCount === 1 ? '' : 's'}`
+            + `${fqCount > 0 ? `, ${fqCount} frequency window${fqCount === 1 ? '' : 's'}` : ''}).`
+          : `Trip "${tripId}" not found — nothing removed.`,
+        undo: () => useStore.getState().restoreTrip(snapshot),
+      };
+    },
+  },
+
+  'delete-unused-stop': {
+    id: 'delete-unused-stop',
+    label: 'Fix',
+    description:
+      'Deletes this stop because no trip serves it (no stop_times reference it). '
+      + 'Also removes any orphaned route_stops and transfers that reference it. '
+      + 'You can undo this.',
+    apply: (message) => {
+      const stopId = message.entity_id ?? '';
+      const snapshot = useStore.getState().removeStopWithSnapshot(stopId);
+      const name = snapshot.stop?.stop_name || stopId;
+      return {
+        fixId: 'delete-unused-stop',
+        changed: snapshot.stop !== undefined,
+        label: snapshot.stop
+          ? `Deleted unused stop "${name}".`
+          : `Stop "${stopId}" not found — nothing deleted.`,
+        undo: () => useStore.getState().restoreStop(snapshot),
+      };
+    },
+  },
+
+  'generate-shapes-from-stops': {
+    id: 'generate-shapes-from-stops',
+    label: 'Generate shapes',
+    description:
+      'Opens a dialog that builds a shape for every stop pattern missing one (snapped to '
+      + 'the road network, or straight lines between stops), links it onto the matching '
+      + 'trips, and flags any pattern that needs a second look. Interactive (network calls '
+      + 'and a mode choice), so it runs from its own dialog rather than one click. '
+      + 'You can undo the whole batch afterward.',
+    // No `apply` — this recipe is interactive-only (see the `interactive` doc
+    // above). applyValidationFix / applyValidationFixBatch both skip it.
+    interactive: true,
+  },
 };
 
 /** Look up a registered fix by id (undefined if the id isn't in the catalog —
@@ -74,12 +177,54 @@ export function getValidationFix(id: ValidationFixId): ValidationFix | undefined
   return FIXES[id];
 }
 
+/** Board-point stops (location_type 0) missing an authoritative
+ *  wheelchair_boarding value — 0 OR absent both read as "no information". */
+function wheelchairGapStopIds(): string[] {
+  return useStore.getState().stops
+    .filter((s) => (s.location_type ?? 0) === 0)
+    .filter((s) => s.wheelchair_boarding !== 1 && s.wheelchair_boarding !== 2)
+    .map((s) => s.stop_id);
+}
+
+export const WHEELCHAIR_VALUE_LABEL: Record<number, string> = {
+  0: 'no info',
+  1: 'accessible',
+  2: 'not accessible',
+};
+
+/** Count of board points that would be filled (for the picker's button label). */
+export function wheelchairGapCount(): number {
+  return wheelchairGapStopIds().length;
+}
+
+/** Fill every board point missing wheelchair_boarding with `value` (0/1/2), for
+ *  the Validation panel's wheelchair fix-recipe value picker. Returns a
+ *  ValidationFixResult so the panel's undo toast reverses it. Note: filling 0
+ *  ("no info") does not clear the validator warning (GTFS treats blank and 0
+ *  identically); 1 or 2 does. */
+export function applyWheelchairFill(value: number): ValidationFixResult {
+  const ids = wheelchairGapStopIds();
+  const snapshot = useStore.getState().fillMissingWheelchairBoarding(ids, value);
+  const n = snapshot.length;
+  const label = WHEELCHAIR_VALUE_LABEL[value] ?? String(value);
+  return {
+    fixId: 'fill-missing-wheelchair',
+    changed: n > 0,
+    label: n > 0
+      ? `Set wheelchair_boarding = ${value} (${label}) on ${n} stop${n === 1 ? '' : 's'}.`
+      : 'Nothing to fill — all board points already have a value.',
+    undo: () => useStore.getState().restoreWheelchairBoarding(snapshot),
+  };
+}
+
 /** Apply the fix a message carries, if any. Returns the undo result, or null
- *  when the message has no fix or its id isn't registered. */
+ *  when the message has no fix, its id isn't registered, or it's `interactive`
+ *  (no `apply` — the caller should open its dialog instead; see
+ *  components/validation/ValidationPanel.tsx). */
 export function applyValidationFix(message: ValidationMessage): ValidationFixResult | null {
   if (!message.fix) return null;
   const fix = FIXES[message.fix.id];
-  if (!fix) return null;
+  if (!fix || !fix.apply) return null;
   return fix.apply(message);
 }
 
@@ -96,6 +241,11 @@ export function applyValidationFix(message: ValidationMessage): ValidationFixRes
  * `undo()` reverses all of them. Returns null when no message in the batch has a
  * registered fix. Re-running validation after a batch is automatic: the fixes
  * mutate store slices the validation memo depends on, so the list refreshes.
+ *
+ * `interactive` fixes (no `apply`) are skipped here — they can never be
+ * silently invoked by the batch "Fix all" path; the panel doesn't even show
+ * that affordance for them (see ValidationPanel.tsx), but this guard holds
+ * even if a caller passes one in directly.
  */
 export function applyValidationFixBatch(messages: ValidationMessage[]): ValidationFixResult | null {
   const results: ValidationFixResult[] = [];
@@ -105,7 +255,7 @@ export function applyValidationFixBatch(messages: ValidationMessage[]): Validati
   for (const m of messages) {
     if (!m.fix) continue;
     const fix = FIXES[m.fix.id];
-    if (!fix) continue;
+    if (!fix || !fix.apply) continue;
     total++;
     fixId = m.fix.id;
     const r = fix.apply(m);

@@ -25,6 +25,7 @@ const SMALL_KEYS = [
   'featureSettings',
   'dismissedValidations',
   'projectId', 'projectName',
+  'licenseSpdx',
 ] as const;
 
 // Union used for "did any persisted data change?" detection in the autosave
@@ -171,6 +172,7 @@ export async function loadProject(projectId: string) {
     // "Scenarios" feature); it's intentionally ignored.
     if (snapshot.projectName) state.setProjectName(snapshot.projectName);
     if (snapshot.projectId) state.setProjectId(snapshot.projectId);
+    if (typeof snapshot.licenseSpdx === 'string') state.setLicenseSpdx(snapshot.licenseSpdx);
 
     // Seed the bulk-write trackers to the just-loaded references so the next
     // autosave doesn't needlessly rewrite stop_times/shapes we only just read.

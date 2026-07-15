@@ -16,19 +16,17 @@ export function HelpPage() {
   const currentUser = useStore((s) => s.currentUser);
   const userOrgs = useStore((s) => s.userOrgs);
 
-  // Plan resolution. The user's personal plan covers Pro support; Agency
-  // (internal id 'agency') and Enterprise live on the org subscription, so we
-  // surface phone support if they belong to any agency/enterprise org (we
-  // also check the user's plan in case enterprise was granted personally).
-  const tier = useMemo<'agency' | 'pro' | 'free'>(() => {
+  // Plan resolution. Planner (internal id 'agency') and Enterprise live on
+  // the org subscription, so we surface direct support if they belong to any
+  // agency/enterprise org (we also check the user's personal plan in case a
+  // paid plan was granted personally).
+  const tier = useMemo<'paid' | 'free'>(() => {
     const userPlan = currentUser?.plan ?? 'free';
-    if (userPlan === 'enterprise') return 'agency';
-    const hasAgencyOrg = userOrgs.some(
+    if (userPlan === 'agency' || userPlan === 'enterprise') return 'paid';
+    const hasPaidOrg = userOrgs.some(
       (o) => o.plan === 'agency' || o.plan === 'enterprise',
     );
-    if (hasAgencyOrg) return 'agency';
-    if (userPlan === 'pro' || userPlan === 'agency') return userPlan === 'agency' ? 'agency' : 'pro';
-    return 'free';
+    return hasPaidOrg ? 'paid' : 'free';
   }, [currentUser, userOrgs]);
 
   return (
@@ -89,10 +87,10 @@ export function HelpPage() {
 
         <section className="bg-white border border-sand rounded-2xl p-6 mb-10">
           <h2 className="font-heading font-bold text-xl text-dark-brown mb-1">Direct support</h2>
-          {tier === 'agency' ? (
+          {tier === 'paid' ? (
             <>
               <p className="text-sm text-warm-gray mb-4">
-                Agency and Enterprise subscriptions include direct email and phone support.
+                Planner and Enterprise subscriptions include direct email and phone support.
               </p>
               <SupportRow
                 label="Email"
@@ -106,24 +104,10 @@ export function HelpPage() {
                 note="Business hours, Mountain time. Voicemail outside of those hours; we'll call back same-day."
               />
             </>
-          ) : tier === 'pro' ? (
-            <>
-              <p className="text-sm text-warm-gray mb-4">
-                Pro subscriptions include direct email support — typical response within 1&ndash;2 business days.
-              </p>
-              <SupportRow
-                label="Email"
-                href={`mailto:${SUPPORT_EMAIL}`}
-                value={SUPPORT_EMAIL}
-              />
-              <p className="mt-4 text-sm text-warm-gray">
-                Need a same-day response or a phone line? <Link to="/pricing" className="text-coral font-semibold underline hover:text-[#d4603a]">Agency plan</Link> adds phone support.
-              </p>
-            </>
           ) : (
             <>
               <p className="text-sm text-warm-gray mb-4">
-                Direct support is included with the Pro and Agency plans. On the free tier the community forum is the right place to ask.
+                Direct support is included with the Planner and Enterprise plans. On the free tier the community forum is the right place to ask.
               </p>
               <div className="flex flex-wrap gap-2">
                 <Link

@@ -113,6 +113,7 @@ export function BottomPanel() {
 
   return (
     <div
+      data-testid="bottom-panel"
       className={
         isNarrow
           ? 'fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-sand flex flex-col'
@@ -259,7 +260,7 @@ export function BottomPanel() {
               feature="embeds"
               currentPlan={editorPlan}
               fill
-              title="The embeddable rider site is a Pro feature"
+              title="The embeddable rider site is a Planner feature"
               description="Host a rider-facing mini-site and copy-paste embeds (schedules, route maps, stop times) on any website."
               exampleHref="https://feeds.gtfsx.com/svt-demo/"
               exampleLabel="See a live example mini-site"

@@ -1,4 +1,4 @@
-import { ApiError, type ApiErrorCode } from './authApi';
+import { apiRequest, ApiError, type ApiErrorCode, DEFAULT_HEADERS as BASE_HEADERS } from './apiClient';
 
 export interface ProjectSummary {
   id: string;
@@ -32,6 +32,8 @@ export interface ProjectSummary {
    * (Save → Save As). Enforced server-side too.
    */
   locked: boolean;
+  /** SPDX short identifier for the feed's declared license, e.g. 'CC-BY-4.0'. */
+  licenseSpdx?: string | null;
 }
 
 export interface ProjectQuota {
@@ -70,6 +72,20 @@ export interface ListProjectsResponse {
   quota: ProjectQuota;
 }
 
+/**
+ * A soft-deleted feed (issue #63 — delete protection). Returned by
+ * `GET /api/projects/deleted`; carries the same fields as ProjectSummary plus
+ * when it was deleted and when it will be permanently purged.
+ */
+export interface DeletedProjectSummary extends ProjectSummary {
+  deletedAt: number;
+  purgeAt: number;
+}
+
+export interface ListDeletedProjectsResponse {
+  projects: DeletedProjectSummary[];
+}
+
 export class ConflictError extends ApiError {
   currentVersion: number;
   constructor(message: string, currentVersion: number) {
@@ -78,8 +94,6 @@ export class ConflictError extends ApiError {
     this.currentVersion = currentVersion;
   }
 }
-
-const BASE_HEADERS = { 'X-GB-Client': 'web' };
 
 async function parseErrorResponse(res: Response): Promise<ApiError> {
   let code: ApiErrorCode = 'unknown';
@@ -101,37 +115,17 @@ async function parseErrorResponse(res: Response): Promise<ApiError> {
   if (res.status === 409 && typeof extra.currentVersion === 'number') {
     return new ConflictError(message, extra.currentVersion);
   }
-  return new ApiError(code, message, res.status);
+  // Pass the full parsed payload through as `extra` (matching apiClient's
+  // default mode) so callers like PublishPanel can read error details —
+  // e.g. rt_breakage's `removed`, validation_failed's `issues`.
+  return new ApiError(code, message, res.status, extra);
 }
 
-async function requestJson<T>(
+function requestJson<T>(
   path: string,
   init: { method?: string; body?: unknown } = {},
 ): Promise<T> {
-  const { method = 'GET', body } = init;
-  const headers: Record<string, string> = { ...BASE_HEADERS };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
-
-  let res: Response;
-  try {
-    res = await fetch(path, {
-      method,
-      headers,
-      credentials: 'include',
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-  } catch (e) {
-    throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
-  }
-
-  if (!res.ok) throw await parseErrorResponse(res);
-  if (res.status === 204) return undefined as T;
-
-  const contentType = res.headers.get('content-type') ?? '';
-  if (contentType.includes('application/json')) {
-    return (await res.json()) as T;
-  }
-  return undefined as T;
+  return apiRequest<T>(path, init, { parseError: parseErrorResponse });
 }
 
 export function listProjects(
@@ -182,8 +176,41 @@ export function setProjectLocked(id: string, locked: boolean): Promise<ProjectSu
   return patchProject(id, { locked });
 }
 
-export function deleteProject(id: string): Promise<void> {
-  return requestJson<void>(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' });
+/**
+ * Soft-delete a feed (issue #63). Rejects with a 409 ApiError when the feed is
+ * currently published or locked — pass `unpublish: true` to unpublish and
+ * delete in one call (the combined action MyFeedsPage offers once the user
+ * confirms they want to take the feed down).
+ */
+export function deleteProject(id: string, opts: { unpublish?: boolean } = {}): Promise<void> {
+  const q = opts.unpublish ? '?unpublish=1' : '';
+  return requestJson<void>(`/api/projects/${encodeURIComponent(id)}${q}`, { method: 'DELETE' });
+}
+
+/**
+ * List the caller's soft-deleted feeds for the "Recently deleted" trash view
+ * (issue #63). Scoped the same way as listProjects (personal vs org
+ * workspace) so an org's trash isn't mixed with the caller's personal one.
+ */
+export function listDeletedProjects(
+  opts: { scope?: string } = {},
+): Promise<ListDeletedProjectsResponse> {
+  const params = new URLSearchParams();
+  if (opts.scope && opts.scope !== 'personal') params.set('scope', opts.scope);
+  const q = params.toString();
+  return requestJson<ListDeletedProjectsResponse>(`/api/projects/deleted${q ? '?' + q : ''}`);
+}
+
+/**
+ * Restore a soft-deleted feed (issue #63). The restored project's slug may
+ * differ from the one it had before deletion if another feed claimed that
+ * slug in the meantime (the server assigns a free suffixed slug) — callers
+ * should compare against the pre-delete slug and tell the user when it changed.
+ */
+export function restoreProject(id: string): Promise<ProjectSummary> {
+  return requestJson<ProjectSummary>(`/api/projects/${encodeURIComponent(id)}/restore`, {
+    method: 'POST',
+  });
 }
 
 export interface TransferResult {
@@ -427,6 +454,9 @@ export interface ScheduledPublishInfo {
   snapshotId: string;
   scheduledFor: number; // unix ms
   ignoreWarnings: boolean;
+  /** ID-stability gates acknowledged at schedule time; the cron replays these. */
+  ignoreRtBreakage: boolean;
+  ignoreAgencyChurn: boolean;
   status: 'pending' | 'executed' | 'cancelled' | 'failed';
   failureReason: string | null;
 }
@@ -474,6 +504,10 @@ export interface PublishInput {
   snapshotId: string;
   ignoreWarnings?: boolean;
   ignoreRtBreakage?: boolean;
+  /** Acknowledges the 409 `agency_id_churn` warning (removed/renamed agency_ids). */
+  ignoreAgencyChurn?: boolean;
+  /** SPDX short identifier for the feed's license, e.g. 'CC-BY-4.0'. */
+  licenseSpdx?: string | null;
   zip?: Blob;
 }
 
@@ -485,6 +519,8 @@ export async function publishProject(
     snapshotId: input.snapshotId,
     ignoreWarnings: input.ignoreWarnings,
     ignoreRtBreakage: input.ignoreRtBreakage,
+    ignoreAgencyChurn: input.ignoreAgencyChurn,
+    licenseSpdx: input.licenseSpdx,
   };
   if (input.zip) {
     const form = new FormData();
@@ -548,14 +584,31 @@ export function getEmbedImpressions(
   );
 }
 
+export interface SchedulePublishInput {
+  snapshotId: string;
+  scheduledFor: number;
+  ignoreWarnings?: boolean;
+  /**
+   * The schedule endpoint runs the SAME ID-stability gates as an immediate
+   * publish (409 `rt_breakage` / 409 `agency_id_churn`) — at schedule time,
+   * while the user is present to acknowledge them. The acknowledgement is
+   * persisted on the scheduled row and replayed by the cron at fire time.
+   */
+  ignoreRtBreakage?: boolean;
+  ignoreAgencyChurn?: boolean;
+  zip?: Blob;
+}
+
 export function schedulePublish(
   projectId: string,
-  input: { snapshotId: string; scheduledFor: number; ignoreWarnings?: boolean; zip?: Blob },
+  input: SchedulePublishInput,
 ): Promise<{ scheduled: ScheduledPublishInfo }> {
   const meta = {
     snapshotId: input.snapshotId,
     scheduledFor: input.scheduledFor,
     ignoreWarnings: input.ignoreWarnings,
+    ignoreRtBreakage: input.ignoreRtBreakage,
+    ignoreAgencyChurn: input.ignoreAgencyChurn,
   };
   if (input.zip) {
     // The cron has no client to render the GTFS ZIP at fire time, so we upload

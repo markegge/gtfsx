@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { AuthButton } from '../auth/AuthButton';
 import { Badge } from '../ui/Badge';
+import { Modal } from '../ui/Modal';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import {
   fetchSnapshotState,
   getPublicationHistory,
@@ -19,6 +21,16 @@ import { ApiError } from '../../services/authApi';
 import { exportGtfsZip } from '../../services/gtfsExport';
 import { applySnapshotToStore, buildSnapshot } from '../../db/serverPersistence';
 import { DraftLinksSection, toEditorDeepLink } from './DraftLinksPanel';
+import { NtdP50Panel } from './NtdP50Panel';
+
+// SPDX identifiers publishers actually use for open transit data. "Leave unset"
+// is a first-class choice — we never guess a license on someone's behalf.
+const LICENSE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '', label: 'Not specified' },
+  { value: 'CC0-1.0', label: 'CC0 1.0 — public domain dedication' },
+  { value: 'CC-BY-4.0', label: 'CC BY 4.0 — attribution' },
+  { value: 'ODbL-1.0', label: 'ODbL 1.0 — open database, share-alike' },
+];
 
 // Env-aware public feeds origin (mirrors EmbedPanel): staging publishes to
 // staging-feeds.gtfsx.com, prod to feeds.gtfsx.com. Used for the canonical-URL
@@ -81,6 +93,38 @@ interface RemovedIds {
   trips?: string[];
 }
 
+/** Acknowledgements the user has already given for this publish attempt. */
+interface IgnoreFlags {
+  ignoreRtBreakage?: boolean;
+  ignoreAgencyChurn?: boolean;
+}
+
+// Publishing now and scheduling a publish trip the SAME two 409 gates
+// (rt_breakage, agency_id_churn) against the same baseline — the server runs one
+// shared check for both. So both are modelled as one retryable action: a gate
+// 409 parks the action, the modal collects the acknowledgement, and we replay the
+// action verbatim with the extra flag. For a schedule, the acknowledgement is
+// persisted server-side and replayed by the cron at fire time — which is the
+// whole point: at fire time the user is asleep and cannot acknowledge anything.
+type PendingAction =
+  | { kind: 'publish'; snapshotId: string; flags: IgnoreFlags }
+  | { kind: 'schedule'; snapshotId: string; scheduledFor: number; flags: IgnoreFlags };
+
+function withFlag(action: PendingAction, flag: keyof IgnoreFlags): PendingAction {
+  const flags: IgnoreFlags = { ...action.flags, [flag]: true };
+  return action.kind === 'publish' ? { ...action, flags } : { ...action, flags };
+}
+
+/** Ack suffixes, shared by the publish + schedule success banners. */
+function ackNotes(flags: IgnoreFlags): string[] {
+  const notes: string[] = [];
+  if (flags.ignoreRtBreakage) notes.push('GTFS-RT breakage acknowledged.');
+  if (flags.ignoreAgencyChurn) {
+    notes.push('agency_id change acknowledged — update your NTD P-50 crosswalk.');
+  }
+  return notes;
+}
+
 export function PublishPanel() {
   const projectId = useStore((s) => s.activeServerProjectId);
   const snapshotList = useStore((s) => s.snapshotList);
@@ -89,6 +133,14 @@ export function PublishPanel() {
   const currentPublication = useStore((s) => s.currentPublication);
   const setPublicationHistory = useStore((s) => s.setPublicationHistory);
   const setCurrentPublication = useStore((s) => s.setCurrentPublication);
+  // The license lives in the editor's feed state (the source of truth) — the
+  // server column is only a projection written at publish. It is editable
+  // outside this panel too, so it must not be mirrored into local component
+  // state. (An agency's NTD / external ID lives on the Agency entity and is
+  // edited in the Agency panel — see NtdP50Panel below, which reads it.)
+  const licenseSpdx = useStore((s) => s.licenseSpdx);
+  const setLicenseSpdx = useStore((s) => s.setLicenseSpdx);
+  const feedsProjects = useStore((s) => s.feedsProjects);
 
   const [loading, setLoading] = useState(false);
   const [banner, setBanner] = useState<Banner | null>(null);
@@ -96,13 +148,19 @@ export function PublishPanel() {
   const [ignoreWarnings, setIgnoreWarnings] = useState(false);
   const [busy, setBusy] = useState(false);
   const [unpublishConfirm, setUnpublishConfirm] = useState(false);
-  const [rtBreakage, setRtBreakage] = useState<{ removed: RemovedIds; snapshotId: string } | null>(
-    null,
-  );
+  const [rtBreakage, setRtBreakage] = useState<{
+    removed: RemovedIds;
+    action: PendingAction;
+  } | null>(null);
+  const [agencyChurn, setAgencyChurn] = useState<{
+    agencies: string[];
+    action: PendingAction;
+  } | null>(null);
   const [publishErrors, setPublishErrors] = useState<string[] | null>(null);
   const [scheduled, setScheduled] = useState<ScheduledPublishInfo | null>(null);
   const [scheduleMode, setScheduleMode] = useState(false);
   const [scheduleAt, setScheduleAt] = useState('');
+  const activeProject = feedsProjects.find((p) => p.id === projectId) ?? null;
 
   const refresh = useCallback(async () => {
     if (!projectId) return;
@@ -146,32 +204,66 @@ export function PublishPanel() {
     );
   }
 
-  const handlePublish = async () => {
-    if (!selectedSnapshot || !projectId) return;
+  // One path for every entry point — publish now, schedule for later, and the
+  // "…anyway" retries after an rt_breakage or agency_id_churn acknowledgement.
+  // `action.flags` carries the acks accumulated so far, so acking one gate and
+  // then tripping the other keeps the first ack.
+  const runAction = async (action: PendingAction) => {
+    if (!projectId) return;
     setBusy(true);
     setBanner(null);
     setPublishErrors(null);
     setRtBreakage(null);
+    setAgencyChurn(null);
     try {
-      const zip = await renderSnapshotZip(projectId, selectedSnapshot.id);
-      const result = await publishProject(projectId, {
-        snapshotId: selectedSnapshot.id,
-        ignoreWarnings: selectedSnapshot.validationWarnings > 0 ? ignoreWarnings : undefined,
-        zip,
-      });
-      setBanner({
-        kind: 'success',
-        message: 'Feed published.',
-        url: result.publication.canonicalUrl,
-      });
+      // Render the ZIP now, for both paths: the cron has no client to render at
+      // fire time, so a scheduled publish's bytes are captured at schedule time.
+      const zip = await renderSnapshotZip(projectId, action.snapshotId);
+      if (action.kind === 'publish') {
+        const result = await publishProject(projectId, {
+          snapshotId: action.snapshotId,
+          ignoreWarnings: ignoreWarnings || undefined,
+          ...action.flags,
+          // Project the feed's license onto the publication so feed_info.json and
+          // dmfr.json can carry it.
+          licenseSpdx: licenseSpdx ?? null,
+          zip,
+        });
+        setBanner({
+          kind: 'success',
+          message: ['Feed published.', ...ackNotes(action.flags)].join(' '),
+          url: result.publication.canonicalUrl,
+        });
+      } else {
+        await schedulePublish(projectId, {
+          snapshotId: action.snapshotId,
+          scheduledFor: action.scheduledFor,
+          ignoreWarnings: ignoreWarnings || undefined,
+          // Persisted on the scheduled row and replayed by the cron at fire time.
+          ...action.flags,
+          zip,
+        });
+        setBanner({
+          kind: 'success',
+          message: [
+            `Scheduled to publish on ${formatDate(action.scheduledFor)}.`,
+            ...ackNotes(action.flags),
+          ].join(' '),
+        });
+        setScheduleMode(false);
+        setScheduleAt('');
+      }
       setIgnoreWarnings(false);
       await refresh();
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.code === ('rt_breakage' as typeof err.code)) {
-          const removed = (err.extra?.removed ?? {}) as RemovedIds;
-          setRtBreakage({ removed, snapshotId: selectedSnapshot.id });
-        } else if (err.code === 'validation_failed') {
+        const code = err.code as string;
+        const removed = (err.extra?.removed ?? {}) as RemovedIds;
+        if (code === 'rt_breakage') {
+          setRtBreakage({ removed, action });
+        } else if (code === 'agency_id_churn') {
+          setAgencyChurn({ agencies: removed.agencies ?? [], action });
+        } else if (code === 'validation_failed') {
           const issues = (err.extra?.issues as unknown[]) ?? [];
           const errList: string[] = [err.message];
           if (Array.isArray(issues)) {
@@ -185,39 +277,29 @@ export function PublishPanel() {
           setBanner({ kind: 'error', message: err.message });
         }
       } else {
-        setBanner({ kind: 'error', message: 'Publish failed' });
+        setBanner({
+          kind: 'error',
+          message: action.kind === 'publish' ? 'Publish failed' : 'Could not schedule publish',
+        });
       }
     } finally {
       setBusy(false);
     }
   };
 
-  const handlePublishIgnoringRt = async () => {
-    if (!rtBreakage || !projectId) return;
-    const snapshotId = rtBreakage.snapshotId;
-    setBusy(true);
-    try {
-      const zip = await renderSnapshotZip(projectId, snapshotId);
-      const result = await publishProject(projectId, {
-        snapshotId,
-        ignoreWarnings: ignoreWarnings || undefined,
-        ignoreRtBreakage: true,
-        zip,
-      });
-      setRtBreakage(null);
-      setBanner({
-        kind: 'success',
-        message: 'Feed published. GTFS-RT breakage acknowledged.',
-        url: result.publication.canonicalUrl,
-      });
-      await refresh();
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Publish failed';
-      setBanner({ kind: 'error', message: msg });
-      setRtBreakage(null);
-    } finally {
-      setBusy(false);
-    }
+  const handlePublish = async () => {
+    if (!selectedSnapshot) return;
+    await runAction({ kind: 'publish', snapshotId: selectedSnapshot.id, flags: {} });
+  };
+
+  const handleIgnoreRtBreakage = async () => {
+    if (!rtBreakage) return;
+    await runAction(withFlag(rtBreakage.action, 'ignoreRtBreakage'));
+  };
+
+  const handleIgnoreAgencyChurn = async () => {
+    if (!agencyChurn) return;
+    await runAction(withFlag(agencyChurn.action, 'ignoreAgencyChurn'));
   };
 
   const handleUnpublish = async () => {
@@ -249,7 +331,14 @@ export function PublishPanel() {
         // If no stored ZIP for that snapshot, fall back to re-rendering + multipart.
         if (err instanceof ApiError && err.code === 'validation_failed') {
           const zip = await renderSnapshotZip(projectId, snapshotId);
-          result = await publishProject(projectId, { snapshotId, ignoreWarnings: true, zip });
+          // Restoring a previously-published snapshot is itself the
+          // acknowledgement — don't re-prompt for agency_id churn here.
+          result = await publishProject(projectId, {
+            snapshotId,
+            ignoreWarnings: true,
+            ignoreAgencyChurn: true,
+            zip,
+          });
         } else {
           throw err;
         }
@@ -268,6 +357,9 @@ export function PublishPanel() {
     }
   };
 
+  // Scheduling runs the same ID-stability gates as an immediate publish, so it
+  // can 409 and open the same modals — the user acknowledges NOW, while they're
+  // here, and the cron replays the acknowledgement when it fires.
   const handleSchedule = async () => {
     if (!selectedSnapshot || !projectId) return;
     const ms = fromLocalDatetimeInput(scheduleAt);
@@ -275,29 +367,12 @@ export function PublishPanel() {
       setBanner({ kind: 'error', message: 'Pick a date and time to schedule.' });
       return;
     }
-    setBusy(true);
-    setBanner(null);
-    setPublishErrors(null);
-    try {
-      // Render the ZIP now and upload it — the cron has no client to render at
-      // fire time, so the rendered bytes are captured at schedule time.
-      const zip = await renderSnapshotZip(projectId, selectedSnapshot.id);
-      await schedulePublish(projectId, {
-        snapshotId: selectedSnapshot.id,
-        scheduledFor: ms,
-        ignoreWarnings: selectedSnapshot.validationWarnings > 0 ? ignoreWarnings : undefined,
-        zip,
-      });
-      setBanner({ kind: 'success', message: `Scheduled to publish on ${formatDate(ms)}.` });
-      setScheduleMode(false);
-      setScheduleAt('');
-      setIgnoreWarnings(false);
-      await refresh();
-    } catch (err) {
-      setBanner({ kind: 'error', message: err instanceof ApiError ? err.message : 'Could not schedule publish' });
-    } finally {
-      setBusy(false);
-    }
+    await runAction({
+      kind: 'schedule',
+      snapshotId: selectedSnapshot.id,
+      scheduledFor: ms,
+      flags: {},
+    });
   };
 
   const handleCancelSchedule = async () => {
@@ -325,6 +400,9 @@ export function PublishPanel() {
   };
 
   const currentPubSnapshotId = currentPublication?.snapshotId ?? null;
+  const canonicalUrl =
+    currentPublication?.canonicalUrl ??
+    (currentPublication && activeProject ? `${FEEDS_ORIGIN}/${activeProject.slug}/gtfs.zip` : null);
   const publishDisabled =
     !selectedSnapshot ||
     busy ||
@@ -460,6 +538,33 @@ export function PublishPanel() {
                 </div>
               )}
 
+              {/* Feed license — travels with the publication into feed_info.json
+                  and the DMFR document (feeds.gtfsx.com/<slug>/dmfr.json).
+                  Optional. */}
+              <div className="mt-4 sm:max-w-sm">
+                <label
+                  htmlFor="publish-license"
+                  className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1"
+                >
+                  Feed license <span className="normal-case font-normal">(optional)</span>
+                </label>
+                <select
+                  id="publish-license"
+                  value={licenseSpdx ?? ''}
+                  onChange={(e) => setLicenseSpdx(e.target.value)}
+                  className="w-full px-3 py-2 border-2 border-sand rounded-lg bg-cream text-sm text-dark-brown focus:outline-none focus:border-coral focus:bg-white"
+                >
+                  {LICENSE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-warm-gray">
+                  SPDX identifier. Published in your feed's metadata so reusers know the terms.
+                </p>
+              </div>
+
               <label className="mt-4 flex items-center gap-2 text-xs text-dark-brown cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -504,6 +609,8 @@ export function PublishPanel() {
         </section>
 
         <DraftLinksSection projectId={projectId} snapshotList={snapshotList} setBanner={setBanner} />
+
+        {currentPublication && <NtdP50Panel canonicalUrl={canonicalUrl} />}
 
         <section className="bg-white border border-sand rounded-xl p-4">
           <h3 className="font-heading font-bold text-base text-dark-brown mb-3">
@@ -561,7 +668,7 @@ export function PublishPanel() {
       </div>
 
       {unpublishConfirm && (
-        <ConfirmModal
+        <ConfirmDialog
           title="Unpublish feed?"
           body="The canonical URL will return 404 until you publish again. Existing downstream consumers (Google Maps, Transit app, etc.) may stop receiving updates."
           confirmLabel="Unpublish"
@@ -575,9 +682,20 @@ export function PublishPanel() {
       {rtBreakage && (
         <RtBreakageModal
           removed={rtBreakage.removed}
+          mode={rtBreakage.action.kind}
           busy={busy}
           onCancel={() => setRtBreakage(null)}
-          onConfirm={handlePublishIgnoringRt}
+          onConfirm={handleIgnoreRtBreakage}
+        />
+      )}
+
+      {agencyChurn && (
+        <AgencyChurnModal
+          agencies={agencyChurn.agencies}
+          mode={agencyChurn.action.kind}
+          busy={busy}
+          onCancel={() => setAgencyChurn(null)}
+          onConfirm={handleIgnoreAgencyChurn}
         />
       )}
 
@@ -773,13 +891,36 @@ function HistoryActionBadge({ action }: { action: string }) {
   return <Badge variant="info">{action}</Badge>;
 }
 
+// Both gate modals serve two callers: "Publish now" and "Schedule publish". In
+// schedule mode the acknowledgement is stored and replayed by the cron, so the
+// copy says so — the user is agreeing to something that happens later.
+type GateMode = 'publish' | 'schedule';
+
+const confirmLabel = (mode: GateMode, busy: boolean): string => {
+  if (mode === 'schedule') return busy ? 'Scheduling…' : 'Schedule anyway';
+  return busy ? 'Publishing…' : 'Publish anyway';
+};
+
+function ScheduleAckNote({ mode }: { mode: GateMode }) {
+  if (mode !== 'schedule') return null;
+  return (
+    <p className="text-xs text-warm-gray mb-4 px-3 py-2 rounded-md bg-cream border border-sand">
+      We check this now because nobody is here to ask when the schedule fires. Acknowledging is
+      recorded with the schedule and applied at publish time. If your published feed changes before
+      then, we'll re-check and hold the publish rather than publish something you didn't agree to.
+    </p>
+  );
+}
+
 function RtBreakageModal({
   removed,
+  mode,
   onCancel,
   onConfirm,
   busy,
 }: {
   removed: RemovedIds;
+  mode: GateMode;
   onCancel: () => void;
   onConfirm: () => void;
   busy: boolean;
@@ -791,84 +932,115 @@ function RtBreakageModal({
     ['Trips', removed.trips],
   ];
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={onCancel} />
-      <div className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-lg mx-4">
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-2">
-          GTFS-Realtime breakage detected
-        </h3>
-        <p className="text-sm text-warm-gray mb-4">
-          Publishing this snapshot will remove or rename IDs that your registered GTFS-Realtime feed
-          references. Downstream trip-update and vehicle-position consumers may break until your RT
-          producer catches up.
-        </p>
-        <div className="max-h-64 overflow-auto bg-cream border border-sand rounded-md p-3 text-xs font-mono text-dark-brown">
-          {sections.map(([label, ids]) =>
-            ids && ids.length > 0 ? (
-              <div key={label} className="mb-2">
-                <div className="font-heading font-bold text-warm-gray uppercase tracking-wide text-[10px] mb-1">
-                  {label} ({ids.length})
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {ids.slice(0, 50).map((id) => (
-                    <span key={id} className="bg-white px-1.5 py-0.5 rounded border border-sand">
-                      {id}
-                    </span>
-                  ))}
-                  {ids.length > 50 && (
-                    <span className="text-warm-gray">… and {ids.length - 50} more</span>
-                  )}
-                </div>
-              </div>
-            ) : null,
-          )}
-        </div>
-        <div className="flex justify-end gap-2 mt-4">
+    <Modal
+      open
+      onClose={onCancel}
+      dismissable={!busy}
+      maxWidthClassName="max-w-lg"
+      title="GTFS-Realtime breakage detected"
+      description="Publishing this snapshot will remove or rename IDs that your registered GTFS-Realtime feed references. Downstream trip-update and vehicle-position consumers may break until your RT producer catches up."
+      footer={
+        <>
           <AuthButton variant="secondary" onClick={onCancel} disabled={busy}>
             Cancel
           </AuthButton>
           <AuthButton variant="danger" onClick={onConfirm} disabled={busy}>
-            {busy ? 'Publishing…' : 'Publish anyway'}
+            {confirmLabel(mode, busy)}
           </AuthButton>
-        </div>
+        </>
+      }
+    >
+      <ScheduleAckNote mode={mode} />
+      <div className="max-h-64 overflow-auto bg-cream border border-sand rounded-md p-3 text-xs font-mono text-dark-brown">
+        {sections.map(([label, ids]) =>
+          ids && ids.length > 0 ? (
+            <div key={label} className="mb-2">
+              <div className="font-heading font-bold text-warm-gray uppercase tracking-wide text-[10px] mb-1">
+                {label} ({ids.length})
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {ids.slice(0, 50).map((id) => (
+                  <span key={id} className="bg-white px-1.5 py-0.5 rounded border border-sand">
+                    {id}
+                  </span>
+                ))}
+                {ids.length > 50 && (
+                  <span className="text-warm-gray">… and {ids.length - 50} more</span>
+                )}
+              </div>
+            </div>
+          ) : null,
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }
 
-function ConfirmModal({
-  title,
-  body,
-  confirmLabel,
-  onConfirm,
+// agency_id churn (409 agency_id_churn). Same acknowledge-and-proceed shape as
+// RtBreakageModal, but a different failure: FTA's P-50 form crosswalks a
+// published feed to its NTD ID by agency_id, so dropping or renaming one breaks
+// the NTD crosswalk even for feeds with no GTFS-Realtime at all.
+function AgencyChurnModal({
+  agencies,
+  mode,
   onCancel,
+  onConfirm,
   busy,
-  danger,
 }: {
-  title: string;
-  body: string;
-  confirmLabel: string;
-  onConfirm: () => void;
+  agencies: string[];
+  mode: GateMode;
   onCancel: () => void;
+  onConfirm: () => void;
   busy: boolean;
-  danger?: boolean;
 }) {
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={onCancel} />
-      <div className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-sm mx-4">
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-2">{title}</h3>
-        <p className="text-sm text-warm-gray mb-5">{body}</p>
-        <div className="flex justify-end gap-2">
+    <Modal
+      open
+      onClose={onCancel}
+      dismissable={!busy}
+      maxWidthClassName="max-w-lg"
+      title="agency_id changed — this breaks your NTD crosswalk"
+      footer={
+        <>
           <AuthButton variant="secondary" onClick={onCancel} disabled={busy}>
             Cancel
           </AuthButton>
-          <AuthButton variant={danger ? 'danger' : 'primary'} onClick={onConfirm} disabled={busy}>
-            {busy ? 'Working…' : confirmLabel}
+          <AuthButton variant="danger" onClick={onConfirm} disabled={busy}>
+            {confirmLabel(mode, busy)}
           </AuthButton>
+        </>
+      }
+    >
+      <p className="text-sm text-warm-gray mb-4">
+        These <code className="font-mono">agency_id</code> values are in your published feed but
+        not in the snapshot you're about to publish. FTA's enhanced P-50 form matches your feed to
+        your National Transit Database ID by <code className="font-mono">agency_id</code>, and any
+        downstream consumer keyed on it (trip planners, analytics, your own RT producer) will lose
+        the link too.
+      </p>
+      <p className="text-sm text-warm-gray mb-4">
+        The safe fix is to keep the existing <code className="font-mono">agency_id</code> values
+        and change <code className="font-mono">agency_name</code> instead. If the change is
+        intentional, {mode === 'schedule' ? 'schedule' : 'publish'} anyway — then refile your P-50
+        with the new IDs.
+      </p>
+      <ScheduleAckNote mode={mode} />
+      <div className="max-h-48 overflow-auto bg-cream border border-sand rounded-md p-3 text-xs font-mono text-dark-brown">
+        <div className="font-heading font-bold text-warm-gray uppercase tracking-wide text-[10px] mb-1">
+          Removed agency_id ({agencies.length})
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {agencies.slice(0, 50).map((id) => (
+            <span key={id} className="bg-white px-1.5 py-0.5 rounded border border-sand">
+              {id}
+            </span>
+          ))}
+          {agencies.length > 50 && (
+            <span className="text-warm-gray">… and {agencies.length - 50} more</span>
+          )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

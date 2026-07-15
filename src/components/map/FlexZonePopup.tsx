@@ -1,5 +1,6 @@
 import { Popup } from 'react-map-gl/mapbox';
 import { useStore } from '../../store';
+import { openFlexZoneDetails } from '../flex/flexHelpers';
 
 interface Props {
   zoneId: string;
@@ -65,9 +66,7 @@ export function FlexZonePopup({ zoneId, lngLat, onClose }: Props) {
   };
 
   const editDetails = () => {
-    setSidebarSection('flex');
-    // Signal the Flex sidebar to open this specific zone's Details panel.
-    window.__flexZoneExpand = zone.id;
+    openFlexZoneDetails(zone.id);
     onClose();
   };
 
@@ -103,7 +102,10 @@ export function FlexZonePopup({ zoneId, lngLat, onClose }: Props) {
             </div>
           )}
           {fare && (
-            <div>💲 {fare.fare_id} — ${Number(fare.price).toFixed(2)} {fare.currency_type}</div>
+            <div>
+              💲 ${Number(fare.price).toFixed(2)} {fare.currency_type}
+              {` (${fare.payment_method === 0 ? 'Pay on board' : 'Pay before boarding'})`}
+            </div>
           )}
           {!zone.pickupWindowStart && !dayPattern && !b && !fare && (
             <div style={{ fontStyle: 'italic', color: '#9CA3AF' }}>

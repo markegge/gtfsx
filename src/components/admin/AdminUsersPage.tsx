@@ -145,6 +145,7 @@ export function AdminUsersPage() {
           value={qInput}
           onChange={(e) => setQInput(e.target.value)}
           placeholder="Search by email substring…"
+          aria-label="Search users by email substring"
           className="flex-1 min-w-[220px] px-3 py-2 border-2 border-sand rounded-lg text-sm bg-white text-dark-brown focus:outline-none focus:border-coral"
         />
         <select
@@ -345,7 +346,6 @@ export function PlanPill({
 }) {
   const styles: Record<AdminUserRow['plan'], string> = {
     free: 'bg-cream text-warm-gray border border-sand',
-    pro: 'bg-coral-light text-coral',
     agency: 'bg-teal-light text-teal',
     enterprise: 'bg-dark-brown text-white',
   };

@@ -16,10 +16,10 @@ import {
 } from './_setup';
 import { ulid } from 'ulidx';
 
-async function loggedInClient(email: string, plan: 'free' | 'pro' | 'agency' | 'enterprise' = 'pro') {
+async function loggedInClient(email: string, plan: 'free' | 'agency' | 'enterprise' = 'agency') {
   // Quota tests pin to a plan with a finite project limit so the assertions
   // stay readable. Free = 3 projects — the only finite-project tier now that
-  // Pro and Agency are unlimited; Agency still has 50 snapshots/project.
+  // Agency is unlimited; Agency still has 50 snapshots/project.
   const user = await seedUser({ email, plan });
   const client = makeClient();
   await client.post('/auth/login', { email: user.email, password: user.password });

@@ -125,7 +125,7 @@ export async function handleRtRequest(request: Request, env: Env): Promise<Respo
     return rtError(404, 'no_rt_source', `No ${kind} feed is registered for this feed.`);
   }
   if (!planHasFeature(resolved.ownerPlan, 'embeds')) {
-    return rtError(403, 'plan_required', 'RT passthrough requires a Pro plan or higher.');
+    return rtError(403, 'plan_required', 'RT passthrough requires the Planner plan or higher.');
   }
 
   let upstream: Response;

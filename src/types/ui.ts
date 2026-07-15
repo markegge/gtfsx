@@ -12,6 +12,7 @@ export type SidebarSection =
   | 'coverage'
   | 'titlevi'
   | 'stop-analysis'
+  | 'access-isochrones'
   | 'alerts'
   | 'settings';
 
@@ -46,11 +47,12 @@ export type MapMode =
   | 'draw_flex_zone'
   | 'edit_flex_zone'
   | 'draw_fare_zone'
-  | 'select_stops_polygon';
+  | 'select_stops_polygon'
+  | 'place_access_origin';
 
 export type StopPlacementMode = 'snap_to_route' | 'freehand';
 
-export type RouteDetailTab = 'details' | 'stops' | 'trips' | 'shapes' | 'costs';
+export type RouteDetailTab = 'details' | 'stops' | 'trips' | 'shapes' | 'costs' | 'coverage';
 
 export type StopDetailTab = 'details' | 'trips' | 'coverage';
 
@@ -63,7 +65,13 @@ export type CalendarDetailTab = 'details' | 'routes' | 'exceptions';
  * store import. Grow the one-click "Fix" catalog by adding an id here and
  * registering it in that registry.
  */
-export type ValidationFixId = 'fill-trip-edge-times';
+export type ValidationFixId =
+  | 'fill-trip-edge-times'
+  | 'fill-missing-wheelchair'
+  | 'remove-orphan-trips'
+  | 'remove-ghost-trips'
+  | 'delete-unused-stop'
+  | 'generate-shapes-from-stops';
 
 export interface ValidationMessage {
   id: string;

@@ -151,7 +151,8 @@
       <p>Because GTFS-Flex is an extension (GeoJSON service areas, <code>booking_rules.txt</code>, extended <code>stop_times.txt</code> columns), authoring it requires an editing tool that supports the extension. <strong>National RTAP's free GTFS Builder does not support GTFS-Flex.</strong> If your agency uses it for fixed-route and needs to add flex, you'll need a tool that can author Flex zones, stop groups, and booking rules. See our <a href="/compare/gtfs-builder-rtap/">GTFS·X vs. National RTAP GTFS Builder comparison</a> for a full breakdown of where each tool fits.</p>
 
       <h2>Building a flex feed in GTFS·X</h2>
-      <p>GTFS·X has first-class support for GTFS-Flex. You can draw polygon zones directly on the map, configure pickup and drop-off windows, mark route segments as continuous pickup, and define a full set of booking rules per zone or per trip. Mixed feeds (fixed-route plus flex) are fully supported. See <a href="/docs/flex-zones-and-booking-rules/">Authoring GTFS-Flex with GTFS·X</a> for the step-by-step workflow.</p>
+      <p>GTFS·X has first-class support for GTFS-Flex. You can draw polygon zones directly on the map, configure pickup and drop-off windows, mark route segments as continuous pickup, and define a full set of booking rules per zone or per trip. Mixed feeds (fixed-route plus flex) are fully supported. See <a href="/docs/flex-zones-and-booking-rules/">Authoring GTFS-Flex with GTFS·X</a> for the step-by-step workflow, or go straight to <a href="/docs/flex-zones-and-booking-rules/#microtransit">Microtransit</a> for the on-demand-zone walkthrough: draw the zone, set the pickup window, write the booking rule, export.</p>
+      <p>One expectation to set early: a flex feed describes where the service runs, when it runs, and how to book it. It is not a booking API, so it carries no real-time vehicle availability, no dynamic pricing, and no way for an app to reserve a ride (that is GOFS / GTFS-OnDemand territory). Riders still book through the phone number or URL in your booking rule.</p>
 
       <h2>Spec references &amp; further reading</h2>
       <ul>
@@ -197,7 +198,7 @@ footer.gx-footer .gx-mono { font-family: "JetBrains Mono", ui-monospace, "SF Mon
         <div class="gx-social">
           <a href="https://twitter.com/gtfsxapp" aria-label="GTFS·X on X">X</a>
           <a href="https://www.linkedin.com/company/gtfsx" aria-label="GTFS·X on LinkedIn">in</a>
-          <a href="https://github.com/markegge/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
+          <a href="https://github.com/GTFS-X/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
         </div>
       </div>
       <div class="gx-col">

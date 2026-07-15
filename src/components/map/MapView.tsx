@@ -13,14 +13,25 @@ import { StopPopup } from './StopPopup';
 import { RoutePopup } from './RoutePopup';
 import { FlexZonePopup } from './FlexZonePopup';
 import { CoverageLayer } from './CoverageLayer';
+import { AccessIsochroneLayer } from './AccessIsochroneLayer';
 import { StopAnalysisLayer } from './StopAnalysisLayer';
 import { FlexLayer } from '../flex/FlexLayer';
 import { DemandDotsLayer } from './DemandDotsLayer';
 import { MapLayerControls } from './MapLayerControls';
-import { createFlexZoneWithRoute } from '../flex/flexHelpers';
+import { createFlexZoneWithRoute, nextFlexZoneName } from '../flex/flexHelpers';
 import { shapeEditLabel } from './shapeEditLabel';
 import { stopsInsidePolygon, stopsInPolygonTurf } from '../fares/fareZoneHelpers';
 import type { MapStyleId } from './MapLayerControls';
+import {
+  DEFAULT_DEMAND_SELECTION,
+  setDemandBackdrop,
+  setDemandJobs,
+  setDemandMode,
+  setDemandSegment,
+  type DemandMode,
+  type DemandSegment,
+  type DemandSelection,
+} from './demandCategories';
 import type { MapMouseEvent, MapboxGeoJSONFeature } from 'mapbox-gl';
 import type { ShapePoint } from '../../types/gtfs';
 import { generateId } from '../../services/idGenerator';
@@ -105,6 +116,21 @@ export function MapView() {
   const [popupDirectionId, setPopupDirectionId] = useState<0 | 1>(0);
   const [popupFlexZoneId, setPopupFlexZoneId] = useState<string | null>(null);
 
+  // Suppress map popups while placing stops. A click on the route shape in
+  // place_stop mode drops a stop (handled in handleMapClick) and must not also
+  // leave a route/stop/flex popup floating over the map — two surfaces
+  // reacting to one click. Clear any open popup when placement mode activates;
+  // no new popup can open while in place_stop (handleMapClick returns early),
+  // so this fully suppresses them for the duration.
+  useEffect(() => {
+    if (mapMode === 'place_stop') {
+      setPopupStopId(null);
+      setPopupRouteId(null);
+      setPopupShapeId(null);
+      setPopupFlexZoneId(null);
+    }
+  }, [mapMode]);
+
   // Track the last stop placed (for ESC undo)
   const lastPlacedStopRef = useRef<string | null>(null);
   // Track the draw feature ID for shape/zone editing
@@ -131,6 +157,27 @@ export function MapView() {
   // Map layer controls
   const [mapStyleId, setMapStyleId] = useState<MapStyleId>('light');
   const [showDemandDots, setShowDemandDots] = useState(false);
+  // What the demand dots draw: a mode + the ONE segment selected within it, plus
+  // the two disjoint companions (backdrop, jobs). A discriminated union, so an
+  // illegal mode/segment pairing — `senior` under `propensity`, which would
+  // double-plot every senior against the propensity backdrop — cannot be
+  // represented, let alone rendered. Applied as a client-side filter against a
+  // single vector source, so changing it never refetches a tile.
+  const [demandSelection, setDemandSelection] = useState<DemandSelection>(
+    DEFAULT_DEMAND_SELECTION,
+  );
+  const handleDemandModeChange = useCallback((mode: DemandMode) => {
+    setDemandSelection((prev) => setDemandMode(prev, mode));
+  }, []);
+  const handleDemandSegmentChange = useCallback((segment: DemandSegment) => {
+    setDemandSelection((prev) => setDemandSegment(prev, segment));
+  }, []);
+  const handleDemandJobsChange = useCallback((show: boolean) => {
+    setDemandSelection((prev) => setDemandJobs(prev, show));
+  }, []);
+  const handleDemandBackdropChange = useCallback((show: boolean) => {
+    setDemandSelection((prev) => setDemandBackdrop(prev, show));
+  }, []);
   // Cursor: pointer when hovering over a clickable feature in select mode
   const [hoveringFeature, setHoveringFeature] = useState(false);
   const [hoveringStop, setHoveringStop] = useState(false);
@@ -141,6 +188,9 @@ export function MapView() {
   const [simplifyShapes, setSimplifyShapes] = useState(false);
   // Stop move state (for didDragStop compat with click handler)
   const didDragStopRef = useRef(false);
+  // Deadline (performance.now()) until which the trailing click of the
+  // double-click that closed a drawing is swallowed. See the effect below.
+  const suppressTailClickUntilRef = useRef(0);
 
   // Compute initial view from stops or shapes. Recompute only when the
   // "any data?" boolean flips — avoids re-running on every stop edit.
@@ -172,6 +222,38 @@ export function MapView() {
     return { latitude: 45.68, longitude: -111.05, zoom: 12 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasAnyData]);
+
+  // True once react-map-gl has actually constructed the underlying Map. Any
+  // effect that needs `mapRef.current.getMap()` must depend on this: react-map-gl
+  // populates the ref while mounting its OWN child, which happens AFTER this
+  // component's mount effects run, so a `[]`-dep effect always sees a null ref
+  // and silently no-ops forever.
+  const [mapReady, setMapReady] = useState(false);
+
+  // Live map zoom, kept in React state so MapLayerControls can (a) state the
+  // EFFECTIVE "1 dot ≈ N people" for the zoom the user is actually at — the tiles
+  // carry only every Nth dot when zoomed out — and (b) warn when a selected class
+  // isn't in the tile at this zoom at all. Both come from the pipeline's zoom
+  // ladder; see perDotAtZoom in demandLegend.ts.
+  //
+  // `mapReady` is load-bearing, not defensive: with `[]` deps this effect ran
+  // once, before the Map existed, bailed on the null ref, and never attached the
+  // listeners — so currentZoom stayed pinned at initialView.zoom for the life of
+  // the session. The zoom warning could therefore never fire, and on a feed whose
+  // initial fit lands below z9 it would instead be stuck ON at every zoom.
+  const [currentZoom, setCurrentZoom] = useState(initialView.zoom);
+  useEffect(() => {
+    const map = mapRef.current?.getMap?.();
+    if (!map) return;
+    const recompute = () => setCurrentZoom(map.getZoom());
+    map.on('zoomend', recompute);
+    map.on('moveend', recompute);
+    // Seed from the map's REAL zoom at attach time. initialView.zoom is only a
+    // request — the data-driven fit may already have moved us elsewhere — so
+    // reading it here is what keeps the warning honest before the first gesture.
+    recompute();
+    return () => { map.off('zoomend', recompute); map.off('moveend', recompute); };
+  }, [mapReady]);
 
   // ESC key handler — use capture phase so we fire before mapbox-gl-draw
   useEffect(() => {
@@ -292,6 +374,41 @@ export function MapView() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', handleKeyUp, true);
+    };
+  }, []);
+
+  // Swallow the trailing click of the double-click that closes a drawing.
+  //
+  // mapbox-gl-draw ends a polygon/line on whichever click lands on the shape's
+  // first or last vertex — which, for the usual "double-click to close", is the
+  // *first* click of the pair. draw.create fires there, we commit the geometry
+  // and drop the draw feature, and Draw drops into simple_select. The second
+  // click of the pair then arrives at simple_select and is hit-tested against
+  // the vertices of the feature we just removed — they're still on screen,
+  // because Draw defers its re-render to the next animation frame — so
+  // simple_select tries to enter direct_select for a feature that no longer
+  // exists ("You must provide a featureId to enter direct_select mode").
+  //
+  // Only the tail of a double-click is dropped (detail >= 2, on the map canvas,
+  // within the double-click window of a completed drawing); ordinary clicks and
+  // the browser's own dblclick event are untouched. Capture on window so Mapbox
+  // never sees mousedown/mouseup and can't be left mid-drag.
+  useEffect(() => {
+    const onTailClick = (e: MouseEvent) => {
+      if (e.detail < 2) return;
+      if (performance.now() > suppressTailClickUntilRef.current) return;
+      const target = e.target;
+      if (!(target instanceof Element) || !target.closest('.mapboxgl-canvas-container')) return;
+      if (e.type === 'click') suppressTailClickUntilRef.current = 0;
+      e.stopPropagation();
+    };
+    window.addEventListener('mousedown', onTailClick, true);
+    window.addEventListener('mouseup', onTailClick, true);
+    window.addEventListener('click', onTailClick, true);
+    return () => {
+      window.removeEventListener('mousedown', onTailClick, true);
+      window.removeEventListener('mouseup', onTailClick, true);
+      window.removeEventListener('click', onTailClick, true);
     };
   }, []);
 
@@ -683,6 +800,10 @@ export function MapView() {
     const feature = e.features[0];
     if (!feature) return;
 
+    // The drawing just closed — if that was the first click of a double-click,
+    // the second one is still coming. 500ms is the browser's double-click window.
+    suppressTailClickUntilRef.current = performance.now() + 500;
+
     const currentState = useStore.getState();
 
     // Flex zone drawn. Two cases:
@@ -705,13 +826,16 @@ export function MapView() {
         delete window.__flexAddPolygonZoneId;
       } else {
         const geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [feature] };
-        const zoneNum = currentState.flexZones.length + 1;
+        const newZoneId = `flex-zone-${Date.now()}`;
         createFlexZoneWithRoute({
-          id: `flex-zone-${Date.now()}`,
-          name: `Zone ${zoneNum}`,
+          id: newZoneId,
+          name: nextFlexZoneName(currentState.flexZones),
           bufferMiles: 0,
           geojson,
         });
+        // Land in the new zone's detail sub-panel when the rail comes back, so
+        // booking rules / windows / fare are the obvious next step.
+        useStore.getState().setFlexZoneDetailId(newZoneId);
       }
       useStore.getState().setMapMode('select');
       if (drawRef.current) drawRef.current.deleteAll();
@@ -900,6 +1024,14 @@ export function MapView() {
     if (didDragStopRef.current) return;
 
     const currentState = useStore.getState();
+
+    // Access-isochrone origin placement — drop the trip-origin pin, then return
+    // to select mode. (The pin is also draggable afterwards via its Marker.)
+    if (currentState.mapMode === 'place_access_origin') {
+      currentState.setAccessOrigin({ lon: e.lngLat.lng, lat: e.lngLat.lat });
+      currentState.setMapMode('select');
+      return;
+    }
 
     // Don't handle map clicks during shape editing
     if (currentState.mapMode === 'edit_shape') return;
@@ -1169,6 +1301,7 @@ export function MapView() {
   const cursor = mapMode === 'draw_route' || mapMode === 'draw_flex_zone' ? 'crosshair'
     : mapMode === 'draw_fare_zone' || mapMode === 'select_stops_polygon' ? 'crosshair'
     : mapMode === 'place_stop' ? 'crosshair'
+    : mapMode === 'place_access_origin' ? 'crosshair'
     : mapMode === 'trim_shape' ? 'crosshair'
     : mapMode === 'move_stop' ? (hoveringStop ? 'grab' : 'crosshair')
     : mapMode === 'edit_shape' || mapMode === 'edit_flex_zone' ? 'default'
@@ -1187,6 +1320,8 @@ export function MapView() {
         }
         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
         cursor={cursor}
+        // Gates every effect that needs the underlying mapbox-gl Map (see mapReady).
+        onLoad={() => setMapReady(true)}
         onClick={handleMapClick}
         onDblClick={handleMapDblClick}
         // Disable native zoom-on-double-click while placing stops so the
@@ -1202,8 +1337,9 @@ export function MapView() {
           onCreate={handleDrawCreate}
           onUpdate={handleDrawUpdate}
         />
-        <DemandDotsLayer visible={showDemandDots} />
+        <DemandDotsLayer visible={showDemandDots} selection={demandSelection} />
         <CoverageLayer />
+        <AccessIsochroneLayer />
         <FlexLayer />
         <RouteLayer simplified={simplifyShapes} />
         <StopLayer clustered={clusterStops} />
@@ -1240,6 +1376,12 @@ export function MapView() {
         onMapStyleChange={setMapStyleId}
         showDemandDots={showDemandDots}
         onShowDemandDotsChange={setShowDemandDots}
+        demandSelection={demandSelection}
+        onDemandModeChange={handleDemandModeChange}
+        onDemandSegmentChange={handleDemandSegmentChange}
+        onDemandJobsChange={handleDemandJobsChange}
+        onDemandBackdropChange={handleDemandBackdropChange}
+        currentZoom={currentZoom}
       />
       <DrawingIndicator />
 

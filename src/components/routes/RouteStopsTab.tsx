@@ -18,6 +18,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useStore } from '../../store';
 import { EmptyState } from '../ui/EmptyState';
+import { Modal } from '../ui/Modal';
+import { AuthButton } from '../auth/AuthButton';
 import { PatternSelector } from '../ui/ShapePatternSelector';
 import { computeShapePatterns, activeStopsShapeId } from '../ui/shapePatterns';
 import { directionName } from '../../utils/constants';
@@ -452,44 +454,44 @@ export function RouteStopsTab() {
         const stop = stops.find((s) => s.stop_id === confirmRemoveStop.stopId);
         const stopName = stop?.stop_name || confirmRemoveStop.stopId;
         return (
-          <div className="fixed inset-0 flex items-center justify-center z-50">
-            <div className="absolute inset-0 bg-black/20" onClick={() => setConfirmRemoveStop(null)} />
-            <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-xs mx-4">
-              <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
-                Remove "{stopName}"?
-              </h3>
-              <p className="text-sm text-warm-gray mb-4">
-                This stop is not used by any other route. Remove it from this route only, or delete it entirely from the feed?
-              </p>
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={() => {
-                    removeRouteStop(routeId, confirmRemoveStop.uid);
-                    setConfirmRemoveStop(null);
-                  }}
-                  className="w-full px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
-                >
-                  Remove from route only
-                </button>
-                <button
-                  onClick={() => {
-                    removeStop(confirmRemoveStop.stopId);
-                    if (selectedStopId === confirmRemoveStop.stopId) selectStop(null);
-                    setConfirmRemoveStop(null);
-                  }}
-                  className="w-full px-3 py-2 bg-red-500 text-white rounded-lg font-heading font-bold text-sm hover:bg-red-600 transition-colors"
-                >
-                  Delete stop entirely
-                </button>
-                <button
-                  onClick={() => setConfirmRemoveStop(null)}
-                  className="w-full px-3 py-1.5 text-xs text-warm-gray hover:text-dark-brown"
-                >
-                  Cancel
-                </button>
-              </div>
+          <Modal
+            open
+            onClose={() => setConfirmRemoveStop(null)}
+            maxWidthClassName="max-w-xs"
+            title={`Remove "${stopName}"?`}
+            description="This stop is not used by any other route. Remove it from this route only, or delete it entirely from the feed?"
+          >
+            <div className="flex flex-col gap-2">
+              <AuthButton
+                variant="ghost"
+                fullWidth
+                onClick={() => setConfirmRemoveStop(null)}
+              >
+                Cancel
+              </AuthButton>
+              <AuthButton
+                variant="secondary"
+                fullWidth
+                onClick={() => {
+                  removeRouteStop(routeId, confirmRemoveStop.uid);
+                  setConfirmRemoveStop(null);
+                }}
+              >
+                Remove from route only
+              </AuthButton>
+              <AuthButton
+                variant="danger"
+                fullWidth
+                onClick={() => {
+                  removeStop(confirmRemoveStop.stopId);
+                  if (selectedStopId === confirmRemoveStop.stopId) selectStop(null);
+                  setConfirmRemoveStop(null);
+                }}
+              >
+                Delete stop entirely
+              </AuthButton>
             </div>
-          </div>
+          </Modal>
         );
       })()}
 

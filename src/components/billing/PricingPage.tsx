@@ -18,7 +18,6 @@ import { AuthLayout } from '../auth/AuthLayout';
 import { AuthButton } from '../auth/AuthButton';
 import { FormField } from '../ui/FormField';
 import { useStore } from '../../store';
-import { billingEnabled } from '../../utils/featureFlags';
 import {
   fetchPlanCatalog,
   openBillingPortal,
@@ -39,56 +38,32 @@ import { TalkToSalesModal } from './TalkToSalesModal';
 const FALLBACK_PLANS: PlanCatalogEntry[] = [
   {
     plan: 'free',
-    displayName: 'Edit',
+    displayName: 'Editor',
     monthlyPriceUsd: 0,
     annualPriceUsd: 0,
     perSeat: false,
-    tagline: 'Create, edit, validate, and export GTFS feeds — in your browser.',
+    tagline: 'Create, edit, validate, and export GTFS feeds—free.',
     features: [
       'Create and edit routes, stops, trips, and schedules on a live map',
       'Add GTFS-Flex zones and booking rules to any feed',
       'Validate against the GTFS spec as you work',
-      'Import an existing feed or start from scratch — no signup required',
+      'Import an existing feed or start from scratch (no signup required)',
       'Export a spec-clean GTFS .zip and host it anywhere',
-      'Up to 3 saved feeds in the cloud',
-      'Nationwide demand-propensity map',
-      'System-level cost and coverage summary',
-      'Community support',
-    ],
-  },
-  {
-    plan: 'pro',
-    displayName: 'Pro',
-    monthlyPriceUsd: 49,
-    annualPriceUsd: 468,
-    perSeat: false,
-    tagline: 'Host and publish feeds.',
-    features: [
-      'Fast, free GTFS·X editor',
-      'Feed publication and hosting',
-      'Rider-facing schedule mini-site',
-      'Feed submission (Google Maps, Mobility Database, etc.)',
-      'Unlimited saved feeds',
-      'Email support',
     ],
   },
   {
     plan: 'agency',
-    displayName: 'Agency',
+    displayName: 'Planner',
     monthlyPriceUsd: 299,
     annualPriceUsd: 2988,
     perSeat: false,
-    tagline: 'Plan routes and service as a team.',
+    tagline: 'The service-planning suite for transit agencies.',
     features: [
-      'Team workspace: your whole org owns and manages feeds together',
-      'Cross-org access for consultants and partners',
-      'Service scenario comparison',
       'Route operating cost estimates',
-      'Demographic coverage and Title VI equity analysis',
-      'GTFS-Realtime Service Alerts',
-      'White-labeled rider site',
-      'Everything in Pro',
-      'Phone + email support',
+      'Demographic coverage & Title VI equity analysis',
+      'Scenario comparison',
+      'Hosted publishing: stable feed URL, rider mini-site & embeds',
+      'Unlimited feeds & team workspaces',
     ],
     detailsHref: '/planning',
     detailsLabel: 'See all planning features →',
@@ -99,43 +74,26 @@ const FALLBACK_PLANS: PlanCatalogEntry[] = [
     monthlyPriceUsd: null,
     annualPriceUsd: null,
     perSeat: false,
-    tagline: 'For state DOTs, MPOs, or consortiums.',
+    tagline: 'Multi-agency subscriptions for consultants and state DOTs',
     features: [
-      'Agency-tier access for every agency in your jurisdiction.',
+      'Everything in Planner',
+      'Multi-agency feed portfolios',
+      'Higher limits and SLA',
+      'Contract via PO or invoice',
     ],
   },
 ];
 
 const POPULAR_PLAN: Plan = 'agency';
 
-// Agency card: two named pillars. Hardcoded here so the grouping is preserved
-// regardless of whether features come from the live catalog or the fallback.
-// Entitlement source: org_workspace + cross_org_member + org_logo (Agency+,
-// worker/billing/plans.ts); unlimited members = flat rate, no per-seat gate
-// (worker/billing/middleware.ts requireOrgSeatAvailable).
-const AGENCY_FEATURE_GROUPS = [
-  {
-    heading: 'Built for teams',
-    items: [
-      'Team workspace: your whole org owns and manages feeds together',
-      'Cross-org access for consultants and partners',
-    ],
-  },
-  {
-    heading: 'Route planning suite',
-    items: [
-      'Service scenario comparison',
-      'Route operating cost estimates',
-      'Demographic coverage and Title VI equity analysis',
-      'GTFS-Realtime Service Alerts',
-      'White-labeled rider site',
-    ],
-  },
-] as const;
-// Items shown below the two pillar groups (secondary, no heading label).
-const AGENCY_TRAILING_FEATURES = [
-  'Everything in Pro',
-  'Phone + email support',
+// Enterprise card bullets are display-only and fixed here (the live catalog's
+// enterprise entry carries longer sales copy meant for /docs/pricing) so the
+// card stays short regardless of catalog contents.
+const ENTERPRISE_FEATURES = [
+  'Everything in Planner',
+  'Multi-agency feed portfolios',
+  'Higher limits and SLA',
+  'Contract via PO or invoice',
 ] as const;
 
 const ENTERPRISE_MAIL =
@@ -195,7 +153,7 @@ export function PricingPage() {
   );
 
   // Each paid card has its own monthly/annual toggle so users can compare
-  // (e.g. Pro monthly vs Agency annual) side-by-side. Keyed by plan id;
+  // monthly vs annual side-by-side. Keyed by plan id;
   // defaults to monthly, or to the deep-linked interval when present.
   const [intervals, setIntervals] = useState<Record<string, 'month' | 'year'>>(() =>
     directIntervalParam && directPlanParam
@@ -207,8 +165,10 @@ export function PricingPage() {
     setIntervals((prev) => ({ ...prev, [plan]: i }));
 
   const [plans, setPlans] = useState<PlanCatalogEntry[]>(FALLBACK_PLANS);
-  const [serverBillingEnabled, setServerBillingEnabled] = useState<boolean>(billingEnabled);
   const [talkToSalesOpen, setTalkToSalesOpen] = useState(false);
+  // Which flow opened the modal — picks the prefilled mailto (Enterprise
+  // inquiry vs. fix-my-feed scoping). Same booking link either way.
+  const [talkToSalesContext, setTalkToSalesContext] = useState<'enterprise' | 'services'>('enterprise');
 
   // Checkout flow state (ported from the old WelcomePlanPage).
   const [pendingPlan, setPendingPlan] = useState<Plan | null>(null);
@@ -232,7 +192,6 @@ export function PricingPage() {
     fetchPlanCatalog()
       .then((res) => {
         if (res.plans?.length) setPlans(res.plans);
-        setServerBillingEnabled(res.billingEnabled);
       })
       .catch(() => {
         // Network or backend disabled — keep fallback content.
@@ -242,14 +201,14 @@ export function PricingPage() {
   const currentPlan: Plan = (currentUser?.plan as Plan | undefined) ?? 'free';
   const onPaidPlan = currentPlan !== 'free' && currentPlan !== 'enterprise';
 
-  // Orgs the user can administer — eligible to host an Agency subscription.
+  // Orgs the user can administer — eligible to host a Planner subscription.
   const adminOrgs: OrgSummary[] = useMemo(
     () => userOrgs.filter((o) => roleAtLeast(o.role, 'admin')),
     [userOrgs],
   );
 
   // If the caller pinned an org owner (e.g. from /orgs/:slug/billing), require
-  // Agency checkout to target that org; otherwise fall back to the user's first
+  // Planner checkout to target that org; otherwise fall back to the user's first
   // admin org, or the org-create flow.
   const presetOrg = useMemo(() => {
     if (presetOwnerType !== 'org' || !presetOwnerId) return null;
@@ -264,7 +223,7 @@ export function PricingPage() {
   );
   const free = plans.find((p) => p.plan === 'free') ?? FALLBACK_PLANS[0];
   const enterprise = plans.find((p) => p.plan === 'enterprise') ?? FALLBACK_PLANS.at(-1)!;
-  const orderedCards = [free, ...selfServePlans];
+  const orderedCards = [free, ...selfServePlans, enterprise];
 
   function priceLabel(
     p: PlanCatalogEntry,
@@ -272,7 +231,7 @@ export function PricingPage() {
   ): { amount: string; per: string; sub: string | null } {
     const monthly = p.monthlyPriceUsd;
     const annual = p.annualPriceUsd;
-    if (monthly === null || annual === null) return { amount: 'Custom', per: '', sub: null };
+    if (monthly === null || annual === null) return { amount: 'Call us', per: '', sub: null };
     if (monthly === 0 && annual === 0) return { amount: 'Free Forever', per: '', sub: null };
     if (interval === 'month') {
       return {
@@ -298,27 +257,22 @@ export function PricingPage() {
 
   // Kick off Stripe Checkout. Owner mapping is enforced server-side too, but we
   // resolve it here so the redirect happens in a single round-trip.
-  async function startPaidCheckout(plan: 'pro' | 'agency', interval: 'month' | 'year', orgId?: string) {
+  async function startPaidCheckout(plan: 'agency', interval: 'month' | 'year', orgId?: string) {
     if (!currentUser) {
       // Logged-out users go straight to sign-up, carrying the plan so they land
       // back here for checkout after verifying their email.
       navigate(`/signup?next=${encodeURIComponent(`/pricing?plan=${plan}&interval=${interval}`)}`);
       return;
     }
-    if (!serverBillingEnabled) {
-      setError('Billing is not yet enabled in this environment.');
-      setPendingPlan(null);
-      return;
-    }
     setError(null);
     setPendingPlan(plan);
     try {
-      const ownerType: 'user' | 'org' = plan === 'agency' ? 'org' : 'user';
-      const ownerId = ownerType === 'org' ? (orgId ?? '') : currentUser.id;
-      if (ownerType === 'org' && !ownerId) {
+      // Planner (internal id 'agency') is always billed to an organization.
+      const ownerId = orgId ?? '';
+      if (!ownerId) {
         throw new Error('No organization selected.');
       }
-      const result = await startCheckout({ ownerType, ownerId, plan, interval });
+      const result = await startCheckout({ ownerType: 'org', ownerId, plan, interval });
       window.location.href = result.url;
     } catch (e) {
       setError(e instanceof ApiError ? e.message : (e as Error)?.message ?? 'Could not start checkout.');
@@ -369,34 +323,31 @@ export function PricingPage() {
     }
     if (plan === 'enterprise') {
       trackCtaClick('pricing_talk_to_sales_open');
+      setTalkToSalesContext('enterprise');
       setTalkToSalesOpen(true);
       return;
     }
-    if (plan === 'agency') {
-      // Prefer a pinned org, then the user's existing admin org, else prompt to
-      // create one.
-      const orgId = presetOrg?.id ?? adminOrgs[0]?.id;
-      if (orgId) {
-        void startPaidCheckout('agency', interval, orgId);
-      } else {
-        const defaultName = `${currentUser?.displayName ?? 'My'} Transit`;
-        setTeamOrgPrompt({ name: defaultName, slug: slugifyOrgName(defaultName), interval });
-      }
-      return;
+    // Planner (internal id 'agency'): prefer a pinned org, then the user's
+    // existing admin org, else prompt to create one.
+    const orgId = presetOrg?.id ?? adminOrgs[0]?.id;
+    if (orgId) {
+      void startPaidCheckout('agency', interval, orgId);
+    } else {
+      const defaultName = `${currentUser?.displayName ?? 'My'} Transit`;
+      setTeamOrgPrompt({ name: defaultName, slug: slugifyOrgName(defaultName), interval });
     }
-    void startPaidCheckout('pro', interval);
   }
 
   // Auto-checkout after a deep-link / post-verify return (e.g.
-  // /pricing?plan=pro&interval=year). Waits for auth + orgs, fires once, and
-  // skips if the user is already on the requested plan. Agency still funnels
+  // /pricing?plan=agency&interval=year). Waits for auth + orgs, fires once, and
+  // skips if the user is already on the requested plan. Planner still funnels
   // through the org picker / create form via handlePick.
   useEffect(() => {
     if (autoTriggered) return;
     if (!authChecked || !currentUser) return;
     if (!orgsLoaded) return;
     if (!directPlanParam) return;
-    if (directPlanParam !== 'pro' && directPlanParam !== 'agency') {
+    if (directPlanParam !== 'agency') {
       setAutoTriggered(true);
       return;
     }
@@ -412,7 +363,7 @@ export function PricingPage() {
 
   // Submit handler for the inline "Create your organization" form. Creates the
   // org first (plan stays 'free' until the Stripe webhook flips it to 'agency'
-  // after Checkout completes), then starts Agency checkout against the new org.
+  // after Checkout completes), then starts Planner checkout against the new org.
   async function handleCreateOrgAndCheckout() {
     if (!teamOrgPrompt) return;
     const name = teamOrgPrompt.name.trim();
@@ -443,12 +394,12 @@ export function PricingPage() {
     }
   }
 
-  // ─── Agency org-create sub-step ───────────────────────────────────────────
+  // ─── Planner org-create sub-step ──────────────────────────────────────────
   if (teamOrgPrompt) {
     return (
       <AuthLayout
         title="Name your organization"
-        subtitle="Agency subscriptions are billed to an organization. We'll create it now and route the subscription to it."
+        subtitle="Planner subscriptions are billed to an organization. We'll create it now and route the subscription to it."
       >
         <div className="space-y-4">
           <TestModeBanner />
@@ -509,7 +460,7 @@ export function PricingPage() {
   // ─── Header copy ──────────────────────────────────────────────────────────
   const isWelcome = source === 'welcome';
   const pageTitle = (() => {
-    if (isWelcome) return 'Welcome — pick your plan';
+    if (isWelcome) return 'Welcome—pick your plan';
     if (featureParam || onPaidPlan) return 'Choose your plan';
     return 'Pricing';
   })();
@@ -517,20 +468,15 @@ export function PricingPage() {
     if (featureParam && FEATURE_COPY[featureParam]) {
       return `Unlocks ${FEATURE_COPY[featureParam].title.toLowerCase()}: ${FEATURE_COPY[featureParam].description}`;
     }
-    if (isWelcome) return 'Your email is verified. Pick the plan that fits — you can always change later.';
+    if (isWelcome) return 'Your email is verified. Pick the plan that fits—you can always change later.';
     if (onPaidPlan) return `You're on ${planDisplayName(currentPlan)}. Compare tiers or change your plan below.`;
-    return 'The fast, free GTFS editor. Paid plans add Premium Feed Management and Route Planning Features.';
+    return 'The Editor is free forever. Planner adds hosted publishing and the service-planning suite for transit agencies.';
   })();
 
   return (
     <AuthLayout title={pageTitle} subtitle={pageSubtitle} wide>
       <div className="space-y-8">
         <TestModeBanner />
-        {!checkoutContext && (
-          <div className="text-sm text-warm-gray">
-            The editor and GTFS-Flex authoring are always free. Pro adds hosting and publishing; Agency adds the full route-planning suite.
-          </div>
-        )}
 
         {error && (
           <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
@@ -538,7 +484,7 @@ export function PricingPage() {
           </div>
         )}
 
-        {/* Free / Pro / Agency — three-up grid */}
+        {/* Editor / Planner / Enterprise—three-up grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {orderedCards.map((p) => {
             const isFree = p.plan === 'free';
@@ -581,80 +527,61 @@ export function PricingPage() {
                   <p className="mt-1 text-xs text-warm-gray">{p.tagline}</p>
                 </div>
                 <div className="mt-4">
-                  <div className="flex items-baseline gap-1">
-                    <span className="font-heading text-3xl font-extrabold text-brown">{label.amount}</span>
-                    {label.per && <span className="text-xs text-warm-gray">{label.per}</span>}
+                  {/* Interval toggle rides the price baseline row instead of
+                      its own stacked row — keeps the card compact. */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-baseline gap-1">
+                      <span className="font-heading text-3xl font-extrabold text-brown">{label.amount}</span>
+                      {label.per && <span className="text-xs text-warm-gray">{label.per}</span>}
+                    </div>
+                    {showToggle && (
+                      <div className="inline-flex shrink-0 rounded-full border border-sand bg-white p-0.5 text-[11px]">
+                        {(['month', 'year'] as const).map((i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setIntervalFor(p.plan, i)}
+                            className={`rounded-full px-2.5 py-1 font-semibold transition-colors ${
+                              cardInterval === i ? 'bg-coral text-white' : 'text-warm-gray hover:text-brown'
+                            }`}
+                          >
+                            {i === 'month' ? 'Monthly' : 'Annual'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {label.sub && (
                     <p className="mt-0.5 text-xs text-warm-gray">{label.sub}</p>
                   )}
-                  {/* Agency tier ships with a 14-day trial; show it inline so
+                  {/* Planner ships with a 14-day trial; show it inline so
                       the price doesn't look like a hard commitment. */}
                   {popular && (
                     <p className="mt-1 text-xs font-semibold text-coral">14-day free trial · cancel anytime</p>
                   )}
-                  {showToggle && (
-                    <div className="mt-3 inline-flex rounded-full border border-sand bg-white p-0.5 text-[11px]">
-                      {(['month', 'year'] as const).map((i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => setIntervalFor(p.plan, i)}
-                          className={`rounded-full px-2.5 py-1 font-semibold transition-colors ${
-                            cardInterval === i ? 'bg-coral text-white' : 'text-warm-gray hover:text-brown'
-                          }`}
-                        >
-                          {i === 'month' ? 'Monthly' : 'Annual'}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
-                {p.plan === 'agency' ? (
-                  <div className="mt-4 text-sm text-brown flex-1">
-                    {AGENCY_FEATURE_GROUPS.map((group, gi) => (
-                      <div key={group.heading} className={gi > 0 ? 'mt-3' : ''}>
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-warm-gray mb-1.5">
-                          {group.heading}
-                        </p>
-                        <ul className="space-y-1.5">
-                          {group.items.map((item) => (
-                            <li key={item} className="flex items-start gap-2">
-                              <span className="mt-0.5 text-teal">✓</span>
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                    <ul className="space-y-1.5 mt-1.5">
-                      {AGENCY_TRAILING_FEATURES.map((f) => (
-                        <li key={f} className="flex items-start gap-2">
-                          <span className="mt-0.5 text-teal">✓</span>
-                          <span>{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <ul className="mt-4 space-y-2 text-sm text-brown flex-1">
-                    {p.features.map((f) => (
+                <div className="mt-4 flex-1 text-sm text-brown">
+                  {p.plan === 'agency' && (
+                    <p className="mb-2 font-semibold text-dark-brown">Everything in Editor, plus:</p>
+                  )}
+                  <ul className="space-y-2">
+                    {(p.plan === 'enterprise' ? ENTERPRISE_FEATURES : p.features).map((f) => (
                       <li key={f} className="flex items-start gap-2">
                         <span className="mt-0.5 text-teal">✓</span>
                         <span>{f}</span>
                       </li>
                     ))}
                   </ul>
-                )}
-                {p.detailsHref && (
-                  // Static content page (e.g. /planning) — full navigation, not an SPA route.
-                  <a
-                    href={p.detailsHref}
-                    className="mt-1 inline-block text-sm font-semibold text-teal hover:underline"
-                  >
-                    {p.detailsLabel ?? 'Learn more →'}
-                  </a>
-                )}
+                  {p.detailsHref && (
+                    // Static content page (e.g. /planning)—full navigation, not an SPA route.
+                    <a
+                      href={p.detailsHref}
+                      className="mt-2.5 inline-block text-sm font-semibold text-teal hover:underline"
+                    >
+                      {p.detailsLabel ?? 'Learn more →'}
+                    </a>
+                  )}
+                </div>
                 <div className="mt-5">
                   {isCurrent ? (
                     <Link
@@ -685,6 +612,17 @@ export function PricingPage() {
                         Create free account
                       </Link>
                     )
+                  ) : p.plan === 'enterprise' ? (
+                    // Sales-led: opens the TalkToSalesModal for logged-in and
+                    // logged-out visitors alike (handlePick fires the
+                    // pricing_talk_to_sales_open CTA event).
+                    <AuthButton
+                      fullWidth
+                      variant="secondary"
+                      onClick={() => handlePick('enterprise', cardInterval)}
+                    >
+                      Talk to sales
+                    </AuthButton>
                   ) : currentUser ? (
                     <AuthButton
                       fullWidth
@@ -711,34 +649,6 @@ export function PricingPage() {
           })}
         </div>
 
-        {/* Enterprise — full-width horizontal banner card */}
-        <div className="relative rounded-2xl border border-sand bg-cream p-5">
-          <div className="flex flex-col gap-5 md:flex-row md:items-center md:gap-8">
-            {/* Name + tagline */}
-            <div className="md:w-48 shrink-0">
-              <h3 className="font-heading text-lg font-bold text-dark-brown">{enterprise.displayName}</h3>
-              <p className="mt-1 text-xs text-warm-gray">For state DOTs, MPOs, or consortiums.</p>
-            </div>
-            {/* Feature line */}
-            <div className="flex-1 text-sm text-brown">
-              Agency-tier access for every agency in your jurisdiction.
-            </div>
-            {/* CTA */}
-            <div className="shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  trackCtaClick('pricing_talk_to_sales_open');
-                  setTalkToSalesOpen(true);
-                }}
-                className="rounded-lg border border-sand bg-cream px-6 py-2.5 font-heading text-sm font-bold text-brown hover:border-coral hover:text-coral"
-              >
-                Talk to sales
-              </button>
-            </div>
-          </div>
-        </div>
-
         <div className="text-center">
           <a
             href="/docs/pricing/"
@@ -748,20 +658,13 @@ export function PricingPage() {
           </a>
         </div>
 
-        {!serverBillingEnabled && (
-          <div className="rounded-xl border border-gold bg-gold-light/40 p-4 text-sm text-amber-900">
-            Billing is not yet enabled in this environment. Paid checkout will open as soon as we flip
-            the switch — you can still create a free account and explore the editor today.
-          </div>
-        )}
-
         {checkoutContext ? (
           <div className="text-center">
             <Link
               to={onPaidPlan ? '/account/billing' : '/feeds'}
               className="text-sm text-warm-gray hover:text-coral"
             >
-              {onPaidPlan ? '← Back to billing settings' : 'Decide later — take me to the editor →'}
+              {onPaidPlan ? '← Back to billing settings' : 'Decide later—take me to the editor →'}
             </Link>
           </div>
         ) : (
@@ -807,23 +710,18 @@ export function PricingPage() {
                   <p className="mt-4 text-xs text-warm-gray">
                     Priced per feed after a 10-min scoping call. Most jobs land in the $500–$1,500 range.
                   </p>
-                  <div className="mt-5 space-y-2">
-                    <a
-                      href={SCHEDULE_CALL_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => trackCtaClick('pricing_fix_my_feed_schedule')}
+                  <div className="mt-5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        trackCtaClick('pricing_fix_my_feed_talk_open');
+                        setTalkToSalesContext('services');
+                        setTalkToSalesOpen(true);
+                      }}
                       className="block w-full rounded-lg bg-coral py-2.5 text-center font-heading text-sm font-bold text-white hover:bg-[#d4603a]"
                     >
-                      Book a scoping call
-                    </a>
-                    <a
-                      href={FIX_FEED_MAIL}
-                      onClick={() => trackCtaClick('pricing_fix_my_feed_email')}
-                      className="block w-full rounded-lg border border-sand bg-cream py-2.5 text-center font-heading text-sm font-bold text-brown hover:border-coral hover:text-coral"
-                    >
-                      Or email us your details
-                    </a>
+                      Talk to sales
+                    </button>
                   </div>
                 </div>
               </div>
@@ -837,7 +735,7 @@ export function PricingPage() {
                 >
                   Vector &amp; Vertex
                 </a>
-                ) — AICP-certified transit planner, GTFS·X founder.
+                )—AICP-certified transit planner, GTFS·X founder.
               </p>
             </section>
 
@@ -855,23 +753,11 @@ export function PricingPage() {
                     ),
                   },
                   {
-                    q: "What's included in Premium Feed Management?",
+                    q: 'How does the 14-day free trial work?',
                     a: (
                       <p className="mt-2 text-sm text-warm-gray">
-                        We host your feed at <code>feeds.gtfsx.com/&lt;slug&gt;/gtfs.zip</code> — a stable
-                        URL you can hand to the Mobility Database, riders, or regulators. We also generate a
-                        rider-facing mini-site, embed widgets you can drop on your own website, draft preview
-                        links for stakeholder review, and validation + expiry monitoring.
-                      </p>
-                    ),
-                  },
-                  {
-                    q: "What's included in Route Planning Features?",
-                    a: (
-                      <p className="mt-2 text-sm text-warm-gray">
-                        Cost estimation (revenue hours, peak vehicles, weekly + annual operating cost),
-                        demographic coverage from US Census ACS, a nationwide demand-propensity map layer,
-                        and Title VI equity analysis using the FTA four-fifths threshold.
+                        Planner trials get full access for 14 days. A card is required to start; cancel anytime
+                        during the trial from your billing portal and you won't be charged.
                       </p>
                     ),
                   },
@@ -885,38 +771,25 @@ export function PricingPage() {
                     ),
                   },
                   {
-                    q: 'How does GTFS·X compare to other tools?',
+                    q: 'Can my agency pay by PO or invoice instead of a card?',
                     a: (
-                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                        <Link
-                          to="/compare/trillium/"
-                          className="block rounded-2xl border border-sand bg-white p-4 hover:border-coral"
+                      <p className="mt-2 text-sm text-warm-gray">
+                        Card checkout keeps Planner below most micro-purchase thresholds, so many agencies can buy
+                        it on a P-card with no procurement cycle. If your agency requires a PO or invoice,
+                        Enterprise agreements support both—{' '}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            trackCtaClick('pricing_faq_talk_to_sales');
+                            setTalkToSalesContext('enterprise');
+                            setTalkToSalesOpen(true);
+                          }}
+                          className="font-semibold text-teal underline hover:text-coral"
                         >
-                          <div className="font-heading text-sm font-bold text-dark-brown">vs. Trillium (Optibus)</div>
-                          <p className="mt-1 text-xs text-warm-gray">Managed GTFS service vs. self-serve editor — cost, control, fit.</p>
-                        </Link>
-                        <Link
-                          to="/compare/remix/"
-                          className="block rounded-2xl border border-sand bg-white p-4 hover:border-coral"
-                        >
-                          <div className="font-heading text-sm font-bold text-dark-brown">vs. Remix by Via</div>
-                          <p className="mt-1 text-xs text-warm-gray">Network planning suite vs. GTFS-first tool — where each one fits.</p>
-                        </Link>
-                        <Link
-                          to="/compare/gtfs-builder-rtap/"
-                          className="block rounded-2xl border border-sand bg-white p-4 hover:border-coral"
-                        >
-                          <div className="font-heading text-sm font-bold text-dark-brown">vs. National RTAP GTFS Builder</div>
-                          <p className="mt-1 text-xs text-warm-gray">Free spreadsheet builder vs. map-based editor — when to use which.</p>
-                        </Link>
-                        <Link
-                          to="/compare/spare-flex-builder/"
-                          className="block rounded-2xl border border-sand bg-white p-4 hover:border-coral"
-                        >
-                          <div className="font-heading text-sm font-bold text-dark-brown">vs. Spare GTFS-Flex Builder</div>
-                          <p className="mt-1 text-xs text-warm-gray">Microtransit-only builder vs. full GTFS + Flex authoring.</p>
-                        </Link>
-                      </div>
+                          talk to sales
+                        </button>
+                        .
+                      </p>
                     ),
                   },
                 ] as { q: string; a: React.ReactNode }[]).map(({ q, a }) => (
@@ -931,13 +804,20 @@ export function PricingPage() {
                   </details>
                 ))}
               </div>
-              <div className="mt-4 pt-3 border-t border-sand">
+              <div className="mt-4 pt-3 border-t border-sand space-y-1.5">
                 <a
-                  href="/docs/"
-                  className="text-sm font-semibold text-teal hover:underline"
+                  href="/docs/pricing/"
+                  className="block text-sm font-semibold text-teal hover:underline"
                 >
-                  See the full GTFS·X documentation →
+                  See the full plan and feature breakdown →
                 </a>
+                <p className="text-xs text-warm-gray">
+                  Comparing tools? GTFS·X vs.{' '}
+                  <Link to="/compare/trillium/" className="font-semibold text-brown underline hover:text-coral">Trillium</Link>,{' '}
+                  <Link to="/compare/remix/" className="font-semibold text-brown underline hover:text-coral">Remix</Link>,{' '}
+                  <Link to="/compare/gtfs-builder-rtap/" className="font-semibold text-brown underline hover:text-coral">RTAP GTFS Builder</Link>, and{' '}
+                  <Link to="/compare/spare-flex-builder/" className="font-semibold text-brown underline hover:text-coral">Spare Flex Builder</Link>.
+                </p>
               </div>
             </section>
           </>
@@ -947,7 +827,7 @@ export function PricingPage() {
         open={talkToSalesOpen}
         onClose={() => setTalkToSalesOpen(false)}
         scheduleUrl={SCHEDULE_CALL_URL}
-        mailto={ENTERPRISE_MAIL}
+        mailto={talkToSalesContext === 'services' ? FIX_FEED_MAIL : ENTERPRISE_MAIL}
       />
     </AuthLayout>
   );

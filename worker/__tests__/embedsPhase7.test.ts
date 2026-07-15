@@ -25,7 +25,7 @@ import { transit_realtime } from 'gtfs-realtime-bindings';
 
 async function loggedInClient(
   email: string,
-  plan: 'free' | 'pro' | 'agency' | 'enterprise' = 'agency',
+  plan: 'free' | 'agency' | 'enterprise' = 'agency',
 ): Promise<{ client: TestClient; userId: string }> {
   const user = await seedUser({ email, plan });
   const client = makeClient();

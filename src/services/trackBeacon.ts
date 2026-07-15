@@ -92,7 +92,16 @@ export function captureGclidFromUrl(): void {
   }
 }
 
-type TrackKind = 'page_view' | 'editor_loaded' | 'feed_exported' | 'paywall_view' | 'cta_click';
+// Keep in sync with the zod enum in worker/events/routes.ts. demo_request is
+// recorded server-side by GET /book-demo (worker/marketing/bookDemo.ts) — it
+// is listed for type parity only and has no client beacon call site.
+type TrackKind =
+  | 'page_view'
+  | 'editor_loaded'
+  | 'feed_exported'
+  | 'paywall_view'
+  | 'cta_click'
+  | 'demo_request';
 
 function send(kind: TrackKind, opts?: { path?: string; label?: string | null }): void {
   try {

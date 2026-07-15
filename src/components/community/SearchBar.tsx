@@ -6,7 +6,7 @@ interface SearchBarProps {
   placeholder?: string;
 }
 
-/** Compact search input. Submits on Enter; clear via the ✕ button. */
+/** Compact search input. Submits on Enter; clear via the × button. */
 export function SearchBar({ initial = '', onSubmit, placeholder = 'Search the community…' }: SearchBarProps) {
   const [q, setQ] = useState(initial);
 
@@ -42,6 +42,7 @@ export function SearchBar({ initial = '', onSubmit, placeholder = 'Search the co
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder={placeholder}
+        aria-label={placeholder}
         className="w-full h-9 pl-8 pr-7 rounded-full border border-sand bg-cream/50 text-sm text-dark-brown placeholder:text-warm-gray focus:bg-white focus:border-coral focus:outline-none transition-colors"
       />
       {q && (

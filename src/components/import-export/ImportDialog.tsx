@@ -5,6 +5,9 @@ import type { Route } from '../../types/gtfs';
 import { CatalogSearch, type CatalogFeed } from './CatalogSearch';
 import { MyFeedsSource } from './MyFeedsSource';
 import { resolveMyFeedImportData, type MyFeedItem } from '../../services/myFeedsImport';
+import { feedNeedsShapes } from '../../services/shapesFromStops';
+import { detectRtapFeed } from '../../services/rtapDetect';
+import { ShapesFromStopsDialog } from '../shapes/ShapesFromStopsDialog';
 
 type ImportSource = 'upload' | 'url' | 'catalog' | 'myfeeds';
 
@@ -91,13 +94,27 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
   // (expensive, main-thread-blocking) parse so the user can back out instead
   // of hanging/crashing the tab.
   const [pendingLarge, setPendingLarge] = useState<
-    { file: File; info: Awaited<ReturnType<typeof inspectGtfsZip>> } | null
+    { file: File; info: Awaited<ReturnType<typeof inspectGtfsZip>>; sourceUrl: string | null } | null
   >(null);
 
   // Success state
   const [importedCounts, setImportedCounts] = useState<{
     routes: number; stops: number; trips: number;
   } | null>(null);
+
+  // "No shapes" offer on the success screen (RTAP feeds and similar). "Not
+  // now" just hides the callout for this screen — the same recipe stays
+  // reachable later from the Validation panel, so nothing is lost.
+  const [shapesOfferDismissed, setShapesOfferDismissed] = useState(false);
+  const [showShapesDialog, setShowShapesDialog] = useState(false);
+  // Where this import actually came from, when we know it: the pasted URL for
+  // the "From URL" source, or the catalog feed's producer/hosted URL for
+  // "Search Catalog". null for a plain ZIP upload or a "My feeds" import
+  // (nothing external to point at). This is detectRtapFeed's primary signal —
+  // a feed fetched from rapid.nationalrtap.org is RTAP-provenanced regardless
+  // of what its bytes say; a bare upload of the exact same bytes is not
+  // knowable as RTAP at all, and the copy is written to admit that honestly.
+  const [importSourceUrl, setImportSourceUrl] = useState<string | null>(null);
 
   // Async completion state (only used when onComplete is provided).
   const [completing, setCompleting] = useState(false);
@@ -141,9 +158,18 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
    * working-state fetch) to the import UI: surface warnings, then either
    * replace immediately (empty project) or open the route-picker so the user
    * chooses what to merge into the current project. Never mutates the store
-   * itself except via doReplaceImport's explicit replace. */
-  const presentImportData = useCallback((data: ImportData, name: string) => {
+   * itself except via doReplaceImport's explicit replace.
+   *
+   * `sourceUrl` is where this feed is actually known to have come from (the
+   * pasted URL / catalog producer URL), or null for a plain upload / "My
+   * feeds" import where there's nothing external to point at. Stashed in
+   * component state here (rather than threaded through ImportData) because
+   * it's provenance about THIS import action, not a property of the parsed
+   * feed itself — it survives untouched whether we replace immediately or the
+   * user lands on the mode-selection screen first. */
+  const presentImportData = useCallback((data: ImportData, name: string, sourceUrl: string | null = null) => {
     setImportWarnings(data.warnings);
+    setImportSourceUrl(sourceUrl);
     // If the project is empty, skip the options screen and import immediately
     if (useStore.getState().routes.length === 0) {
       doReplaceImport(data, name);
@@ -157,7 +183,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
 
   // The actual (expensive) parse. Always reached via parseFile so every entry
   // point — upload, URL, catalog — goes through the size pre-flight first.
-  const runParse = useCallback(async (file: File) => {
+  const runParse = useCallback(async (file: File, sourceUrl: string | null = null) => {
     setParsing(true);
     setProgress(null);
     setError(null);
@@ -166,7 +192,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
         setProgress(rows ? `${phase} ${rows.toLocaleString()} rows` : phase),
       );
       const name = file.name.replace(/\.zip$/i, '');
-      presentImportData(data, name);
+      presentImportData(data, name, sourceUrl);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to parse GTFS feed');
     } finally {
@@ -175,7 +201,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
     }
   }, [presentImportData]);
 
-  const parseFile = useCallback(async (file: File) => {
+  const parseFile = useCallback(async (file: File, sourceUrl: string | null = null) => {
     setError(null);
     // Cheap pre-flight: if stop_times is large, gate behind a confirmation
     // instead of charging into a parse that can hang or crash the tab. If the
@@ -183,20 +209,20 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
     try {
       const info = await inspectGtfsZip(file);
       if (info.isLarge) {
-        setPendingLarge({ file, info });
+        setPendingLarge({ file, info, sourceUrl });
         return;
       }
     } catch {
       /* ignore — proceed to the normal parse path */
     }
-    await runParse(file);
+    await runParse(file, sourceUrl);
   }, [runParse]);
 
   const proceedWithLarge = useCallback(() => {
     if (!pendingLarge) return;
-    const { file } = pendingLarge;
+    const { file, sourceUrl } = pendingLarge;
     setPendingLarge(null);
-    runParse(file);
+    runParse(file, sourceUrl);
   }, [pendingLarge, runParse]);
 
   const cancelLarge = useCallback(() => {
@@ -225,7 +251,13 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
     if (!r.ok) throw new Error(`Download failed: ${r.status} ${await r.text()}`);
     const blob = await r.blob();
     const file = new File([blob], `${fileNameStem}.zip`, { type: 'application/zip' });
-    await parseFile(file);
+    // Prefer the producer's own URL (where the feed was actually published) for
+    // RTAP provenance detection — an RTAP-built feed catalogued by Mobility
+    // Database is still DOWNLOADED from MDB's own storage, not
+    // rapid.nationalrtap.org, so hosted_url alone would never match. Fall back
+    // to hosted_url if there's no producer URL; worse case it just doesn't
+    // match nationalrtap.org, same as passing nothing at all.
+    await parseFile(file, feed.source_info?.producer_url ?? url);
   }, [parseFile]);
 
   // "My feeds" import: resolve the selected feed — published OR draft — from its
@@ -241,7 +273,8 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
     if (data.routes.length === 0) {
       throw new Error('That feed has no routes to import yet.');
     }
-    presentImportData(data, feed.name || feed.slug);
+    // No external URL for an internal project reference.
+    presentImportData(data, feed.name || feed.slug, null);
   }, [presentImportData]);
 
   const handleUrlFetch = useCallback(async () => {
@@ -274,7 +307,9 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
       const stem =
         trimmed.split('/').pop()?.replace(/\.zip$/i, '') || 'imported-feed';
       const file = new File([blob], `${stem}.zip`, { type: 'application/zip' });
-      await parseFile(file);
+      // The URL the user pasted IS the feed's actual source — the strongest
+      // provenance signal we have.
+      await parseFile(file, trimmed);
     } catch (e) {
       setError((e as Error).message || 'Failed to fetch feed.');
     } finally {
@@ -336,44 +371,125 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
 
   // ── Success screen ─────────────────────────────────────────────────────────
   if (importedCounts) {
+    // Read the just-landed feed back from the store to decide whether to
+    // offer the shapes-from-stops recipe. feedNeedsShapes looks at the whole
+    // current project (not just what this import contributed) — consistent
+    // with generateShapesFromStops itself, which repairs every shapeless
+    // pattern in the store.
+    const storeState = useStore.getState();
+    const needsShapes = feedNeedsShapes(
+      storeState.trips, storeState.stopTimes, storeState.stops, storeState.shapes,
+    );
+    // RTAP detection is copy-only flavor, so prefer the just-parsed feed's own
+    // feed_info/agency rows (parsedData) when we have them — merge mode never
+    // writes the imported feed's metadata into the store, only its routes. The
+    // "project was empty" fast-import path skips parsedData entirely, so fall
+    // back to the store, which a full replace populated from this same feed.
+    // importSourceUrl has no store fallback (it's provenance about this import
+    // action, not a store field) — it's stashed in state at import time (see
+    // presentImportData) for exactly this read.
+    const rtap = detectRtapFeed(
+      parsedData?.feedInfo ?? storeState.feedInfo,
+      parsedData?.agencies ?? storeState.agencies,
+      importSourceUrl,
+    );
+
     return (
-      <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={completing ? undefined : onClose}>
-        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-teal-light rounded-lg flex items-center justify-center text-xl">✓</div>
-            <h3 className="font-heading font-bold text-lg text-dark-brown">
-              {mode === 'merge' ? 'Routes Added' : 'Import Successful'}
-            </h3>
-          </div>
-          {importWarnings.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 text-xs text-amber-700">
-              {importWarnings.map((w, i) => <p key={i}>{w}</p>)}
+      <>
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={completing ? undefined : onClose}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-teal-light rounded-lg flex items-center justify-center text-xl">✓</div>
+              <h3 className="font-heading font-bold text-lg text-dark-brown">
+                {mode === 'merge' ? 'Routes Added' : 'Import Successful'}
+              </h3>
             </div>
-          )}
-          <div className="flex flex-col gap-2 mb-4">
-            {([['Routes', importedCounts.routes], ['Stops', importedCounts.stops], ['Trips', importedCounts.trips]] as [string, number][]).map(
-              ([label, count]) => (
-                <div key={label} className="flex justify-between px-3 py-2 bg-cream rounded-lg text-sm">
-                  <span>{label}</span>
-                  <span className="font-semibold">{count}</span>
-                </div>
-              ),
+            {importWarnings.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 text-xs text-amber-700">
+                {importWarnings.map((w, i) => <p key={i}>{w}</p>)}
+              </div>
             )}
-          </div>
-          {completeError && (
-            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4 text-sm text-red-700">
-              {completeError}
+            <div className="flex flex-col gap-2 mb-4">
+              {([['Routes', importedCounts.routes], ['Stops', importedCounts.stops], ['Trips', importedCounts.trips]] as [string, number][]).map(
+                ([label, count]) => (
+                  <div key={label} className="flex justify-between px-3 py-2 bg-cream rounded-lg text-sm">
+                    <span>{label}</span>
+                    <span className="font-semibold">{count}</span>
+                  </div>
+                ),
+              )}
             </div>
-          )}
-          <button
-            onClick={handleComplete}
-            disabled={completing}
-            className="w-full px-4 py-2.5 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {completing ? 'Saving…' : onComplete ? (completeLabel ?? 'Save feed') : 'Open in Editor'}
-          </button>
+            {needsShapes && !shapesOfferDismissed && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-base">🛣️</span>
+                  <p className="font-heading font-bold text-sm text-dark-brown">No route geometry in this feed</p>
+                </div>
+                <p className="text-xs text-amber-700 leading-relaxed">
+                  {/* Lead with the observed fact in every case; the RTAP line is
+                      additional color, worded to match how sure we actually are.
+                      High confidence = fetched from a nationalrtap.org URL, or an
+                      explicit "National RTAP" self-mention in the feed's own
+                      metadata — either way it's fine to name RTAP outright. Low
+                      confidence is a bare "rtap"/"gtfs builder" string mention,
+                      which is common enough as a false positive that it's phrased
+                      as a likeness, never an assertion. A plain ZIP upload with
+                      no self-identifying string makes NO RTAP claim at all — we
+                      genuinely can't tell RTAP provenance from bytes alone (see
+                      rtapDetect.ts's TODO for why the content fingerprint we
+                      tried first was abandoned). */}
+                  {rtap.isRtap && rtap.confidence === 'high' && (
+                    <>This looks like a National RTAP GTFS Builder feed: that tool ships shapes.txt empty by default. </>
+                  )}
+                  {rtap.isRtap && rtap.confidence === 'low' && (
+                    <>This has some of the hallmarks of a spreadsheet-based GTFS Builder export (the kind National RTAP provides), which often ships shapes.txt empty rather than leaving it out. </>
+                  )}
+                  This feed has no usable route geometry, so trip planners will draw straight lines
+                  between stops instead of following the streets. GTFS·X can generate route geometry by
+                  snapping each route's stop sequence to the road network.
+                </p>
+                <div className="flex gap-2 mt-2.5">
+                  <button
+                    onClick={() => setShowShapesDialog(true)}
+                    className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-xs hover:bg-[#d4603a] transition-colors"
+                  >
+                    Generate shapes from stops
+                  </button>
+                  <button
+                    onClick={() => setShapesOfferDismissed(true)}
+                    className="px-3 py-2 text-xs text-amber-700 hover:text-dark-brown transition-colors"
+                  >
+                    Not now
+                  </button>
+                </div>
+                <p className="text-[11px] text-amber-700/80 mt-1.5">
+                  You can run this later from the Validation panel too.
+                </p>
+              </div>
+            )}
+            {completeError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4 text-sm text-red-700">
+                {completeError}
+              </div>
+            )}
+            <button
+              onClick={handleComplete}
+              disabled={completing}
+              className="w-full px-4 py-2.5 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {completing ? 'Saving…' : onComplete ? (completeLabel ?? 'Save feed') : 'Open in Editor'}
+            </button>
+          </div>
         </div>
-      </div>
+        {/* Rendered as a sibling, not nested inside the overlay above, so its
+            own backdrop click doesn't bubble into this screen's onClose. */}
+        {showShapesDialog && (
+          <ShapesFromStopsDialog
+            rtapConfidence={rtap.isRtap ? rtap.confidence : undefined}
+            onClose={() => setShowShapesDialog(false)}
+          />
+        )}
+      </>
     );
   }
 

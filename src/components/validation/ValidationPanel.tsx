@@ -3,11 +3,14 @@ import { useStore } from '../../store';
 import { runValidation, DISMISSIBLE_RULE_LABELS } from '../../services/validation';
 import {
   getValidationFix, applyValidationFix, applyValidationFixBatch,
+  applyWheelchairFill, wheelchairGapCount,
   type ValidationFixResult,
 } from '../../services/validationFixes';
 import { groupValidationMessages } from '../../services/validationGrouping';
+import { noShapeBucketId } from '../ui/shapePatterns';
 import type { ValidationMessage } from '../../types/ui';
 import { Badge } from '../ui/Badge';
+import { ShapesFromStopsDialog } from '../shapes/ShapesFromStopsDialog';
 
 // Below this many active messages the panel defaults to the flat "Individual"
 // list; at or above it, it opens "By type" so a feed with hundreds of the same
@@ -33,6 +36,9 @@ export function ValidationPanel() {
   // Last applied fix (single OR batch), held for the undo toast. Lives outside
   // the validation memo so it survives the re-validate that clears fixed errors.
   const [fixUndo, setFixUndo] = useState<ValidationFixResult | null>(null);
+  // An `interactive` fix (currently just generate-shapes-from-stops) has no
+  // `apply` to run — clicking its Fix button opens this dialog instead.
+  const [showShapesDialog, setShowShapesDialog] = useState(false);
 
   // Depend on the specific entity slices the validator reads; `state` as a
   // whole would re-trigger on every unrelated store change (UI state,
@@ -43,7 +49,7 @@ export function ValidationPanel() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const messages = useMemo(() => runValidation(state), [
     state.agencies, state.calendars, state.calendarDates,
-    state.routes, state.stops, state.trips, state.stopTimes, state.shapes,
+    state.routes, state.routeStops, state.stops, state.trips, state.stopTimes, state.shapes,
     state.fareAttributes, state.fareRules, state.transfers,
     state.flexZones, state.frequencies, state.levels, state.pathways,
     state.featureSettings,
@@ -128,7 +134,9 @@ export function ValidationPanel() {
           state.selectRoute(trip.route_id);
           state.setTimetableServiceId(trip.service_id);
           state.setTimetableDirectionId(trip.direction_id);
-          if (trip.shape_id) state.setTimetableShapeId(trip.shape_id);
+          // A shaped trip opens on its shape; a shapeless "ghost" trip opens on
+          // the synthetic "No shape" bucket so the grid actually shows it.
+          state.setTimetableShapeId(trip.shape_id || noShapeBucketId(trip.direction_id));
         }
       }
     }
@@ -154,6 +162,13 @@ export function ValidationPanel() {
     // Always toast a batch (it reports "X of N", incl. "all already fine"), but
     // only keep an undo handle when something actually changed.
     if (result) setFixUndo(result.changed ? result : null);
+  };
+
+  // The wheelchair fix carries a value choice (0/1/2), so the rail renders a
+  // picker that calls this instead of the generic one-click apply.
+  const applyWheelchair = (value: number) => {
+    const result = applyWheelchairFill(value);
+    if (result.changed) setFixUndo(result);
   };
 
   // The rail's current group + (optional) focused message, resolved from `selected`.
@@ -187,9 +202,16 @@ export function ValidationPanel() {
             )}
           </div>
         </button>
-        {m.fix && getValidationFix(m.fix.id) && (
+        {m.fix && m.fix.id !== 'fill-missing-wheelchair' && getValidationFix(m.fix.id) && (
           <button
-            onClick={() => applySingle(m)}
+            onClick={() => {
+              // Interactive fixes (no `apply`) have no one-click mutation to
+              // run — open their dialog instead. Mirrors the wheelchair
+              // special-case above, generalized via the `interactive` flag.
+              const fixDef = getValidationFix(m.fix!.id)!;
+              if (fixDef.interactive) setShowShapesDialog(true);
+              else applySingle(m);
+            }}
             title={getValidationFix(m.fix.id)!.description}
             className="shrink-0 self-center mr-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-teal text-white hover:bg-teal/90 transition-colors"
           >
@@ -260,7 +282,7 @@ export function ValidationPanel() {
             title="Dismiss"
             aria-label="Dismiss"
           >
-            ✕
+            ×
           </button>
         </div>
       )}
@@ -391,9 +413,15 @@ export function ValidationPanel() {
             focused={focusedMessage}
             onFixOne={() => focusedMessage && applySingle(focusedMessage)}
             onFixAll={() => selectedGroup && applyBatch(selectedGroup.messages)}
+            onWheelchairFill={applyWheelchair}
+            onOpenInteractiveFix={() => setShowShapesDialog(true)}
           />
         </div>
       </div>
+
+      {showShapesDialog && (
+        <ShapesFromStopsDialog onClose={() => setShowShapesDialog(false)} />
+      )}
     </div>
   );
 }
@@ -401,12 +429,16 @@ export function ValidationPanel() {
 // The right-rail "how do I fix this" panel. Shows the catalog recipe for the
 // selected rule's fix (or a no-auto-fix note) plus Fix-this-one / Fix-all-N.
 function FixRecipeRail({
-  group, focused, onFixOne, onFixAll,
+  group, focused, onFixOne, onFixAll, onWheelchairFill, onOpenInteractiveFix,
 }: {
   group: ReturnType<typeof groupValidationMessages>[number] | null;
   focused: ValidationMessage | null;
   onFixOne: () => void;
   onFixAll: () => void;
+  onWheelchairFill: (value: number) => void;
+  /** Open the dialog for an `interactive` fix (currently just
+   *  generate-shapes-from-stops — see services/validationFixes.ts). */
+  onOpenInteractiveFix: () => void;
 }) {
   if (!group) {
     return (
@@ -417,7 +449,11 @@ function FixRecipeRail({
     );
   }
   const fix = group.fixId ? getValidationFix(group.fixId) : undefined;
-  const focusedFixable = !!(focused?.fix && getValidationFix(focused.fix.id));
+  const focusedFixDef = focused?.fix ? getValidationFix(focused.fix.id) : undefined;
+  // Interactive fixes are never one-click-fixable, at the single-message
+  // level either — "Fix this one" stays disabled for them (the button itself
+  // doesn't even render once `fix.interactive` is true; see below).
+  const focusedFixable = !!(focusedFixDef && !focusedFixDef.interactive);
   return (
     <div className="p-3 flex flex-col gap-2.5">
       <p className="font-heading font-bold text-[13px] text-dark-brown">Fix recipe</p>
@@ -444,7 +480,19 @@ function FixRecipeRail({
         </p>
       </div>
 
-      {fix && (
+      {fix && fix.interactive ? (
+        // No one-click apply (and no batch "Fix all N" — this recipe needs a
+        // mode choice + network calls, so every affected message is fixed
+        // through the same dialog, one feed-wide run at a time).
+        <button
+          onClick={onOpenInteractiveFix}
+          className="px-3 py-1.5 rounded-md text-[12px] font-semibold bg-teal text-white hover:bg-teal/90 transition-colors"
+        >
+          {fix.label}
+        </button>
+      ) : fix && group.fixId === 'fill-missing-wheelchair' ? (
+        <WheelchairFillPicker onFill={onWheelchairFill} />
+      ) : fix && (
         <div className="flex flex-col gap-1.5">
           {focused && (
             <button
@@ -465,6 +513,48 @@ function FixRecipeRail({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// Value picker for the wheelchair_boarding fix recipe. Mirrors the old Stop
+// Analysis bulk-fill: pick the value to apply (1 = accessible / 2 = not / 0 = no
+// info) and fill every board point missing a value. 1 or 2 clears the warning;
+// 0 records "reviewed, no info" (the warning persists, since GTFS reads blank
+// and 0 the same).
+function WheelchairFillPicker({ onFill }: { onFill: (value: number) => void }) {
+  const [value, setValue] = useState(1);
+  const gapCount = wheelchairGapCount();
+  const OPTIONS: { v: number; label: string }[] = [
+    { v: 1, label: 'Accessible' },
+    { v: 2, label: 'Not accessible' },
+    { v: 0, label: 'No info' },
+  ];
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-[11px] font-semibold text-warm-gray">Fill missing values with</p>
+      <div className="flex gap-1">
+        {OPTIONS.map((o) => (
+          <button
+            key={o.v}
+            onClick={() => setValue(o.v)}
+            className={`flex-1 px-1.5 py-1 rounded-md text-[11px] font-semibold border transition-colors ${
+              value === o.v
+                ? 'border-teal bg-teal-light text-teal'
+                : 'border-sand text-warm-gray hover:border-teal/50'
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      <button
+        onClick={() => onFill(value)}
+        disabled={gapCount === 0}
+        className="px-3 py-1.5 rounded-md text-[12px] font-semibold bg-teal text-white hover:bg-teal/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {gapCount > 0 ? `Fill ${gapCount} missing` : 'Nothing to fill'}
+      </button>
     </div>
   );
 }

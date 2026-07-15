@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../store';
+import { FormField } from '../ui/FormField';
 import {
   listAlerts,
   createAlert,
@@ -412,16 +413,16 @@ function AlertForm({
         <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      <Field label="Header (rider-facing summary)">
+      <FormField label="Header (rider-facing summary)" required containerClassName="">
         <input
           value={form.header_text}
           onChange={(e) => set('header_text', e.target.value)}
           placeholder="Route 5 detour around Main St"
           className={`${inputCls} w-full`}
         />
-      </Field>
+      </FormField>
 
-      <Field label="Description (optional)">
+      <FormField label="Description" containerClassName="">
         <textarea
           value={form.description_text ?? ''}
           onChange={(e) => set('description_text', e.target.value)}
@@ -429,39 +430,41 @@ function AlertForm({
           placeholder="Buses are detouring via 2nd Ave until further notice."
           className={`${inputCls} w-full`}
         />
-      </Field>
+      </FormField>
 
       <div className="grid grid-cols-3 gap-2">
-        <Field label="Cause">
+        <FormField label="Cause" containerClassName="">
           <select value={form.cause} onChange={(e) => set('cause', e.target.value)} className={`${inputCls} w-full`}>
             {CAUSE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-        </Field>
-        <Field label="Effect">
+        </FormField>
+        <FormField label="Effect" containerClassName="">
           <select value={form.effect} onChange={(e) => set('effect', e.target.value)} className={`${inputCls} w-full`}>
             {EFFECT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-        </Field>
-        <Field label="Severity">
+        </FormField>
+        <FormField label="Severity" containerClassName="">
           <select value={form.severity_level} onChange={(e) => set('severity_level', e.target.value)} className={`${inputCls} w-full`}>
             {SEVERITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-        </Field>
+        </FormField>
       </div>
 
-      <Field label="More info URL (optional)">
+      <FormField label="More info URL" containerClassName="">
         <input
           value={form.url ?? ''}
           onChange={(e) => set('url', e.target.value)}
           placeholder="https://agency.gov/alerts/route-5"
           className={`${inputCls} w-full`}
         />
-      </Field>
+      </FormField>
 
       {/* Affected entities */}
       <div>
         <div className="flex items-center justify-between mb-1">
-          <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide">Affected (≥ 1 required)</label>
+          <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide">
+            Affected<span className="text-coral ml-0.5">*</span>
+          </label>
           <button
             onClick={() => set('informed_entities', [...form.informed_entities, { route_id: '' }])}
             className="text-xs font-semibold text-coral hover:underline"
@@ -469,6 +472,7 @@ function AlertForm({
             + Add
           </button>
         </div>
+        <p className="text-[11px] text-warm-gray mb-1">Add at least one affected route, stop, or agency.</p>
         <div className="space-y-2">
           {form.informed_entities.map((e, i) => (
             <EntityRow
@@ -529,7 +533,7 @@ function AlertForm({
                 className="text-warm-gray hover:text-red-600 text-sm px-1"
                 title="Remove window"
               >
-                ✕
+                ×
               </button>
             </div>
           ))}
@@ -649,7 +653,7 @@ function EntityRow({
 
       {canRemove && (
         <button onClick={onRemove} className="text-warm-gray hover:text-red-600 text-sm px-1" title="Remove">
-          ✕
+          ×
         </button>
       )}
     </div>
@@ -663,11 +667,3 @@ function EntityRow({
 const inputCls =
   'rounded-lg border-2 border-sand bg-cream px-3 py-2 text-sm text-dark-brown focus:outline-none focus:border-coral focus:bg-white';
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">{label}</label>
-      {children}
-    </div>
-  );
-}

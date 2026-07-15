@@ -1,14 +1,15 @@
 // Google Ads Offline Conversion Import (OCI) — server-side conversion
-// uploader. Pushes gclid-stamped `event` rows (feed_exported, paywall_view)
-// to Google Ads as offline conversions. This is the cookieless replacement
-// for the standard gtag.js conversion pixel and preserves the locked
-// no-cookies analytics architecture (see docs/GOOGLE_ADS_PLAN.md §3.2).
+// uploader. Pushes gclid-stamped `event` rows (feed_exported, paywall_view,
+// demo_request) to Google Ads as offline conversions. This is the cookieless
+// replacement for the standard gtag.js conversion pixel and preserves the
+// locked no-cookies analytics architecture (see docs/GOOGLE_ADS_PLAN.md §3.2).
 //
 // Flow:
-//   1. Read OCI config from env. Bail (no-op) if any secret is missing —
+//   1. Read OCI config from env. Bail (no-op) if any core secret is missing —
 //      Mark hasn't run the one-time OAuth setup yet. See README.md.
 //   2. Query `event` rows where gclid IS NOT NULL, oci_uploaded_at IS NULL,
-//      kind IN ('feed_exported', 'paywall_view'), ts > now - 90 days.
+//      kind IN (the kinds whose conversion action is configured),
+//      ts > now - 90 days.
 //      (Older gclids are silently dropped — Google rejects them anyway.)
 //   3. Exchange the long-lived refresh token for a short-lived access token.
 //   4. POST batches of up to BATCH_SIZE conversions to uploadClickConversions
@@ -34,10 +35,11 @@ const BATCH_SIZE = 1000;
 // gclids expire from Google Ads' side at ~90 days. Drop anything older.
 const GCLID_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const MAX_ATTEMPTS = 3;
-// Conversion kinds we upload. Anything not in this set is ignored by the
-// uploader (the SQL WHERE clause also pins kind IN ('feed_exported',
-// 'paywall_view')). Keep these two literals in sync with that query.
-type UploadedKind = 'feed_exported' | 'paywall_view';
+// Conversion kinds we can upload. Anything not in this set is ignored by the
+// uploader; the per-run SQL WHERE clause narrows further to the kinds whose
+// conversion action is actually configured (see configuredKinds).
+export type UploadedKind = 'feed_exported' | 'paywall_view' | 'demo_request';
+const ALL_UPLOAD_KINDS: UploadedKind[] = ['feed_exported', 'paywall_view', 'demo_request'];
 
 export interface OciConfig {
   developerToken: string;
@@ -45,7 +47,22 @@ export interface OciConfig {
   clientSecret: string;
   refreshToken: string;
   customerId: string;
-  conversionActions: Record<UploadedKind, string>;
+  // feed_exported / paywall_view are required — the uploader refuses to run
+  // without them (live in prod since 2026-05-26). demo_request is OPTIONAL:
+  // making it required would silently no-op the two live uploads until Mark
+  // creates the new conversion action in the Ads UI. Unset simply means
+  // demo_request rows stay pending (and are surfaced on the admin status
+  // page) until GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST is set.
+  conversionActions: {
+    feed_exported: string;
+    paywall_view: string;
+    demo_request?: string;
+  };
+}
+
+// The kinds this config can actually upload, in ALL_UPLOAD_KINDS order.
+export function configuredKinds(cfg: OciConfig): UploadedKind[] {
+  return ALL_UPLOAD_KINDS.filter((k) => cfg.conversionActions[k] !== undefined);
 }
 
 export interface OciResult {
@@ -79,6 +96,8 @@ export function readOciConfig(env: Env): OciConfig | null {
   const cust = env.GOOGLE_ADS_CUSTOMER_ID;
   const feedAction = env.GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED;
   const paywallAction = env.GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW;
+  // Optional — see the OciConfig.conversionActions comment above.
+  const demoAction = env.GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST;
   if (!dev || !cid || !cs || !rt || !cust || !feedAction || !paywallAction) {
     return null;
   }
@@ -91,6 +110,7 @@ export function readOciConfig(env: Env): OciConfig | null {
     conversionActions: {
       feed_exported: feedAction,
       paywall_view: paywallAction,
+      ...(demoAction ? { demo_request: demoAction } : {}),
     },
   };
 }
@@ -164,14 +184,22 @@ export function buildConversionPayload(
   rows: PendingRow[],
 ): { conversions: UploadPayloadConversion[]; partial_failure: boolean; validate_only: boolean } {
   return {
-    conversions: rows.map((r) => ({
-      gclid: r.gclid,
-      conversion_action: `customers/${cfg.customerId}/conversionActions/${cfg.conversionActions[r.kind]}`,
-      conversion_date_time: formatConversionDateTime(r.ts),
-      // No conversion_value — both Google Ads conversion actions are
-      // configured "Don't use a value" (handoff §2). Sending one would
-      // cause Google to silently flip them to value-using mode.
-    })),
+    conversions: rows.map((r) => {
+      // loadPending only selects kinds present in cfg.conversionActions, so
+      // this lookup can't miss — the throw is a tripwire for future drift.
+      const actionId = cfg.conversionActions[r.kind];
+      if (!actionId) {
+        throw new Error(`No conversion action configured for kind '${r.kind}'`);
+      }
+      return {
+        gclid: r.gclid,
+        conversion_action: `customers/${cfg.customerId}/conversionActions/${actionId}`,
+        conversion_date_time: formatConversionDateTime(r.ts),
+        // No conversion_value — all Google Ads conversion actions are
+        // configured "Don't use a value" (handoff §2). Sending one would
+        // cause Google to silently flip them to value-using mode.
+      };
+    }),
     partial_failure: true,
     validate_only: false,
   };
@@ -240,41 +268,50 @@ async function postBatch(
 
 // ─── DB ────────────────────────────────────────────────────────────────────
 
+// Only kinds whose conversion action is configured are selected — an
+// unconfigured kind's rows stay pending (visible on the admin status page)
+// instead of failing per-row against a missing action.
 async function loadPending(
   env: Env,
   now: number,
   limit: number,
+  kinds: UploadedKind[],
 ): Promise<PendingRow[]> {
   const cutoff = now - GCLID_TTL_MS;
+  const placeholders = kinds.map(() => '?').join(', ');
   const res = await env.DB.prepare(
     `SELECT id, ts, kind, gclid, COALESCE(oci_attempts, 0) AS attempts
        FROM event
       WHERE gclid IS NOT NULL
         AND oci_uploaded_at IS NULL
-        AND kind IN ('feed_exported', 'paywall_view')
+        AND kind IN (${placeholders})
         AND ts > ?
       ORDER BY ts ASC
       LIMIT ?`,
   )
-    .bind(cutoff, limit)
+    .bind(...kinds, cutoff, limit)
     .all<{ id: string; ts: number; kind: UploadedKind; gclid: string; attempts: number }>();
   return res.results ?? [];
 }
 
 // Mark rows older than the 90-day cutoff so they stop showing as "pending"
-// on the admin status page. Sentinel -1 = permanently dropped.
+// on the admin status page. Sentinel -1 = permanently dropped. Covers ALL
+// upload kinds (not just the configured ones): Google would reject the stale
+// gclid regardless, so an unconfigured kind's out-of-window rows are flagged
+// too rather than pending forever.
 async function markExpiredOnly(env: Env, now: number): Promise<number> {
   const cutoff = now - GCLID_TTL_MS;
+  const placeholders = ALL_UPLOAD_KINDS.map(() => '?').join(', ');
   const res = await env.DB.prepare(
     `UPDATE event
         SET oci_uploaded_at = -1,
             oci_last_error = 'expired (>90 days)'
       WHERE gclid IS NOT NULL
         AND oci_uploaded_at IS NULL
-        AND kind IN ('feed_exported', 'paywall_view')
+        AND kind IN (${placeholders})
         AND ts <= ?`,
   )
-    .bind(cutoff)
+    .bind(...ALL_UPLOAD_KINDS, cutoff)
     .run();
   return res.meta.changes ?? 0;
 }
@@ -297,7 +334,7 @@ export async function uploadPendingConversions(
   }
 
   const skippedExpired = await markExpiredOnly(env, now);
-  const rows = await loadPending(env, now, BATCH_SIZE * 5);
+  const rows = await loadPending(env, now, BATCH_SIZE * 5, configuredKinds(cfg));
   if (rows.length === 0) {
     return {
       ranAt: now, configured: true,

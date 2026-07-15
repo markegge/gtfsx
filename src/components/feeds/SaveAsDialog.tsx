@@ -7,6 +7,8 @@ import { buildSnapshot, setCurrentWorkingStateVersion } from '../../db/serverPer
 import { roleAtLeast } from '../../services/orgsApi';
 import { db } from '../../db/dexie';
 import { LAST_PROJECT_KEY } from '../../db/persistence';
+import { Modal } from '../ui/Modal';
+import { AuthButton } from '../auth/AuthButton';
 
 export function SaveAsDialog({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
@@ -105,17 +107,15 @@ export function SaveAsDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/30" onClick={busy ? undefined : onClose} />
-      <form
-        onSubmit={submit}
-        className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-md mx-4"
-      >
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-1">Save feed</h3>
-        <p className="text-xs text-warm-gray mb-4">
-          Saves your current work to the cloud as a new feed you can edit from any device.
-        </p>
-
+    <Modal
+      open
+      onClose={onClose}
+      dismissable={!busy}
+      maxWidthClassName="max-w-md"
+      title="Save feed"
+      description="Saves your current work to the cloud as a new feed you can edit from any device."
+    >
+      <form onSubmit={submit}>
         <label className="block text-xs font-semibold text-dark-brown mb-1">Name</label>
         <input
           autoFocus
@@ -151,23 +151,14 @@ export function SaveAsDialog({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="flex justify-end gap-2 mt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-            className="px-4 py-2 rounded-lg bg-sand text-brown font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors disabled:opacity-50"
-          >
+          <AuthButton type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={busy || !name.trim()}
-            className="px-4 py-2 rounded-lg bg-coral text-white font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50"
-          >
+          </AuthButton>
+          <AuthButton type="submit" disabled={busy || !name.trim()}>
             {busy ? 'Saving…' : 'Save'}
-          </button>
+          </AuthButton>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }

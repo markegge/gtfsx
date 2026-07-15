@@ -411,7 +411,7 @@ function RtFeedsSection({ projectId }: { projectId: string }) {
 
       <div className="border border-sand rounded-lg overflow-hidden mb-4">
         {loading ? (
-          <div className="px-4 py-3 text-sm text-warm-gray">Loading…</div>
+          <p className="px-4 py-3 text-sm text-warm-gray">Loading…</p>
         ) : feeds.length === 0 ? (
           <div className="px-4 py-3 text-sm text-warm-gray">No RT feeds registered.</div>
         ) : (

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AuthButton } from '../auth/AuthButton';
+import { Modal } from '../ui/Modal';
 import { loadProjectFromServer, forceSaveWithLatest } from '../../db/serverPersistence';
 
 interface ConflictEventDetail {
@@ -51,31 +52,38 @@ export function ConflictDialog({ projectId }: { projectId: string }) {
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/30" />
-      <div className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-md mx-4">
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-2">
-          Feed edited elsewhere
-        </h3>
-        <p className="text-sm text-warm-gray mb-4">
+    <Modal
+      open
+      // Conflict resolution is forced: no backdrop/Escape dismiss, no × — the
+      // user must pick one of the two actions.
+      onClose={() => {}}
+      dismissable={false}
+      showClose={false}
+      maxWidthClassName="max-w-md"
+      title="Feed edited elsewhere"
+      description={
+        <>
           Someone edited this feed on another device. Your changes are still in your browser — you
           can either reload the server's version (losing your local edits) or overwrite the server
           version (losing theirs).
-        </p>
-        {error && (
-          <div className="mb-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm">
-            {error}
-          </div>
-        )}
-        <div className="flex justify-end gap-2">
+        </>
+      }
+      footer={
+        <>
           <AuthButton variant="secondary" onClick={loadTheirs} disabled={busy}>
             Reload theirs
           </AuthButton>
           <AuthButton onClick={keepMine} disabled={busy}>
             Keep mine
           </AuthButton>
+        </>
+      }
+    >
+      {error && (
+        <div className="px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm">
+          {error}
         </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   );
 }

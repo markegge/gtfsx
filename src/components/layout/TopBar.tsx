@@ -8,11 +8,11 @@ import { db } from '../../db/dexie';
 import { ApiError } from '../../services/authApi';
 import { patchProject } from '../../services/projectsApi';
 import { saveProjectNow } from '../../db/serverPersistence';
-import { backendEnabled } from '../../utils/featureFlags';
 import { AppBrand } from './AppBrand';
 import { VariantSwitcher } from '../variants/VariantSwitcher';
 import { UndoRedoControls } from './UndoRedoControls';
 import { UserMenu, UserMenuItems } from './UserMenu';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 // Re-export RoleBadge for callers that imported it from TopBar previously.
 export { RoleBadge } from './UserMenu';
@@ -71,7 +71,6 @@ export function TopBar() {
   const hasContent = agenciesCount > 0 || routesCount > 0 || stopsCount > 0;
 
   const handleSaveClick = async () => {
-    if (!backendEnabled) return;
     setSaveError(null);
     if (!currentUser) {
       const next = `${window.location.pathname || '/'}?save=1`;
@@ -137,7 +136,7 @@ export function TopBar() {
 
         {/* Save button — hidden on phones; folded into the mobile menu below.
             Also hidden on /demo (read-only preview, no project to save). */}
-        {backendEnabled && !isDemo && (
+        {!isDemo && (
           <button
             onClick={handleSaveClick}
             disabled={saving || (!isDirty && !!activeServerProjectId)}
@@ -205,7 +204,7 @@ export function TopBar() {
                 aria-hidden
               />
               <div className="absolute right-0 top-full mt-1 z-40 w-64 max-h-[80vh] overflow-y-auto bg-white border border-sand rounded-xl shadow-lg p-2 flex flex-col">
-                {backendEnabled && !isDemo && (
+                {!isDemo && (
                   <button
                     onClick={() => { setMobileMenuOpen(false); handleSaveClick(); }}
                     disabled={saving || (!isDirty && !!activeServerProjectId)}
@@ -228,13 +227,9 @@ export function TopBar() {
                 >
                   Export GTFS
                 </button>
-                {backendEnabled && (
-                  <>
-                    <div className="border-t border-sand my-1" />
-                    {/* All UserMenu items inline — account, workspaces, sign in/out, etc. */}
-                    <UserMenuItems onClose={() => setMobileMenuOpen(false)} />
-                  </>
-                )}
+                <div className="border-t border-sand my-1" />
+                {/* All UserMenu items inline — account, workspaces, sign in/out, etc. */}
+                <UserMenuItems onClose={() => setMobileMenuOpen(false)} />
               </div>
             </>
           )}
@@ -257,39 +252,22 @@ export function TopBar() {
       {showSaveAs && <SaveAsDialog onClose={() => setShowSaveAs(false)} />}
 
       {showResetConfirm && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="absolute inset-0 bg-black/20" onClick={() => setShowResetConfirm(false)} />
-          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-xs mx-4">
-            <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
-              Start a new project?
-            </h3>
-            <p className="text-sm text-warm-gray mb-4">
-              Your current project has not been exported. Any unsaved work will be lost.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowResetConfirm(false)}
-                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  await db.projectData.clear();
-                  await db.projectBulk.clear();
-                  await db.projects.clear();
-                  // Navigate home (not reload) so resetting from a server-backed
-                  // editor route lands on a fresh project instead of re-loading
-                  // the same feed. Workspace persists in localStorage.
-                  window.location.href = import.meta.env.BASE_URL;
-                }}
-                className="flex-1 px-3 py-2 bg-red-500 text-white rounded-lg font-heading font-bold text-sm hover:bg-red-600 transition-colors"
-              >
-                Discard & Reset
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          danger
+          title="Start a new project?"
+          body="Your current project has not been exported. Any unsaved work will be lost."
+          confirmLabel="Discard & Reset"
+          onCancel={() => setShowResetConfirm(false)}
+          onConfirm={async () => {
+            await db.projectData.clear();
+            await db.projectBulk.clear();
+            await db.projects.clear();
+            // Navigate home (not reload) so resetting from a server-backed
+            // editor route lands on a fresh project instead of re-loading
+            // the same feed. Workspace persists in localStorage.
+            window.location.href = import.meta.env.BASE_URL;
+          }}
+        />
       )}
     </>
   );

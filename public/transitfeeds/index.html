@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>TransitFeeds Is Gone: Where to Find GTFS Feeds Now</title>
+    <meta name="description" content="TransitFeeds (OpenMobilityData) shut down in December 2025. Here's where to download GTFS feeds now, and how to check whether a feed is valid and current." />
+    <link rel="canonical" href="https://www.gtfsx.com/transitfeeds/" />
+    <meta property="og:title" content="TransitFeeds Is Gone: Where to Find GTFS Feeds Now" />
+    <meta property="og:description" content="TransitFeeds (OpenMobilityData) shut down in December 2025. Here's where to download GTFS feeds now, and how to check whether a feed is valid and current." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/transitfeeds/" />
+    <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@gtfsxapp" />
+    <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+      /* ─── site header (matches the editor) ─── */
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header .brand-name { font-weight:800; font-size:1.5rem; color:var(--accent); letter-spacing:-0.01em; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; transition:color 0.15s, background 0.15s; }
+      .site-header nav a:hover { color:var(--ink); background:var(--bg); }
+      .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .cta:hover { filter:brightness(0.95); }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a:hover { color:var(--ink); }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      .site-header .user-slot .user-avatar:hover { filter:brightness(0.95); }
+      @media (max-width: 720px) {
+        .site-header nav, .site-header .cta { display:none; }
+        .site-header .brand-name { font-size:1.25rem; }
+        .site-header .brand img { height:30px; width:auto; }
+      }
+      main { padding-top: 40px; padding-bottom: 60px; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; }
+      h2 { font-size: 1.4rem; margin-top: 2.2rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      a { color: var(--accent); }
+      ul { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code { background:#fff; border:1px solid var(--rule); padding:1px 6px; border-radius:4px; font-size:0.9em; }
+      pre { background:#fff; border:1px solid var(--rule); padding:12px 16px; border-radius:6px; overflow-x:auto; font-size:0.9em; line-height:1.45; }
+      pre code { background:none; border:none; padding:0; }
+      table { border-collapse: collapse; width: 100%; margin: 1.5rem 0; }
+      th, td { border: 1px solid var(--rule); padding: 8px 12px; text-align: left; vertical-align: top; }
+      th { background: rgba(0,0,0,0.03); font-weight: 600; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; }
+      footer a { color: var(--muted); }
+    </style>
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": "TransitFeeds is gone. Here's where transit feed data lives now.",
+        "url": "https://www.gtfsx.com/transitfeeds/",
+        "description": "TransitFeeds (OpenMobilityData) shut down in December 2025. Here's where to download GTFS feeds now, and how to check whether a feed is valid and current."
+      }
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a href="/" class="brand">
+        <img src="/gtfsx-lockup.svg" alt="GTFS·X" />
+      </a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot">
+          <a href="/login">Sign in</a>
+        </div>
+      </div>
+    </header>
+    <main>
+      <h1>TransitFeeds is gone. Here&#39;s where transit feed data lives now.</h1>
+      <p>If you&#39;re here because transitfeeds.com stopped working, or because a bookmark, script, or documentation link now points at a dead page, here&#39;s what happened and where to go instead.</p>
+      <h2>What happened to TransitFeeds?</h2>
+      <p>TransitFeeds launched in 2014 as a community catalog of GTFS feeds and became the default place to browse, download, and archive transit data. It was later renamed <strong>OpenMobilityData</strong> and maintained by <a href="https://mobilitydata.org/">MobilityData</a>, the non-profit that stewards the GTFS spec.</p>
+      <p>The catalog stopped receiving updated feed data in <strong>February 2024</strong>, and the site was <strong>deprecated in December 2025</strong>. Its historical archive (2014–2024) was migrated to MobilityData&#39;s replacement platform.</p>
+      <h2>Where to download GTFS feeds now</h2>
+      <ul>
+      <li><strong><a href="https://mobilitydatabase.org/">Mobility Database</a></strong>: the official successor, run by MobilityData. 6,000+ GTFS, GTFS Realtime, and GBFS feeds in 99+ countries, with an API. This is where TransitFeeds&#39; historical data went, and where trip planners look for new feeds.</li>
+      <li><strong><a href="https://www.transit.land/">Transitland</a></strong>: an independent feed registry and API maintained by Interline, with feed contents queryable down to the route and stop level.</li>
+      <li><strong>The agency itself</strong>: most agencies publish their feed at a stable URL on their own site. The Mobility Database record links to the source.</li>
+      </ul>
+      <h2>Want to check whether a feed is valid and current?</h2>
+      <p>One thing TransitFeeds did well was show feed status at a glance. Our free <strong><a href="/feed-health/">GTFS Feed Health dashboard</a></strong> tracks published U.S. feeds continuously: whether they validate against the spec, whether they&#39;re expired, and what the canonical validator flags. No account needed.</p>
+      <p>(It&#39;s how we found that roughly 45% of U.S. transit agencies have no GTFS feed any trip planner can find. That&#39;s the gap <a href="/">GTFS·X</a> exists to close.)</p>
+      <h2>If you&#39;re an agency whose feed was hosted or listed on TransitFeeds</h2>
+      <p>Your feed needs a new permanent home and a listing in the Mobility Database so Google Maps, Apple Maps, and Transit keep finding it:</p>
+      <ol>
+      <li><p>Host your feed at a stable URL you control (your website, or a hosting service).</p></li>
+      <li><p><a href="https://mobilitydatabase.org/">Submit it to the Mobility Database</a> (the registry consumers actually poll).</p></li>
+      <li><p>Keep it valid: run it through the <a href="https://github.com/MobilityData/gtfs-validator">canonical GTFS validator</a> whenever it changes.</p></li>
+      </ol>
+      <p>If you&#39;d rather not manage that by hand, <a href="/">GTFS·X</a> edits and validates feeds free in your browser, and the Planner plan handles hosted publishing and one-click Mobility Database submission. But whichever tools you use: get your feed to a stable URL and into the Mobility Database.</p>
+      <h2>See also</h2>
+      <ul>
+      <li><a href="/learn/publish-gtfs-feed/">How to publish a GTFS feed</a></li>
+      <li><a href="/learn/gtfs/">What is GTFS?</a></li>
+      <li><a href="/feed-health/">GTFS Feed Health dashboard</a></li>
+      </ul>
+    </main>
+    <!-- ============================================================
+         gx-footer · canonical GTFS·X site footer
+         Self-contained: scoped styles + hardcoded brand colors so it
+         renders identically on ANY static page regardless of that page's
+         own CSS. Selectors use `footer.gx-footer` (higher specificity than
+         a bare `footer {}` rule) and reset max-width/margin/padding so a
+         page's existing footer styling can't constrain the full-width band.
+         PROPAGATED across all static content pages — keep in sync with the
+         landing footer in public/home/index.html.
+         ============================================================ -->
+    <style>
+footer.gx-footer { max-width: none; width: 100%; margin: 0; padding: 0; background: #3D2E22; color: #FFF8F0; font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif; box-sizing: border-box; }
+footer.gx-footer * { box-sizing: border-box; }
+footer.gx-footer a { text-decoration: none; }
+footer.gx-footer .gx-wrap { max-width: 1180px; margin: 0 auto; padding: 64px 28px 36px; }
+footer.gx-footer .gx-top { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 36px; }
+footer.gx-footer .gx-lockup { height: 28px; width: auto; display: block; margin-bottom: 16px; }
+footer.gx-footer .gx-blurb { font-size: 13.5px; color: rgba(255,248,240,0.6); line-height: 1.55; max-width: 240px; margin: 0; }
+footer.gx-footer .gx-social { display: flex; gap: 10px; margin-top: 18px; }
+footer.gx-footer .gx-social a { width: 34px; height: 34px; border-radius: 9px; background: rgba(255,248,240,0.08); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #FFF8F0; transition: background 0.12s; }
+footer.gx-footer .gx-social a:hover { background: #E8734A; }
+footer.gx-footer .gx-col h4 { font-family: "Nunito", ui-rounded, system-ui, sans-serif; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.07em; color: rgba(255,248,240,0.5); margin: 0 0 16px; }
+footer.gx-footer .gx-col a { display: block; font-size: 14px; color: rgba(255,248,240,0.82); margin-bottom: 11px; transition: color 0.12s; }
+footer.gx-footer .gx-col a:hover { color: #E8734A; }
+footer.gx-footer .gx-bottom { max-width: 1180px; margin: 48px auto 0; padding: 24px 28px 0; border-top: 1px solid rgba(255,248,240,0.12); display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 13px; color: rgba(255,248,240,0.5); }
+footer.gx-footer .gx-mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+@media (max-width: 780px) { footer.gx-footer .gx-top { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 480px) { footer.gx-footer .gx-top { grid-template-columns: 1fr; } }
+</style>
+<footer class="gx-footer">
+  <div class="gx-wrap">
+    <div class="gx-top">
+      <div>
+        <img class="gx-lockup" src="/gtfsx-lockup-on-dark.svg" alt="GTFS·X" width="100" height="28">
+        <p class="gx-blurb">The fast, easy GTFS editor and service planner. Built for transit agencies, planners, and consultants.</p>
+        <div class="gx-social">
+          <a href="https://twitter.com/gtfsxapp" aria-label="GTFS·X on X">X</a>
+          <a href="https://www.linkedin.com/company/gtfsx" aria-label="GTFS·X on LinkedIn">in</a>
+          <a href="https://github.com/GTFS-X/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
+        </div>
+      </div>
+      <div class="gx-col">
+        <h4>Product</h4>
+        <a href="/editor">Editor</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/planning">Planning</a>
+        <a href="/docs/hosted-publishing/">Publishing</a>
+      </div>
+      <div class="gx-col">
+        <h4>Learn</h4>
+        <a href="/learn/gtfs/">What is GTFS</a>
+        <a href="/learn/gtfs-flex/">What is GTFS-Flex</a>
+        <a href="/learn/publish-gtfs-feed/">Publish a GTFS feed</a>
+        <a href="/docs/">Docs</a>
+      </div>
+      <div class="gx-col">
+        <h4>Compare</h4>
+        <a href="/compare/trillium/">vs Trillium</a>
+        <a href="/compare/remix/">vs Remix</a>
+        <a href="/compare/gtfs-builder-rtap/">vs RTAP</a>
+      </div>
+      <div class="gx-col">
+        <h4>Company</h4>
+        <a href="/about/">About</a>
+        <a href="/feed-health/">GTFS Dashboard</a>
+        <a href="/community/announcements">Announcements</a>
+        <a href="mailto:hello@gtfsx.com">Contact</a>
+        <a href="/use-cases/state-dot/">State DOTs</a>
+      </div>
+    </div>
+    <div class="gx-bottom">
+      <span>© 2026 GTFS·X · Vector &amp; Vertex</span>
+      <span class="gx-mono">hello@gtfsx.com</span>
+    </div>
+  </div>
+</footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+    <script src="/assets/site-nav.js"></script>
+</body>
+</html>

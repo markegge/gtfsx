@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
-import { AuthButton } from '../auth/AuthButton';
+
+// Re-exported from the shared UI primitive so admin pages keep importing
+// `ConfirmDialog` from here; the API is unchanged.
+export { ConfirmDialog } from '../ui/ConfirmDialog';
 
 export function StatusPill({ status }: { status: string }) {
   const tone: Record<string, string> = {
@@ -13,46 +16,6 @@ export function StatusPill({ status }: { status: string }) {
     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${cls}`}>
       {status.replace(/_/g, ' ')}
     </span>
-  );
-}
-
-export function ConfirmDialog({
-  title,
-  body,
-  confirmLabel,
-  onConfirm,
-  onCancel,
-  danger,
-  busy,
-}: {
-  title: string;
-  body: ReactNode;
-  confirmLabel: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-  danger?: boolean;
-  busy?: boolean;
-}) {
-  return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={busy ? undefined : onCancel} />
-      <div className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-sm mx-4">
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-2">{title}</h3>
-        <div className="text-sm text-warm-gray mb-5">{body}</div>
-        <div className="flex justify-end gap-2">
-          <AuthButton variant="secondary" onClick={onCancel} disabled={busy}>
-            Cancel
-          </AuthButton>
-          <AuthButton
-            variant={danger ? 'danger' : 'primary'}
-            onClick={onConfirm}
-            disabled={busy}
-          >
-            {busy ? 'Working…' : confirmLabel}
-          </AuthButton>
-        </div>
-      </div>
-    </div>
   );
 }
 

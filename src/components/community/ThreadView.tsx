@@ -17,6 +17,7 @@ import { useStore } from '../../store';
 import { Avatar } from './Avatar';
 import { Composer } from './Composer';
 import { PostCard } from './PostCard';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { relativeTime } from './time';
 import { threadPermalink } from './permalinks';
 
@@ -44,6 +45,11 @@ export function ThreadView() {
   const [replyPending, setReplyPending] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
   const [replyResetKey, setReplyResetKey] = useState(0);
+  const [confirmDeleteThread, setConfirmDeleteThread] = useState(false);
+  const [deletingThread, setDeletingThread] = useState(false);
+  // Inline surface for thread-moderation failures (delete / pin / lock), in
+  // place of a blocking alert().
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Thread-level copy-link state
   const [threadLinkCopied, setThreadLinkCopied] = useState(false);
@@ -127,7 +133,7 @@ export function ThreadView() {
     return (
       <div className="bg-white border border-sand rounded-lg p-6">
         <p className="text-sm text-red-700 mb-2">{error}</p>
-        <Link to="/community" className="text-sm text-coral hover:underline">← Back to community</Link>
+        <Link to="/community" className="text-sm text-coral hover:text-coral">← Back to community</Link>
       </div>
     );
   }
@@ -185,22 +191,27 @@ export function ThreadView() {
     }
   };
 
-  const handleDeleteThread = async () => {
-    if (!confirm('Delete this thread? This cannot be undone.')) return;
+  const performDeleteThread = async () => {
+    setActionError(null);
+    setDeletingThread(true);
     try {
       await deleteThread(thread.id);
       navigate(`/community/${encodeURIComponent(thread.categoryId)}`);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Could not delete thread');
+      setActionError(e instanceof Error ? e.message : 'Could not delete thread');
+      setConfirmDeleteThread(false);
+    } finally {
+      setDeletingThread(false);
     }
   };
 
   const handleAdminToggle = async (field: 'pinned' | 'locked') => {
+    setActionError(null);
     try {
       const res = await patchThread(thread.id, { [field]: !thread[field] });
       setThread(res.thread);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Could not update thread');
+      setActionError(e instanceof Error ? e.message : 'Could not update thread');
     }
   };
 
@@ -277,19 +288,24 @@ export function ThreadView() {
               </button>
               {(isAdmin || isAuthor) && (
                 <button
-                  onClick={handleDeleteThread}
-                  className="text-xs text-warm-gray hover:text-red-700"
+                  onClick={() => setConfirmDeleteThread(true)}
+                  className="px-2 py-1 rounded-md text-xs border border-sand text-warm-gray hover:border-red-300 hover:text-red-700 transition-colors"
                 >
                   Delete thread
                 </button>
               )}
               {isAdmin && (
-                <div className="flex gap-1 text-[11px]">
-                  <button onClick={() => handleAdminToggle('pinned')} className="hover:text-coral">
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => handleAdminToggle('pinned')}
+                    className="px-2 py-1 rounded-md text-xs border border-sand hover:border-coral hover:text-coral transition-colors"
+                  >
                     {thread.pinned ? 'Unpin' : 'Pin'}
                   </button>
-                  <span>·</span>
-                  <button onClick={() => handleAdminToggle('locked')} className="hover:text-coral">
+                  <button
+                    onClick={() => handleAdminToggle('locked')}
+                    className="px-2 py-1 rounded-md text-xs border border-sand hover:border-coral hover:text-coral transition-colors"
+                  >
                     {thread.locked ? 'Unlock' : 'Lock'}
                   </button>
                 </div>
@@ -298,6 +314,12 @@ export function ThreadView() {
           )}
         </div>
       </div>
+
+      {actionError && (
+        <div className="px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
+          {actionError}
+        </div>
+      )}
 
       {op && (
         <PostCard
@@ -361,6 +383,18 @@ export function ThreadView() {
           </div>
         )}
       </div>
+
+      {confirmDeleteThread && (
+        <ConfirmDialog
+          danger
+          title="Delete this thread?"
+          body="Delete this thread? This cannot be undone."
+          confirmLabel="Delete thread"
+          onConfirm={performDeleteThread}
+          onCancel={() => setConfirmDeleteThread(false)}
+          busy={deletingThread}
+        />
+      )}
     </div>
   );
 }

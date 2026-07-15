@@ -13,7 +13,7 @@ import {
 function bg(geoid: string, lat: number, lon: number, extra: Partial<BlockGroupData> = {}): BlockGroupData {
   return {
     geoid, lat, lon,
-    population: 0, households: 0, workers: 0, highPropensityRiders: 0,
+    population: 0, households: 0, workers: 0,
     minorityPop: 0, totalRacePop: 0,
     lowIncomePop: 0, povertyUniverse: 0,
     zeroVehicleHouseholds: 0, occupiedHouseholds: 0,
@@ -49,14 +49,13 @@ describe('calculateCoverage', () => {
     const stops = [stop('s', 40, -100)];
     const bgs = [bg('g1', 40, -100, {
       // totalHouseholds is OCCUPIED households (B25044), not housing units.
-      population: 1000, occupiedHouseholds: 400, workers: 600, highPropensityRiders: 350,
+      population: 1000, occupiedHouseholds: 400, workers: 600,
     })];
     // 0.5 mi buffer with the BG centered on the stop and bgRadius 0.5 → fraction 1.
     const r = calculateCoverage(stops, bgs, 0.5);
     expect(r.totalPopulation).toBe(1000);
     expect(r.totalHouseholds).toBe(400);
     expect(r.totalWorkers).toBe(600);
-    expect(r.totalHighPropensityRiders).toBe(350);
   });
 
   it('excludes a block group far outside any buffer', () => {
@@ -120,14 +119,24 @@ describe('demographicShares & baselineShares', () => {
     expect(demographicShares(r).minority).toBeCloseTo(70 / 150, 6);
   });
 
-  it('apportions high-propensity riders by the overlap fraction', () => {
-    const bgsHp = [
-      bg('a', 40, -100, { highPropensityRiders: 300 }),
-      bg('b', 40, -100, { highPropensityRiders: 200 }),
-    ];
-    const fractions = new Map([['a', 1], ['b', 0.5]]);
-    const r = coverageFromFractions(fractions, bgsHp, 0.25);
-    // 300×1 + 200×0.5 = 400
-    expect(r.totalHighPropensityRiders).toBe(400);
+  it('carries NO propensity / transit-need figure — this path cannot honestly produce one', () => {
+    // The block-group path pins each block group to its PARENT TRACT's centroid
+    // and smears it over a 0.5–3.0 mi disc, so its geometry is tract-resolution.
+    // The propensity and transit-need composites are de-duplicated unions whose
+    // overlap is measured from PUMS; computing one on top of a tract-smeared disc
+    // would quote a model error far smaller than the apportionment error it
+    // carries. So this result type does not have the field at all — the compiler,
+    // not a code review, is what stops it coming back.
+    //
+    // The retired ×0.6 "high-propensity riders" column lived exactly here. It is
+    // gone, and the ONLY source of a propensity number is now the exact
+    // census-block layer (blockCoverage.ts → BlockCoverageResult).
+    const r = coverageFromFractions(new Map([['a', 1]]), [bg('a', 40, -100, { population: 500 })], 0.25);
+    const keys = Object.keys(r);
+    expect(keys).not.toContain('totalHighPropensityRiders');
+    expect(keys).not.toContain('propensityAll');
+    expect(keys).not.toContain('needAll');
+    // What it DOES carry is straight ACS counts, unchanged.
+    expect(r.totalPopulation).toBe(500);
   });
 });

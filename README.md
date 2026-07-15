@@ -54,7 +54,7 @@ A web-based editor for creating, editing, analyzing, and publishing [GTFS](https
 
 ## Tech stack
 
-- **React 18** + **TypeScript** + **Vite**
+- **React 19** + **TypeScript** + **Vite**
 - **Mapbox GL JS** via `react-map-gl` + `@mapbox/mapbox-gl-draw`
 - **Zustand** with the `immer` middleware
 - **Tailwind CSS v4** with a warm custom theme (cream / sand / coral / teal / gold)
@@ -76,7 +76,7 @@ A web-based editor for creating, editing, analyzing, and publishing [GTFS](https
 ### Local development
 
 ```bash
-git clone https://github.com/markegge/gtfsx.git
+git clone https://github.com/GTFS-X/gtfsx.git
 cd gtfsx
 npm install
 cp .env.example .env

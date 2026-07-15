@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../../store';
 import { FormField } from '../ui/FormField';
 import { WHEELCHAIR_BOARDING, LOCATION_TYPES } from '../../utils/constants';
@@ -34,6 +34,8 @@ export function CreateStopPanel() {
   const addRouteStop = useStore((s) => s.addRouteStop);
   const setCreatingStop = useStore((s) => s.setCreatingStop);
   const setEditingStopId = useStore((s) => s.setEditingStopId);
+  const setRouteDetailTab = useStore((s) => s.setRouteDetailTab);
+  const sidebarSection = useStore((s) => s.sidebarSection);
 
   const fromRouteContext = !!editingRouteId && !!editingRoute;
 
@@ -59,6 +61,26 @@ export function CreateStopPanel() {
   const togglePlaceOnMap = () => {
     setMapMode(placingOnMap ? 'select' : 'place_stop');
   };
+
+  // When placement mode ends — the "Done placing" button, double-click-to-
+  // finish, or Escape all drop mapMode back to 'select' — don't leave the user
+  // stranded on this "New stop" form after their stops were added. Close the
+  // create panel and return them to the list they came from: the route's Stops
+  // tab (route context) or the global Stops list. Mirrors CreateStopHeader's
+  // back-arrow (goBack), which keys off the section so a stale editingRouteId
+  // in the global Stops panel can't misroute us into a route.
+  const wasPlacingRef = useRef(false);
+  useEffect(() => {
+    if (placingOnMap) {
+      wasPlacingRef.current = true;
+      return;
+    }
+    if (wasPlacingRef.current) {
+      wasPlacingRef.current = false;
+      setCreatingStop(false);
+      if (sidebarSection === 'routes' && fromRouteContext) setRouteDetailTab('stops');
+    }
+  }, [placingOnMap, sidebarSection, fromRouteContext, setCreatingStop, setRouteDetailTab]);
 
   const handleCreate = () => {
     if (!canCreate) return;
@@ -150,10 +172,7 @@ export function CreateStopPanel() {
           <FormField label="Longitude" value={lon} onChange={setLon} placeholder="-111.0429" type="number" required />
         </div>
 
-        <div className="mb-3">
-          <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-            Wheelchair Boarding
-          </label>
+        <FormField label="Wheelchair Boarding">
           <select
             value={wheelchair}
             onChange={(e) => setWheelchair(Number(e.target.value))}
@@ -163,12 +182,9 @@ export function CreateStopPanel() {
               <option key={val} value={val}>{label}</option>
             ))}
           </select>
-        </div>
+        </FormField>
 
-        <div className="mb-3">
-          <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-            Location Type
-          </label>
+        <FormField label="Location Type">
           <select
             value={locationType}
             onChange={(e) => setLocationType(Number(e.target.value))}
@@ -178,7 +194,7 @@ export function CreateStopPanel() {
               <option key={val} value={val}>{label}</option>
             ))}
           </select>
-        </div>
+        </FormField>
 
         <button
           onClick={handleCreate}

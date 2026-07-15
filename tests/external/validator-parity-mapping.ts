@@ -60,7 +60,35 @@ export type OurNoticeId =
   | 'missing_wheelchair'
   | 'expired_calendar'
   | 'no_fares'
-  | 'duplicate_area_id';
+  | 'duplicate_area_id'
+  // GTFS-Flex — zone geography (locations.geojson / location_groups.txt)
+  | 'flex_duplicate_geography_id'
+  | 'flex_unsupported_geometry'
+  | 'flex_invalid_geometry'
+  | 'flex_group_unknown_stop'
+  | 'flex_group_duplicate_stop'
+  | 'flex_empty_stop_group'
+  | 'flex_no_service_area'
+  // GTFS-Flex — pickup/drop-off window + service
+  | 'flex_invalid_window'
+  | 'flex_malformed_window'
+  | 'flex_no_window'
+  | 'flex_unknown_service'
+  | 'flex_no_service_pattern'
+  // GTFS-Flex — booking_rules.txt
+  | 'flex_missing_booking_rule'
+  | 'flex_invalid_booking_type'
+  | 'flex_missing_prior_notice_duration_min'
+  | 'flex_invalid_prior_notice_duration_min'
+  | 'flex_missing_prior_notice_last_day'
+  | 'flex_missing_prior_notice_last_time'
+  | 'flex_missing_prior_notice_start_time'
+  | 'flex_forbidden_real_time_booking_field'
+  | 'flex_forbidden_same_day_booking_field'
+  | 'flex_forbidden_prior_day_booking_field'
+  | 'flex_forbidden_prior_notice_start_day'
+  | 'flex_forbidden_prior_notice_start_time'
+  | 'flex_prior_notice_last_day_after_start_day';
 
 interface OurNoticeRule {
   id: OurNoticeId;
@@ -71,6 +99,40 @@ interface OurNoticeRule {
 // Order matters only in that the FIRST matching rule wins per message. Keep the
 // regexes specific enough that they don't cross-match.
 const OUR_NOTICE_RULES: OurNoticeRule[] = [
+  // ── GTFS-Flex ──────────────────────────────────────────────────────────
+  // FIRST, deliberately: every flex message is prefixed "Flex zone …" or
+  // "Geography id …", but some generic rules below would otherwise steal one
+  // (e.g. frequency_bad_window's /ends .* at or before it starts/ also matches
+  // our flex window message). Anchoring the flex rules ahead of them keeps both
+  // vocabularies intact.
+  { id: 'flex_duplicate_geography_id', test: /^geography id .* share ONE id namespace/is },
+  { id: 'flex_unsupported_geometry', test: /flex location must be a Polygon or MultiPolygon/i },
+  { id: 'flex_invalid_geometry', test: /flex zone .* has an invalid polygon/i },
+  { id: 'flex_group_unknown_stop', test: /flex zone .* in its group, but no such stop exists/i },
+  { id: 'flex_group_duplicate_stop', test: /flex zone .* in its group more than once/i },
+  { id: 'flex_empty_stop_group', test: /flex zone .* has a stop group with no stops/i },
+  { id: 'flex_no_service_area', test: /flex zone .* has no service area/i },
+
+  { id: 'flex_malformed_window', test: /flex zone .* pickup_drop_off_window .* must be HH:MM:SS/i },
+  { id: 'flex_invalid_window', test: /flex zone .* pickup\/drop-off window ends .* at or before it starts/i },
+  { id: 'flex_no_window', test: /flex zone .* has no pickup\/drop-off window set/i },
+  { id: 'flex_unknown_service', test: /flex zone .* (references service_id|references prior_notice_service_id) .* which no longer exists/i },
+  { id: 'flex_no_service_pattern', test: /flex zone .* has no service pattern in calendar\.txt/i },
+
+  { id: 'flex_missing_booking_rule', test: /flex zone .* but no booking rule/i },
+  { id: 'flex_invalid_booking_type', test: /flex zone .* booking rule has booking_type/i },
+  { id: 'flex_missing_prior_notice_duration_min', test: /flex zone .* sets no prior_notice_duration_min/i },
+  { id: 'flex_invalid_prior_notice_duration_min', test: /prior_notice_duration_max .* below prior_notice_duration_min/i },
+  { id: 'flex_missing_prior_notice_last_day', test: /flex zone .* sets no prior_notice_last_day/i },
+  { id: 'flex_missing_prior_notice_last_time', test: /sets no prior_notice_last_time/i },
+  { id: 'flex_missing_prior_notice_start_time', test: /sets prior_notice_start_day but no prior_notice_start_time/i },
+  { id: 'flex_forbidden_prior_notice_start_time', test: /sets prior_notice_start_time but no prior_notice_start_day/i },
+  { id: 'flex_forbidden_prior_notice_start_day', test: /both prior_notice_start_day and prior_notice_duration_max/i },
+  { id: 'flex_prior_notice_last_day_after_start_day', test: /prior_notice_last_day must not be greater than prior_notice_start_day/i },
+  { id: 'flex_forbidden_real_time_booking_field', test: /books in real time \(booking_type=0\)/i },
+  { id: 'flex_forbidden_same_day_booking_field', test: /books same day \(booking_type=1\), so /i },
+  { id: 'flex_forbidden_prior_day_booking_field', test: /books a prior day \(booking_type=2\), so /i },
+
   { id: 'missing_agency', test: /at least one agency is required/i },
   { id: 'agency_missing_name', test: /agency .* is missing a name/i },
   { id: 'agency_missing_timezone', test: /agency .* is missing a timezone/i },
@@ -144,6 +206,11 @@ export const MOBILITY_TO_OURS: Record<string, OurNoticeId[]> = {
     'frequency_unknown_trip',
     'stop_area_unknown_area',
     'stop_area_unknown_stop',
+    // Flex FKs land here too: a location_group_stops row pointing at a missing
+    // stop, and a booking rule naming a prior_notice_service_id that isn't in
+    // calendar.txt / calendar_dates.txt.
+    'flex_group_unknown_stop',
+    'flex_unknown_service',
   ],
   wrong_parent_location_type: ['parent_not_station'],
 
@@ -166,6 +233,31 @@ export const MOBILITY_TO_OURS: Record<string, OurNoticeId[]> = {
   route_short_and_long_name_missing: ['route_missing_name'],
   stop_without_location: ['stop_bad_coords'],
   stop_time_with_arrival_before_previous_departure_time: ['departure_before_arrival'],
+
+  // ── GTFS-Flex (gtfs.org/community/extensions/flex) ─────────────────────
+  // booking_rules.txt conditional requirements, keyed on booking_type:
+  //   type 0 (real time) — every prior_notice_* field is Forbidden
+  //   type 1 (same day)  — duration_min Required; last_day/last_time/service_id Forbidden
+  //   type 2 (prior day) — last_day Required (+ last_time with it); duration_* Forbidden
+  missing_prior_notice_duration_min: ['flex_missing_prior_notice_duration_min'],
+  invalid_prior_notice_duration_min: ['flex_invalid_prior_notice_duration_min'],
+  missing_prior_notice_last_day: ['flex_missing_prior_notice_last_day'],
+  missing_prior_notice_last_time: ['flex_missing_prior_notice_last_time'],
+  missing_prior_notice_start_time: ['flex_missing_prior_notice_start_time'],
+  forbidden_prior_notice_start_day: ['flex_forbidden_prior_notice_start_day'],
+  forbidden_prior_notice_start_time: ['flex_forbidden_prior_notice_start_time'],
+  prior_notice_last_day_after_start_day: ['flex_prior_notice_last_day_after_start_day'],
+  forbidden_real_time_booking_field_value: ['flex_forbidden_real_time_booking_field'],
+  forbidden_same_day_booking_field_value: ['flex_forbidden_same_day_booking_field'],
+  forbidden_prior_day_booking_field_value: ['flex_forbidden_prior_day_booking_field'],
+  missing_pickup_drop_off_booking_rule_id: ['flex_missing_booking_rule'],
+  // Zone geography. stops.stop_id / locations.geojson id / location_group_id
+  // share one namespace, so a collision anywhere in it is one canonical notice.
+  duplicate_geography_id: ['flex_duplicate_geography_id'],
+  unsupported_geometry_type: ['flex_unsupported_geometry'],
+  invalid_geometry: ['flex_invalid_geometry'],
+  // The pickup/drop-off window on a flex stop_times row.
+  invalid_pickup_drop_off_window: ['flex_invalid_window'],
 
   // ── Best-practice / advisory ───────────────────────────────────────────
   unused_stop: ['unused_stop'],
@@ -231,4 +323,52 @@ export const TODO_MOBILITY_CODES: string[] = [
   // Block overlaps (we warn already but with different sampling semantics —
   // mapping deferred until our block check is reconciled with theirs).
   'block_trips_with_overlapping_stop_times',
+
+  // ── GTFS-Flex notices our MODEL makes unreachable ──────────────────────
+  // These describe malformed stop_times/locations rows that our data model
+  // cannot represent, so there is nothing for us to validate — the exporter
+  // can't emit them and the parser can't read them back into the store. Listed
+  // here (rather than mapped to an empty array) so they read as "structurally
+  // N/A", not "gap we owe":
+  //   forbidden_geography_id — a stop_times row carrying stop_id AND
+  //     location_id/location_group_id. materializeFlex writes exactly one
+  //     reference per row, and gtfsParse routes a row to EITHER the fixed-route
+  //     stopTimes slice OR the flex slice, never both.
+  'forbidden_geography_id',
+  //   forbidden_arrival_or_departure_time — a windowed flex row with
+  //     arrival_time/departure_time. Our flex rows never carry times, and the
+  //     parser doesn't retain them on a flex row.
+  'forbidden_arrival_or_departure_time',
+  //   missing_stop_times_record — travel within one location needs TWO
+  //     stop_times rows. The exporter always duplicates the reference at
+  //     stop_sequence 1 and 2, and a FlexZone has no way to express "one row".
+  'missing_stop_times_record',
+  //   location_without_stop_time / location_group_without_stop_time — an orphan
+  //     location nothing references. The exporter writes locations.geojson and
+  //     location_groups.txt ONLY from zones that materialized a trip.
+  'location_without_stop_time',
+  'location_group_without_stop_time',
+  //   missing_prior_notice_duration_min / forbidden_* on an INVALID booking_type
+  //     value: we flag the bad booking_type itself (flex_invalid_booking_type)
+  //     and stop, rather than cascading every conditional rule off a value that
+  //     has no defined semantics.
+  //
+  //   location_with_unexpected_stop_time — a stop_times row that references a
+  //     location AND carries arrival/departure times. Same structural N/A as
+  //     forbidden_arrival_or_departure_time above; observed on the bundled
+  //     sample-gtfs-feed fixture, which does carry locations.geojson.
+  'location_with_unexpected_stop_time',
+
+  // ── Canonical rules we deliberately do NOT implement ───────────────────
+  // unexpected_enum_value fires on our flex routes' `route_type: 715` (verified
+  // against v8.0.1: fieldName "route_type", fieldValue 715). 715 = "Demand and
+  // Response Bus Service" in the Google extended route types, which is the
+  // correct value for a flex route; MobilityData v8's enum check only accepts
+  // the base 0-12 set. This is THEIR gap, not ours — do not "fix" it by
+  // downgrading 715 to 3.
+  'unexpected_enum_value',
+  // Feed-level metadata hygiene our exporter doesn't populate (feed_info.txt
+  // contact fields, short-name length). Not flex-specific.
+  'missing_feed_contact_email_and_url',
+  'route_short_name_too_long',
 ];

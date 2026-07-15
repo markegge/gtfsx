@@ -23,10 +23,12 @@ export const billingRouter = new Hono<AppContext>();
 billingRouter.get('/plans', async (c) => {
   // Public catalog used by /pricing. Doesn't include Price IDs (those are
   // worker-side) — only display copy and amounts.
-  return c.json({
-    plans: PLAN_CATALOG,
-    billingEnabled: c.env.BILLING_ENABLED === 'true',
-  });
+  //
+  // Used to also return a `billingEnabled` flag mirroring the BILLING_ENABLED
+  // var, which /pricing used to grey out checkout. Both were removed on
+  // 2026-07-12 (legacy). Checkout is always offered; an environment with no
+  // Stripe secret still fails safe via billingReady() → 503.
+  return c.json({ plans: PLAN_CATALOG });
 });
 
 // Webhook endpoint. NO auth middleware here — the signature header is the auth.
@@ -163,12 +165,12 @@ export async function recordCheckoutStarted(
   }
 }
 
-// Self-serve checkout supports the two flat-priced plans (Pro on the user,
-// Agency on the org — DB id 'agency'). Enterprise is sales-led.
+// Self-serve checkout supports the single flat-priced plan (Planner — DB id
+// 'agency', billed to an org). Enterprise is sales-led.
 const checkoutSchema = z.object({
   ownerType: z.enum(['user', 'org']),
   ownerId: z.string().min(1),
-  plan: z.enum(['pro', 'agency']),
+  plan: z.enum(['agency']),
   interval: z.enum(['month', 'year']),
 });
 
@@ -220,49 +222,35 @@ billingRouter.post('/checkout', async (c) => {
   //   - user/self: must match c.var.user.id
   //   - org: must be admin or owner of the org
   if (body.ownerType === 'user') {
-    if (body.ownerId !== user.id) throw forbidden('Cannot start checkout for another user.');
-    // Pro is billed to the user; Agency (DB id 'agency') needs an org.
-    if (body.plan === 'agency') {
-      throw validationFailed('Agency plans must be billed to an organization.');
-    }
-  } else {
-    await requireOrgRole(c.env, user, body.ownerId, 'admin');
-    if (body.plan === 'pro') {
-      throw validationFailed('Pro plans must be billed to a user, not an organization.');
-    }
+    // Planner (DB id 'agency') is always billed to an organization.
+    throw validationFailed('Planner plans must be billed to an organization.');
   }
+  await requireOrgRole(c.env, user, body.ownerId, 'admin');
 
   const interval: Interval = body.interval;
-  // Agency (DB id 'agency') is flat-priced with unlimited seats, so every
+  // Planner (DB id 'agency') is flat-priced with unlimited seats, so every
   // self-serve checkout is quantity=1; Stripe quantity does not track seats.
   const quantity = 1;
 
   const priceId = resolvePriceId(c.env, body.plan, interval);
   const stripe = getStripe(c.env);
 
-  // Reuse the existing Stripe Customer for this owner if there is one.
+  // Reuse the existing Stripe Customer for this org if there is one.
   const existingCustomerId = await loadStripeCustomerId(c.env, body.ownerType, body.ownerId);
   let customerId = existingCustomerId;
 
-  // The post-checkout redirect needs to land on the billing page that shows
-  // the *plan that was just upgraded*. For user subscriptions that's
-  // /account/billing; for org subscriptions it's the org's billing page,
-  // which is keyed by slug.
-  let orgSlug: string | null = null;
-  if (body.ownerType === 'org') {
-    orgSlug = await loadOrgSlug(c.env, body.ownerId);
-  }
-  const billingPath =
-    body.ownerType === 'org' && orgSlug
-      ? `/orgs/${encodeURIComponent(orgSlug)}/billing`
-      : '/account/billing';
+  // The post-checkout redirect needs to land on the org's billing page, which
+  // is keyed by slug.
+  const orgSlug = await loadOrgSlug(c.env, body.ownerId);
+  const billingPath = orgSlug
+    ? `/orgs/${encodeURIComponent(orgSlug)}/billing`
+    : '/account/billing';
 
   let session: Awaited<ReturnType<typeof stripe.checkout.sessions.create>>;
   try {
     if (!customerId) {
       const customer = await stripe.customers.create({
-        email: body.ownerType === 'user' ? user.email : undefined,
-        name: body.ownerType === 'user' ? user.displayName : await loadOrgName(c.env, body.ownerId),
+        name: await loadOrgName(c.env, body.ownerId),
         metadata: {
           owner_type: body.ownerType,
           owner_id: body.ownerId,
@@ -270,15 +258,9 @@ billingRouter.post('/checkout', async (c) => {
         },
       });
       customerId = customer.id;
-      if (body.ownerType === 'user') {
-        await c.env.DB.prepare(`UPDATE user SET stripe_customer_id = ?, updated_at = ? WHERE id = ?`)
-          .bind(customerId, Date.now(), user.id)
-          .run();
-      } else {
-        await c.env.DB.prepare(`UPDATE organization SET stripe_customer_id = ? WHERE id = ?`)
-          .bind(customerId, body.ownerId)
-          .run();
-      }
+      await c.env.DB.prepare(`UPDATE organization SET stripe_customer_id = ? WHERE id = ?`)
+        .bind(customerId, body.ownerId)
+        .run();
     }
 
     session = await stripe.checkout.sessions.create({
@@ -302,12 +284,11 @@ billingRouter.post('/checkout', async (c) => {
           // delivers a Subscription, not a checkout session.
           initiated_by_user_id: user.id,
         },
-        // 14-day free trial on Agency (internal id 'agency'). Card up front
+        // 14-day free trial on Planner (internal id 'agency'). Card up front
         // per Stripe defaults — payment fails closed at trial end if the
         // card is invalid (Stripe pauses the subscription and emits
-        // invoice.payment_failed which the existing handler logs). No trial
-        // on Pro — its value is testable in an hour on the Free tier already.
-        ...(body.plan === 'agency' ? { trial_period_days: 14 } : {}),
+        // invoice.payment_failed which the existing handler logs).
+        trial_period_days: 14,
       },
       success_url: `${c.env.APP_ORIGIN}${billingPath}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${c.env.APP_ORIGIN}${billingPath}?checkout=canceled`,

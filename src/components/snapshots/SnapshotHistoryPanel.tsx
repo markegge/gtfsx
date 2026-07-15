@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useStore } from '../../store';
 import { AuthButton } from '../auth/AuthButton';
 import { FormField } from '../ui/FormField';
+import { Modal } from '../ui/Modal';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Badge } from '../ui/Badge';
 import {
   deleteSnapshot,
@@ -206,7 +208,7 @@ export function SnapshotHistoryPanel() {
 
       <div className="flex-1 overflow-auto">
         {loading && snapshotList.length === 0 ? (
-          <div className="p-4 text-sm text-warm-gray">Loading…</div>
+          <p className="p-4 text-sm text-warm-gray">Loading…</p>
         ) : snapshotList.length === 0 ? (
           <div className="p-4 text-sm text-warm-gray">
             No saved snapshots yet. Click "Save snapshot" to capture the current feed.
@@ -274,7 +276,7 @@ export function SnapshotHistoryPanel() {
       {showSave && <SaveSnapshotDialog onSave={handleSaveSnapshot} onCancel={() => setShowSave(false)} busy={busy} />}
 
       {restoreTarget && (
-        <ConfirmModal
+        <ConfirmDialog
           title="Restore this snapshot?"
           body={`This will replace your current working draft with "${restoreTarget.label || restoreTarget.id.slice(0, 8)}". Your current draft will be lost unless you save it as a snapshot first.`}
           confirmLabel="Restore"
@@ -285,7 +287,7 @@ export function SnapshotHistoryPanel() {
       )}
 
       {deleteTarget && (
-        <ConfirmModal
+        <ConfirmDialog
           title="Delete snapshot?"
           body={`"${deleteTarget.label || deleteTarget.id.slice(0, 8)}" will be permanently removed.`}
           confirmLabel="Delete"
@@ -323,65 +325,31 @@ function SaveSnapshotDialog({
   // over the pre-selected text for a custom label.
   const [label, setLabel] = useState(defaultSnapshotLabel);
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={onCancel} />
-      <div className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-md mx-4">
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-2">Save snapshot</h3>
-        <p className="text-sm text-warm-gray mb-3">
-          Captures the current feed state. Snapshots are immutable once saved.
-        </p>
-        <FormField
-          label="Label"
-          value={label}
-          onChange={setLabel}
-          placeholder="e.g. March 2026 service change"
-          autoFocus
-        />
-        <div className="flex justify-end gap-2 mt-2">
+    <Modal
+      open
+      onClose={onCancel}
+      dismissable={!busy}
+      maxWidthClassName="max-w-md"
+      title="Save snapshot"
+      description="Captures the current feed state. Snapshots are immutable once saved."
+      footer={
+        <>
           <AuthButton variant="secondary" onClick={onCancel} disabled={busy}>
             Cancel
           </AuthButton>
           <AuthButton onClick={() => onSave(label)} disabled={busy}>
             {busy ? 'Saving…' : 'Save'}
           </AuthButton>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmModal({
-  title,
-  body,
-  confirmLabel,
-  onConfirm,
-  onCancel,
-  busy,
-  danger,
-}: {
-  title: string;
-  body: string;
-  confirmLabel: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-  busy: boolean;
-  danger?: boolean;
-}) {
-  return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={onCancel} />
-      <div className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-sm mx-4">
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-2">{title}</h3>
-        <p className="text-sm text-warm-gray mb-5">{body}</p>
-        <div className="flex justify-end gap-2">
-          <AuthButton variant="secondary" onClick={onCancel} disabled={busy}>
-            Cancel
-          </AuthButton>
-          <AuthButton variant={danger ? 'danger' : 'primary'} onClick={onConfirm} disabled={busy}>
-            {busy ? 'Working…' : confirmLabel}
-          </AuthButton>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <FormField
+        label="Label"
+        value={label}
+        onChange={setLabel}
+        placeholder="e.g. March 2026 service change"
+        autoFocus
+      />
+    </Modal>
   );
 }

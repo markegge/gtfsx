@@ -31,6 +31,9 @@ export function StopList() {
   const selectStop = useStore((s) => s.selectStop);
   const setMapStopFilter = useStore((s) => s.setMapStopFilter);
   const removeStop = useStore((s) => s.removeStop);
+  const hiddenStopIds = useStore((s) => s.hiddenStopIds);
+  const toggleStopVisibility = useStore((s) => s.toggleStopVisibility);
+  const setHiddenStopIds = useStore((s) => s.setHiddenStopIds);
 
   const [routeFilter, setRouteFilter] = useState<string>('');
   const [directionFilter, setDirectionFilter] = useState<DirectionFilter>('both');
@@ -174,6 +177,7 @@ export function StopList() {
     for (const id of ids) removeStop(id);
     setConfirmingDelete(false);
     setEditingStopId(null);
+    selectStop(null);
   };
 
   const openStopEditor = (stopId: string) => {
@@ -216,6 +220,7 @@ export function StopList() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Filter stops…"
+          aria-label="Filter stops"
           className="w-full px-2.5 py-1.5 border-2 border-sand rounded-lg text-xs bg-cream focus:outline-none focus:border-coral"
         />
         <div>
@@ -351,31 +356,67 @@ export function StopList() {
             <span className="text-[11px] font-semibold text-warm-gray uppercase tracking-wide">
               Stops ({sortedStops.length}{stops.length !== sortedStops.length ? ` of ${stops.length}` : ''})
             </span>
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide">
+              <button
+                type="button"
+                onClick={() => setHiddenStopIds([])}
+                className="hover:text-coral transition-colors"
+                title="Show all stops on the map"
+              >
+                Show all
+              </button>
+              <span className="text-sand" aria-hidden>·</span>
+              <button
+                type="button"
+                onClick={() => setHiddenStopIds(sortedStops.map((s) => s.stop_id))}
+                className="hover:text-coral transition-colors"
+                title="Hide all stops from the map"
+              >
+                Hide all
+              </button>
+            </div>
           </div>
           <div className="flex flex-col gap-0.5">
-            {sortedStops.map((stop) => (
-              <button
-                key={stop.stop_id}
-                onClick={() => openStopEditor(stop.stop_id)}
-                className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg transition-colors text-left hover:bg-cream group"
-              >
-                <div
-                  className="w-2.5 h-2.5 rounded-full border-2 shrink-0"
-                  style={{ borderColor: '#E8734A', backgroundColor: 'white' }}
-                />
-                <div className="flex flex-col min-w-0 flex-1">
-                  <span className="text-xs font-medium text-dark-brown truncate">
-                    {stop.stop_name || 'Unnamed Stop'}
+            {sortedStops.map((stop) => {
+              const isHidden = hiddenStopIds.includes(stop.stop_id);
+              return (
+                <button
+                  key={stop.stop_id}
+                  onClick={() => openStopEditor(stop.stop_id)}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg transition-colors text-left hover:bg-cream group"
+                >
+                  {/* Dot — click to toggle stop visibility on the map */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleStopVisibility(stop.stop_id);
+                    }}
+                    className={`w-2.5 h-2.5 rounded-full border-2 shrink-0 transition-all ${
+                      isHidden
+                        ? 'opacity-40 hover:opacity-70'
+                        : 'opacity-100 hover:scale-110'
+                    }`}
+                    style={{
+                      borderColor: '#E8734A',
+                      backgroundColor: isHidden ? 'transparent' : 'white',
+                    }}
+                    title={isHidden ? 'Show on map' : 'Hide from map'}
+                  />
+                  <div className={`flex flex-col min-w-0 flex-1 transition-opacity ${isHidden ? 'opacity-40' : ''}`}>
+                    <span className="text-xs font-medium text-dark-brown truncate">
+                      {stop.stop_name || 'Unnamed Stop'}
+                    </span>
+                    {stop.stop_code && (
+                      <span className="text-[10px] text-warm-gray">Code: {stop.stop_code}</span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-warm-gray opacity-0 group-hover:opacity-100 transition-opacity">
+                    Edit →
                   </span>
-                  {stop.stop_code && (
-                    <span className="text-[10px] text-warm-gray">Code: {stop.stop_code}</span>
-                  )}
-                </div>
-                <span className="text-[10px] text-warm-gray opacity-0 group-hover:opacity-100 transition-opacity">
-                  Edit →
-                </span>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
 
           <div className="mt-3 pt-3 border-t border-sand">

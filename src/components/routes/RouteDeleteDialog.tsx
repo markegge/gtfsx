@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../../store';
+import { Modal } from '../ui/Modal';
+import { AuthButton } from '../auth/AuthButton';
 
 export function RouteDeleteDialog() {
   const routeId = useStore((s) => s.routeDeleteConfirmId);
@@ -47,87 +49,78 @@ export function RouteDeleteDialog() {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={close}>
-      <div
-        className="bg-white rounded-xl shadow-lg p-5 max-w-sm mx-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
-          Delete "{route.route_short_name || route.route_long_name || 'Untitled Route'}"?
-        </h3>
-        {deleteInfo.tripCount > 0 && (
-          <>
-            <p className="text-sm text-warm-gray mb-2">This will also delete:</p>
-            <ul className="text-sm text-dark-brown mb-3 space-y-1">
-              <li>
-                • {deleteInfo.tripCount} trip{deleteInfo.tripCount !== 1 ? 's' : ''} and their stop times
-              </li>
-            </ul>
-          </>
-        )}
-
-        {deleteInfo.uniqueStops.length > 0 && (
-          <div className="mb-4 p-3 rounded-lg bg-cream border border-sand">
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={deleteOrphanedStops}
-                onChange={(e) => setDeleteOrphanedStops(e.target.checked)}
-                className="mt-0.5 rounded"
-              />
-              <span className="text-sm text-dark-brown">
-                <span className="font-semibold">
-                  Also delete {deleteInfo.uniqueStops.length} orphaned stop
-                  {deleteInfo.uniqueStops.length !== 1 ? 's' : ''}
-                </span>
-                <span className="block text-xs text-warm-gray mt-0.5">
-                  {deleteOrphanedStops
-                    ? 'These stops are not used by any other route and will be removed.'
-                    : 'These stops will stay in stops.txt without a route — useful if you plan to reassign them.'}
-                </span>
-              </span>
-            </label>
-            <div className="ml-6 mt-2 max-h-24 overflow-y-auto">
-              {deleteInfo.uniqueStops.slice(0, 10).map((s) => (
-                <div key={s.stop_id} className="text-xs text-warm-gray">
-                  {s.stop_name || s.stop_id}
-                </div>
-              ))}
-              {deleteInfo.uniqueStops.length > 10 && (
-                <div className="text-xs text-warm-gray italic">
-                  …and {deleteInfo.uniqueStops.length - 10} more
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        <label className="flex items-center gap-2 text-xs text-warm-gray mb-4 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={dontWarnDelete}
-            onChange={(e) => setDontWarnDelete(e.target.checked)}
-            className="rounded"
-          />
-          Don't warn me again
-        </label>
-
-        <div className="flex gap-2">
-          <button
-            onClick={close}
-            className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-cream transition-colors"
-          >
+    <Modal
+      open
+      onClose={close}
+      title={`Delete "${route.route_short_name || route.route_long_name || 'Untitled Route'}"?`}
+      footer={
+        <>
+          <AuthButton variant="secondary" onClick={close}>
             Cancel
-          </button>
-          <button
-            onClick={executeDelete}
-            className="flex-1 px-3 py-2 bg-red-500 text-white rounded-lg font-heading font-bold text-sm hover:bg-red-600 transition-colors"
-          >
+          </AuthButton>
+          <AuthButton variant="danger" onClick={executeDelete}>
             Delete
-          </button>
+          </AuthButton>
+        </>
+      }
+    >
+      {deleteInfo.tripCount > 0 && (
+        <>
+          <p className="text-sm text-warm-gray mb-2">This will also delete:</p>
+          <ul className="text-sm text-dark-brown mb-3 space-y-1">
+            <li>
+              • {deleteInfo.tripCount} trip{deleteInfo.tripCount !== 1 ? 's' : ''} and their stop times
+            </li>
+          </ul>
+        </>
+      )}
+
+      {deleteInfo.uniqueStops.length > 0 && (
+        <div className="mb-4 p-3 rounded-lg bg-cream border border-sand">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={deleteOrphanedStops}
+              onChange={(e) => setDeleteOrphanedStops(e.target.checked)}
+              className="mt-0.5 rounded"
+            />
+            <span className="text-sm text-dark-brown">
+              <span className="font-semibold">
+                Also delete {deleteInfo.uniqueStops.length} orphaned stop
+                {deleteInfo.uniqueStops.length !== 1 ? 's' : ''}
+              </span>
+              <span className="block text-xs text-warm-gray mt-0.5">
+                {deleteOrphanedStops
+                  ? 'These stops are not used by any other route and will be removed.'
+                  : 'These stops will stay in stops.txt without a route — useful if you plan to reassign them.'}
+              </span>
+            </span>
+          </label>
+          <div className="ml-6 mt-2 max-h-24 overflow-y-auto">
+            {deleteInfo.uniqueStops.slice(0, 10).map((s) => (
+              <div key={s.stop_id} className="text-xs text-warm-gray">
+                {s.stop_name || s.stop_id}
+              </div>
+            ))}
+            {deleteInfo.uniqueStops.length > 10 && (
+              <div className="text-xs text-warm-gray italic">
+                …and {deleteInfo.uniqueStops.length - 10} more
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+
+      <label className="flex items-center gap-2 text-xs text-warm-gray cursor-pointer">
+        <input
+          type="checkbox"
+          checked={dontWarnDelete}
+          onChange={(e) => setDontWarnDelete(e.target.checked)}
+          className="rounded"
+        />
+        Don't warn me again
+      </label>
+    </Modal>
   );
 }
 

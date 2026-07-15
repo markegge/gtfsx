@@ -11,7 +11,7 @@ import {
   type OwnerBillingState,
 } from '../../services/billingApi';
 import { ApiError } from '../../services/authApi';
-import { billingEnabled } from '../../utils/featureFlags';
+import { planDisplayName } from './planConfig';
 import { TestModeBanner } from './TestModeBanner';
 
 function formatDate(ms: number | null | undefined): string {
@@ -176,7 +176,9 @@ export function AccountBillingPage() {
             <span>
               {confirmingPlan
                 ? 'Thanks — Stripe confirms payment. Waiting for the subscription to activate…'
-                : `You’re now on ${state?.plan ?? 'your new'} plan.`}
+                : state
+                  ? `You’re now on the ${planDisplayName(state.plan)} plan.`
+                  : 'You’re now on your new plan.'}
             </span>
           </div>
         )}
@@ -227,28 +229,23 @@ export function AccountBillingPage() {
                   <AuthButton
                     variant="secondary"
                     onClick={handleManage}
-                    disabled={openingPortal || !billingEnabled}
+                    disabled={openingPortal}
                   >
                     {openingPortal ? 'Opening…' : 'Manage billing'}
                   </AuthButton>
                 ) : null}
                 {state.plan === 'free' && (
-                  <AuthButton onClick={() => navigate('/pricing')} disabled={!billingEnabled}>
+                  <AuthButton onClick={() => navigate('/pricing')}>
                     Upgrade
                   </AuthButton>
                 )}
                 {state.plan !== 'free' && state.plan !== 'enterprise' && (
-                  <AuthButton variant="secondary" onClick={() => navigate('/pricing')} disabled={!billingEnabled}>
+                  <AuthButton variant="secondary" onClick={() => navigate('/pricing')}>
                     Change plan
                   </AuthButton>
                 )}
               </div>
             </div>
-            {!billingEnabled && (
-              <p className="mt-3 text-xs text-amber-700">
-                Billing actions are temporarily disabled in this environment. Self-serve checkout will return shortly.
-              </p>
-            )}
           </section>
         )}
 

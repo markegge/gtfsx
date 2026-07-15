@@ -12,9 +12,9 @@ import { useStore } from './store';
 import { importGtfsZip, loadImportIntoStore } from './services/gtfsImport';
 import { NotFoundPage } from './components/misc/NotFoundPage';
 import { ConflictDialog } from './components/snapshots/ConflictDialog';
+import { Banner } from './components/ui/Banner';
 import { ImpersonationBanner } from './components/admin/ImpersonationBanner';
 import { RtBreakageDialog } from './components/distribution/RtBreakageDialog';
-import { backendEnabled } from './utils/featureFlags';
 import { captureGclidFromUrl, captureRefFromUrl, trackPageview } from './services/trackBeacon';
 
 // Route-level code splitting. The homepage (`/`) renders the editor, so its
@@ -28,7 +28,6 @@ const MagicLinkPage = lazy(() => import('./components/auth/MagicLinkPage').then(
 const ResetPasswordPage = lazy(() => import('./components/auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
 const ChangeEmailPage = lazy(() => import('./components/auth/ChangeEmailPage').then((m) => ({ default: m.ChangeEmailPage })));
 const AccountSettingsPage = lazy(() => import('./components/auth/AccountSettingsPage').then((m) => ({ default: m.AccountSettingsPage })));
-const BackendDisabledPage = lazy(() => import('./components/misc/BackendDisabledPage').then((m) => ({ default: m.BackendDisabledPage })));
 const MyFeedsPage = lazy(() => import('./components/feeds/MyFeedsPage').then((m) => ({ default: m.MyFeedsPage })));
 const AdminDashboardPage = lazy(() => import('./components/admin/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
 const AdminUsersPage = lazy(() => import('./components/admin/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })));
@@ -110,7 +109,7 @@ function EditorRoute({ demo = false }: { demo?: boolean }) {
   // org, then came back to "continue editing."
   useEffect(() => {
     if (demo) return;
-    if (!backendEnabled || !authChecked || !currentUser) return;
+    if (!authChecked || !currentUser) return;
     const sid = useStore.getState().projectId;
     if (!sid) return;
     const match = feedsProjects.find((p) => p.id === sid);
@@ -139,7 +138,6 @@ function EditorRoute({ demo = false }: { demo?: boolean }) {
   // ?save=1. Show the Save-As dialog as long as the param is present and
   // auth is hydrated; closing the dialog strips the param.
   const showSaveAs =
-    backendEnabled &&
     authChecked &&
     !!currentUser &&
     searchParams.get('save') === '1';
@@ -268,25 +266,15 @@ function ServerEditorRoute() {
   return (
     <div className="h-full flex flex-col">
       {locked && (
-        <div className="shrink-0 px-4 py-2 bg-gold-light text-amber-700 text-sm flex items-center gap-2 border-b border-amber-200">
-          <span aria-hidden>🔒</span>
-          <span className="flex-1">
-            Locked — changes won't be saved here. Use <strong>Save As</strong> to fork
-            this feed, or unlock it from the feed list to edit.
-          </span>
-        </div>
+        <Banner variant="warning" icon="🔒">
+          Locked — changes won't be saved here. Use <strong>Save As</strong> to fork
+          this feed, or unlock it from the feed list to edit.
+        </Banner>
       )}
       {restoredBanner && (
-        <div className="shrink-0 px-4 py-2 bg-teal-light text-teal text-sm flex items-center gap-3">
-          <span className="flex-1">{restoredBanner}</span>
-          <button
-            onClick={() => setRestoredBanner(null)}
-            className="w-7 h-7 rounded-md hover:bg-white/50"
-            aria-label="Dismiss"
-          >
-            ×
-          </button>
-        </div>
+        <Banner variant="info" onDismiss={() => setRestoredBanner(null)}>
+          {restoredBanner}
+        </Banner>
       )}
       <div className="flex-1 min-h-0">
         <AppShell />
@@ -301,11 +289,9 @@ function ServerEditorRoute() {
 
 function App() {
   useEffect(() => {
-    if (backendEnabled) {
-      useStore.getState().hydrateAuth().catch(() => {});
-      captureRefFromUrl();
-      captureGclidFromUrl();
-    }
+    useStore.getState().hydrateAuth().catch(() => {});
+    captureRefFromUrl();
+    captureGclidFromUrl();
   }, []);
 
   useEffect(() => {
@@ -319,36 +305,6 @@ function App() {
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
-
-  if (!backendEnabled) {
-    return (
-      <BrowserRouter>
-        <Suspense fallback={<RouteFallback />}>
-        <Routes>
-          <Route path="/" element={<EditorRoute />} />
-          <Route path="/editor" element={<EditorRoute />} />
-          <Route path="/demo" element={<EditorRoute demo />} />
-          <Route path="/import" element={<DeepLinkImportPage />} />
-          <Route path="/pricing" element={<PricingPage />} />
-          <Route path="/help" element={<HelpPage />} />
-          <Route path="/login" element={<BackendDisabledPage />} />
-          <Route path="/signup" element={<BackendDisabledPage />} />
-          <Route path="/feeds" element={<BackendDisabledPage />} />
-          <Route path="/feeds/*" element={<BackendDisabledPage />} />
-          <Route path="/community" element={<BackendDisabledPage />} />
-          <Route path="/community/*" element={<BackendDisabledPage />} />
-          <Route path="/account" element={<BackendDisabledPage />} />
-          <Route path="/account/*" element={<BackendDisabledPage />} />
-          <Route path="/verify-email" element={<BackendDisabledPage />} />
-          <Route path="/magic-link" element={<BackendDisabledPage />} />
-          <Route path="/reset-password" element={<BackendDisabledPage />} />
-          <Route path="/change-email" element={<BackendDisabledPage />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-        </Suspense>
-      </BrowserRouter>
-    );
-  }
 
   return (
     <BrowserRouter>

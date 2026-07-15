@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../../store';
 import { getMyForumProfile, patchMyForumProfile } from '../../services/forumApi';
+import { Modal } from '../ui/Modal';
+import { AuthButton } from '../auth/AuthButton';
 
 // Sticky modal — appears on first visit to any /community/* page for any
 // authed user without a forum display name set. The user can dismiss it,
@@ -81,51 +83,42 @@ export function DisplayNameGate({ children }: { children: React.ReactNode }) {
     <>
       {children}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={handleDismiss} aria-hidden />
-          <div className="relative bg-white rounded-xl shadow-lg p-6 max-w-md w-[90%] mx-4">
-            <h2 className="font-heading font-bold text-lg text-dark-brown mb-1">Pick your community name</h2>
-            <p className="text-sm text-warm-gray mb-4">
-              This is how you'll appear on posts and replies. You can change it later in your profile.
-            </p>
-            <form onSubmit={handleSubmit}>
-              <input
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your display name"
-                maxLength={40}
-                disabled={submitting}
-                className="w-full px-3 py-2 border border-sand rounded-lg text-sm outline-none focus:border-coral mb-3"
-              />
-              {error && (
-                <div className="px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs mb-3">
-                  {error}
-                </div>
-              )}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleDismiss}
-                  disabled={submitting}
-                  className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors disabled:opacity-50"
-                >
-                  Skip for now
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting || name.trim().length < 2}
-                  className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50"
-                >
-                  {submitting ? 'Saving…' : 'Set name'}
-                </button>
+        <Modal
+          open
+          onClose={handleDismiss}
+          showClose={false}
+          maxWidthClassName="max-w-md"
+          title="Pick your community name"
+          description="This is how you'll appear on posts and replies. You can change it later in your profile."
+        >
+          <form onSubmit={handleSubmit}>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Your display name"
+              maxLength={40}
+              disabled={submitting}
+              className="w-full px-3 py-2 border border-sand rounded-lg text-sm outline-none focus:border-coral mb-3"
+            />
+            {error && (
+              <div className="px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs mb-3">
+                {error}
               </div>
-              <p className="text-[11px] text-warm-gray mt-3">
-                Posting and upvoting are blocked until you pick a name.
-              </p>
-            </form>
-          </div>
-        </div>
+            )}
+            <div className="flex gap-2">
+              <AuthButton type="button" variant="secondary" fullWidth onClick={handleDismiss} disabled={submitting}>
+                Skip for now
+              </AuthButton>
+              <AuthButton type="submit" fullWidth disabled={submitting || name.trim().length < 2}>
+                {submitting ? 'Saving…' : 'Set name'}
+              </AuthButton>
+            </div>
+            <p className="text-[11px] text-warm-gray mt-3">
+              Posting and upvoting are blocked until you pick a name.
+            </p>
+          </form>
+        </Modal>
       )}
     </>
   );

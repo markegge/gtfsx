@@ -21,7 +21,8 @@ import { importGtfsZip, loadImportIntoStore } from './src/services/gtfsImport';
 import { exportGtfsZip } from './src/services/gtfsExport';
 import { runValidation } from './src/services/validation';
 import { groupValidationMessages } from './src/services/validationGrouping';
-import { applyValidationFixBatch } from './src/services/validationFixes';
+import { applyValidationFixBatch, applyWheelchairFill } from './src/services/validationFixes';
+import type { StopTime } from './src/types/gtfs';
 import {
   computeStopSpacing, computeBalancingCandidates, computeServiceIntensity,
   computeAccessibilityAudit, representativeDay,
@@ -114,6 +115,64 @@ async function buildBundleFixtureZip(): Promise<Buffer> {
     'T_FREQ,06:00:00,09:00:00,600,\n' +
     'T_FREQ,15:00:00,19:00:00,1200,1\n');
   return zip.generateAsync({ type: 'nodebuffer' });
+}
+
+/**
+ * Minimal MULTI-agency feed for the `external_id` custom column on agency.txt
+ * (an agency's NTD ID, in the US). `externalIds` supplies the per-agency values
+ * — one entry per agency, null for a blank cell. Omit it entirely and agency.txt
+ * carries no `external_id` column at all.
+ *
+ * The values used in the tests are deliberately leading-zero strings ("01234"):
+ * an external ID is a STRING and a Number() coercion anywhere would silently
+ * destroy it.
+ */
+async function buildExternalIdFixtureZip(externalIds?: (string | null)[]): Promise<Buffer> {
+  const AGENCIES = [
+    ['A1', 'Valley Transit', 'https://valley.example'],
+    ['A2', 'Ridge Transit', 'https://ridge.example'],
+  ];
+  const withColumn = externalIds !== undefined;
+  const zip = new JSZip();
+  let agencyCsv =
+    `agency_id,agency_name,agency_url,agency_timezone${withColumn ? ',external_id' : ''}\n`;
+  AGENCIES.forEach(([id, name, url], i) => {
+    const ext = withColumn ? `,${externalIds![i] ?? ''}` : '';
+    agencyCsv += `${id},${name},${url},America/Denver${ext}\n`;
+  });
+  zip.file('agency.txt', agencyCsv);
+  zip.file('routes.txt',
+    'route_id,agency_id,route_short_name,route_long_name,route_type\n' +
+    'R1,A1,1,Main Line,3\n');
+  zip.file('stops.txt',
+    'stop_id,stop_name,stop_lat,stop_lon\n' +
+    'S1,First St,45.6770,-111.0429\n' +
+    'S2,Second St,45.6800,-111.0400\n');
+  zip.file('calendar.txt',
+    'service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n' +
+    'WKDY,1,1,1,1,1,0,0,20260101,20271231\n');
+  zip.file('trips.txt',
+    'route_id,service_id,trip_id\n' +
+    'R1,WKDY,T1\n');
+  zip.file('stop_times.txt',
+    'trip_id,arrival_time,departure_time,stop_id,stop_sequence\n' +
+    'T1,08:00:00,08:00:00,S1,1\n' +
+    'T1,08:10:00,08:10:00,S2,2\n');
+  return zip.generateAsync({ type: 'nodebuffer' });
+}
+
+/** Read one file out of an exported zip Blob as text. */
+async function readExportedFile(blob: Blob, name: string): Promise<string> {
+  const z = await JSZip.loadAsync(Buffer.from(await blob.arrayBuffer()));
+  const entry = z.file(name);
+  if (!entry) throw new Error(`${name} missing from export`);
+  return entry.async('string');
+}
+
+/** Column names from a CSV's header row. PapaParse unparses with CRLF endings,
+ *  so the trailing cell carries a \r — split on /\r?\n/ and trim. */
+function headerColumns(csv: string): string[] {
+  return csv.split(/\r?\n/)[0].split(',').map((c) => c.trim());
 }
 
 let passed = 0;
@@ -890,10 +949,11 @@ async function main() {
   assert('export: 4 location_group_stops rows',
     (locGroupStopsTxt.trim().split('\n').length - 1) === 4, locGroupStopsTxt);
   // The mixed zone's trip carries BOTH a location_id row and a
-  // location_group_id row (two flex stop_times on the same trip).
+  // location_group_id row (two flex stop_times on the same trip). The whole zone
+  // is one location, so the location_id is the zone id itself.
   const mixedStopTimeRows = stopTimesTxt.split('\n').filter(l => l.startsWith('zmixed-trip,'));
   assert('export: mixed zone has 2 flex stop_times rows', mixedStopTimeRows.length === 2, `got ${mixedStopTimeRows.length}`);
-  assert('export: mixed has a location_id row', mixedStopTimeRows.some(r => r.includes('zmixed-0')));
+  assert('export: mixed has a location_id row', mixedStopTimeRows.some(r => r.split(',').includes('zmixed')));
   assert('export: mixed has a location_group_id row', mixedStopTimeRows.some(r => r.includes('zmixed-group')));
 
   // Round-trip: re-import and confirm all three zones reconstruct with the
@@ -1331,6 +1391,240 @@ async function main() {
 
     s().setTrips([]);
     s().setStopTimes([]);
+  }
+
+  // ---- PHASE 27: validation fix recipes ----
+  // Covers fill-missing-wheelchair, remove-orphan-trips, and delete-unused-stop.
+  // Each recipe is tested for: message carries the fix id, fix executes and
+  // mutates state, re-validation clears the warning (or confirms expected
+  // behavior), and the undo closure reverses the mutation.
+  console.log('\nPhase 27: validation fix recipes (wheelchair / orphan-trips / unused-stop)');
+  {
+    // ── 27a: fill-missing-wheelchair ──────────────────────────────────────────
+    // WC1 has no wheelchair_boarding (flagged). WC2 has wheelchair_boarding=1
+    // (fine — not touched). The fix sets WC1 to 0 (GTFS "no information").
+    // NOTE: the validation rule counts both undefined and 0 as "no info", so
+    // the warning persists after the 0-fill. The recipe's purpose is to mark
+    // stops as explicitly reviewed (value set), not to silence the warning —
+    // users then update individual stops to 1 or 2 via Stop Analysis.
+    s().setStops([
+      { stop_id: 'WC1', stop_name: 'WC1', stop_lat: 45.0, stop_lon: -111.0, location_type: 0 } as Stop,
+      { stop_id: 'WC2', stop_name: 'WC2', stop_lat: 45.1, stop_lon: -111.1, location_type: 0, wheelchair_boarding: 1 } as Stop,
+    ]);
+    s().setCalendars([{ service_id: 'WCSVC', monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 0, sunday: 0, start_date: '20270101', end_date: '20271231' }]);
+    s().setRoutes([{ route_id: 'WCR', agency_id: 'A1', route_short_name: 'W', route_long_name: 'WC Route', route_type: 3 }]);
+    s().setTrips([{ trip_id: 'WCT', route_id: 'WCR', service_id: 'WCSVC', direction_id: 0 }]);
+    s().setStopTimes([]);
+    s().setFrequencies([]);
+    s().setFlexZones([]);
+
+    const wcMsgs = runValidation(s()).filter((m) => m.message.includes('missing wheelchair_boarding'));
+    assert('27a: wheelchair warning fires', wcMsgs.length === 1, `got ${wcMsgs.length}`);
+    assert('27a: message carries fill-missing-wheelchair fix id', wcMsgs[0]?.fix?.id === 'fill-missing-wheelchair');
+
+    const wcResult = applyValidationFixBatch(wcMsgs);
+    assert('27a: fix reports changed', !!wcResult && wcResult.changed === true);
+    assert('27a: WC1 wheelchair_boarding set to 0', s().stops.find((x) => x.stop_id === 'WC1')?.wheelchair_boarding === 0);
+    assert('27a: WC2 (=1) not touched by fix', s().stops.find((x) => x.stop_id === 'WC2')?.wheelchair_boarding === 1);
+
+    // Undo: fillMissingWheelchairBoarding saves prev=0 for undefined inputs
+    // (Number.isFinite(undefined) = false → stored as 0). After undo WC1 gets 0.
+    wcResult!.undo();
+    assert('27a: undo runs; WC2 still = 1', s().stops.find((x) => x.stop_id === 'WC2')?.wheelchair_boarding === 1);
+
+    // 27a (picker): the validation panel's value picker calls applyWheelchairFill
+    // with the chosen value. Filling 1 (accessible) records the status AND clears
+    // the warning (unlike the 0-fill above). WC2 (already 1) is left alone.
+    const wcPick = applyWheelchairFill(1);
+    assert('27a-picker: fills the gap stop', wcPick.changed === true);
+    assert('27a-picker: WC1 now = 1 (accessible)', s().stops.find((x) => x.stop_id === 'WC1')?.wheelchair_boarding === 1);
+    const wcAfterPick = runValidation(s()).filter((m) => m.message.includes('missing wheelchair_boarding'));
+    assert('27a-picker: warning clears after filling 1', wcAfterPick.length === 0, wcAfterPick.map((m) => m.message).join('; '));
+    wcPick.undo();
+    assert('27a-picker: undo restores WC1 to no-info (flagged again)',
+      runValidation(s()).filter((m) => m.message.includes('missing wheelchair_boarding')).length === 1);
+
+    // ── 27b: remove-orphan-trips ──────────────────────────────────────────────
+    // ORPHAN_T references GHOST_SVC which has no calendar. The fix removes it
+    // plus its 2 stop_times and 1 frequency window. GOOD_T (valid service) must
+    // be untouched. Undo restores all removed rows.
+    s().setStops([
+      { stop_id: 'ORP_S1', stop_name: 'S1', stop_lat: 45.0, stop_lon: -111.0, location_type: 0, wheelchair_boarding: 1 },
+      { stop_id: 'ORP_S2', stop_name: 'S2', stop_lat: 45.1, stop_lon: -111.1, location_type: 0, wheelchair_boarding: 1 },
+    ]);
+    s().setCalendars([{ service_id: 'REAL_SVC', monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 0, sunday: 0, start_date: '20270101', end_date: '20271231' }]);
+    s().setRoutes([{ route_id: 'ORP_R', agency_id: 'A1', route_short_name: 'O', route_long_name: 'Orphan Route', route_type: 3 }]);
+    s().setTrips([
+      { trip_id: 'GOOD_T', route_id: 'ORP_R', service_id: 'REAL_SVC', direction_id: 0 },
+      { trip_id: 'ORPHAN_T', route_id: 'ORP_R', service_id: 'GHOST_SVC', direction_id: 0 },
+    ]);
+    s().setStopTimes([
+      { trip_id: 'GOOD_T', stop_id: 'ORP_S1', stop_sequence: 1, arrival_time: '08:00:00', departure_time: '08:00:00' },
+      { trip_id: 'GOOD_T', stop_id: 'ORP_S2', stop_sequence: 2, arrival_time: '08:10:00', departure_time: '08:10:00' },
+      { trip_id: 'ORPHAN_T', stop_id: 'ORP_S1', stop_sequence: 1, arrival_time: '09:00:00', departure_time: '09:00:00' },
+      { trip_id: 'ORPHAN_T', stop_id: 'ORP_S2', stop_sequence: 2, arrival_time: '09:10:00', departure_time: '09:10:00' },
+    ] as StopTime[]);
+    s().setFrequencies([
+      { trip_id: 'ORPHAN_T', start_time: '08:00:00', end_time: '12:00:00', headway_secs: 600 },
+    ]);
+    s().setFlexZones([]);
+    s().setRouteStops([]);
+
+    const orphanMsgs = runValidation(s()).filter((m) => m.message.includes('non-existent calendar "GHOST_SVC"'));
+    assert('27b: orphan trip warning fires', orphanMsgs.length === 1, `got ${orphanMsgs.length}`);
+    assert('27b: orphan message has entity_id ORPHAN_T', orphanMsgs[0]?.entity_id === 'ORPHAN_T');
+    assert('27b: orphan message carries remove-orphan-trips fix', orphanMsgs[0]?.fix?.id === 'remove-orphan-trips');
+
+    const orphanResult = applyValidationFixBatch(orphanMsgs);
+    assert('27b: fix reports changed', !!orphanResult && orphanResult.changed === true);
+    assert('27b: ORPHAN_T removed from trips', !s().trips.some((t) => t.trip_id === 'ORPHAN_T'));
+    assert('27b: ORPHAN_T stop_times removed', s().stopTimes.filter((st) => st.trip_id === 'ORPHAN_T').length === 0);
+    assert('27b: ORPHAN_T frequency removed', s().frequencies.filter((f) => f.trip_id === 'ORPHAN_T').length === 0);
+    assert('27b: GOOD_T unaffected', s().trips.some((t) => t.trip_id === 'GOOD_T'));
+    assert('27b: GOOD_T stop_times intact (2)', s().stopTimes.filter((st) => st.trip_id === 'GOOD_T').length === 2);
+
+    const orphanAfter = runValidation(s()).filter((m) => m.entity_id === 'ORPHAN_T');
+    assert('27b: re-validation clears orphan warning', orphanAfter.length === 0, orphanAfter.map((m) => m.message).join('; '));
+
+    orphanResult!.undo();
+    assert('27b: undo restores ORPHAN_T trip', s().trips.some((t) => t.trip_id === 'ORPHAN_T'));
+    assert('27b: undo restores 2 stop_times for ORPHAN_T', s().stopTimes.filter((st) => st.trip_id === 'ORPHAN_T').length === 2);
+    assert('27b: undo restores 1 frequency for ORPHAN_T', s().frequencies.filter((f) => f.trip_id === 'ORPHAN_T').length === 1);
+    assert('27b: GOOD_T still present after undo', s().trips.some((t) => t.trip_id === 'GOOD_T'));
+
+    // ── 27c: delete-unused-stop ───────────────────────────────────────────────
+    // UNUSED_S has no stop_times but has a route_stop entry. USED_S is served by
+    // UT. The fix removes UNUSED_S and its route_stop; USED_S is untouched.
+    // The unused-stop rule only fires when stopTimes.length > 0.
+    s().setStops([
+      { stop_id: 'USED_S', stop_name: 'Used Stop', stop_lat: 45.0, stop_lon: -111.0, location_type: 0, wheelchair_boarding: 1 },
+      { stop_id: 'UNUSED_S', stop_name: 'Unused Stop', stop_lat: 45.1, stop_lon: -111.1, location_type: 0, wheelchair_boarding: 1 },
+    ]);
+    s().setCalendars([{ service_id: 'USVC', monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 0, sunday: 0, start_date: '20270101', end_date: '20271231' }]);
+    s().setRoutes([{ route_id: 'UR', agency_id: 'A1', route_short_name: 'U', route_long_name: 'Used Route', route_type: 3 }]);
+    s().setTrips([{ trip_id: 'UT', route_id: 'UR', service_id: 'USVC', direction_id: 0 }]);
+    s().setStopTimes([
+      { trip_id: 'UT', stop_id: 'USED_S', stop_sequence: 1, arrival_time: '08:00:00', departure_time: '08:00:00' },
+    ] as StopTime[]);
+    s().setRouteStops([
+      { route_id: 'UR', stop_id: 'USED_S', direction_id: 0, stop_sequence: 0, _snapped: false },
+      { route_id: 'UR', stop_id: 'UNUSED_S', direction_id: 0, stop_sequence: 1, _snapped: false },
+    ]);
+    s().setFrequencies([]);
+    s().setFlexZones([]);
+
+    const unusedMsgs = runValidation(s()).filter((m) => m.entity_id === 'UNUSED_S');
+    assert('27c: unused stop warning fires', unusedMsgs.length === 1, `got ${unusedMsgs.length}: ${unusedMsgs.map((m) => m.message).join(';')}`);
+    assert('27c: message has entity_id UNUSED_S', unusedMsgs[0]?.entity_id === 'UNUSED_S');
+    assert('27c: message carries delete-unused-stop fix', unusedMsgs[0]?.fix?.id === 'delete-unused-stop');
+
+    const unusedResult = applyValidationFixBatch(unusedMsgs);
+    assert('27c: fix reports changed', !!unusedResult && unusedResult.changed === true);
+    assert('27c: UNUSED_S removed from stops', !s().stops.some((st) => st.stop_id === 'UNUSED_S'));
+    assert('27c: UNUSED_S route_stop removed', !s().routeStops.some((rs) => rs.stop_id === 'UNUSED_S'));
+    assert('27c: USED_S still in stops', s().stops.some((st) => st.stop_id === 'USED_S'));
+    assert('27c: USED_S route_stop intact', s().routeStops.some((rs) => rs.stop_id === 'USED_S'));
+
+    const unusedAfter = runValidation(s()).filter((m) => m.entity_id === 'UNUSED_S');
+    assert('27c: re-validation clears unused-stop warning', unusedAfter.length === 0);
+
+    unusedResult!.undo();
+    assert('27c: undo restores UNUSED_S stop', s().stops.some((st) => st.stop_id === 'UNUSED_S'));
+    assert('27c: undo restores UNUSED_S route_stop', s().routeStops.some((rs) => rs.stop_id === 'UNUSED_S'));
+    assert('27c: USED_S still present after undo', s().stops.some((st) => st.stop_id === 'USED_S'));
+
+    s().setStops([]);
+    s().setTrips([]);
+    s().setStopTimes([]);
+    s().setFrequencies([]);
+    s().setRouteStops([]);
+  }
+
+  // ---- PHASE 28: agency-level `external_id` column (#62) ----
+  // The NTD / external ID belongs to the AGENCY: it is an ordinary optional
+  // field on the Agency entity, written to agency.txt as an `external_id` column
+  // whenever ANY agency has one — no opt-in. Each agency keeps its OWN value, and
+  // leading zeros are significant throughout (string, never Number()-coerced).
+  console.log('\nPhase 28: agency-level external_id column round-trip');
+  {
+    // ── 28a: import a MULTI-agency feed, each agency with its own value ─────
+    const extImport = await importGtfsZip(
+      (await buildExternalIdFixtureZip(['01234', '00567'])) as unknown as File,
+    );
+    assert('28a: both agencies imported', extImport.agencies.length === 2);
+    assert('28a: agency A1 keeps its own external_id (leading zero intact)',
+      extImport.agencies[0].external_id === '01234',
+      `got ${JSON.stringify(extImport.agencies[0].external_id)}`);
+    assert('28a: agency A2 keeps its OWN, different external_id',
+      extImport.agencies[1].external_id === '00567',
+      `got ${JSON.stringify(extImport.agencies[1].external_id)}`);
+    // Guard the leading zero explicitly — a Number() coercion anywhere would
+    // silently turn "01234" into 1234 and break the agency's NTD identity.
+    assert('28a: external_id is a STRING, not Number-coerced',
+      typeof extImport.agencies[0].external_id === 'string' &&
+      extImport.agencies[0].external_id!.length === 5);
+
+    loadImportIntoStore(extImport);
+    assert('28a: values land in the store per-agency',
+      s().agencies[0].external_id === '01234' && s().agencies[1].external_id === '00567');
+
+    // ── 28b: export writes the column per-row, no opt-in required ───────────
+    const extCsv = await readExportedFile(await exportGtfsZip(), 'agency.txt');
+    assert('28b: exported agency.txt has an external_id header',
+      headerColumns(extCsv).includes('external_id'), extCsv);
+    assert('28b: A1 exports 01234 with its leading zero (not 1234)',
+      /(^|,)01234(,|\r?$)/m.test(extCsv), extCsv);
+    assert('28b: A2 exports its own 00567',
+      /(^|,)00567(,|\r?$)/m.test(extCsv), extCsv);
+
+    // Full round-trip: re-import the export and confirm both values come back
+    // on the right agencies.
+    const extReimport = await importGtfsZip(
+      Buffer.from(await (await exportGtfsZip()).arrayBuffer()) as unknown as File,
+    );
+    assert('28b: round-trip export → import preserves both per-agency values',
+      extReimport.agencies[0].external_id === '01234' &&
+      extReimport.agencies[1].external_id === '00567',
+      JSON.stringify(extReimport.agencies.map((a) => a.external_id)));
+
+    // ── 28c: only SOME agencies have one → column written, blank cell for the
+    //         agency that doesn't (and that blank imports back as undefined) ──
+    const mixedImport = await importGtfsZip(
+      (await buildExternalIdFixtureZip(['01234', null])) as unknown as File,
+    );
+    assert('28c: a blank cell imports as undefined, not ""',
+      mixedImport.agencies[1].external_id === undefined,
+      `got ${JSON.stringify(mixedImport.agencies[1].external_id)}`);
+    loadImportIntoStore(mixedImport);
+    const mixedCsv = await readExportedFile(await exportGtfsZip(), 'agency.txt');
+    assert('28c: column still written when only one agency has a value',
+      headerColumns(mixedCsv).includes('external_id'), mixedCsv);
+    assert('28c: the value that exists survives', /(^|,)01234(,|\r?$)/m.test(mixedCsv), mixedCsv);
+
+    // ── 28d: NO agency has one → NO external_id column at all ───────────────
+    // agency.txt must be byte-identical to a feed that never knew about the
+    // field: no empty column, no header change.
+    const plainImport = await importGtfsZip(
+      (await buildExternalIdFixtureZip()) as unknown as File,
+    );
+    assert('28d: a feed without the column imports with no external_id set',
+      plainImport.agencies.every((a) => a.external_id === undefined));
+    loadImportIntoStore(plainImport);
+    const plainCsv = await readExportedFile(await exportGtfsZip(), 'agency.txt');
+    assert('28d: no agency has one → NO external_id header',
+      !headerColumns(plainCsv).includes('external_id'), plainCsv);
+
+    // Set one, export, then clear it again: the cleared export must be
+    // byte-identical to the never-set one.
+    s().updateAgency('A1', { external_id: '01234' });
+    const setCsv = await readExportedFile(await exportGtfsZip(), 'agency.txt');
+    assert('28d: setting it on one agency brings the column back',
+      headerColumns(setCsv).includes('external_id'), setCsv);
+    s().updateAgency('A1', { external_id: undefined });
+    const clearedCsv = await readExportedFile(await exportGtfsZip(), 'agency.txt');
+    assert('28d: clearing it makes agency.txt byte-identical to a no-external_id export',
+      clearedCsv === plainCsv,
+      `${JSON.stringify(clearedCsv)} vs ${JSON.stringify(plainCsv)}`);
   }
 
   // ---- SUMMARY ----

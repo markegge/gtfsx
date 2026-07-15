@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Transit access isochrones — GTFS·X</title>
+    <meta name="description" content="From an origin pin, see where a rider can reach on your network in 15 / 30 / 45 minutes — schedule-based RAPTOR routing combining walk access, wait, and in-vehicle time — with the population, jobs, and equity populations inside each contour." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/access-isochrones/" />
+    <meta property="og:title" content="Transit access isochrones — GTFS·X" />
+    <meta property="og:description" content="Schedule-based travel-time reach analysis: drop a pin and see what a rider can reach on your network in N minutes, plus the population, jobs, and equity populations inside each contour." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/access-isochrones/" />
+    <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@gtfsxapp" />
+    <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --sand:#FBF6EE; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
+      .site-header nav a:hover, .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      @media (max-width: 720px) { .site-header nav, .site-header .cta { display:none; } .site-header .brand img { height:30px; } }
+      main { padding-top: 24px; padding-bottom: 60px; }
+      .crumbs { color:var(--muted); font-size:0.9rem; margin: 0 0 12px; }
+      .crumbs a { color:var(--muted); text-decoration:none; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      .tier-badge { display:inline-block; font-size:0.7rem; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.05em; text-transform:uppercase; vertical-align:middle; }
+      .tier-badge.planner,
+
+      .tier-badge.agency { background:#EADFFD; color:#5B2E91; border:1px solid #C9B1F0; }
+      a { color: var(--accent); }
+      ul, ol { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code, kbd { background:var(--sand); padding: 1px 6px; border-radius:4px; font-size:0.9em; }
+      figure { margin: 1.4rem 0; }
+      figure img { width:100%; max-width:1200px; height:auto; border:1px solid var(--rule); border-radius:8px; display:block; }
+      figcaption { color:var(--muted); font-size:0.9rem; margin-top:6px; }
+      .see-also { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 36px 0 0; }
+      .see-also h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; font-size:1.1rem; }
+      .see-also ul { margin: 8px 0 0; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; margin-top:32px; }
+      footer a { color: var(--muted); text-decoration:none; }
+      footer a:hover { color:var(--accent); }
+    </style>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Transit access isochrones — GTFS·X",
+  "description": "Schedule-based travel-time reach analysis over a GTFS feed: from an origin, where can a rider go in N minutes, and how many residents, jobs, and equity populations can they reach.",
+  "image": "https://www.gtfsx.com/og-default.png",
+  "author": { "@type": "Organization", "name": "GTFS·X", "url": "https://www.gtfsx.com/" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "GTFS·X",
+    "logo": { "@type": "ImageObject", "url": "https://www.gtfsx.com/gtfsx-lockup.svg" }
+  },
+  "datePublished": "2026-06-28",
+  "dateModified": "2026-06-28",
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "https://www.gtfsx.com/docs/access-isochrones/" }
+}
+  </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Analysis tools · Transit access isochrones</div>
+      <h1>Transit access isochrones <span class="tier-badge planner">Planner</span></h1>
+      <p class="lede">Drop a pin and see where a rider can travel on your network within a time budget — combining the walk to a stop, the wait for service, the in-vehicle ride, and the walk from the final stop — drawn as 15 / 30 / 45-minute contours, with the population, jobs, and equity populations reachable inside each.</p>
+      <p>Where <a href="/docs/demographic-coverage/">Demographic coverage</a> tells you <em>who lives near your stops</em>, access isochrones tell you <em>where a rider can go from a stop</em>: the temporal, schedule-aware companion to the buffer-based coverage analysis. It's a Planner feature.</p>
+
+      <figure>
+        <img src="/assets/docs/access-isochrones-hero.png" alt="The Access Isochrones panel in GTFS·X with an origin pin on the map, time-budget contours shaded in stepped blue saturation following the street network, and a sidebar listing the population, jobs, and equity populations reachable within each time band." loading="lazy" />
+        <figcaption>An access-isochrone run on the Sunny Valley feed. The blue contours show where a rider can reach from the origin pin within each time budget (darkest = closest), and the sidebar tallies the residents, jobs, and equity populations inside each.</figcaption>
+      </figure>
+
+      <h2 id="what-it-is">What it is</h2>
+      <p>The Access Isochrones panel answers the question no buffer-based tool can: <strong>from a given point, what can a rider reach on your network in N minutes?</strong> It runs a schedule-based transit router over your in-memory feed and combines three legs of a trip into one reachable area:</p>
+      <ul>
+        <li><strong>Access</strong> — the walk from the origin pin to nearby boardable stops.</li>
+        <li><strong>Transit</strong> — riding the network: waiting for the next departure, the in-vehicle time, and any transfers, computed from your <code>stop_times</code> (and <code>frequencies.txt</code>) for the chosen service day and departure time.</li>
+        <li><strong>Egress</strong> — the walk from each reachable stop out to the surrounding streets, drawn as a real routed walkshed.</li>
+      </ul>
+      <p>The union of those reachable areas, clipped to each time budget, is the isochrone. Alongside the map contours, the panel tallies the <strong>population</strong>, <strong>jobs</strong>, and <strong>equity populations</strong> (minority, low-income, zero-vehicle households) inside each contour — the same Census plumbing as the coverage analysis.</p>
+
+      <h2 id="when-to-use-it">When to use it</h2>
+      <ul>
+        <li><strong>Grant narratives and New/Small Starts.</strong> "How many jobs can a resident of this low-income tract reach in 45 minutes by transit?" is the standard accessibility framing in FTA filings and regional transportation plans. Access isochrones produce a defensible, documented number.</li>
+        <li><strong>Equity analysis with a temporal dimension.</strong> Title VI and coverage tell you who lives near service; isochrones tell you what destinations that service actually connects them to.</li>
+        <li><strong>Comparing a proposed change.</strong> Run the analysis from a key origin on today's network, then again with a proposed route on or off (via <a href="/docs/scenario-analysis/">route visibility</a>), and compare the residents and jobs reached.</li>
+        <li><strong>Siting and outreach.</strong> Evaluate transit access from a proposed development, a job center, a hospital, or a neighborhood that's raised a service request.</li>
+      </ul>
+
+      <h2 id="how-to-use-it">How to use it in GTFS·X</h2>
+      <ol>
+        <li>Open the feed in the editor and click <strong>Access</strong> under Analysis in the left sidebar.</li>
+        <li>Click <strong>Set origin on map</strong> and click the map to drop the trip origin (drag the pin afterward to move it).</li>
+        <li>Pick your <strong>time budgets</strong> (15 / 30 / 45 / 60 minutes — choose one or several), a <strong>departure time</strong>, the <strong>service day</strong> (defaults to the feed's busiest weekday), and the <strong>maximum walk</strong> for the access and egress legs.</li>
+        <li>Click <strong>Run analysis</strong>. GTFS·X routes the network and draws the routed walksheds — because it makes a real walking-isochrone request per reachable stop, a run takes a few seconds (the button shows "Analyzing…").</li>
+        <li>Read the contours on the map (darkest = closest reach, each labeled with its time budget) and the per-budget readout in the sidebar: stops reached, population, jobs, and equity shares.</li>
+      </ol>
+
+      <h2 id="methodology">Methodology</h2>
+      <ul>
+        <li><strong>Routing engine.</strong> Reach is computed with <strong>RAPTOR</strong> (Round-Based Public Transit Routing), the standard algorithm for schedule-based travel-time analysis. It runs entirely in your browser over the feed's <code>stop_times</code>, one round per transfer, returning the earliest arrival time at every stop in the network from the chosen departure time. Frequency-based trips (<code>frequencies.txt</code>) are expanded to synthetic departures, and only the calendars active on the selected service day are considered.</li>
+        <li><strong>Access leg.</strong> Stops within the walk-time budget of the origin (at an assumed walking speed) seed the router, so the trip clock includes the time it takes to reach the first stop.</li>
+        <li><strong>Egress leg: routed walksheds.</strong> For each stop reachable within a budget, GTFS·X draws a <strong>street-network walkshed</strong> (a Mapbox walking isochrone that follows the actual pedestrian network), not a fixed-radius circle, and unions them into the contour. This is the same engine as the Planner-plan <a href="/docs/demographic-coverage/">network walksheds</a> in the Coverage panel.</li>
+        <li><strong>Opportunities.</strong> Population, jobs, and equity populations inside each contour are apportioned from US Census ACS block groups overlapping the polygon, through the same summation the coverage analysis uses, so the figures are consistent across the two tools.</li>
+        <li><strong>Contours.</strong> A single hue with stepped saturation — the closest (shortest-time) band is the most saturated, longer budgets lighter — the standard travel-time-isochrone convention.</li>
+      </ul>
+
+      <h2 id="limits">Limits</h2>
+      <ul>
+        <li><strong>One departure time.</strong> Each run is for a single departure moment, so the result is sensitive to which bus the rider just caught or missed. Run a few departure times to see the range; departure-window averaging is planned.</li>
+        <li><strong>Walk legs.</strong> The access leg uses a straight-line walk-time to decide which stops are boardable; the egress contour drawn on the map is the real routed walkshed. Neither models elevation, crossing delays, or wait-to-cross.</li>
+        <li><strong>Opportunity counts are apportioned.</strong> Population, jobs, and equity figures are ACS estimates apportioned to the reachable area; they share the vintage and caveats of the <a href="/docs/demographic-coverage/">coverage analysis</a>, and ACS block-group data covers the 50 states plus DC.</li>
+        <li><strong>Schedule, not real time.</strong> Routing uses the published schedule; it does not apply real-time delays, and GTFS-Flex / demand-response zones are not routed.</li>
+        <li><strong>Best on small and mid-size feeds.</strong> The router runs in the browser; very large feeds are slower, and each reachable stop adds a walking-isochrone request (capped per run).</li>
+      </ul>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/demographic-coverage/">Demographic coverage</a> — who lives near your stops (the buffer-based companion to this tool).</li>
+          <li><a href="/docs/title-vi-analysis/">Title VI analysis</a> — equity comparison aligned with FTA Circular 4702.1B.</li>
+          <li><a href="/docs/scenario-analysis/">Route visibility</a> — toggle routes on and off to compare access before and after a change.</li>
+        </ul>
+      </div>
+    </main>
+    <style>
+footer.gx-footer { max-width: none; width: 100%; margin: 0; padding: 0; background: #3D2E22; color: #FFF8F0; font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif; box-sizing: border-box; }
+footer.gx-footer * { box-sizing: border-box; }
+footer.gx-footer a { text-decoration: none; }
+footer.gx-footer .gx-wrap { max-width: 1180px; margin: 0 auto; padding: 64px 28px 36px; }
+footer.gx-footer .gx-top { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 36px; }
+footer.gx-footer .gx-lockup { height: 28px; width: auto; display: block; margin-bottom: 16px; }
+footer.gx-footer .gx-blurb { font-size: 13.5px; color: rgba(255,248,240,0.6); line-height: 1.55; max-width: 240px; margin: 0; }
+footer.gx-footer .gx-social { display: flex; gap: 10px; margin-top: 18px; }
+footer.gx-footer .gx-social a { width: 34px; height: 34px; border-radius: 9px; background: rgba(255,248,240,0.08); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #FFF8F0; transition: background 0.12s; }
+footer.gx-footer .gx-social a:hover { background: #E8734A; }
+footer.gx-footer .gx-col h4 { font-family: "Nunito", ui-rounded, system-ui, sans-serif; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.07em; color: rgba(255,248,240,0.5); margin: 0 0 16px; }
+footer.gx-footer .gx-col a { display: block; font-size: 14px; color: rgba(255,248,240,0.82); margin-bottom: 11px; transition: color 0.12s; }
+footer.gx-footer .gx-col a:hover { color: #E8734A; }
+footer.gx-footer .gx-bottom { max-width: 1180px; margin: 48px auto 0; padding: 24px 28px 0; border-top: 1px solid rgba(255,248,240,0.12); display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 13px; color: rgba(255,248,240,0.5); }
+footer.gx-footer .gx-mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+@media (max-width: 780px) { footer.gx-footer .gx-top { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 480px) { footer.gx-footer .gx-top { grid-template-columns: 1fr; } }
+</style>
+<footer class="gx-footer">
+  <div class="gx-wrap">
+    <div class="gx-top">
+      <div>
+        <img class="gx-lockup" src="/gtfsx-lockup-on-dark.svg" alt="GTFS·X" width="100" height="28">
+        <p class="gx-blurb">The fast, easy GTFS editor and service planner. Built for transit agencies, planners, and consultants.</p>
+        <div class="gx-social">
+          <a href="https://twitter.com/gtfsxapp" aria-label="GTFS·X on X">X</a>
+          <a href="https://www.linkedin.com/company/gtfsx" aria-label="GTFS·X on LinkedIn">in</a>
+          <a href="https://github.com/GTFS-X/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
+        </div>
+      </div>
+      <div class="gx-col">
+        <h4>Product</h4>
+        <a href="/editor">Editor</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/planning">Planning</a>
+        <a href="/docs/hosted-publishing/">Publishing</a>
+      </div>
+      <div class="gx-col">
+        <h4>Learn</h4>
+        <a href="/learn/gtfs/">What is GTFS</a>
+        <a href="/learn/gtfs-flex/">What is GTFS-Flex</a>
+        <a href="/learn/publish-gtfs-feed/">Publish a GTFS feed</a>
+        <a href="/docs/">Docs</a>
+      </div>
+      <div class="gx-col">
+        <h4>Compare</h4>
+        <a href="/compare/trillium/">vs Trillium</a>
+        <a href="/compare/remix/">vs Remix</a>
+        <a href="/compare/gtfs-builder-rtap/">vs RTAP</a>
+      </div>
+      <div class="gx-col">
+        <h4>Company</h4>
+        <a href="/about/">About</a>
+        <a href="/feed-health/">GTFS Dashboard</a>
+        <a href="/community/announcements">Announcements</a>
+        <a href="mailto:hello@gtfsx.com">Contact</a>
+        <a href="/use-cases/state-dot/">State DOTs</a>
+      </div>
+    </div>
+    <div class="gx-bottom">
+      <span>© 2026 GTFS·X · Vector &amp; Vertex</span>
+      <span class="gx-mono">hello@gtfsx.com</span>
+    </div>
+  </div>
+</footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+    <script src="/assets/site-nav.js"></script>
+      <script src="/assets/docs/docs-nav.js"></script>
+</body>
+</html>

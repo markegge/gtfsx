@@ -458,6 +458,14 @@ a { color: inherit; }
 /* State-view enrichment sub-lines (national table never renders these). */
 .ag-name-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ag-sub { font-size: 11px; color: var(--gtfs-warm-gray); }
+/* NTD/MDB crosswalk ids: tabular figures so the digits line up down the column,
+   and freely selectable so they can be copied into FTA's P-50 form. */
+.ag-id-line {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  user-select: text;
+  cursor: text;
+}
 .ag-flex-badge {
   font-family: var(--font-body); font-weight: 700; font-size: 9px;
   text-transform: uppercase; letter-spacing: 0.04em;

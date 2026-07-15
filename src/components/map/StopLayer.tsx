@@ -20,6 +20,7 @@ export function StopLayer({ clustered = false }: { clustered?: boolean }) {
   const mapMode = useStore((s) => s.mapMode);
   const isEditingShape = mapMode === 'edit_shape';
   const hiddenRouteIds = useStore((s) => s.hiddenRouteIds);
+  const hiddenStopIds = useStore((s) => s.hiddenStopIds);
   // When the Stops panel is filtering, fade non-matching stops so the user
   // sees the filter in context. null = no overlay; render everything normally.
   const mapStopFilter = useStore((s) => s.mapStopFilter);
@@ -53,11 +54,14 @@ export function StopLayer({ clustered = false }: { clustered?: boolean }) {
     }
 
     const matchedSet = mapStopFilter ? new Set(mapStopFilter.matched) : null;
+    const hiddenStopSet = new Set(hiddenStopIds);
 
     return {
       type: 'FeatureCollection' as const,
       features: stops
         .filter((stop) => {
+          // Explicitly hidden via the Stops panel toggle — never render, even if selected.
+          if (hiddenStopSet.has(stop.stop_id)) return false;
           // Show stops that: have no route assignment, have at least one visible route, or are selected
           const visibleCount = stopVisibleRoutes.get(stop.stop_id) || 0;
           const totalCount = stopRouteCount.get(stop.stop_id) || 0;
@@ -89,7 +93,7 @@ export function StopLayer({ clustered = false }: { clustered?: boolean }) {
           };
         }),
     };
-  }, [stops, routes, routeStops, selectedStopId, selectedRouteId, hiddenRouteIds, mapStopFilter]);
+  }, [stops, routes, routeStops, selectedStopId, selectedRouteId, hiddenRouteIds, hiddenStopIds, mapStopFilter]);
 
   // Outer ring — route-colored border. Filter-faded stops shrink, gray out,
   // and drop opacity so they're context, not foreground.

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { activeStopsShapeId, computeShapePatterns, type ShapePattern } from '../shapePatterns';
+import {
+  activeStopsShapeId, computeShapePatterns, computeTimetablePatterns,
+  unreachableTimetableTripIds, isNoShapeBucket, noShapeBucketId,
+  type ShapePattern,
+} from '../shapePatterns';
+import type { Trip, RouteStop } from '../../../types/gtfs';
 
 // activeStopsShapeId resolves which shape the Routes > Stops subpanel is
 // editing. The map highlight keys off the same value (via stopPlacementShapeId),
@@ -76,5 +81,82 @@ describe('computeShapePatterns — freshly drawn shapes', () => {
 
   it('ignores a drawn shape belonging to another route', () => {
     expect(computeShapePatterns('R', [], [], [shape('x', 'OTHER')])).toEqual([]);
+  });
+});
+
+// Regression (Trent Wiesner forum report, "Ghost trips cannot be deleted"):
+// build an outbound timetable before any shape exists (trips get empty
+// shape_id), then draw + stop the inbound direction (route now has a shape).
+// The grid flips to shape-filter mode and the outbound trips match no pattern →
+// invisible AND undeletable. computeTimetablePatterns adds a "No shape" bucket
+// so they stay reachable; unreachableTimetableTripIds powers the cleanup recipe.
+describe('No-shape bucket + ghost detection', () => {
+  const t = (id: string, over: Partial<Trip> = {}): Trip =>
+    ({ trip_id: id, route_id: 'R', service_id: 'wk', direction_id: 0, ...over }) as Trip;
+  const rs = (over: Partial<RouteStop>): RouteStop =>
+    ({ route_id: 'R', stop_id: 's', stop_sequence: 0, direction_id: 0, ...over }) as RouteStop;
+
+  it('isNoShapeBucket distinguishes the sentinel from real shape ids', () => {
+    expect(isNoShapeBucket(noShapeBucketId(0))).toBe(true);
+    expect(isNoShapeBucket(noShapeBucketId(1))).toBe(true);
+    expect(noShapeBucketId(0)).not.toBe(noShapeBucketId(1));
+    expect(isNoShapeBucket('in')).toBe(false);
+    expect(isNoShapeBucket('')).toBe(false);
+    expect(isNoShapeBucket(null)).toBe(false);
+  });
+
+  it('the repro: outbound trips (empty shape) + an inbound shape → a No-shape bucket', () => {
+    // 3 outbound trips with no shape (made before any shape existed).
+    const trips = [t('o1'), t('o2'), t('o3')];
+    // Inbound was drawn + stopped: its route_stops carry the inbound shape.
+    const routeStops = [rs({ shape_id: 'in', direction_id: 1, stop_sequence: 0 })];
+
+    // Without the bucket, the only pattern is the inbound shape — outbound ghosts.
+    expect(computeShapePatterns('R', trips, routeStops)).toEqual([{ shapeId: 'in', directionId: 1 }]);
+
+    // With it, a direction-0 "No shape" bucket is appended so they're reachable.
+    expect(computeTimetablePatterns('R', trips, routeStops)).toEqual([
+      { shapeId: 'in', directionId: 1 },
+      { shapeId: noShapeBucketId(0), directionId: 0 },
+    ]);
+
+    // And all three outbound trips are flagged as unreachable (ghosts).
+    const ghosts = unreachableTimetableTripIds(trips, routeStops);
+    expect([...ghosts].sort()).toEqual(['o1', 'o2', 'o3']);
+  });
+
+  it('adds no bucket / ghosts when the route has no shapes at all (direction fallback)', () => {
+    const trips = [t('o1'), t('i1', { direction_id: 1 })];
+    expect(computeTimetablePatterns('R', trips, [])).toEqual([]);
+    expect(unreachableTimetableTripIds(trips, []).size).toBe(0);
+  });
+
+  it('adds no bucket / ghosts when every trip already has a real shape', () => {
+    const trips = [t('o1', { shape_id: 'out' }), t('i1', { shape_id: 'in', direction_id: 1 })];
+    expect(computeTimetablePatterns('R', trips, [])).toEqual([
+      { shapeId: 'out', directionId: 0 },
+      { shapeId: 'in', directionId: 1 },
+    ]);
+    expect(unreachableTimetableTripIds(trips, []).size).toBe(0);
+  });
+
+  it('buckets ghosts on BOTH directions when each has shapeless trips alongside a shape', () => {
+    const trips = [
+      t('o-ghost'),                              // dir 0, no shape
+      t('i-ghost', { direction_id: 1 }),         // dir 1, no shape
+      t('o-ok', { shape_id: 'out' }),            // dir 0, real shape
+    ];
+    const patterns = computeTimetablePatterns('R', trips, []);
+    expect(patterns).toContainEqual({ shapeId: noShapeBucketId(0), directionId: 0 });
+    expect(patterns).toContainEqual({ shapeId: noShapeBucketId(1), directionId: 1 });
+    expect([...unreachableTimetableTripIds(trips, [])].sort()).toEqual(['i-ghost', 'o-ghost']);
+  });
+
+  it("a trip's own non-empty shape_id always forms a reachable pattern (never a ghost)", () => {
+    // Even a dangling shape_id (the Shape row was deleted) is reachable: like
+    // computeShapePatterns, the helper turns every non-empty trip shape_id into
+    // a selectable pattern, so the trip is never hidden — no false ghost.
+    const trips = [t('dangling', { shape_id: 'gone' }), t('ok', { shape_id: 'in', direction_id: 1 })];
+    expect(unreachableTimetableTripIds(trips, []).has('dangling')).toBe(false);
   });
 });

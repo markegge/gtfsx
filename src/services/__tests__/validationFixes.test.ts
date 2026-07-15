@@ -12,13 +12,19 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { useStore } from '../../store';
 import { runValidation } from '../validation';
 import { getValidationFix, applyValidationFix } from '../validationFixes';
-import type { Trip, StopTime } from '../../types/gtfs';
+import type { Trip, StopTime, RouteStop } from '../../types/gtfs';
 import type { ValidationMessage } from '../../types/ui';
 
 function reset() {
   const s = useStore.getState();
   s.setTrips([]);
   s.setStopTimes([]);
+  s.setRouteStops([]);
+  s.setShapes([]);
+  s.setCalendars([
+    { service_id: 'S1', monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 0, sunday: 0, start_date: '20260101', end_date: '20261231' } as never,
+  ]);
+  s.setRoutes([{ route_id: 'R1', route_short_name: '1' } as never]);
 }
 beforeEach(reset);
 
@@ -151,6 +157,69 @@ describe('validation.ts attaches the fix on the correct variant only', () => {
     const m = blankBothMsg(msgs);
     expect(m).toBeDefined();
     expect(m!.fix).toBeUndefined();
+  });
+});
+
+// "Ghost" trip cleanup recipe (Trent Wiesner forum report). A shapeless trip on
+// a route that ALSO has a shape is unreachable in the timetable grid; the rule
+// flags it with remove-ghost-trips so it can be bulk-deleted with its stop_times.
+function ghostTripScenario() {
+  const s = useStore.getState();
+  // Outbound trip made before any shape existed → empty shape_id.
+  s.setTrips([{ trip_id: 'GHOST', route_id: 'R1', service_id: 'S1', direction_id: 0 } as Trip]);
+  s.setStopTimes([
+    { trip_id: 'GHOST', stop_id: 's1', stop_sequence: 1, arrival_time: '08:00:00', departure_time: '08:00:00' },
+    { trip_id: 'GHOST', stop_id: 's2', stop_sequence: 2, arrival_time: '08:10:00', departure_time: '08:10:00' },
+  ] as StopTime[]);
+  // Inbound direction later drawn + stopped → the route now has a shape pattern,
+  // flipping the grid into shape-filter mode where GHOST matches nothing.
+  s.setRouteStops([
+    { route_id: 'R1', stop_id: 's3', stop_sequence: 0, direction_id: 1, shape_id: 'in' } as RouteStop,
+  ]);
+}
+const ghostMsg = (msgs: ValidationMessage[]) =>
+  msgs.find((m) => m.message.includes("can't be reached in the timetable editor"));
+
+describe('remove-ghost-trips (unreachable timetable trips)', () => {
+  it('exposes the fix in the registry with a label + description', () => {
+    const fix = getValidationFix('remove-ghost-trips');
+    expect(fix).toBeDefined();
+    expect(fix!.label).toBeTruthy();
+    expect(fix!.description).toBeTruthy();
+  });
+
+  it('validation.ts flags the shapeless trip and attaches remove-ghost-trips', () => {
+    ghostTripScenario();
+    const m = ghostMsg(runValidation(useStore.getState()));
+    expect(m).toBeDefined();
+    expect(m!.entity_id).toBe('GHOST');
+    expect(m!.fix).toEqual({ id: 'remove-ghost-trips' });
+  });
+
+  it('does NOT flag trips on a route with no shapes (direction fallback is reachable)', () => {
+    const s = useStore.getState();
+    s.setTrips([{ trip_id: 'OK', route_id: 'R1', service_id: 'S1', direction_id: 0 } as Trip]);
+    s.setStopTimes([
+      { trip_id: 'OK', stop_id: 's1', stop_sequence: 1, arrival_time: '08:00:00', departure_time: '08:00:00' },
+    ] as StopTime[]);
+    s.setRouteStops([]); // no shape anywhere
+    expect(ghostMsg(runValidation(useStore.getState()))).toBeUndefined();
+  });
+
+  it('applying the fix removes the trip + its stop_times, and undo restores both', () => {
+    ghostTripScenario();
+    const m = ghostMsg(runValidation(useStore.getState()))!;
+
+    const result = applyValidationFix(m)!;
+    expect(result.changed).toBe(true);
+    expect(useStore.getState().trips.find((t) => t.trip_id === 'GHOST')).toBeUndefined();
+    expect(useStore.getState().stopTimes.filter((st) => st.trip_id === 'GHOST')).toHaveLength(0);
+    // Re-validating (panel memo recomputes) clears the resolved warning.
+    expect(ghostMsg(runValidation(useStore.getState()))).toBeUndefined();
+
+    result.undo();
+    expect(useStore.getState().trips.find((t) => t.trip_id === 'GHOST')).toBeDefined();
+    expect(useStore.getState().stopTimes.filter((st) => st.trip_id === 'GHOST')).toHaveLength(2);
   });
 });
 

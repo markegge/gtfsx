@@ -5,7 +5,8 @@ import { useStore } from '../../store';
 import { logout as apiLogout } from '../../services/authApi';
 import { createOrg, type OrgRole } from '../../services/orgsApi';
 import { FormField } from '../ui/FormField';
-import { backendEnabled } from '../../utils/featureFlags';
+import { Modal } from '../ui/Modal';
+import { AuthButton } from '../auth/AuthButton';
 import { PlanBadge } from '../billing/PlanBadge';
 import { shouldShowUpgradeEntry } from '../../services/proIntent';
 
@@ -100,7 +101,7 @@ export function UserMenuItems({ onClose }: { onClose?: () => void } = {}) {
         <div className="text-xs text-warm-gray truncate">{currentUser.email}</div>
       </div>
 
-      {/* Upgrade entry — logged-in free users only (hidden for pro/agency/
+      {/* Upgrade entry — logged-in free users only (hidden for agency/
           enterprise). Gives a free user who decides to pay a one-click path to
           /pricing instead of hunting through Billing. */}
       {shouldShowUpgradeEntry(true, currentUser.plan) && (
@@ -109,7 +110,7 @@ export function UserMenuItems({ onClose }: { onClose?: () => void } = {}) {
             onClick={() => go('/pricing')}
             className="w-full text-left px-3 py-2 mb-1 rounded-md bg-coral-light text-coral hover:bg-coral hover:text-white transition-colors flex items-center justify-between gap-2"
           >
-            <span className="text-sm font-heading font-bold">Upgrade to Pro</span>
+            <span className="text-sm font-heading font-bold">Upgrade</span>
             <span aria-hidden>→</span>
           </button>
           <div className="border-t border-sand my-1" />
@@ -162,11 +163,11 @@ export function UserMenuItems({ onClose }: { onClose?: () => void } = {}) {
         <button
           onClick={() => go('/pricing?feature=org_workspace')}
           className="w-full text-left px-3 py-1.5 rounded-md text-sm text-coral hover:bg-cream transition-colors flex items-center justify-between gap-2"
-          title="Organizations are an Agency plan feature"
+          title="Organizations are a Planner plan feature"
         >
           <span>+ Create organization…</span>
           <span className="text-[10px] font-bold uppercase tracking-wide bg-cream text-warm-gray px-1.5 py-0.5 rounded border border-sand">
-            Agency
+            Planner
           </span>
         </button>
       )}
@@ -256,12 +257,9 @@ export function UserMenuItems({ onClose }: { onClose?: () => void } = {}) {
  * My Feeds, Account settings, Admin console, Sign out) when there's a user,
  * or the "Sign in" CTA otherwise. Use this on every page that needs
  * consistent account navigation.
- *
- * Returns null when backend features are disabled.
  */
 export function UserMenu() {
   const currentUser = useStore((s) => s.currentUser);
-  if (!backendEnabled) return null;
   const triggerClasses = currentUser
     ? 'w-9 h-9 rounded-full bg-coral text-white font-heading font-bold text-sm flex items-center justify-center hover:bg-[#d4603a] transition-colors shrink-0'
     : 'w-9 h-9 rounded-full bg-white border-2 border-sand text-warm-gray hover:border-coral hover:text-coral transition-colors flex items-center justify-center shrink-0';
@@ -340,46 +338,33 @@ function CreateOrgDialog({
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-sm w-full mx-4">
-        <h3 className="font-heading font-bold text-base text-dark-brown mb-3">Create organization</h3>
-        <form onSubmit={handleSubmit}>
-          <FormField label="Name" value={name} onChange={setName} placeholder="Streamline Transit" required />
-          <FormField
-            label="Slug"
-            value={effectiveSlug}
-            onChange={(v) => {
-              setSlug(v);
-              setSlugTouched(true);
-            }}
-            placeholder="streamline-transit"
-            required
-          />
-          {error && (
-            <div className="mb-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
-              {error}
-            </div>
-          )}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting || !name.trim() || !effectiveSlug}
-              className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50"
-            >
-              {submitting ? 'Creating…' : 'Create'}
-            </button>
+    <Modal open onClose={onClose} title="Create organization" dismissable={!submitting}>
+      <form onSubmit={handleSubmit}>
+        <FormField label="Name" value={name} onChange={setName} placeholder="Streamline Transit" required />
+        <FormField
+          label="Slug"
+          value={effectiveSlug}
+          onChange={(v) => {
+            setSlug(v);
+            setSlugTouched(true);
+          }}
+          placeholder="streamline-transit"
+          required
+        />
+        {error && (
+          <div className="mb-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
+            {error}
           </div>
-        </form>
-      </div>
-    </div>
+        )}
+        <div className="flex justify-end gap-2 mt-2">
+          <AuthButton type="button" variant="secondary" onClick={onClose} disabled={submitting}>
+            Cancel
+          </AuthButton>
+          <AuthButton type="submit" disabled={submitting || !name.trim() || !effectiveSlug}>
+            {submitting ? 'Creating…' : 'Create'}
+          </AuthButton>
+        </div>
+      </form>
+    </Modal>
   );
 }

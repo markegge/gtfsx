@@ -17,7 +17,6 @@ declare global {
     /** Cancel an in-progress Draw Route, discard any partial line, and return
      *  to select mode. Used by the toolbar's Draw Route toggle. */
     __cancelDrawRoute?: () => void;
-    __flexZoneExpand?: string;
     /** When set, the next polygon drawn in 'draw_flex_zone' mode is appended to
      *  this existing flex zone (making it a mixed polygon + group zone) instead
      *  of creating a new zone. Cleared by MapView after the draw completes. */

@@ -13,7 +13,9 @@ import { CostSummary } from '../costs/CostSummary';
 import { CoveragePanel } from '../coverage/CoveragePanel';
 import { TitleVIPanel } from '../titlevi/TitleVIPanel';
 import { StopAnalysisPanel } from '../analysis/StopAnalysisPanel';
+import { AccessIsochronePanel } from '../analysis/AccessIsochronePanel';
 import { FlexEditor } from '../flex/FlexEditor';
+import { deleteFlexZoneWithRoute } from '../flex/flexHelpers';
 import { StationsPanel } from '../stations/StationsPanel';
 import { FrequenciesEditor } from '../frequencies/FrequenciesEditor';
 import { BlocksPanel } from '../blocks/BlocksPanel';
@@ -22,6 +24,8 @@ import { FeatureSettingsPanel } from '../settings/FeatureSettingsPanel';
 import { PaywallOverlay } from '../billing/PaywallOverlay';
 import { useEditorPlan } from '../billing/useEditorPlan';
 import { EditActions } from '../ui/EditActions';
+import { Breadcrumb } from '../ui/Breadcrumb';
+import { TabButton } from '../ui/Tabs';
 
 const RIGHT_RAIL_DEFAULT_WIDTH = 460;
 const RIGHT_RAIL_MIN_WIDTH = 320;
@@ -45,6 +49,7 @@ const SECTION_TITLES: Record<SidebarSection, string> = {
   coverage: 'Coverage',
   titlevi: 'Title VI',
   'stop-analysis': 'Stop Analysis',
+  'access-isochrones': 'Access Isochrones',
   alerts: 'Service Alerts',
   settings: 'Feature settings',
 };
@@ -63,6 +68,7 @@ const SECTION_GROUP: Record<SidebarSection, string | null> = {
   coverage: 'Analysis',
   titlevi: 'Analysis',
   'stop-analysis': 'Analysis',
+  'access-isochrones': 'Analysis',
   alerts: 'Operations',
   settings: null,
 };
@@ -108,6 +114,12 @@ function PanelBody({ section }: { section: SidebarSection }) {
           <StopAnalysisPanel />
         </PaywallOverlay>
       );
+    case 'access-isochrones':
+      return (
+        <PaywallOverlay feature="access_isochrones" currentPlan={plan}>
+          <AccessIsochronePanel />
+        </PaywallOverlay>
+      );
     case 'alerts':
       return (
         <PaywallOverlay feature="service_alerts" currentPlan={plan}>
@@ -127,6 +139,7 @@ const ROUTE_TABS: { id: RouteDetailTab; label: string }[] = [
   { id: 'stops', label: 'Stops' },
   { id: 'trips', label: 'Trips' },
   { id: 'costs', label: 'Costs' },
+  { id: 'coverage', label: 'Coverage' },
 ];
 
 function RouteDetailHeader() {
@@ -187,16 +200,12 @@ function RouteDetailHeader() {
       {/* Breadcrumb row */}
       <div className="px-5 pt-3 flex items-center gap-2">
         <div className="flex-1 min-w-0 text-[13px] text-warm-gray">
-          <button
-            onClick={() => setEditingRouteId(null)}
-            className="hover:text-coral transition-colors"
-          >
-            Routes
-          </button>
-          <span className="opacity-50 mx-1.5">›</span>
-          <span className="text-dark-brown font-semibold truncate">
-            {title}
-          </span>
+          <Breadcrumb
+            items={[
+              { label: 'Routes', onClick: () => setEditingRouteId(null) },
+              { label: title, className: 'truncate' },
+            ]}
+          />
         </div>
         <button
           onClick={() => {
@@ -209,7 +218,7 @@ function RouteDetailHeader() {
           className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
           title="Close editor"
         >
-          ✕
+          ×
         </button>
       </div>
       {/* Title row */}
@@ -236,14 +245,11 @@ function RouteDetailHeader() {
             const active = tab === t.id;
             const count = counts[t.id];
             return (
-              <button
+              <TabButton
                 key={t.id}
+                active={active}
                 onClick={() => setRouteDetailTab(t.id)}
-                className={`relative px-3 py-2 font-heading font-bold text-[13px] flex items-center gap-1.5 border-b-2 transition-colors ${
-                  active
-                    ? 'text-coral border-coral'
-                    : 'text-warm-gray border-transparent hover:text-dark-brown'
-                }`}
+                className="flex items-center gap-1.5"
               >
                 <span>{t.label}</span>
                 {count != null && count > 0 && (
@@ -255,7 +261,7 @@ function RouteDetailHeader() {
                     {count.toLocaleString()}
                   </span>
                 )}
-              </button>
+              </TabButton>
             );
           })}
         </div>
@@ -301,6 +307,7 @@ function StopEditHeader() {
   // Going back from the Stops panel just clears the edit state.
   const goBack = () => {
     setEditingStopId(null);
+    selectStop(null);
     if (fromRouteContext) setRouteDetailTab('stops');
   };
 
@@ -308,37 +315,27 @@ function StopEditHeader() {
     <div className="px-5 py-3.5 border-b border-sand bg-white shrink-0">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <nav className="text-[13px] text-warm-gray flex items-center gap-1.5">
-            <button onClick={goBack} className="hover:text-coral transition-colors">
+          <nav className="text-[13px] text-warm-gray">
+            <button onClick={goBack} className="hover:text-coral transition-colors mr-1.5">
               ←
             </button>
             {fromRouteContext ? (
-              <>
-                <button
-                  onClick={() => setSidebarSection('routes')}
-                  className="hover:text-coral transition-colors"
-                >
-                  Routes
-                </button>
-                <span className="opacity-50">›</span>
-                <button
-                  onClick={() => { setEditingStopId(null); setRouteDetailTab('details'); }}
-                  className="hover:text-coral transition-colors truncate"
-                >
-                  {route.route_short_name || route.route_long_name || 'Route'}
-                </button>
-                <span className="opacity-50">›</span>
-                <button
-                  onClick={() => { setEditingStopId(null); setRouteDetailTab('stops'); }}
-                  className="hover:text-coral transition-colors"
-                >
-                  Stops
-                </button>
-              </>
+              <Breadcrumb
+                items={[
+                  { label: 'Routes', onClick: () => setSidebarSection('routes') },
+                  {
+                    label: route.route_short_name || route.route_long_name || 'Route',
+                    onClick: () => { setEditingStopId(null); setRouteDetailTab('details'); },
+                    className: 'truncate',
+                  },
+                  {
+                    label: 'Stops',
+                    onClick: () => { setEditingStopId(null); selectStop(null); setRouteDetailTab('stops'); },
+                  },
+                ]}
+              />
             ) : (
-              <button onClick={goBack} className="hover:text-coral transition-colors">
-                Stops
-              </button>
+              <Breadcrumb items={[{ label: 'Stops', onClick: goBack }]} />
             )}
           </nav>
           <h2 className="mt-1 font-heading font-extrabold text-lg text-dark-brown leading-tight truncate">
@@ -361,24 +358,16 @@ function StopEditHeader() {
             className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
             title="Close editor"
           >
-            ✕
+            ×
           </button>
         </div>
       </div>
       {/* Details / Trips / Coverage tabs (mirrors the route editor's tab strip). */}
       <div className="flex gap-1 mt-3 -mb-3.5">
         {(['details', 'trips', 'coverage'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setStopDetailTab(t)}
-            className={`px-3 py-2 font-heading font-bold text-[13px] border-b-2 transition-colors ${
-              stopDetailTab === t
-                ? 'text-coral border-coral'
-                : 'text-warm-gray border-transparent hover:text-dark-brown'
-            }`}
-          >
+          <TabButton key={t} active={stopDetailTab === t} onClick={() => setStopDetailTab(t)}>
             {t === 'details' ? 'Details' : t === 'trips' ? 'Trips' : 'Coverage'}
-          </button>
+          </TabButton>
         ))}
       </div>
     </div>
@@ -414,29 +403,22 @@ function CreateStopHeader() {
     <div className="px-5 py-3.5 border-b border-sand bg-white shrink-0">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <nav className="text-[13px] text-warm-gray flex items-center gap-1.5">
-            <button onClick={goBack} className="hover:text-coral transition-colors">←</button>
+          <nav className="text-[13px] text-warm-gray">
+            <button onClick={goBack} className="hover:text-coral transition-colors mr-1.5">←</button>
             {fromRouteContext && route ? (
-              <>
-                <button onClick={() => setSidebarSection('routes')} className="hover:text-coral transition-colors">
-                  Routes
-                </button>
-                <span className="opacity-50">›</span>
-                <button
-                  onClick={() => { setCreatingStop(false); setRouteDetailTab('details'); }}
-                  className="hover:text-coral transition-colors truncate"
-                >
-                  {route.route_short_name || route.route_long_name || 'Route'}
-                </button>
-                <span className="opacity-50">›</span>
-                <button onClick={goBack} className="hover:text-coral transition-colors">
-                  Stops
-                </button>
-              </>
+              <Breadcrumb
+                items={[
+                  { label: 'Routes', onClick: () => setSidebarSection('routes') },
+                  {
+                    label: route.route_short_name || route.route_long_name || 'Route',
+                    onClick: () => { setCreatingStop(false); setRouteDetailTab('details'); },
+                    className: 'truncate',
+                  },
+                  { label: 'Stops', onClick: goBack },
+                ]}
+              />
             ) : (
-              <button onClick={goBack} className="hover:text-coral transition-colors">
-                Stops
-              </button>
+              <Breadcrumb items={[{ label: 'Stops', onClick: goBack }]} />
             )}
           </nav>
           <h2 className="mt-1 font-heading font-extrabold text-lg text-dark-brown leading-tight truncate">
@@ -448,7 +430,7 @@ function CreateStopHeader() {
           className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
           title="Close editor"
         >
-          ✕
+          ×
         </button>
       </div>
     </div>
@@ -472,21 +454,19 @@ function CalendarDetailHeader() {
     <div className="border-b border-sand bg-white shrink-0">
       <div className="px-5 pt-3 flex items-center gap-2">
         <div className="flex-1 min-w-0 text-[13px] text-warm-gray">
-          <button
-            onClick={() => setEditingCalendarServiceId(null)}
-            className="hover:text-coral transition-colors"
-          >
-            Calendars
-          </button>
-          <span className="opacity-50 mx-1.5">›</span>
-          <span className="text-dark-brown font-semibold truncate">{title}</span>
+          <Breadcrumb
+            items={[
+              { label: 'Calendars', onClick: () => setEditingCalendarServiceId(null) },
+              { label: title, className: 'truncate' },
+            ]}
+          />
         </div>
         <button
           onClick={() => useStore.getState().setSidebarSection(null)}
           className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
           title="Close editor"
         >
-          ✕
+          ×
         </button>
       </div>
       <div className="px-5 pt-1 pb-3 flex items-center gap-3">
@@ -507,19 +487,68 @@ function CalendarDetailHeader() {
       <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex gap-1 px-3 -mb-px min-w-max">
           {(['details', 'routes', 'exceptions'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setCalendarDetailTab(t)}
-              className={`px-3 py-2 font-heading font-bold text-[13px] border-b-2 transition-colors ${
-                calendarDetailTab === t
-                  ? 'text-coral border-coral'
-                  : 'text-warm-gray border-transparent hover:text-dark-brown'
-              }`}
-            >
+            <TabButton key={t} active={calendarDetailTab === t} onClick={() => setCalendarDetailTab(t)}>
               {t === 'details' ? 'Details' : t === 'routes' ? 'Routes' : 'Exceptions'}
-            </button>
+            </TabButton>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Header for the flex zone detail sub-panel. Mirrors RouteDetailHeader: a
+ * breadcrumb back to the zone list, the zone name, and its Delete action.
+ */
+function FlexZoneDetailHeader() {
+  const zone = useStore((s) =>
+    s.flexZones.find((z) => z.id === s.flexZoneDetailId) ?? null,
+  );
+  const setFlexZoneDetailId = useStore((s) => s.setFlexZoneDetailId);
+  const setSidebarSection = useStore((s) => s.setSidebarSection);
+
+  if (!zone) return null;
+
+  return (
+    <div className="border-b border-sand bg-white shrink-0">
+      {/* Breadcrumb row */}
+      <div className="px-5 pt-3 flex items-center gap-2">
+        <div className="flex-1 min-w-0 text-[13px] text-warm-gray">
+          <Breadcrumb
+            items={[
+              { label: 'Flex Zones', onClick: () => setFlexZoneDetailId(null) },
+              { label: zone.name, className: 'truncate' },
+            ]}
+          />
+        </div>
+        <button
+          onClick={() => {
+            setFlexZoneDetailId(null);
+            setSidebarSection(null);
+          }}
+          className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
+          title="Close editor"
+        >
+          ×
+        </button>
+      </div>
+      {/* Title row */}
+      <div className="px-5 pt-1 pb-3 flex items-center gap-3">
+        <div
+          className="w-5 h-5 rounded-md shrink-0 border border-purple-300"
+          style={{ background: 'rgba(124,58,237,0.2)' }}
+        />
+        <h2 className="font-heading font-extrabold text-xl text-dark-brown leading-tight truncate flex-1 min-w-0">
+          {zone.name}
+        </h2>
+        <EditActions
+          onDelete={() => {
+            deleteFlexZoneWithRoute(zone.id);
+            setFlexZoneDetailId(null);
+          }}
+          deleteTitle="Delete this flex zone"
+        />
       </div>
     </div>
   );
@@ -546,7 +575,7 @@ function GenericHeader({ section }: { section: SidebarSection }) {
         className="w-7 h-7 rounded-md flex items-center justify-center text-warm-gray hover:bg-cream hover:text-coral transition-colors"
         title="Close editor"
       >
-        ✕
+        ×
       </button>
     </div>
   );
@@ -558,6 +587,7 @@ export function RightRail() {
   const editingRouteId = useStore((s) => s.editingRouteId);
   const editingStopId = useStore((s) => s.editingStopId);
   const editingCalendarServiceId = useStore((s) => s.editingCalendarServiceId);
+  const flexZoneDetailId = useStore((s) => s.flexZoneDetailId);
   const creatingStop = useStore((s) => s.creatingStop);
   const mapMode = useStore((s) => s.mapMode);
   const storedWidth = useStore((s) => s.rightRailWidth);
@@ -671,6 +701,7 @@ export function RightRail() {
 
   const inRouteDetail = section === 'routes' && !!editingRouteId;
   const inCalendarDetail = section === 'calendar' && !!editingCalendarServiceId;
+  const inFlexDetail = section === 'flex' && !!flexZoneDetailId;
   const editingStop = !!editingStopId;
   const creatingNewStop = !!creatingStop;
 
@@ -709,7 +740,9 @@ export function RightRail() {
             ? <RouteDetailHeader />
             : inCalendarDetail
               ? <CalendarDetailHeader />
-              : <GenericHeader section={section} />}
+              : inFlexDetail
+                ? <FlexZoneDetailHeader />
+                : <GenericHeader section={section} />}
       <div className="flex-1 overflow-y-auto">
         <div className="p-5">
           {creatingNewStop

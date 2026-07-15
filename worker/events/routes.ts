@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { ulid } from 'ulidx';
 import type { AppContext } from '../env';
+import { insertEvent } from './insert';
 import { validationFailed } from '../util/errors';
 import { clientIp, rateLimit } from '../util/rateLimit';
 
@@ -21,7 +21,11 @@ const TrackSchema = z.object({
   // page_view is the original signal; the others feed the marketing funnel
   // (editor sessions, exports, paywall intent, marketing-CTA clicks). See
   // migration 0013. `kind` is a plain TEXT column — new kinds need no migration.
-  kind: z.enum(['page_view', 'editor_loaded', 'feed_exported', 'paywall_view', 'cta_click']),
+  // demo_request is normally written server-side by the /book-demo lead-form
+  // submit (POST /api/demo-leads, worker/marketing/demoLead.ts); it's listed
+  // here for kind parity with src/services/trackBeacon.ts — the client has no
+  // beacon call site for it.
+  kind: z.enum(['page_view', 'editor_loaded', 'feed_exported', 'paywall_view', 'cta_click', 'demo_request']),
   path: z.string().min(1).max(512),
   ref: z.string().min(1).max(128).nullable().optional(),
   sessionId: z.string().min(8).max(64),
@@ -64,23 +68,15 @@ eventsRouter.post('/track', async (c) => {
     windowSec: 60,
   });
 
-  const country = c.req.header('CF-IPCountry') ?? null;
-  await c.env.DB.prepare(
-    `INSERT INTO event (id, ts, kind, path, ref, session_id, country, label, gclid)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  )
-    .bind(
-      ulid(),
-      Date.now(),
-      body.kind,
-      body.path,
-      body.ref ?? null,
-      body.sessionId,
-      country,
-      body.label ?? null,
-      body.gclid ?? null,
-    )
-    .run();
+  await insertEvent(c.env.DB, {
+    kind: body.kind,
+    path: body.path,
+    ref: body.ref ?? null,
+    sessionId: body.sessionId,
+    country: c.req.header('CF-IPCountry') ?? null,
+    label: body.label ?? null,
+    gclid: body.gclid ?? null,
+  });
 
   return c.body(null, 204);
 });

@@ -55,6 +55,7 @@ const ADS_SECRET_KEYS = [
   'GOOGLE_ADS_CUSTOMER_ID',
   'GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED',
   'GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW',
+  'GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST',
 ];
 function clearAdsSecrets() {
   for (const k of ADS_SECRET_KEYS) {
@@ -109,6 +110,38 @@ describe('/api/admin/events/oci-status', () => {
     const body = await res.text();
     expect(body).toContain('OCI is configured');
     expect(body).not.toContain('not configured');
+    // All actions present — no demo_request warning note.
+    expect(body).not.toContain('GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST');
+  });
+
+  it('staff: core configured but demo action missing → configured banner plus demo note', async () => {
+    const { client } = await staffClient();
+    for (const k of ADS_SECRET_KEYS) {
+      if (k === 'GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST') continue;
+      (testEnv as unknown as Record<string, string>)[k] = 'x';
+    }
+    const res = await client.get('/api/admin/events/oci-status');
+    const body = await res.text();
+    // The page stays green for the two live kinds…
+    expect(body).toContain('OCI is configured');
+    // …but flags that demo_request uploads are off until the secret is set.
+    expect(body).toContain('GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST');
+    expect(body).toContain('uploads are <strong>off</strong>');
+  });
+
+  it('counts pending demo_request rows alongside the original kinds', async () => {
+    const { client } = await staffClient();
+    const now = Date.now();
+    await seedEvent({ kind: 'feed_exported', gclid: 'gP1', ts: now - 5000 });
+    await seedEvent({ kind: 'demo_request', gclid: 'gD1', ts: now - 6000 });
+    await seedEvent({ kind: 'demo_request', gclid: 'gD2', ts: now - 7000 });
+
+    const res = await client.get('/api/admin/events/oci-status');
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    // Pending: 1 feed_exported + 2 demo_request = 3 total.
+    expect(body).toMatch(/Pending[^]*?>3</);
+    expect(body).toContain('demo_request');
   });
 
   it('counts pending, uploaded, and permanently failed', async () => {

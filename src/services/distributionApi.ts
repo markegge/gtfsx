@@ -1,4 +1,4 @@
-import { ApiError, type ApiErrorCode } from './authApi';
+import { apiRequest, defaultParseError, ApiError, DEFAULT_HEADERS as BASE_HEADERS } from './apiClient';
 
 // ───────────────────────────────────────────────────────────────────────────
 // Types
@@ -50,60 +50,11 @@ export interface UserUsage {
 // Low-level request helper — mirrors projectsApi.ts pattern
 // ───────────────────────────────────────────────────────────────────────────
 
-const BASE_HEADERS = { 'X-GB-Client': 'web' };
-
-async function parseErrorResponse(res: Response): Promise<ApiError> {
-  let code: ApiErrorCode = 'unknown';
-  let message = res.statusText || 'Request failed';
-  let extra: Record<string, unknown> = {};
-  const contentType = res.headers.get('content-type') ?? '';
-  if (contentType.includes('application/json')) {
-    try {
-      const data = await res.json();
-      if (data && typeof data === 'object') {
-        if (typeof (data as Record<string, unknown>).error === 'string') {
-          code = (data as Record<string, unknown>).error as ApiErrorCode;
-        }
-        if (typeof (data as Record<string, unknown>).message === 'string') {
-          message = (data as Record<string, unknown>).message as string;
-        }
-        extra = data as Record<string, unknown>;
-      }
-    } catch {
-      // ignore
-    }
-  }
-  return new ApiError(code, message, res.status, extra);
-}
-
-async function requestJson<T>(
+function requestJson<T>(
   path: string,
   init: { method?: string; body?: unknown } = {},
 ): Promise<T> {
-  const { method = 'GET', body } = init;
-  const headers: Record<string, string> = { ...BASE_HEADERS };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
-
-  let res: Response;
-  try {
-    res = await fetch(path, {
-      method,
-      headers,
-      credentials: 'include',
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-  } catch (e) {
-    throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
-  }
-
-  if (!res.ok) throw await parseErrorResponse(res);
-  if (res.status === 204) return undefined as T;
-
-  const contentType = res.headers.get('content-type') ?? '';
-  if (contentType.includes('application/json')) {
-    return (await res.json()) as T;
-  }
-  return undefined as T;
+  return apiRequest<T>(path, init);
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -221,7 +172,7 @@ export async function downloadMyExport(): Promise<void> {
   if (!res.ok) {
     // 429 rate limit surfaces a clear message; other errors fall through to
     // the generic error path so callers can render them.
-    throw await parseErrorResponse(res);
+    throw await defaultParseError(res);
   }
 
   const blob = await res.blob();

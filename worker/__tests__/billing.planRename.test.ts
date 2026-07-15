@@ -17,8 +17,6 @@ import { applyMigrations, dbGet, dbRun, env as testEnv, resetDb } from './_setup
 describe('planFromPriceId returns the renamed internal plan', () => {
   // planFromPriceId only reads price-ID env vars, so a hand-built env suffices.
   const env = {
-    STRIPE_PRICE_PRO_MONTHLY: 'price_pro_m',
-    STRIPE_PRICE_PRO_ANNUAL: 'price_pro_a',
     STRIPE_PRICE_TEAM_MONTHLY: 'price_agency_m',
     STRIPE_PRICE_TEAM_ANNUAL: 'price_agency_a',
   } as unknown as Env;
@@ -28,9 +26,8 @@ describe('planFromPriceId returns the renamed internal plan', () => {
     expect(planFromPriceId(env, 'price_agency_a')).toBe('agency');
   });
 
-  it('still maps Pro price IDs to "pro" and unknown IDs to null', () => {
-    expect(planFromPriceId(env, 'price_pro_m')).toBe('pro');
-    expect(planFromPriceId(env, 'price_pro_a')).toBe('pro');
+  it('maps unknown IDs (incl. the retired Pro prices) to null, never throws', () => {
+    expect(planFromPriceId(env, 'price_pro_m')).toBeNull();
     expect(planFromPriceId(env, 'price_unknown')).toBeNull();
   });
 });
@@ -91,12 +88,12 @@ describe('0017 migration rewrites persisted team plans to agency', () => {
 
   it('leaves non-team plans untouched', async () => {
     const now = Date.now();
-    const proId = ulid();
+    const entId = ulid();
     const freeId = ulid();
     await dbRun(
       `INSERT INTO user (id, email, display_name, status, staff, plan, created_at, updated_at)
-       VALUES (?, ?, 'Pro', 'active', 0, 'pro', ?, ?)`,
-      proId, `pro-${proId}@example.com`, now, now,
+       VALUES (?, ?, 'Ent', 'active', 0, 'enterprise', ?, ?)`,
+      entId, `ent-${entId}@example.com`, now, now,
     );
     await dbRun(
       `INSERT INTO user (id, email, display_name, status, staff, plan, created_at, updated_at)
@@ -106,9 +103,9 @@ describe('0017 migration rewrites persisted team plans to agency', () => {
 
     await runRenameMigration();
 
-    const pro = await dbGet<{ plan: string }>(`SELECT plan FROM user WHERE id = ?`, proId);
+    const ent = await dbGet<{ plan: string }>(`SELECT plan FROM user WHERE id = ?`, entId);
     const free = await dbGet<{ plan: string }>(`SELECT plan FROM user WHERE id = ?`, freeId);
-    expect(pro?.plan).toBe('pro');
+    expect(ent?.plan).toBe('enterprise');
     expect(free?.plan).toBe('free');
   });
 });

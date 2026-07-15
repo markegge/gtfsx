@@ -72,6 +72,20 @@ describe('/api/events/track gclid persistence', () => {
     expect(row!.gclid).toBeNull();
   });
 
+  it('accepts kind=demo_request (parity with the /book-demo lead-form writer)', async () => {
+    const client = makeClient();
+    const res = await client.post('/api/events/track', {
+      kind: 'demo_request',
+      path: '/book-demo',
+      ref: null,
+      sessionId: 'sess-demo-kind-12345',
+    });
+    expect(res.status).toBe(204);
+
+    const row = await dbGet<EventRow>(`SELECT * FROM event`);
+    expect(row!.kind).toBe('demo_request');
+  });
+
   it('rejects gclid longer than 256 chars', async () => {
     const client = makeClient();
     const res = await client.post('/api/events/track', {

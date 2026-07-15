@@ -185,7 +185,7 @@ function LoadingPanel({
   return (
     <div>
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-8 h-8 rounded-full border-2 border-sand border-t-coral animate-spin" />
+        <div className="w-8 h-8 rounded-full border-2 border-sand border-t-teal animate-spin" />
         <h1 className="font-heading font-bold text-xl text-dark-brown">
           {verb} feed…
         </h1>

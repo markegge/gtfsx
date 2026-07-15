@@ -9,12 +9,12 @@
 // function performs the publish itself, identically for both paths.
 import { ulid } from 'ulidx';
 import type { Env } from '../env';
-import { diffRemovedIds, isEmpty as rtReportEmpty } from './idStability';
+import { assertIdStable } from './idStability';
 import { submitToCatalogs } from './submit';
 import { getFeedBlob, publicationZipKey, putFeedBlob } from '../projects/r2';
 import { loadFeedStateFromKey, maybeRegenerateThumbnail } from '../embeds/thumbnail';
 import { logAudit } from '../util/audit';
-import { validationFailed, notFound, rtBreakage } from '../util/errors';
+import { validationFailed, notFound } from '../util/errors';
 
 export interface PublishProject {
   id: string;
@@ -36,6 +36,18 @@ export interface PerformPublishInput {
   existingPublication: { snapshot_id: string } | null;
   ignoreWarnings?: boolean;
   ignoreRtBreakage?: boolean;
+  /** Acknowledges the agency_id-churn warning (C2). */
+  ignoreAgencyChurn?: boolean;
+  /**
+   * SPDX license identifier to record on `feed_project` as part of this
+   * publish. `undefined` leaves the stored value untouched (the cron path never
+   * supplies it); `null` clears it.
+   *
+   * There is no NTD ID here: it lives on the agency, inside the feed
+   * (agency.external_id), so it arrives with the snapshot state and is read
+   * per-agency by the feeds origin.
+   */
+  licenseSpdx?: string | null;
   /** Null for system/cron-initiated publishes. */
   actorUserId: string | null;
   /** Interactive multipart path supplies the freshly-rendered ZIP; the cron
@@ -59,6 +71,7 @@ export async function performPublish(env: Env, input: PerformPublishInput): Prom
   const { project, snapshot, existingPublication, actorUserId, incomingZip, feedsOrigin, runBackground } = input;
   const ignoreWarnings = input.ignoreWarnings ?? false;
   const ignoreRtBreakage = input.ignoreRtBreakage ?? false;
+  const ignoreAgencyChurn = input.ignoreAgencyChurn ?? false;
   const now = input.now ?? Date.now();
 
   // Validation gate: errors block publish unless ignoreWarnings=true.
@@ -69,38 +82,21 @@ export async function performPublish(env: Env, input: PerformPublishInput): Prom
     });
   }
 
-  // ID-stability check (BE-88): only when the project has externally-hosted RT
-  // feeds, there's an existing publication, and we're switching snapshots.
-  const rtCount = await env.DB.prepare(
-    `SELECT COUNT(*) AS n FROM project_rt_feed WHERE project_id = ? AND managed = 0`,
-  )
-    .bind(project.id)
-    .first<{ n: number }>();
-  if (
-    existingPublication &&
-    (rtCount?.n ?? 0) > 0 &&
-    existingPublication.snapshot_id !== snapshot.id &&
-    !ignoreRtBreakage
-  ) {
-    const prior = await env.DB.prepare(
-      `SELECT state_r2_key FROM feed_snapshot WHERE id = ? AND project_id = ?`,
-    )
-      .bind(existingPublication.snapshot_id, project.id)
-      .first<{ state_r2_key: string }>();
-    if (prior) {
-      const removed = await diffRemovedIds(env, prior.state_r2_key, snapshot.state_r2_key);
-      if (!rtReportEmpty(removed)) {
-        throw rtBreakage({
-          removed: {
-            agencies: removed.agencies,
-            routes: removed.routes,
-            stops: removed.stops,
-            trips: removed.trips,
-          },
-        });
-      }
-    }
-  }
+  // ─── ID-stability gates (rt_breakage BE-88 + agency_id_churn C2) ────────────
+  //
+  // One shared evaluation (worker/publication/idStability.ts → assertIdStable),
+  // also run by the schedule endpoint at SCHEDULE time so a scheduled publish is
+  // acknowledged while the user is still at the keyboard. The cron replays those
+  // persisted acknowledgements through here — so a gate that fires at fire time
+  // means the diff CHANGED since scheduling (someone published something else in
+  // between, moving the baseline), and the schedule correctly fails.
+  await assertIdStable(env, {
+    projectId: project.id,
+    snapshot,
+    existingPublication,
+    ignoreRtBreakage,
+    ignoreAgencyChurn,
+  });
 
   // Copy the rendered ZIP into the publication slot in R2.
   const pubKey = publicationZipKey(project.id, snapshot.id);
@@ -117,6 +113,16 @@ export async function performPublish(env: Env, input: PerformPublishInput): Prom
     const buf = await source.arrayBuffer();
     publishedBytes = buf.byteLength;
     await putFeedBlob(env, pubKey, buf, { contentType: 'application/zip' });
+  }
+
+  // Record the feed's license on feed_project (migration 0024) — the copy the
+  // public feeds origin serves in feed_info.json + dmfr.json. Only written when
+  // the caller supplied it: the cron path omits it and must not clobber what the
+  // last interactive publish set.
+  if (input.licenseSpdx !== undefined) {
+    await env.DB.prepare(`UPDATE feed_project SET license_spdx = ? WHERE id = ?`)
+      .bind(input.licenseSpdx, project.id)
+      .run();
   }
 
   // Upsert publication + append history.

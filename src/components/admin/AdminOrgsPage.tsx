@@ -53,6 +53,7 @@ export function AdminOrgsPage() {
           value={qInput}
           onChange={(e) => setQInput(e.target.value)}
           placeholder="Search by slug or name…"
+          aria-label="Search organizations by slug or name"
           className="flex-1 min-w-[220px] px-3 py-2 border-2 border-sand rounded-lg text-sm bg-white text-dark-brown focus:outline-none focus:border-coral"
         />
         <AuthButton type="submit" variant="secondary">

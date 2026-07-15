@@ -39,7 +39,7 @@
     }
   },
   "datePublished": "2026-05-01",
-  "dateModified": "2026-05-22",
+  "dateModified": "2026-07-12",
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": "https://www.gtfsx.com/docs/import-and-export/"
@@ -65,7 +65,7 @@
     <main>
       <div class="crumbs"><a href="/docs/">Docs</a> · Validation &amp; I/O · Import &amp; export</div>
       <h1>Import &amp; export</h1>
-      <p class="lede">GTFS·X reads and writes standards-compliant GTFS ZIPs. Import an existing feed to edit it; export to produce a ZIP you can host or hand to a regulator. Round-trip preserves the data you imported — non-standard columns and files survive the cycle and reappear on export.</p>
+      <p class="lede">GTFS·X reads and writes standards-compliant GTFS ZIPs. Import an existing feed to edit it; export to produce a ZIP you can host or hand to a regulator. Every GTFS file the editor supports round-trips through the cycle unchanged — including the parts it has no editor UI for, like Fares v2.</p>
 
       <figure>
         <img src="/assets/docs/import-and-export-hero.png" alt="Export GTFS Feed dialog in GTFS·X, listing every file in the export with row counts and an 'All checks passed' status." loading="lazy" />
@@ -81,6 +81,7 @@
         <li>GTFS-Flex files where applicable (<code>locations.geojson</code>, <code>booking_rules.txt</code>, <code>location_groups.txt</code>, <code>location_group_stops.txt</code>).</li>
         <li>GTFS-Fares v2 files where present in the imported feed (round-trip preservation — see <a href="/docs/fares/#v2-roadmap">Fares</a>).</li>
         <li><code>feed_info.txt</code> always — synthesized from agency data if you didn't fill it in explicitly.</li>
+        <li>A provisional <code>external_id</code> column on <code>agency.txt</code>, whenever any agency in the feed has an NTD / External ID set. It carries each agency's own identifier and is <strong>not</strong> part of the GTFS spec — see <a href="/docs/ntd-id/#external-id-column">NTD ID &amp; FTA reporting</a>. No agency has one, no column is written.</li>
       </ul>
       <p>The ZIP is named after the project slug, with the export date appended (<code>sunny-valley-transit-20260518.zip</code>). Drop it on a static host, hand it to Google Transit Partners, or use the editor's <a href="/docs/hosted-publishing/">hosted publishing</a> to serve it from a stable URL.</p>
 
@@ -88,9 +89,9 @@
       <p>Click <strong>Import</strong> in the top bar, select a ZIP. The editor parses every supported file and surfaces an import summary:</p>
       <ul>
         <li><strong>Counts</strong> — agencies, routes, stops, trips, stop_times, shapes, calendars, fares, flex zones, transfers.</li>
-        <li><strong>Warnings</strong> — non-standard columns preserved, files the editor doesn't author but round-trips, unknown route types, anything in the ZIP that's outside the spec.</li>
+        <li><strong>Warnings</strong> — unknown route types, malformed values, and anything in the ZIP the editor couldn't make sense of.</li>
       </ul>
-      <p>After import, the editor loads the feed and you can edit it. Subsequent export produces a ZIP that's structurally identical for the parts the editor manages, with the non-managed files preserved verbatim.</p>
+      <p>After import, the editor loads the feed and you can edit it. Subsequent export produces a ZIP that's structurally identical for every file the editor supports.</p>
 
       <h3 id="import-routes">Import individual routes from another of your feeds</h3>
       <p>You don't have to import a whole feed. With a project already open, you can pull a few routes (with their stops, shapes, trips, and service calendars) from any of your other GTFS·X feeds into the current one. This is the fast way to reuse a route you've already built.</p>
@@ -104,14 +105,15 @@
       <p>To import an entire feed instead, use <strong>Replace project</strong> (or import from a ZIP, URL, or the public catalog on the other tabs).</p>
 
       <h2 id="round-trip">Round-trip behavior</h2>
-      <p>The principle: nothing that came in goes out missing or mangled. Specifically:</p>
+      <p>The principle: every GTFS file and field the editor supports goes out the way it came in, whether or not the editor has a UI for authoring it. Specifically:</p>
       <ul>
-        <li><strong>Non-standard columns</strong> on GTFS files (e.g. an agency that uses a custom <code>route_text_color</code> variant) are preserved at the row level. Edits in the editor write the standard columns; non-standard ones carry through unchanged.</li>
-        <li><strong>Files outside the spec</strong> that the editor doesn't author (extended attribution files, agency-specific extensions) are preserved verbatim. They reappear in the export ZIP at byte-equivalent content.</li>
-        <li><strong>GTFS-Fares v2</strong> is fully round-tripped — every v2 file imported reappears on export, even though there's no editor UI for authoring v2 today.</li>
-        <li><strong>directions.txt</strong>, <code>frequencies.txt</code>, <code>pathways.txt</code> — supported on import; partially supported in the editor; preserved on export.</li>
+        <li><strong>GTFS-Fares v2</strong> is fully round-tripped — every v2 file imported (<code>fare_products</code>, <code>fare_leg_rules</code>, <code>fare_transfer_rules</code>, <code>areas</code>, <code>networks</code>, <code>timeframes</code>, <code>rider_categories</code>, <code>fare_media</code>) reappears on export, even where there's no editor UI for authoring it today.</li>
+        <li><strong>GTFS-Flex</strong> — <code>locations.geojson</code>, <code>booking_rules.txt</code>, <code>location_groups.txt</code>, <code>location_group_stops.txt</code>, and the extended <code>stop_times</code> fields.</li>
+        <li><strong><code>directions.txt</code>, <code>frequencies.txt</code>, <code>pathways.txt</code>, <code>levels.txt</code></strong> — supported on import; partially supported in the editor; written back on export.</li>
       </ul>
-      <p>For agencies running automated quality checks, the round-trip behavior means the editor can sit in your pipeline without changing your feed's structure — only the parts you edit are touched.</p>
+      <div class="callout">
+        <p><strong>Columns and files the editor doesn't know are dropped, not preserved.</strong> The importer reads a fixed set of GTFS files and, within each, a fixed set of spec fields. A custom column your agency added to <code>routes.txt</code>, or a non-GTFS file you shipped alongside the standard ones, will not survive an import-then-export cycle. If you depend on a non-standard field, keep the authoritative copy outside GTFS·X. The one deliberate exception is <a href="/docs/ntd-id/#external-id-column"><code>external_id</code></a> on <code>agency.txt</code>, which the importer reads onto each agency and the exporter writes back.</p>
+      </div>
 
       <h2 id="limits">Limits</h2>
       <ul>
@@ -133,6 +135,7 @@
         <ul>
           <li><a href="/docs/validation/">Validation</a> — runs before every export; blocks on errors.</li>
           <li><a href="/docs/hosted-publishing/">Hosted publishing</a> — serve the exported ZIP from a stable URL.</li>
+          <li><a href="/docs/ntd-id/">NTD ID &amp; FTA reporting</a> — the provisional <code>external_id</code> column on <code>agency.txt</code>.</li>
           <li><a href="/docs/deep-links/">Deep-link integration</a> — load a feed into the editor from a URL.</li>
         </ul>
       </div>
@@ -165,7 +168,7 @@ footer.gx-footer .gx-mono { font-family: "JetBrains Mono", ui-monospace, "SF Mon
         <div class="gx-social">
           <a href="https://twitter.com/gtfsxapp" aria-label="GTFS·X on X">X</a>
           <a href="https://www.linkedin.com/company/gtfsx" aria-label="GTFS·X on LinkedIn">in</a>
-          <a href="https://github.com/markegge/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
+          <a href="https://github.com/GTFS-X/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
         </div>
       </div>
       <div class="gx-col">

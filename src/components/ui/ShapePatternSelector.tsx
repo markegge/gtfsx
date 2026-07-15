@@ -5,7 +5,7 @@
 
 import { directionName } from '../../utils/constants';
 import type { Route, Shape } from '../../types/gtfs';
-import type { ShapePattern } from './shapePatterns';
+import { type ShapePattern, isNoShapeBucket } from './shapePatterns';
 
 /**
  * Each option carries (shape_id, direction_id). The label is the shape's name
@@ -33,6 +33,9 @@ export function PatternSelector({
     return acc;
   }, {});
   const label = (p: ShapePattern) => {
+    // The synthetic "No shape" bucket holds trips with no/unknown shape on a
+    // route that otherwise has shapes — label it plainly so it's pickable.
+    if (isNoShapeBucket(p.shapeId)) return `${directionName(route, p.directionId)} · no shape`;
     const name = shapes?.find((s) => s.shape_id === p.shapeId)?._name?.trim();
     if (name) return name;
     const base = directionName(route, p.directionId);

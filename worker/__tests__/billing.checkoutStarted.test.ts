@@ -1,8 +1,9 @@
 // GH #68 — recordCheckoutStarted(): the server-side upgrade-path-start signal.
 // The full POST /checkout route can't run in the worker test pool (no
-// BILLING_ENABLED / STRIPE_SECRET_KEY, fixed at pool boot), so we unit-test the
-// extracted helper directly: it writes a `checkout_started` pro_intent row, and
-// it swallows DB errors so a logging failure can never break checkout.
+// STRIPE_SECRET_KEY, fixed at pool boot, so billingReady() is false), so we
+// unit-test the extracted helper directly: it writes a `checkout_started`
+// pro_intent row, and it swallows DB errors so a logging failure can never
+// break checkout.
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { env } from 'cloudflare:test';
@@ -28,13 +29,13 @@ describe('recordCheckoutStarted (GH #68 funnel signal)', () => {
     const user = await seedUser({ email: 'checkout1@example.com', plan: 'free' });
 
     const before = Date.now();
-    await recordCheckoutStarted(env as unknown as Env, user.id, 'pro', 'month');
+    await recordCheckoutStarted(env as unknown as Env, user.id, 'agency', 'month');
     const after = Date.now();
 
     const rows = await dbAll<ProIntentRow>(`SELECT * FROM pro_intent`);
     expect(rows.length).toBe(1);
     expect(rows[0].action).toBe('checkout_started');
-    expect(rows[0].source).toBe('pro_month');
+    expect(rows[0].source).toBe('agency_month');
     expect(rows[0].user_id).toBe(user.id);
     expect(rows[0].ts).toBeGreaterThanOrEqual(before);
     expect(rows[0].ts).toBeLessThanOrEqual(after);
@@ -58,7 +59,7 @@ describe('recordCheckoutStarted (GH #68 funnel signal)', () => {
     } as unknown as Env;
 
     await expect(
-      recordCheckoutStarted(badEnv, 'someuser', 'pro', 'month'),
+      recordCheckoutStarted(badEnv, 'someuser', 'agency', 'month'),
     ).resolves.toBeUndefined();
   });
 });

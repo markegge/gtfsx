@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../store';
 import { FormField } from '../ui/FormField';
+import { Breadcrumb } from '../ui/Breadcrumb';
 import { Badge } from '../ui/Badge';
 import { RailSubHeading } from '../ui/RailHeadings';
 import { EditActions } from '../ui/EditActions';
@@ -185,7 +186,7 @@ export function AreasEditor() {
           onClick={handleAddArea}
           className="w-full py-2 rounded-lg border-2 border-dashed border-sand text-warm-gray text-sm font-medium hover:border-coral hover:text-coral transition-colors"
         >
-          + Add Area
+          + Add area
         </button>
       </div>
     );
@@ -195,13 +196,13 @@ export function AreasEditor() {
   return (
     <div>
       {/* Breadcrumb */}
-      <nav className="text-[13px] text-warm-gray flex items-center gap-1.5 mb-1">
-        <button onClick={() => openArea(null)} className="hover:text-coral transition-colors">‹</button>
-        <button onClick={() => openArea(null)} className="hover:text-coral transition-colors">Areas</button>
-        <span className="opacity-50">›</span>
-        <span className="text-dark-brown font-semibold truncate">
-          {selectedArea.area_name || selectedArea.area_id}
-        </span>
+      <nav className="text-[13px] text-warm-gray mb-1">
+        <Breadcrumb
+          items={[
+            { label: 'Areas', onClick: () => openArea(null) },
+            { label: selectedArea.area_name || selectedArea.area_id, className: 'truncate' },
+          ]}
+        />
       </nav>
 
       {/* Title + actions */}
@@ -320,6 +321,7 @@ export function AreasEditor() {
         value={stopFilter}
         onChange={(e) => setStopFilter(e.target.value)}
         placeholder="Search stops by name or ID…"
+        aria-label="Search stops by name or ID"
         className="w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral focus:bg-white mb-2"
       />
       <div className="space-y-1 max-h-64 overflow-y-auto">

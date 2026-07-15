@@ -17,7 +17,7 @@ import {
   type AlertRecord,
 } from '../alerts/render';
 
-type Plan = 'free' | 'pro' | 'agency' | 'enterprise';
+type Plan = 'free' | 'agency' | 'enterprise';
 
 async function loggedIn(email: string, plan?: Plan): Promise<TestClient> {
   const user = await seedUser({ email, ...(plan ? { plan } : {}) });

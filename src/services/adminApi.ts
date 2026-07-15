@@ -1,4 +1,4 @@
-import { ApiError, type ApiErrorCode } from './authApi';
+import { apiRequest, restParseError } from './apiClient';
 
 export type UserStatus = 'active' | 'pending_verification' | 'disabled' | 'deleted_soft';
 
@@ -11,7 +11,7 @@ export interface AdminStats {
     deleted_soft: number;
   };
   // Non-deleted users by subscription tier ('agency' = Agency tier).
-  usersByPlan: { free: number; pro: number; agency: number; enterprise: number };
+  usersByPlan: { free: number; agency: number; enterprise: number };
   organizations: { total: number };
   projects: { total: number; byOwnerType: { user: number; org: number } };
   snapshots: { total: number };
@@ -24,7 +24,7 @@ export interface AdminStats {
   };
 }
 
-export type Plan = 'free' | 'pro' | 'agency' | 'enterprise';
+export type Plan = 'free' | 'agency' | 'enterprise';
 export type PlanStatus = 'active' | 'past_due' | 'canceled' | 'trialing';
 
 /** Plans a staff member can comp-grant (no Stripe). */
@@ -136,55 +136,11 @@ export interface AdminAuditFilters {
   pageSize?: number;
 }
 
-const BASE_HEADERS = { 'X-GB-Client': 'web' };
-
-async function request<T = unknown>(
+function request<T = unknown>(
   path: string,
   init: { method?: string; body?: unknown } = {},
 ): Promise<T> {
-  const { method = 'GET', body } = init;
-  const headers: Record<string, string> = { ...BASE_HEADERS };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
-
-  let res: Response;
-  try {
-    res = await fetch(path, {
-      method,
-      headers,
-      credentials: 'include',
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-  } catch (e) {
-    throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
-  }
-
-  if (res.status === 204) return undefined as T;
-
-  const contentType = res.headers.get('content-type') ?? '';
-  const isJson = contentType.includes('application/json');
-
-  if (!res.ok) {
-    let code: ApiErrorCode = 'unknown';
-    let message = res.statusText || 'Request failed';
-    let extra: Record<string, unknown> = {};
-    if (isJson) {
-      try {
-        const data = await res.json();
-        if (data && typeof data === 'object') {
-          const { error, message: msg, ...rest } = data as Record<string, unknown>;
-          if (typeof error === 'string') code = error as ApiErrorCode;
-          if (typeof msg === 'string') message = msg;
-          extra = rest;
-        }
-      } catch {
-        // ignore
-      }
-    }
-    throw new ApiError(code, message, res.status, extra);
-  }
-
-  if (isJson) return (await res.json()) as T;
-  return undefined as T;
+  return apiRequest<T>(path, init, { parseError: restParseError });
 }
 
 function buildQuery(params: Record<string, string | number | undefined | null>): string {

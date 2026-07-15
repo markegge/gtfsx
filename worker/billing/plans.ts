@@ -21,33 +21,35 @@ export type FeatureKey =
   | 'org_logo'             // upload a custom org logo
   | 'brand_color'          // custom brand primary color
   | 'service_alerts'       // author GTFS-Realtime Service Alerts
+  | 'geojson_export'       // export routes + stops as GeoJSON for GIS
+  | 'access_isochrones'    // schedule-based transit travel-time reach analysis
   | 'phone_support';       // SLA-backed phone support
 
 // Per-feature: which plans grant access. Free is excluded by absence.
 //
-// Pricing v3 (Jun 2026): richer, more shareable free tier without giving away
-// the two paid pillars (hosting/embeds + route-level analysis). Demand dots
-// (analysis_propensity) are free for everyone; the cost & coverage panels split
-// into a free system-level summary and a paywalled route-level breakdown
-// (analysis_basic stays Agency+). Embeds stay Pro+, but only Agency+ may remove
-// the "Powered by GTFS·X" badge (embed_remove_badge). phone_support moves to
-// Agency+ to match the catalog.
+// Pricing v4 (Jul 2026): the Pro tier is retired (zero subscribers — no
+// migration needed). Everything that was Pro+ moves up to Agency+ (internal
+// plan id 'agency'; displayed as "Planner"), except geojson_export which
+// drops DOWN to every plan including free. analysis_propensity (demand dots)
+// stays free for everyone.
 export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
-  managed_publishing:  ['pro', 'agency', 'enterprise'],
-  draft_links:         ['pro', 'agency', 'enterprise'],
-  mobility_db_submit:  ['pro', 'agency', 'enterprise'],
-  embeds:              ['pro', 'agency', 'enterprise'],
+  managed_publishing:  ['agency', 'enterprise'],
+  draft_links:         ['agency', 'enterprise'],
+  mobility_db_submit:  ['agency', 'enterprise'],
+  embeds:              ['agency', 'enterprise'],
   embed_remove_badge:  ['agency', 'enterprise'],
-  snapshot_history:    ['pro', 'agency', 'enterprise'],
+  snapshot_history:    ['agency', 'enterprise'],
   analysis_basic:      ['agency', 'enterprise'],
   analysis_title_vi:   ['agency', 'enterprise'],
-  analysis_propensity: ['free', 'pro', 'agency', 'enterprise'],
+  analysis_propensity: ['free', 'agency', 'enterprise'],
   network_walksheds:   ['agency', 'enterprise'],
   org_workspace:       ['agency', 'enterprise'],
   cross_org_member:    ['agency', 'enterprise'],
   org_logo:            ['agency', 'enterprise'],
-  brand_color:         ['pro', 'agency', 'enterprise'],
+  brand_color:         ['agency', 'enterprise'],
   service_alerts:      ['agency', 'enterprise'],
+  geojson_export:      ['free', 'agency', 'enterprise'],
+  access_isochrones:   ['agency', 'enterprise'],
   phone_support:       ['agency', 'enterprise'],
 };
 
@@ -57,7 +59,7 @@ export function planHasFeature(plan: Plan, feature: FeatureKey): boolean {
 
 // The smallest plan that unlocks a given feature — used by the upgrade modal
 // to suggest a target. Order matches the price ladder.
-const PLAN_ORDER: Plan[] = ['free', 'pro', 'agency', 'enterprise'];
+const PLAN_ORDER: Plan[] = ['free', 'agency', 'enterprise'];
 
 export function cheapestPlanFor(feature: FeatureKey): Plan {
   for (const plan of PLAN_ORDER) {
@@ -90,61 +92,32 @@ export interface PlanCatalogEntry {
 export const PLAN_CATALOG: PlanCatalogEntry[] = [
   {
     plan: 'free',
-    displayName: 'Edit',
+    displayName: 'Editor',
     monthlyPriceUsd: 0,
     annualPriceUsd: 0,
     perSeat: false,
-    tagline: 'Create, edit, validate, and export GTFS feeds — in your browser.',
+    tagline: 'Create, edit, validate, and export GTFS feeds—free.',
     features: [
       'Create and edit routes, stops, trips, and schedules on a live map',
       'Add GTFS-Flex zones and booking rules to any feed',
       'Validate against the GTFS spec as you work',
-      'Import an existing feed or start from scratch — no signup required',
+      'Import an existing feed or start from scratch (no signup required)',
       'Export a spec-clean GTFS .zip and host it anywhere',
-      'Up to 3 saved feeds in the cloud',
-      'Nationwide demand-propensity map',
-      'System-level cost and coverage summary',
-      'Community support',
-    ],
-  },
-  {
-    plan: 'pro',
-    displayName: 'Pro',
-    monthlyPriceUsd: 49,
-    annualPriceUsd: 468,
-    perSeat: false,
-    tagline: 'Host and publish feeds.',
-    features: [
-      'Fast, free GTFS·X editor',
-      'Feed publication and hosting',
-      'Rider-facing schedule mini-site',
-      'Feed submission (Google Maps, Mobility Database, etc.)',
-      'Unlimited saved feeds',
-      'Email support',
     ],
   },
   {
     plan: 'agency',
-    displayName: 'Agency',
+    displayName: 'Planner',
     monthlyPriceUsd: 299,
     annualPriceUsd: 2988,
     perSeat: false,
-    tagline: 'Plan routes and service as a team.',
+    tagline: 'The service-planning suite for transit agencies.',
     features: [
-      'Team workspace: your whole org owns and manages feeds together',
-      'Unlimited members at a flat rate (no per-seat fees)',
-      'Cross-org access for consultants and partners',
-      'Custom org logo',
       'Route operating cost estimates',
-      'Demographic coverage analysis',
-      'Network-distance walksheds',
-      'Stop-level analysis',
-      'Title VI equity analysis',
-      'GTFS-Realtime Service Alerts',
-      'Fully white-labeled rider site (your domain, your brand)',
-      'Everything in Pro',
-      'Unlimited feeds',
-      'Phone + email support',
+      'Demographic coverage & Title VI equity analysis',
+      'Scenario comparison',
+      'Hosted publishing: stable feed URL, rider mini-site & embeds',
+      'Unlimited feeds & team workspaces',
     ],
     detailsHref: '/planning',
     detailsLabel: 'See all planning features →',
@@ -155,7 +128,7 @@ export const PLAN_CATALOG: PlanCatalogEntry[] = [
     monthlyPriceUsd: null,
     annualPriceUsd: null,
     perSeat: false,
-    tagline: 'For state DOTs, RTAP networks, and large consortiums.',
+    tagline: 'Multi-agency subscriptions for consultants and state DOTs.',
     features: [
       'Custom feed and seat limits',
       'Unlimited Premium Feed Management',

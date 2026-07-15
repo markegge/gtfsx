@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { useStore } from '../../store';
-import { isPlanAtLeastPro } from '../../utils/planRank';
+import { isPaidPlan } from '../../utils/planRank';
 
 const SUPPORT_EMAIL = 'support@gtfsx.com';
 
@@ -12,7 +12,8 @@ const SUPPORT_EMAIL = 'support@gtfsx.com';
  * toggles a menu above it with links to the quick-start guide, full
  * documentation, and community forum — all in new tabs so the user does not
  * lose editor state. Clicking outside or pressing Escape closes the menu.
- * Pro+ users also see a support-email row with a copy-to-clipboard button.
+ * Paid (Planner/Enterprise) users also see a support-email row with a
+ * copy-to-clipboard button.
  *
  * Accessibility:
  *   - Trigger: aria-haspopup / aria-expanded managed by Radix Popover.Trigger.
@@ -41,9 +42,9 @@ export function FloatingHelp() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // Show support email for Pro+ personal plan OR any agency / enterprise org.
+  // Show support email for a paid personal plan OR any agency / enterprise org.
   const showSupportEmail = useMemo(() => {
-    if (isPlanAtLeastPro(currentUser?.plan)) return true;
+    if (isPaidPlan(currentUser?.plan)) return true;
     return userOrgs.some((o) => o.plan === 'agency' || o.plan === 'enterprise');
   }, [currentUser, userOrgs]);
 

@@ -153,9 +153,9 @@ export function FrequenciesEditor() {
       <button
         onClick={handleAdd}
         disabled={trips.length === 0}
-        className="w-full px-4 py-2 rounded-lg font-heading font-bold text-sm bg-coral text-white hover:bg-[#d4603a] transition-colors disabled:opacity-40"
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border-2 border-dashed border-sand rounded-lg text-sm font-semibold text-warm-gray hover:border-coral hover:text-coral hover:bg-coral-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-sand disabled:hover:text-warm-gray disabled:hover:bg-transparent"
       >
-        + Add Headway Window
+        + Add headway window
       </button>
     </div>
   );

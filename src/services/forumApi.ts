@@ -1,50 +1,10 @@
-import { ApiError, type ApiErrorCode } from './authApi';
+import { apiRequest, defaultParseError, ApiError, DEFAULT_HEADERS as BASE_HEADERS } from './apiClient';
 
-const BASE_HEADERS = { 'X-GB-Client': 'web' };
-
-async function parseErrorResponse(res: Response): Promise<ApiError> {
-  let code: ApiErrorCode = 'unknown';
-  let message = res.statusText || 'Request failed';
-  let extra: Record<string, unknown> = {};
-  const contentType = res.headers.get('content-type') ?? '';
-  if (contentType.includes('application/json')) {
-    try {
-      const data = await res.json();
-      if (data && typeof data === 'object') {
-        if (typeof data.error === 'string') code = data.error as ApiErrorCode;
-        if (typeof data.message === 'string') message = data.message;
-        extra = data as Record<string, unknown>;
-      }
-    } catch {
-      // ignore
-    }
-  }
-  return new ApiError(code, message, res.status, extra);
-}
-
-async function requestJson<T>(
+function requestJson<T>(
   path: string,
   init: { method?: string; body?: unknown } = {},
 ): Promise<T> {
-  const { method = 'GET', body } = init;
-  const headers: Record<string, string> = { ...BASE_HEADERS };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
-  let res: Response;
-  try {
-    res = await fetch(path, {
-      method,
-      headers,
-      credentials: 'include',
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-  } catch (e) {
-    throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
-  }
-  if (!res.ok) throw await parseErrorResponse(res);
-  if (res.status === 204) return undefined as T;
-  const ct = res.headers.get('content-type') ?? '';
-  if (ct.includes('application/json')) return (await res.json()) as T;
-  return undefined as T;
+  return apiRequest<T>(path, init);
 }
 
 // ─── Types (mirror worker/forum/types.ts but in client form) ────────────────
@@ -282,6 +242,6 @@ export async function uploadForumImage(file: File): Promise<UploadedImage> {
   }).catch((e) => {
     throw new ApiError('network_error', (e as Error)?.message ?? 'Network error', 0);
   });
-  if (!res.ok) throw await parseErrorResponse(res);
+  if (!res.ok) throw await defaultParseError(res);
   return (await res.json()) as UploadedImage;
 }

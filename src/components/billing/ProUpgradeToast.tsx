@@ -5,7 +5,7 @@ import { PRO_NUDGE_COPY } from '../../services/proIntent';
 /**
  * Non-modal upgrade toast for the contextual upgrade nudges (publish/hosting,
  * feed-cap, mini-site). Mounted once in the editor shell; renders only when
- * uiSlice.proNudgeToast is set (a logged-in free user just hit a Pro moment).
+ * uiSlice.proNudgeToast is set (a logged-in free user just hit a paid-feature moment).
  * It stays put until the user dismisses it (the × or the CTA) — no auto-
  * dismiss, so it can't vanish before it's read. Links to /pricing.
  */

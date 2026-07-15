@@ -16,10 +16,9 @@ import type { Plan } from '../projects/quotas';
 // (not an expanded Product), so reading `product.metadata.tier` requires a
 // second API round-trip. Reading the Price ID directly out of the env vars we
 // already configured at setup time is faster and dependency-free.
+// Returns null for any unrecognized Price ID (e.g. the retired Pro prices) —
+// callers must treat null as "no plan change" and log, never crash.
 export function planFromPriceId(env: Env, priceId: string): Plan | null {
-  if (priceId === env.STRIPE_PRICE_PRO_MONTHLY || priceId === env.STRIPE_PRICE_PRO_ANNUAL) {
-    return 'pro';
-  }
   if (priceId === env.STRIPE_PRICE_TEAM_MONTHLY || priceId === env.STRIPE_PRICE_TEAM_ANNUAL) {
     return 'agency';
   }
@@ -48,9 +47,7 @@ export type Interval = 'month' | 'year';
 export function resolvePriceId(env: Env, plan: Plan, interval: Interval): string {
   const k = `${plan}_${interval}` as const;
   const map: Partial<Record<string, string | undefined>> = {
-    pro_month: env.STRIPE_PRICE_PRO_MONTHLY,
-    pro_year: env.STRIPE_PRICE_PRO_ANNUAL,
-    // Keyed by `${plan}_${interval}`; plan is now 'agency'. The env var NAMES
+    // Keyed by `${plan}_${interval}`; plan is 'agency'. The env var NAMES
     // (STRIPE_PRICE_TEAM_*) intentionally stay — they're opaque config that
     // points at the same Stripe Price IDs as before the display rename.
     agency_month: env.STRIPE_PRICE_TEAM_MONTHLY,
@@ -66,8 +63,11 @@ export function resolvePriceId(env: Env, plan: Plan, interval: Interval): string
 // Whether the billing path is wired up enough to actually charge. Called
 // before checkout / portal endpoints so we can return a polite 503 in
 // staging-without-stripe rather than a cryptic Stripe error.
+//
+// The BILLING_ENABLED kill-switch was removed on 2026-07-12 (legacy); having a
+// Stripe secret key configured is now the only precondition.
 export function billingReady(env: Env): boolean {
-  return env.BILLING_ENABLED === 'true' && !!env.STRIPE_SECRET_KEY;
+  return !!env.STRIPE_SECRET_KEY;
 }
 
 // Detect Stripe SDK errors so callers can log full detail server-side and

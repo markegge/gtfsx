@@ -20,33 +20,37 @@ export type FeatureKey =
   | 'brand_color'
   | 'service_alerts'
   | 'variants'
+  | 'geojson_export'
+  | 'access_isochrones'
   | 'phone_support';
 
-// Pricing v3 (Jun 2026): demand dots are free for all; cost/coverage split into a
-// free system-level summary + a paywalled route-level breakdown (analysis_basic
-// stays Agency+); embeds stay Pro+ but only Agency+ removes the badge
-// (embed_remove_badge); phone_support → Agency+. See worker/billing/plans.ts.
+// Pricing v4 (Jul 2026): the Pro tier is retired. Everything that was Pro+
+// moves up to Agency+ (internal id 'agency'; displayed as "Planner"), except
+// geojson_export which is now free for every plan. Demand dots
+// (analysis_propensity) stay free for everyone. See worker/billing/plans.ts.
 export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
-  managed_publishing:  ['pro', 'agency', 'enterprise'],
-  draft_links:         ['pro', 'agency', 'enterprise'],
-  mobility_db_submit:  ['pro', 'agency', 'enterprise'],
-  embeds:              ['pro', 'agency', 'enterprise'],
+  managed_publishing:  ['agency', 'enterprise'],
+  draft_links:         ['agency', 'enterprise'],
+  mobility_db_submit:  ['agency', 'enterprise'],
+  embeds:              ['agency', 'enterprise'],
   embed_remove_badge:  ['agency', 'enterprise'],
-  snapshot_history:    ['pro', 'agency', 'enterprise'],
+  snapshot_history:    ['agency', 'enterprise'],
   analysis_basic:      ['agency', 'enterprise'],
   analysis_title_vi:   ['agency', 'enterprise'],
-  analysis_propensity: ['free', 'pro', 'agency', 'enterprise'],
+  analysis_propensity: ['free', 'agency', 'enterprise'],
   network_walksheds:   ['agency', 'enterprise'],
   org_workspace:       ['agency', 'enterprise'],
   cross_org_member:    ['agency', 'enterprise'],
   org_logo:            ['agency', 'enterprise'],
-  brand_color:         ['pro', 'agency', 'enterprise'],
+  brand_color:         ['agency', 'enterprise'],
   service_alerts:      ['agency', 'enterprise'],
   variants:            ['agency', 'enterprise'],
+  geojson_export:      ['free', 'agency', 'enterprise'],
+  access_isochrones:   ['agency', 'enterprise'],
   phone_support:       ['agency', 'enterprise'],
 };
 
-const PLAN_ORDER: Plan[] = ['free', 'pro', 'agency', 'enterprise'];
+const PLAN_ORDER: Plan[] = ['free', 'agency', 'enterprise'];
 
 export function planHasFeature(plan: Plan | undefined | null, feature: FeatureKey): boolean {
   if (!plan) return false;
@@ -62,12 +66,12 @@ export function cheapestPlanFor(feature: FeatureKey): Plan {
 
 export function planDisplayName(plan: Plan): string {
   switch (plan) {
-    case 'free': return 'Free';
-    case 'pro': return 'Pro';
+    case 'free': return 'Editor';
     // Internal id is 'agency' (DB column, code paths); the Stripe env-var names
-    // (STRIPE_PRICE_TEAM_*) and product id stay 'team' for stability. 'Agency'
-    // is the May-2026 display rename. See docs/REQUIREMENTS.md.
-    case 'agency': return 'Agency';
+    // (STRIPE_PRICE_TEAM_*) and product id stay 'team' for stability. 'Planner'
+    // is the Jul-2026 display rename (the service-planning suite for transit
+    // agencies). See docs/REQUIREMENTS.md.
+    case 'agency': return 'Planner';
     case 'enterprise': return 'Enterprise';
   }
 }
@@ -93,7 +97,7 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   },
   embed_remove_badge: {
     title: 'Remove the GTFS·X badge',
-    description: 'Serve your embeds and mini-site white-label — without the “Powered by GTFS·X” badge.',
+    description: 'Serve your embeds and mini-site white-label, without the “Powered by GTFS·X” badge.',
   },
   snapshot_history: {
     title: 'Named snapshots',
@@ -101,7 +105,7 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   },
   analysis_basic: {
     title: 'Route-level coverage and cost analysis',
-    description: 'System-level summaries are free. Unlock the per-route breakdown — coverage and operating cost route by route — with the Agency planning suite.',
+    description: 'System-level summaries are free. Unlock the per-route breakdown (coverage and operating cost, route by route) with the Planner suite.',
   },
   analysis_title_vi: {
     title: 'Title VI equity analysis',
@@ -113,7 +117,7 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   },
   network_walksheds: {
     title: 'Street-network walksheds',
-    description: 'Swap the straight-line ¼–½ mi coverage buffer for real walking-time isochrones — coverage and demographics that respect rivers, freeways, and the actual street grid.',
+    description: 'Swap the straight-line ¼–½ mi coverage buffer for real walking-time isochrones: coverage and demographics that respect rivers, freeways, and the actual street grid.',
   },
   org_workspace: {
     title: 'Team workspace',
@@ -121,7 +125,7 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   },
   cross_org_member: {
     title: 'Cross-org membership',
-    description: 'Built for consultants — work in multiple client orgs from one Agency subscription, without the client orgs paying for your seat.',
+    description: 'Built for consultants: work in multiple client orgs from one Planner subscription, without the client orgs paying for your seat.',
   },
   org_logo: {
     title: 'Custom organization logo',
@@ -133,7 +137,7 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   },
   service_alerts: {
     title: 'Service Alerts authoring',
-    description: 'Publish GTFS-Realtime Service Alerts — detours, delays, and stop closures — to a live feed Google, Apple, and transit apps consume, without republishing your schedule.',
+    description: 'Publish GTFS-Realtime Service Alerts (detours, delays, and stop closures) to a live feed Google, Apple, and transit apps consume, without republishing your schedule.',
   },
   variants: {
     title: 'Feed variants',
@@ -141,6 +145,14 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   },
   phone_support: {
     title: 'Phone support with SLA',
-    description: 'Direct phone line + 24-hour response SLA, available on Agency and Enterprise plans.',
+    description: 'Direct phone line + 24-hour response SLA, available on the Planner and Enterprise plans.',
+  },
+  geojson_export: {
+    title: 'GeoJSON export',
+    description: 'Export your route shapes and stops as a GeoJSON FeatureCollection. Drop them straight into QGIS, ArcGIS, Mapbox, or any GIS tool.',
+  },
+  access_isochrones: {
+    title: 'Transit access isochrones',
+    description: 'Drop a pin and see where a rider can reach on your network in 15 / 30 / 45 minutes (combining walk access, wait, and in-vehicle time), with the population, jobs, and equity populations inside each contour.',
   },
 };

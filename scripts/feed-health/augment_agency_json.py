@@ -55,7 +55,10 @@ DEFAULT_CSV  = "/Users/clippy2/proj/gtfsx/handoffs/Feed Health Data/ntd_feed_hea
 DEFAULT_CACHE = "/tmp/fh-aug-work/mdb_us_feeds.json"
 
 # Canonical agency field order (mirrors feed-health-publish.write_agency_jsons).
-FIELD_ORDER = ["name", "ntdId", "city", "reporterType", "status", "feedUrl",
+# NB: records are re-emitted as {k: ag.get(k) for k in FIELD_ORDER}, so a field
+# missing from this list is silently DROPPED from the published JSON. Any field
+# added to write_agency_jsons() must be added here too.
+FIELD_ORDER = ["name", "ntdId", "mdbId", "city", "reporterType", "status", "feedUrl",
                "lastValidated", "orgType", "modes", "fixedRoute", "demandResponse",
                "isFlex", "serviceEnd", "lastFeedUpdate", "expired"]
 
@@ -84,9 +87,9 @@ def build_mode_map():
     return {nid: pipeline.classify_modes(codes) for nid, codes in modes_by_ntd.items()}
 
 
-def build_lastupdate_map(csv_path, cache_path):
-    """norm_ntd -> lastFeedUpdate date string (only for ntd ids with an MDB match)."""
-    cache = {f["mdb_id"]: f for f in json.load(open(cache_path))}
+def build_ntd_to_mdb(csv_path):
+    """norm_ntd -> mdb_id. The NTD↔MDB crosswalk: the handoffs Phase-D CSV
+    matches UNION the audited allowlist. Ids stay strings throughout."""
     ntd_to_mdb = {}
     # 1) handoffs Phase-D CSV matches.
     for r in csv.DictReader(open(csv_path)):
@@ -95,7 +98,12 @@ def build_lastupdate_map(csv_path, cache_path):
     # 2) audited allowlist additions (post-June-7; e.g. the 2026-06-17 11).
     for ntd_norm, mdb_id in CONFIRMED_GOOD_MATCHES:
         ntd_to_mdb.setdefault(pipeline.norm_ntd(ntd_norm), mdb_id)
+    return ntd_to_mdb
 
+
+def build_lastupdate_map(ntd_to_mdb, cache_path):
+    """norm_ntd -> lastFeedUpdate date string (only for ntd ids with an MDB match)."""
+    cache = {f["mdb_id"]: f for f in json.load(open(cache_path))}
     out = {}
     for nid, mdb_id in ntd_to_mdb.items():
         d = feed_last_updated(cache.get(mdb_id))
@@ -117,11 +125,14 @@ def main():
     print("Fetching NTD service-mode classification (wwdp-t4re)...", file=sys.stderr)
     mode_map = build_mode_map()
     print(f"  {len(mode_map)} agencies classified", file=sys.stderr)
+    print("Building ntd_id -> mdb_id crosswalk...", file=sys.stderr)
+    mdb_map = build_ntd_to_mdb(args.csv)
+    print(f"  {len(mdb_map)} agencies have an MDB match", file=sys.stderr)
     print("Building ntd_id -> lastFeedUpdate map...", file=sys.stderr)
-    lu_map = build_lastupdate_map(args.csv, args.cache)
+    lu_map = build_lastupdate_map(mdb_map, args.cache)
     print(f"  {len(lu_map)} agencies have an MDB last-updated date", file=sys.stderr)
 
-    tot = n_fr = n_dr = n_lu = n_lu_skipped_none = 0
+    tot = n_fr = n_dr = n_lu = n_lu_skipped_none = n_mdb = 0
     files = sorted(glob.glob(os.path.join(args.agencies_dir, "*.json")))
     for path in files:
         if os.path.basename(path) == "_SAMPLE.json":
@@ -133,6 +144,10 @@ def main():
             fr, dr = mode_map.get(nid, (False, False))
             ag["fixedRoute"] = fr
             ag["demandResponse"] = dr
+            # NTD↔MDB crosswalk id; None when the agency has no MDB match.
+            # Unlike lastFeedUpdate this is NOT gated on status — it is an
+            # identity fact, not a health signal.
+            ag["mdbId"] = mdb_map.get(nid)
             # lastFeedUpdate only for findable agencies (a "none" status has no feed).
             if ag.get("status") != "none":
                 lfu = lu_map.get(nid)
@@ -144,11 +159,13 @@ def main():
             # Re-emit each record in the canonical field order.
             new_agencies.append({k: ag.get(k) for k in FIELD_ORDER})
             tot += 1; n_fr += bool(fr); n_dr += bool(dr); n_lu += bool(lfu)
+            n_mdb += bool(ag["mdbId"])
         doc["agencies"] = new_agencies
         with open(path, "w") as f:
             json.dump(doc, f, separators=(",", ":"))
 
     print(f"\nAugmented {len(files)-0} state files / {tot} agencies", file=sys.stderr)
+    print(f"  mdbId set: {n_mdb}", file=sys.stderr)
     print(f"  fixedRoute=True: {n_fr}", file=sys.stderr)
     print(f"  demandResponse=True: {n_dr}", file=sys.stderr)
     print(f"  lastFeedUpdate set: {n_lu}  (skipped on status=none: {n_lu_skipped_none})",

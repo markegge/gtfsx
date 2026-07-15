@@ -143,7 +143,7 @@
       <p>State-level engagements are quote-based, but the components and pricing are publicly known:</p>
       <ul>
       <li><strong>Free editor</strong>: $0 for every operator in the state (no per-seat licensing)</li>
-      <li><strong>Hosted publishing</strong>: $500/yr per operator if procured individually; state-bulk pricing available</li>
+      <li><strong>Hosted publishing</strong>: included in the Planner plan ($299/mo or $2,988/yr) if procured individually; multi-agency Enterprise pricing available</li>
       <li><strong>State dashboard</strong>: scoped per state, depends on integrations (custom DNS, branding, exports)</li>
       <li><strong>Professional remediation</strong>: per-agency, $750–$2,500+ per feed</li>
       <li><strong>Training cohort</strong>: $5,000–$10,000 per state, one-time</li>
@@ -174,8 +174,8 @@
       <li>What a GTFS·X engagement would look like for your state specifically (10 min)</li>
       <li>Procurement path and scoping work (5 min)</li>
       </ol>
-      <p><a href="https://fantastical.app/markegge/gtfsx-feed-consult">Book a 30-minute consult call</a> or email <a href="mailto:hello@gtfsx.com?subject=State%20DOT%20discovery%20call">hello@gtfsx.com</a>.</p>
-      <p><a href="mailto:hello@gtfsx.com?subject=State%20DOT%20discovery%20call">Email hello@gtfsx.com</a> to schedule. Or use the <a href="https://fantastical.app/markegge/gtfsx-feed-consult">scheduling link</a> directly.</p>
+      <p><a href="/book-demo?src=state_dot">Book a 30-minute demo</a> or email <a href="mailto:hello@gtfsx.com?subject=State%20DOT%20discovery%20call">hello@gtfsx.com</a>.</p>
+      <p><a href="mailto:hello@gtfsx.com?subject=State%20DOT%20discovery%20call">Email hello@gtfsx.com</a> to schedule. Or use the <a href="/book-demo?src=state_dot">scheduling link</a> directly.</p>
       <hr>
       <p><em>Production note: state-specific Feed Health Reports for Montana, Illinois, and Kansas are produced quarterly. If you&#39;d like to receive your state&#39;s report, <a href="mailto:hello@gtfsx.com?subject=State%20Feed%20Health%20Report%20request">request it here</a> — no obligation, sent as a PDF.</em></p>
     </main>
@@ -207,7 +207,7 @@ footer.gx-footer .gx-mono { font-family: "JetBrains Mono", ui-monospace, "SF Mon
         <div class="gx-social">
           <a href="https://twitter.com/gtfsxapp" aria-label="GTFS·X on X">X</a>
           <a href="https://www.linkedin.com/company/gtfsx" aria-label="GTFS·X on LinkedIn">in</a>
-          <a href="https://github.com/markegge/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
+          <a href="https://github.com/GTFS-X/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
         </div>
       </div>
       <div class="gx-col">
@@ -262,5 +262,33 @@ footer.gx-footer .gx-mono { font-family: "JetBrains Mono", ui-monospace, "SF Mon
       })();
     </script>
       <script src="/assets/site-nav.js"></script>
+    <script>
+      (function () {
+        // Minimal first-party gclid capture + /book-demo carry-through.
+        // Same sessionStorage key as the site beacon; no cookies.
+        var GK = 'gb_track_gclid';
+        function get() { try { return sessionStorage.getItem(GK); } catch (_) { return null; } }
+        try {
+          if (get() === null) {
+            var raw = new URLSearchParams(location.search).get('gclid');
+            if (raw) { raw = raw.trim().slice(0, 256); if (raw) sessionStorage.setItem(GK, raw); }
+          }
+        } catch (_) {}
+        document.addEventListener('click', function (e) {
+          var t = e.target, a = null;
+          while (t && t !== document.body) {
+            if (t.tagName === 'A') { a = t; break; }
+            t = t.parentNode;
+          }
+          if (!a) return;
+          var href = a.getAttribute('href') || '';
+          if (href.indexOf('/book-demo') !== 0) return;
+          var g = get();
+          if (!g) { try { g = new URLSearchParams(location.search).get('gclid'); } catch (_) {} }
+          if (!g || href.indexOf('gclid=') !== -1) return;
+          a.setAttribute('href', href + (href.indexOf('?') === -1 ? '?' : '&') + 'gclid=' + encodeURIComponent(g));
+        }, { capture: true, passive: true });
+      })();
+    </script>
 </body>
 </html>

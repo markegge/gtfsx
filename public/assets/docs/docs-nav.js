@@ -40,6 +40,7 @@
       pages: [
         { path: '/docs/validation/',       title: 'Validation' },
         { path: '/docs/import-and-export/', title: 'Import & Export' },
+        { path: '/docs/shapes-from-stops/', title: 'Generate Shapes from Stops' },
         { path: '/docs/service-summary/',  title: 'Service Summary' },
         { path: '/docs/deep-links/',       title: 'Integrations' }
       ]
@@ -49,6 +50,7 @@
       pages: [
         { path: '/docs/cost-estimation/',      title: 'Cost Estimation' },
         { path: '/docs/demographic-coverage/', title: 'Demographic Coverage' },
+        { path: '/docs/access-isochrones/',    title: 'Transit Access Isochrones' },
         { path: '/docs/stop-analysis/',        title: 'Stop Analysis' },
         { path: '/docs/title-vi-analysis/',    title: 'Title VI Analysis' },
         { path: '/docs/scenario-analysis/',    title: 'Route Visibility' },
@@ -60,6 +62,7 @@
       label: 'Publishing & distribution',
       pages: [
         { path: '/docs/hosted-publishing/',  title: 'Hosted Publishing' },
+        { path: '/docs/ntd-id/',             title: 'NTD ID & FTA Reporting' },
         { path: '/docs/rider-mini-site/',    title: 'Rider Mini-Site' },
         { path: '/docs/embed-widgets/',      title: 'Embed Widgets' },
         { path: '/docs/draft-links/',        title: 'Draft Links' },

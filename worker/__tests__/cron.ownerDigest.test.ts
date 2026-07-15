@@ -55,7 +55,7 @@ async function seedSubscription(opts: {
       ulid(),
       subId,
       `cus_${id}`,
-      opts.plan ?? 'pro',
+      opts.plan ?? 'agency',
       opts.status ?? 'active',
       opts.createdAt,
       opts.createdAt + 30 * DAY,

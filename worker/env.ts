@@ -32,8 +32,6 @@ export interface Env {
   // (img.gtfsx.com / staging-img.gtfsx.com). New uploads return URLs on this
   // host; legacy feeds.gtfsx.com image URLs keep working via the feeds handler.
   IMAGES_ORIGIN: string;
-  BACKEND_ENABLED: string;
-  BILLING_ENABLED?: string;
   HARD_LIMITS: string;
   // Public Mapbox publishable token used by the embed pages on the feeds
   // origin. Same value as VITE_MAPBOX_TOKEN; not a secret.
@@ -47,11 +45,20 @@ export interface Env {
   GOOGLE_CLIENT_SECRET?: string;
 
   // Stripe Price IDs (from scripts/setup-stripe.ts). Empty until billing wired in.
-  STRIPE_PRICE_PRO_MONTHLY?: string;
-  STRIPE_PRICE_PRO_ANNUAL?: string;
+  // NOTE: the TEAM_* names are deliberate legacy — they point at the Planner
+  // (internal plan id 'agency') prices. Do not rename.
   STRIPE_PRICE_TEAM_MONTHLY?: string;
   STRIPE_PRICE_TEAM_ANNUAL?: string;
   STRIPE_PORTAL_CONFIG_ID?: string;
+
+  // Cloudflare Turnstile SITE key (public). Baked into the React bundle as
+  // VITE_TURNSTILE_SITE_KEY for signup; this copy is for the worker-rendered
+  // /book-demo lead form, which isn't part of the React build and so can't read
+  // the Vite var. Same public value; lives in `vars`, not as a secret. Empty =
+  // the widget is skipped (dev fallback) AND the POST handler skips server-side
+  // verification, mirroring how signup couples site key ⟺ TURNSTILE_SECRET_KEY
+  // per environment. Set it wherever TURNSTILE_SECRET_KEY is set.
+  TURNSTILE_SITE_KEY?: string;
 
   // Secrets (wrangler secret put)
   RESEND_API_KEY: string;
@@ -77,6 +84,12 @@ export interface Env {
   // Get from Goals → Summary → click the action → URL contains the ID.
   GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED?: string;
   GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW?: string;
+  // demo_request (the /book-demo lead-form submit). Unlike the two
+  // above, this one is optional even when OCI is otherwise configured:
+  // leaving it unset keeps the live feed_exported/paywall_view uploads
+  // running while the new conversion action is created in the Ads UI —
+  // demo_request rows simply stay pending until it's set.
+  GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST?: string;
 }
 
 // Hono context variables populated by middleware. Typed as a module augmentation
@@ -95,7 +108,7 @@ export interface AuthedUser {
   staff: boolean;
   // Personal-workspace plan + status, mirrored from user.plan / user.plan_status.
   // Updated by Stripe webhooks. Used for client-side paywall gating.
-  plan: 'free' | 'pro' | 'agency' | 'enterprise';
+  plan: 'free' | 'agency' | 'enterprise';
   planStatus: 'active' | 'past_due' | 'canceled' | 'trialing';
 }
 

@@ -94,13 +94,13 @@ describe('legacy tier-picker aliases 301 to /pricing', () => {
     });
 
     it(`preserves the query string on ${alias}`, async () => {
-      const res = await client.get(`${alias}?plan=pro&interval=year&source=welcome`, {
+      const res = await client.get(`${alias}?plan=agency&interval=year&source=welcome`, {
         redirect: 'manual',
       });
       expect(res.status).toBe(301);
       const loc = new URL(res.headers.get('location')!);
       expect(loc.pathname).toBe('/pricing');
-      expect(loc.searchParams.get('plan')).toBe('pro');
+      expect(loc.searchParams.get('plan')).toBe('agency');
       expect(loc.searchParams.get('interval')).toBe('year');
       expect(loc.searchParams.get('source')).toBe('welcome');
     });

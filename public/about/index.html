@@ -103,6 +103,17 @@
       <h1>About GTFS·X</h1>
       <p class="lede">GTFS·X is the fast, free GTFS editor — browser-based, no signup required for editing or export. It was built for the people who actually publish transit data — small agencies, mobility consultants, and transportation planners. Editing is free for everyone, forever; paid plans add premium feed management and route planning features.</p>
 
+      <figure style="margin:1.8rem 0;">
+        <video controls preload="metadata" playsinline poster="/home/video-poster.jpg"
+               aria-label="GTFS·X — a 2-minute overview"
+               style="width:100%;height:auto;display:block;border:1px solid #EADBC8;border-radius:10px;background:#000;">
+          <source src="/home/gtfs-x-overview.mp4" type="video/mp4">
+          <track kind="captions" src="/home/gtfs-x-overview.vtt" srclang="en" label="English" default>
+          Your browser doesn’t support embedded video — <a href="/home/gtfs-x-overview.mp4">download the clip</a>.
+        </video>
+        <figcaption style="color:#6B5A4D;font-size:0.9rem;margin-top:8px;text-align:center;">A two-minute overview of GTFS·X.</figcaption>
+      </figure>
+
       <h2>Why this exists</h2>
       <p>Most existing GTFS tooling is either a command-line script aimed at engineers, a heavyweight desktop GIS application, or a hosted SaaS product that locks your data behind an account. None of those are a good fit for a planner who just wants to draw a route, lay down stops, type in a timetable, and walk away with a valid <code>gtfs.zip</code>. GTFS·X fills that gap with an interactive map-based interface that mirrors how planners actually think about transit service.</p>
 
@@ -132,22 +143,22 @@
       <h2>Route planning features</h2>
       <p>GTFS·X isn't only an editor. Five route planning capabilities ship in the same tool, so the agency that builds the feed can also evaluate the service:</p>
       <ul>
-        <li><strong>Cost estimation</strong> computes revenue hours, peak vehicle count, and weekly + annual operating cost per route and system-wide from the timetable. Configurable cost-per-hour and deadhead factor; the output is the figure agencies hand to a finance team or grant reviewer. <em>(Pro tier.)</em></li>
-        <li><strong>Demographic coverage</strong> answers "who lives within a 1/4-mile walk of each stop." Population, households, and workers from US Census ACS, apportioned via circle-overlap so the totals are accurate at the block-group level. <em>(Pro tier.)</em></li>
-        <li><strong>Demand-propensity layer</strong> is a nationwide map layer of transit-propensity population, other adults, and jobs, rendered as block-resolution dots from ACS and LODES. Useful for spotting underserved demand pockets when laying out a route or a Flex zone. <em>(Team tier.)</em></li>
-        <li><strong>Title VI equity analysis</strong> classifies block groups by regional minority share and reports the trip-ratio between minority and non-minority groups using the four-fifths threshold from FTA Circular 4702.1B. The output is the table agencies put in their triennial Title VI submission. <em>(Team tier.)</em></li>
+        <li><strong>Cost estimation</strong> computes revenue hours, peak vehicle count, and weekly + annual operating cost per route and system-wide from the timetable. Configurable cost-per-hour and deadhead factor; the output is the figure agencies hand to a finance team or grant reviewer. <em>(Planner plan.)</em></li>
+        <li><strong>Demographic coverage</strong> answers "who lives within a 1/4-mile walk of each stop." Population, households, and workers from US Census ACS, apportioned via circle-overlap so the totals are accurate at the block-group level. <em>(Planner plan.)</em></li>
+        <li><strong>Demand-propensity layer</strong> is a nationwide map layer of transit-propensity population, other adults, and jobs, rendered as block-resolution dots from ACS and LODES. Useful for spotting underserved demand pockets when laying out a route or a Flex zone. <em>(Free on every plan.)</em></li>
+        <li><strong>Title VI equity analysis</strong> classifies block groups by regional minority share and reports the trip-ratio between minority and non-minority groups using the four-fifths threshold from FTA Circular 4702.1B. The output is the table agencies put in their triennial Title VI submission. <em>(Planner plan.)</em></li>
         <li><strong>Snapshots</strong> save any feed state at any point and let you restore, compare, or branch from it later. For evaluating "what would happen if we added Saturday service" or "how does this restructure compare to the current network," snapshots + the analyses above cover the substantive planning workflow without leaving the editor.</li>
       </ul>
       <p>What this <em>doesn't</em> replace: drag-to-edit network design at scale or multi-stakeholder workshop tooling. For active service redesign with frequent stakeholder workshops, a dedicated planning suite is the right tool. For evaluating your own service alternatives and producing the analytical work product that justifies the decision, GTFS·X handles it.</p>
 
       <h2>How pricing works</h2>
-      <p>The core editor is free to use without limit. You can build, validate, and export GTFS feeds — including GTFS-Flex — without ever paying. Anonymous users save their work in the browser; signing up for a free account adds cloud sync for up to a few feeds at no charge.</p>
+      <p>The core editor is free to use without limit. You can build, validate, and export GTFS feeds (including GTFS-Flex) without ever paying. Anonymous users save their work in the browser; signing up for a free account adds cloud sync for up to a few feeds at no charge.</p>
       <p>Paid plans add two categories of features that don't make sense as a free service:</p>
       <ul>
         <li><strong>Premium feed management.</strong> We host your feed at a stable URL (<code>feeds.gtfsx.com/&lt;slug&gt;/gtfs.zip</code>) that you can hand to riders, regulators, and the Mobility Database. Includes auto-generated rider-facing embed widgets and a mini-site, plus draft preview links for stakeholder review.</li>
-        <li><strong>Route planning features.</strong> Cost estimation, demographic coverage analysis, demand-propensity mapping, Title VI equity reporting, and snapshot-based scenario comparison — the work product an agency actually hands to a board or a federal grant reviewer.</li>
+        <li><strong>Route planning features.</strong> Cost estimation, demographic coverage analysis, demand-propensity mapping, Title VI equity reporting, and snapshot-based scenario comparison: the work product an agency actually hands to a board or a federal grant reviewer.</li>
       </ul>
-      <p>See the <a href="/pricing">pricing page</a> for the specifics. The short version: <strong>Pro</strong> is for an individual operator or consultant; <strong>Team</strong> is for an agency or firm with unlimited members; <strong>Enterprise</strong> is for <a href="/use-cases/state-dot/">state DOTs and large consortiums</a>. The free tier is not a trial — it's the permanent home for the editor.</p>
+      <p>See the <a href="/pricing">pricing page</a> for the specifics. The short version: the <strong>Editor</strong> is free for everyone; <strong>Planner</strong> is the service-planning suite for transit agencies and consulting firms, with publishing and unlimited team members included; <strong>Enterprise</strong> offers <a href="/use-cases/state-dot/">multi-agency subscriptions for consultants and state DOTs</a>. The free tier is not a trial—it's the permanent home for the editor.</p>
 
       <h2>Other tools in this space</h2>
       <p>GTFS·X is one of several tools agencies and consultants use to author and maintain GTFS feeds. Side-by-side comparisons covering features, pricing, and fit:</p>
@@ -201,7 +212,7 @@ footer.gx-footer .gx-mono { font-family: "JetBrains Mono", ui-monospace, "SF Mon
         <div class="gx-social">
           <a href="https://twitter.com/gtfsxapp" aria-label="GTFS·X on X">X</a>
           <a href="https://www.linkedin.com/company/gtfsx" aria-label="GTFS·X on LinkedIn">in</a>
-          <a href="https://github.com/markegge/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
+          <a href="https://github.com/GTFS-X/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
         </div>
       </div>
       <div class="gx-col">

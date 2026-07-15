@@ -5,12 +5,17 @@ import { ensureDefaultCalendar } from '../../services/defaultCalendar';
 import { formatTimeShort, normalizeTimeInput, gtfsTimeToSeconds, secondsToGtfsTime } from '../../utils/time';
 import { directionName } from '../../utils/constants';
 import { PatternSelector } from '../ui/ShapePatternSelector';
-import { computeShapePatterns } from '../ui/shapePatterns';
+import { Modal } from '../ui/Modal';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { AuthButton } from '../auth/AuthButton';
+import { computeTimetablePatterns, isNoShapeBucket } from '../ui/shapePatterns';
 import type { Route, StopTime } from '../../types/gtfs';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
 import { estimateStopTravelByRoad, layoutStopTimes } from '../../services/travelTime';
 import { GenerateServiceForm } from './GenerateServiceForm';
 import { RuntimeEditor } from './RuntimeEditor';
+import { FlexTimetablePanel } from './FlexTimetablePanel';
+import { findFlexZoneForRoute, isFlexRoute } from './flexRouteMatch';
 
 function generateTripName(routeName: string, departureTime: string, serviceIndex: number): string {
   const prefix = (routeName || 'trip').replace(/\s+/g, '').slice(0, 4).toLowerCase();
@@ -99,9 +104,17 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
   const showContinuous = useStore((s) => featureEnabled(s, 'continuousStops'));
 
   // "Show opposite direction" toggle (global UI pref). The button lives only in
-  // the main pane's toolbar; the companion pane never shows it.
+  // the main pane's toolbar; the companion pane never shows it. (directionId /
+  // setDirectionId are resolved in the scope-aliasing block above, so they're
+  // not re-read here.)
   const oppositeOpen = useStore((s) => s.timetableOppositeOpen);
   const setOppositeOpen = useStore((s) => s.setTimetableOppositeOpen);
+
+  // A demand-response route's trip is synthesized at export time, so it has no
+  // trips or route_stops here. Detect it and swap the fixed-route grid for a
+  // read-only explainer instead of the misleading "add stops first" empty state.
+  const flexZones = useStore((s) => s.flexZones);
+  const demandResponseOn = useStore((s) => featureEnabled(s, 'demandResponse'));
 
   // Advanced: when true, every stop cell shows two inputs (arr / dep) so
   // dwell time can be authored. Persisted in the UI slice. Shared across panes.
@@ -138,8 +151,11 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
   // A route with 0 shapes (e.g. trips with empty shape_id) falls back to the
   // legacy direction-only toggle so we keep authoring useful for in-progress
   // feeds before a shape exists.
+  // Includes a synthetic "No shape" bucket per direction for trips whose
+  // shape_id matches no real shape, so trips can never become ghosts (hidden +
+  // undeletable) once the route also has a real shape. See computeTimetablePatterns.
   const patterns = useMemo(
-    () => computeShapePatterns(selectedRouteId, trips, routeStops),
+    () => computeTimetablePatterns(selectedRouteId, trips, routeStops),
     [selectedRouteId, trips, routeStops],
   );
 
@@ -180,6 +196,18 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
       ? selectedShapeId
       : patterns[0].shapeId;
   }, [patterns, selectedShapeId]);
+
+  // The selected pattern is the synthetic "No shape" bucket (holds trips with
+  // no/unknown shape on a route that otherwise has shapes). In that mode the
+  // grid scopes by direction + empty-shape rather than by a real shape_id, and
+  // the bucket sentinel must never be written to a trip/shape downstream.
+  const noShapeBucket = isNoShapeBucket(effectiveShapeId);
+  // Shape ids that correspond to a REAL pattern (exclude the bucket sentinels);
+  // used to decide which trips/stops belong to the no-shape bucket.
+  const realShapeIds = useMemo(
+    () => new Set(patterns.filter((p) => !isNoShapeBucket(p.shapeId)).map((p) => p.shapeId)),
+    [patterns],
+  );
 
   // Service patterns that have trips for this route+direction (for "copy from" feature)
   const serviceIdsWithTrips = useMemo(() => {
@@ -247,11 +275,15 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
   // stop_times) alongside its resolved Stop.
   const orderedStops = useMemo(() => {
     if (!selectedRouteId) return [];
-    // Columns are the selected shape's own stops (per-shape). Shapeless routes
-    // (no shape selected) fall back to direction-keyed stops.
-    const list = effectiveShapeId
-      ? routeStops.filter((rs) => rs.route_id === selectedRouteId && rs.shape_id === effectiveShapeId)
-      : routeStops.filter((rs) => rs.route_id === selectedRouteId && rs.direction_id === directionId);
+    // Columns are the selected shape's own stops (per-shape). The "No shape"
+    // bucket and shapeless routes fall back to this direction's empty-shape
+    // route_stops (the columns the bucket's trips were built from).
+    const list = noShapeBucket
+      ? routeStops.filter((rs) => rs.route_id === selectedRouteId && rs.direction_id === directionId
+          && (!rs.shape_id || !realShapeIds.has(rs.shape_id)))
+      : effectiveShapeId
+        ? routeStops.filter((rs) => rs.route_id === selectedRouteId && rs.shape_id === effectiveShapeId)
+        : routeStops.filter((rs) => rs.route_id === selectedRouteId && rs.direction_id === directionId);
     return [...list]
       .sort((a, b) => a.stop_sequence - b.stop_sequence)
       .map((rs) => {
@@ -261,7 +293,7 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
           : null;
       })
       .filter((x): x is { uid: string; seq: number; stop: typeof stops[number] } => x !== null);
-  }, [selectedRouteId, effectiveShapeId, directionId, routeStops, stops]);
+  }, [selectedRouteId, effectiveShapeId, directionId, routeStops, stops, noShapeBucket, realShapeIds]);
 
   // Find a specific stop_time by trip + stop_sequence (the per-instance key)
   // using the byTrip index — keying by stop_id would collapse a repeated stop.
@@ -352,9 +384,12 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
     return trips
       .filter((t) => t.route_id === selectedRouteId
         && (!activeServiceId || t.service_id === activeServiceId)
-        // Filter by the selected shape when there is one (so two shapes sharing
-        // a direction don't pile into one view); otherwise by direction.
-        && (effectiveShapeId ? t.shape_id === effectiveShapeId : t.direction_id === directionId))
+        // The "No shape" bucket collects this direction's trips with no/unknown
+        // shape; otherwise filter by the selected shape when there is one (so two
+        // shapes sharing a direction don't pile into one view), else by direction.
+        && (noShapeBucket
+          ? (t.direction_id === directionId && (!t.shape_id || !realShapeIds.has(t.shape_id)))
+          : effectiveShapeId ? t.shape_id === effectiveShapeId : t.direction_id === directionId))
       .sort((a, b) => {
         // Sort by earliest assigned arrival; trips with no times yet go last.
         const earliest = (tripId: string) => {
@@ -371,7 +406,7 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
         if (!aTime || !bTime) return (aTime ? 0 : 1) - (bTime ? 0 : 1);
         return aTime.localeCompare(bTime);
       });
-  }, [selectedRouteId, trips, stopTimesByTrip, directionId, activeServiceId, effectiveShapeId]);
+  }, [selectedRouteId, trips, stopTimesByTrip, directionId, activeServiceId, effectiveShapeId, noShapeBucket, realShapeIds]);
 
   // Tab key navigation. Walks to the next focusable cell, stepping OVER skipped
   // columns (which render no input and so register no ref) until it lands on a
@@ -420,7 +455,11 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
       service_id: activeServiceId || calendars[0]?.service_id || '',
       direction_id: directionId,
       trip_headsign: route?.route_short_name || '',
-      shape_id: effectiveShapeId ?? trips.find((t) => t.route_id === selectedRouteId && t.direction_id === directionId)?.shape_id,
+      // Never stamp the "No shape" bucket sentinel onto a real trip — a trip
+      // added in that bucket genuinely has no shape.
+      shape_id: noShapeBucket
+        ? undefined
+        : effectiveShapeId ?? trips.find((t) => t.route_id === selectedRouteId && t.direction_id === directionId)?.shape_id,
     });
     // Seed a blank (served, no time) row for each stop so the new trip's cells
     // default to "served" — without rows every cell would render as skipped.
@@ -609,6 +648,17 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
     );
   }
 
+  if (demandResponseOn && isFlexRoute(route, flexZones, routes)) {
+    return (
+      <div className="p-2 flex flex-col min-h-0 flex-1">
+        <div className="shrink-0 mb-2 px-2">
+          <RouteSelect routes={routes} selectedRouteId={selectedRouteId} onChange={selectRoute} />
+        </div>
+        <FlexTimetablePanel route={route} zone={findFlexZoneForRoute(route, flexZones, routes)} />
+      </div>
+    );
+  }
+
   const hasStops = orderedStops.length > 0;
 
   return (
@@ -627,17 +677,7 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
       <div className="shrink-0 mb-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex items-center gap-2 px-2 min-w-max">
           {/* Route selector */}
-          <select
-            value={selectedRouteId || ''}
-            onChange={(e) => selectRoute(e.target.value || null)}
-            className="px-2 py-1 border border-sand rounded-md text-xs font-semibold bg-cream focus:outline-none focus:border-coral"
-          >
-            {routes.map((r) => (
-              <option key={r.route_id} value={r.route_id}>
-                {r.route_short_name || r.route_long_name || r.route_id}
-              </option>
-            ))}
-          </select>
+          <RouteSelect routes={routes} selectedRouteId={selectedRouteId} onChange={selectRoute} />
           {/* Service pattern */}
           {calendars.length > 0 && (
             <select
@@ -781,7 +821,7 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
           <RuntimeEditor
             routeId={selectedRouteId!}
             directionId={directionId}
-            shapeId={effectiveShapeId ?? undefined}
+            shapeId={noShapeBucket ? undefined : (effectiveShapeId ?? undefined)}
             serviceId={activeServiceId}
             onCancel={() => setShowRuntime(false)}
           />
@@ -1147,228 +1187,191 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
 
       {/* Duplicate trip prompt */}
       {dupPrompt && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="absolute inset-0 bg-black/20" onClick={() => setDupPrompt(null)} />
-          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-xs mx-4">
-            <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
-              Duplicate Trip
-            </h3>
-            <p className="text-sm text-warm-gray mb-3">
-              Start time for the new trip:
-            </p>
-            <input
-              autoFocus
-              value={dupStartTime}
-              onChange={(e) => setDupStartTime(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleDupConfirm(); }}
-              placeholder="e.g. 08:00"
-              className="w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral mb-3 tabular-nums"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => setDupPrompt(null)}
-                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
-              >
+        <Modal
+          open
+          onClose={() => setDupPrompt(null)}
+          title="Duplicate Trip"
+          description="Start time for the new trip:"
+          maxWidthClassName="max-w-xs"
+          footer={
+            <>
+              <AuthButton variant="secondary" onClick={() => setDupPrompt(null)}>
                 Cancel
-              </button>
-              <button
-                onClick={handleDupConfirm}
-                className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors"
-              >
-                Add Trip
-              </button>
-            </div>
-          </div>
-        </div>
+              </AuthButton>
+              <AuthButton onClick={handleDupConfirm}>Add Trip</AuthButton>
+            </>
+          }
+        >
+          <input
+            autoFocus
+            value={dupStartTime}
+            onChange={(e) => setDupStartTime(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleDupConfirm(); }}
+            placeholder="e.g. 08:00"
+            className="w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral tabular-nums"
+          />
+        </Modal>
       )}
 
       {/* Apply-to-all-trips confirm */}
       {applyPrompt && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="absolute inset-0 bg-black/20" onClick={() => setApplyPrompt(null)} />
-          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-sm mx-4">
-            <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
-              Apply to all trips
-            </h3>
-            <p className="text-sm text-warm-gray mb-4">
+        <ConfirmDialog
+          title="Apply to all trips"
+          body={
+            <>
               Re-lay the {applyTargets.length} other {directionName(route, directionId).toLowerCase()} trip
               {applyTargets.length === 1 ? '' : 's'} on this route to match this trip&rsquo;s stops and
               timing. Each keeps its own start time — headways and departures stay the same; only the
               stop sequence and run/dwell times change.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setApplyPrompt(null)}
-                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleApplyConfirm}
-                disabled={applyTargets.length === 0}
-                className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50"
-              >
-                Apply to {applyTargets.length}
-              </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+          confirmLabel={`Apply to ${applyTargets.length}`}
+          onConfirm={handleApplyConfirm}
+          onCancel={() => setApplyPrompt(null)}
+          confirmDisabled={applyTargets.length === 0}
+        />
       )}
 
       {/* Remove-all-trips confirm */}
       {removeAllPrompt && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="absolute inset-0 bg-black/20" onClick={() => setRemoveAllPrompt(false)} />
-          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-sm mx-4">
-            <h3 className="font-heading font-bold text-base text-dark-brown mb-2">
-              Remove all trips
-            </h3>
-            <p className="text-sm text-warm-gray mb-4">
+        <ConfirmDialog
+          danger
+          title="Remove all trips"
+          body={
+            <>
               Delete all {routeTrips.length} {directionName(route, directionId).toLowerCase()} trip
               {routeTrips.length === 1 ? '' : 's'} shown for {route.route_short_name || route.route_long_name || route.route_id}?
               This also removes their stop times. The shape and its stops are kept, so you can add a
               fresh trip and replicate it by headway.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setRemoveAllPrompt(false)}
-                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleRemoveAllConfirm}
-                className="flex-1 px-3 py-2 bg-red-500 text-white rounded-lg font-heading font-bold text-sm hover:bg-red-600 transition-colors"
-              >
-                Remove {routeTrips.length}
-              </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+          confirmLabel={`Remove ${routeTrips.length}`}
+          onConfirm={handleRemoveAllConfirm}
+          onCancel={() => setRemoveAllPrompt(false)}
+        />
       )}
 
       {/* Estimate times dialog */}
       {estimatePrompt && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="absolute inset-0 bg-black/20" onClick={() => { if (!estimating) setEstimatePrompt(null); }} />
-          <div className="relative bg-white rounded-xl shadow-lg p-5 max-w-sm mx-4">
-            <h3 className="font-heading font-bold text-base text-dark-brown mb-1">
-              Estimate times
-            </h3>
-            <p className="text-sm text-warm-gray mb-4">
+        <Modal
+          open
+          onClose={() => setEstimatePrompt(null)}
+          dismissable={!estimating}
+          title="Estimate times"
+          description={
+            <>
               Fill this trip&rsquo;s stop times from the road driving time between your stops, in order,
               plus a dwell at each stop. Then use&nbsp;⇶ to apply it to the route&rsquo;s other trips.
-            </p>
-            <div className="space-y-3 mb-4">
-              <label className="block">
-                <span className="text-xs font-semibold text-dark-brown">Start time</span>
+            </>
+          }
+          footer={
+            <>
+              <AuthButton variant="secondary" onClick={() => setEstimatePrompt(null)} disabled={estimating}>
+                Cancel
+              </AuthButton>
+              <AuthButton onClick={handleEstimateConfirm} disabled={estimating}>
+                {estimating ? 'Estimating…' : 'Estimate'}
+              </AuthButton>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            <label className="block">
+              <span className="text-xs font-semibold text-dark-brown">Start time</span>
+              <input
+                autoFocus
+                value={estStart}
+                onChange={(e) => setEstStart(e.target.value)}
+                placeholder="08:00"
+                className="mt-1 w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral tabular-nums"
+              />
+            </label>
+            <div className="flex gap-3">
+              <label className="flex-1">
+                <span className="flex items-center gap-1 text-xs font-semibold text-dark-brown">
+                  Dwell / stop (sec)
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="text-warm-gray shrink-0"
+                    aria-hidden
+                  >
+                    <title>Seconds the vehicle waits at each stop for boarding. Added to the driving time between stops when filling in the schedule.</title>
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                </span>
                 <input
-                  autoFocus
-                  value={estStart}
-                  onChange={(e) => setEstStart(e.target.value)}
-                  placeholder="08:00"
+                  type="number"
+                  min={0}
+                  value={estDwell}
+                  onChange={(e) => setEstDwell(Math.max(0, Number(e.target.value)))}
                   className="mt-1 w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral tabular-nums"
                 />
               </label>
-              <div className="flex gap-3">
-                <label className="flex-1">
-                  <span className="flex items-center gap-1 text-xs font-semibold text-dark-brown">
-                    Dwell / stop (sec)
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      className="text-warm-gray shrink-0"
-                      aria-hidden
-                    >
-                      <title>Seconds the vehicle waits at each stop for boarding. Added to the driving time between stops when filling in the schedule.</title>
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="16" x2="12" y2="12" />
-                      <line x1="12" y1="8" x2="12.01" y2="8" />
-                    </svg>
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    value={estDwell}
-                    onChange={(e) => setEstDwell(Math.max(0, Number(e.target.value)))}
-                    className="mt-1 w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral tabular-nums"
-                  />
-                </label>
-                <label className="flex-1">
-                  <span className="flex items-center gap-1 text-xs font-semibold text-dark-brown">
-                    Speed factor
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      className="text-warm-gray shrink-0"
-                      aria-hidden
-                    >
-                      <title>Multiplier on the road-network driving time, to account for traffic, signals, and acceleration. e.g. 1.1 adds 10% to the free-flow estimate; higher = slower.</title>
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="16" x2="12" y2="12" />
-                      <line x1="12" y1="8" x2="12.01" y2="8" />
-                    </svg>
-                  </span>
-                  <input
-                    type="number"
-                    min={0.1}
-                    step={0.1}
-                    value={estSpeed}
-                    onChange={(e) => setEstSpeed(Math.max(0.1, Number(e.target.value)))}
-                    className="mt-1 w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral tabular-nums"
-                  />
-                </label>
-              </div>
+              <label className="flex-1">
+                <span className="flex items-center gap-1 text-xs font-semibold text-dark-brown">
+                  Speed factor
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="text-warm-gray shrink-0"
+                    aria-hidden
+                  >
+                    <title>Multiplier on the road-network driving time, to account for traffic, signals, and acceleration. e.g. 1.1 adds 10% to the free-flow estimate; higher = slower.</title>
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                </span>
+                <input
+                  type="number"
+                  min={0.1}
+                  step={0.1}
+                  value={estSpeed}
+                  onChange={(e) => setEstSpeed(Math.max(0.1, Number(e.target.value)))}
+                  className="mt-1 w-full px-3 py-2 border-2 border-sand rounded-lg text-sm bg-cream focus:outline-none focus:border-coral tabular-nums"
+                />
+              </label>
             </div>
-            {estError && <p className="text-xs text-red-500 mb-3">{estError}</p>}
-            <div className="flex gap-2">
-              <button
-                onClick={() => setEstimatePrompt(null)}
-                disabled={estimating}
-                className="flex-1 px-3 py-2 bg-sand text-brown rounded-lg font-heading font-bold text-sm hover:bg-coral-light hover:text-coral transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEstimateConfirm}
-                disabled={estimating}
-                className="flex-1 px-3 py-2 bg-coral text-white rounded-lg font-heading font-bold text-sm hover:bg-[#d4603a] transition-colors disabled:opacity-50"
-              >
-                {estimating ? 'Estimating…' : 'Estimate'}
-              </button>
-            </div>
+            {estError && <p className="text-xs text-red-500">{estError}</p>}
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* B1 Generate service — modal. Opened by the toolbar control and by the
           empty-state button. GenerateServiceForm is a self-contained card; we
-          drop it onto a backdrop (click-out or Esc dismisses). On generate it
-          closes and the populated grid renders. */}
+          drop it into the shared Modal with a bare container (the card carries
+          its own chrome + heading). On generate it closes and the grid renders. */}
       {showGenerate && hasStops && activeServiceId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setShowGenerate(false)} />
-          <div className="relative w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <GenerateServiceForm
-              routeId={selectedRouteId!}
-              directionId={directionId}
-              shapeId={effectiveShapeId ?? undefined}
-              serviceId={activeServiceId}
-              headsign={route?.route_short_name || undefined}
-              variant="card"
-              onGenerated={() => setShowGenerate(false)}
-              onCancel={() => setShowGenerate(false)}
-            />
-          </div>
-        </div>
+        <Modal
+          open
+          onClose={() => setShowGenerate(false)}
+          title="Generate service"
+          hideTitle
+          showClose={false}
+          className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md mx-4"
+        >
+          <GenerateServiceForm
+            routeId={selectedRouteId!}
+            directionId={directionId}
+            shapeId={noShapeBucket ? undefined : (effectiveShapeId ?? undefined)}
+            serviceId={activeServiceId}
+            headsign={route?.route_short_name || undefined}
+            variant="card"
+            onGenerated={() => setShowGenerate(false)}
+            onCancel={() => setShowGenerate(false)}
+          />
+        </Modal>
       )}
     </div>
   );
@@ -1462,7 +1465,7 @@ function ContinuousOverridePopover({
           aria-label="Close"
           className="text-warm-gray/60 hover:text-warm-gray text-xs leading-none"
         >
-          ✕
+          ×
         </button>
       </div>
       <p className="text-[10px] text-warm-gray/70 mb-2 font-normal leading-snug">
@@ -1673,6 +1676,30 @@ function TripIdCell({ tripId, allTripIds, onRename }: {
 
 /** Direction dropdown for routes with no shapes yet (in-progress feeds).
  *  Routes that have shapes use the shape-based PatternSelector instead. */
+function RouteSelect({
+  routes,
+  selectedRouteId,
+  onChange,
+}: {
+  routes: Route[];
+  selectedRouteId: string | null;
+  onChange: (routeId: string | null) => void;
+}) {
+  return (
+    <select
+      value={selectedRouteId || ''}
+      onChange={(e) => onChange(e.target.value || null)}
+      className="px-2 py-1 border border-sand rounded-md text-xs font-semibold bg-cream focus:outline-none focus:border-coral"
+    >
+      {routes.map((r) => (
+        <option key={r.route_id} value={r.route_id}>
+          {r.route_short_name || r.route_long_name || r.route_id}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function DirectionSelect({
   directionId,
   onChange,

@@ -9,6 +9,8 @@ import {
   type AdvancedFeature,
 } from '../../store/featuresSlice';
 import type { AppStore } from '../../store';
+import { Modal } from '../ui/Modal';
+import { AuthButton } from '../auth/AuthButton';
 
 // Human description of the data a feature owns, for the hide-vs-delete prompt.
 function describeData(s: AppStore, f: AdvancedFeature): string {
@@ -130,47 +132,32 @@ export function FeatureSettingsPanel() {
       </div>
 
       {pending && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setPending(null)}
-        >
-          <div
-            className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-bold text-dark-brown">Turn off {FEATURE_BY_KEY[pending].label}?</h3>
-            <p className="mt-2 text-sm text-warm-gray">
+        <Modal
+          open
+          onClose={() => setPending(null)}
+          maxWidthClassName="max-w-md"
+          title={`Turn off ${FEATURE_BY_KEY[pending].label}?`}
+          description={
+            <>
               This feed has {describeData(s, pending)}. You can hide {FEATURE_BY_KEY[pending].label} from
               the editor and keep the data — it still exports in your GTFS — or delete the data from the
               feed entirely.
-            </p>
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPending(null)}
-                className="px-4 py-2 rounded-lg text-sm font-semibold text-warm-gray hover:bg-sand transition-colors"
-              >
+            </>
+          }
+          footer={
+            <div className="flex flex-wrap justify-end gap-2">
+              <AuthButton variant="ghost" onClick={() => setPending(null)}>
                 Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => hideFeature(pending)}
-                className="px-4 py-2 rounded-lg text-sm font-semibold border border-sand text-dark-brown hover:bg-cream transition-colors"
-              >
+              </AuthButton>
+              <AuthButton variant="secondary" onClick={() => hideFeature(pending)}>
                 Hide, keep data
-              </button>
-              <button
-                type="button"
-                onClick={() => deleteFeatureData(pending)}
-                className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors"
-              >
+              </AuthButton>
+              <AuthButton variant="danger" onClick={() => deleteFeatureData(pending)}>
                 Delete data
-              </button>
+              </AuthButton>
             </div>
-          </div>
-        </div>
+          }
+        />
       )}
     </div>
   );

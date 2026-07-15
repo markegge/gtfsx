@@ -42,6 +42,12 @@ const DATA_KEYS = [
   'flexZones',
   'featureSettings',
   'dismissedValidations',
+  // The feed's declared license (SPDX short identifier). Feed-state: the D1
+  // `license_spdx` column is only the projection written at publish, so the
+  // working-state snapshot is what preserves a license the user picked but
+  // hasn't published yet. (An agency's `external_id` needs no key of its own —
+  // it rides along inside the already-persisted `agencies` entity.)
+  'licenseSpdx',
 ] as const;
 
 type DataKey = (typeof DATA_KEYS)[number];
@@ -105,6 +111,7 @@ export function resetStoreEntities() {
   state.setFlexZones([] as never);
   state.setFeatureSettings({});
   state.setDismissedValidations([]);
+  state.setLicenseSpdx(null);
 }
 
 export function applySnapshotToStore(snapshot: Record<string, unknown>) {
@@ -125,6 +132,7 @@ function applySnapshotToStoreInner(snapshot: Record<string, unknown>) {
   state.setEditingRouteId(null);
   state.setEditingShapeId(null);
   state.setEditingFlexZoneId(null);
+  state.setFlexZoneDetailId(null);
   state.setMapMode('select');
   useStore.setState((s) => {
     s.hiddenRouteIds = [];
@@ -183,6 +191,10 @@ function applySnapshotToStoreInner(snapshot: Record<string, unknown>) {
   if (Array.isArray(g('dismissedValidations'))) {
     state.setDismissedValidations(g('dismissedValidations') as never);
   }
+  // resetStoreEntities() above already cleared this to null, so an absent or
+  // explicitly-null key correctly leaves a fresh/cleared feed rather than
+  // leaking the previous project's license.
+  if (typeof g('licenseSpdx') === 'string') state.setLicenseSpdx(g('licenseSpdx') as string);
   // Older saved blobs may still carry a `visibilitySets` key (the removed
   // "Scenarios" feature). It's intentionally ignored here — unknown keys are
   // harmless and never re-applied.

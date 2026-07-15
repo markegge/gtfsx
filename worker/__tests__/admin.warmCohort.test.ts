@@ -172,7 +172,7 @@ describe('GET /api/admin/warm-cohort.csv', () => {
     const { client } = await staffClient();
     const now = Date.now();
 
-    const member = await seedUser({ email: 'pm@bigcity.gov', plan: 'pro' });
+    const member = await seedUser({ email: 'pm@bigcity.gov', plan: 'agency' });
     const orgId = ulid();
     await dbRun(
       `INSERT INTO organization (id, slug, name, created_at) VALUES (?, 'bigcity', 'Big City DOT', ?)`,

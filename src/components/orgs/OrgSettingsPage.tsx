@@ -4,8 +4,9 @@ import { useStore } from '../../store';
 import { AuthLayout } from '../auth/AuthLayout';
 import { AuthButton } from '../auth/AuthButton';
 import { FormField } from '../ui/FormField';
-import { AppBrand } from '../layout/AppBrand';
-import { UserMenu, RoleBadge } from '../layout/UserMenu';
+import { Modal } from '../ui/Modal';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { RoleBadge } from '../layout/UserMenu';
 import { ApiError } from '../../services/authApi';
 import {
   createInvitation,
@@ -37,7 +38,6 @@ import {
   openBillingPortal,
   type OrgBillingState,
 } from '../../services/billingApi';
-import { billingEnabled } from '../../utils/featureFlags';
 import { ImportDialog } from '../import-export/ImportDialog';
 import { createProject, saveWorkingState } from '../../services/projectsApi';
 import { buildSnapshot, setCurrentWorkingStateVersion } from '../../db/serverPersistence';
@@ -436,17 +436,16 @@ export function OrgSettingsPage() {
   };
 
   return (
-    <div className="min-h-full bg-cream">
-      <header className="h-14 bg-white border-b border-sand flex items-center px-3 sm:px-5 gap-2 sm:gap-3 shrink-0">
-        <AppBrand mode="link" showTagline={false} />
-        <Link to="/feeds" className="text-sm text-warm-gray hover:text-coral transition-colors whitespace-nowrap ml-2">
-          ← My Feeds
-        </Link>
-        <div className="flex-1" />
-        <UserMenu />
-      </header>
-
-      <main className="max-w-4xl mx-auto px-6 py-8">
+    <>
+      <AuthLayout
+        wide
+        bare
+        headerExtra={
+          <Link to="/feeds" className="text-sm text-warm-gray hover:text-coral transition-colors whitespace-nowrap ml-2">
+            ← My Feeds
+          </Link>
+        }
+      >
         <div className="bg-white border border-sand rounded-2xl p-6 mb-5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
@@ -488,7 +487,7 @@ export function OrgSettingsPage() {
 
         <PaywallOverlay
           feature="org_logo"
-          currentPlan={(matchingOrg as { plan?: 'free' | 'pro' | 'agency' | 'enterprise' } | null)?.plan ?? 'free'}
+          currentPlan={(matchingOrg as { plan?: 'free' | 'agency' | 'enterprise' } | null)?.plan ?? 'free'}
           preview={false}
         >
           <BrandingSection
@@ -563,7 +562,7 @@ export function OrgSettingsPage() {
                     <AuthButton
                       variant="secondary"
                       onClick={handleManagePortal}
-                      disabled={openingPortal || !billingEnabled}
+                      disabled={openingPortal}
                     >
                       {openingPortal ? 'Opening…' : 'Manage billing'}
                     </AuthButton>
@@ -571,9 +570,8 @@ export function OrgSettingsPage() {
                   {isAdmin && billing.plan === 'free' && matchingOrg && (
                     <AuthButton
                       onClick={() => navigate(`/pricing?ownerType=org&ownerId=${matchingOrg.id}`)}
-                      disabled={!billingEnabled}
                     >
-                      Upgrade to Agency
+                      Upgrade to Planner
                     </AuthButton>
                   )}
                 </div>
@@ -606,11 +604,6 @@ export function OrgSettingsPage() {
               {!isAdmin && (
                 <p className="text-xs text-warm-gray">
                   Only owners and admins can change the org's plan or open the billing portal.
-                </p>
-              )}
-              {!billingEnabled && (
-                <p className="text-xs text-amber-700">
-                  Billing actions are temporarily disabled in this environment.
                 </p>
               )}
             </div>
@@ -721,7 +714,7 @@ export function OrgSettingsPage() {
             </AuthButton>
           </section>
         )}
-      </main>
+      </AuthLayout>
 
       {showImport && (
         <ImportDialog
@@ -793,7 +786,7 @@ export function OrgSettingsPage() {
           }}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -896,15 +889,8 @@ function EditOrgDialog({
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={onCancel} />
-      <form
-        onSubmit={submit}
-        className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-md mx-4"
-      >
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-3">
-          Edit organization
-        </h3>
+    <Modal open onClose={onCancel} maxWidthClassName="max-w-md" title="Edit organization" dismissable={!busy}>
+      <form onSubmit={submit}>
         <FormField label="Name" value={name} onChange={setName} required />
         <FormField label="Slug" value={slug} onChange={setSlug} required />
         <div className="flex justify-end gap-2 mt-2">
@@ -916,7 +902,7 @@ function EditOrgDialog({
           </AuthButton>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }
 
@@ -952,13 +938,8 @@ function InviteDialog({
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={onClose} />
-      <form
-        onSubmit={submit}
-        className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-md mx-4"
-      >
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-3">Invite member</h3>
+    <Modal open onClose={onClose} maxWidthClassName="max-w-md" title="Invite member" dismissable={!busy}>
+      <form onSubmit={submit}>
         <FormField
           label="Email"
           type="email"
@@ -969,10 +950,7 @@ function InviteDialog({
           }}
           required
         />
-        <div className="mb-3">
-          <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-            Role
-          </label>
+        <FormField label="Role">
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as InviteRole)}
@@ -982,7 +960,7 @@ function InviteDialog({
             <option value="editor">Editor</option>
             <option value="viewer">Viewer</option>
           </select>
-        </div>
+        </FormField>
         {error && (
           <div className="mb-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm">
             {error}
@@ -1002,7 +980,7 @@ function InviteDialog({
           </AuthButton>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }
 
@@ -1031,22 +1009,16 @@ function TransferDialog({
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={onCancel} />
-      <form
-        onSubmit={submit}
-        className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-md mx-4"
-      >
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-2">
-          Transfer ownership
-        </h3>
-        <p className="text-sm text-warm-gray mb-3">
-          The selected member will become owner. You'll be demoted to admin.
-        </p>
-        <div className="mb-3">
-          <label className="block text-[11px] font-semibold text-warm-gray uppercase tracking-wide mb-1">
-            New owner
-          </label>
+    <Modal
+      open
+      onClose={onCancel}
+      maxWidthClassName="max-w-md"
+      title="Transfer ownership"
+      description="The selected member will become owner. You'll be demoted to admin."
+      dismissable={!busy}
+    >
+      <form onSubmit={submit}>
+        <FormField label="New owner">
           <select
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
@@ -1058,7 +1030,7 @@ function TransferDialog({
               </option>
             ))}
           </select>
-        </div>
+        </FormField>
         <label className="flex items-center gap-2 text-sm text-dark-brown mb-4">
           <input
             type="checkbox"
@@ -1080,7 +1052,7 @@ function TransferDialog({
           </AuthButton>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }
 
@@ -1108,19 +1080,20 @@ function DeleteOrgDialog({
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={onCancel} />
-      <form
-        onSubmit={submit}
-        className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-md mx-4"
-      >
-        <h3 className="font-heading font-bold text-lg text-red-700 mb-2">
-          Delete organization
-        </h3>
-        <p className="text-sm text-warm-gray mb-3">
+    <Modal
+      open
+      onClose={onCancel}
+      maxWidthClassName="max-w-md"
+      dismissable={!busy}
+      title={<span className="text-red-700">Delete organization</span>}
+      description={
+        <>
           This deletes the organization and its feeds. To confirm, type the slug{' '}
           <code className="font-mono text-dark-brown">{slug}</code> below.
-        </p>
+        </>
+      }
+    >
+      <form onSubmit={submit}>
         <FormField
           label="Slug"
           value={typed}
@@ -1137,41 +1110,7 @@ function DeleteOrgDialog({
           </AuthButton>
         </div>
       </form>
-    </div>
-  );
-}
-
-function ConfirmDialog({
-  title,
-  body,
-  confirmLabel,
-  onConfirm,
-  onCancel,
-  danger,
-}: {
-  title: string;
-  body: string;
-  confirmLabel: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-  danger?: boolean;
-}) {
-  return (
-    <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="absolute inset-0 bg-black/20" onClick={onCancel} />
-      <div className="relative bg-white rounded-2xl shadow-lg p-6 w-full max-w-sm mx-4">
-        <h3 className="font-heading font-bold text-lg text-dark-brown mb-2">{title}</h3>
-        <p className="text-sm text-warm-gray mb-5">{body}</p>
-        <div className="flex justify-end gap-2">
-          <AuthButton variant="secondary" onClick={onCancel}>
-            Cancel
-          </AuthButton>
-          <AuthButton variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>
-            {confirmLabel}
-          </AuthButton>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

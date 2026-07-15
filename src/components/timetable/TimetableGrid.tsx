@@ -1111,7 +1111,6 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
                                   else cellRefs.current.delete(key);
                                 }}
                                 onKeyDown={(e) => handleKeyDown(e, tripIdx, stopIdx)}
-                                isTimepoint={isTimepoint}
                                 timeError={errors[stopIdx]}
                               />
                             )}
@@ -1507,7 +1506,6 @@ function TimeCell({
   onCommit,
   inputRef: externalRef,
   onKeyDown,
-  isTimepoint: _isTimepoint,
   timeError,
   compact,
 }: {
@@ -1515,7 +1513,6 @@ function TimeCell({
   onCommit: (normalized: string) => void;
   inputRef?: (el: HTMLInputElement | null) => void;
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
-  isTimepoint: boolean;
   timeError?: boolean;
   /** Narrower variant used inside SplitTimeCell where two cells share a column. */
   compact?: boolean;
@@ -1619,7 +1616,6 @@ function SplitTimeCell({
         onCommit={onCommitArrival}
         inputRef={externalRef}
         onKeyDown={onKeyDown}
-        isTimepoint={false}
         timeError={timeError}
         compact
       />
@@ -1627,7 +1623,6 @@ function SplitTimeCell({
       <TimeCell
         value={departure}
         onCommit={onCommitDeparture}
-        isTimepoint={false}
         compact
       />
     </div>

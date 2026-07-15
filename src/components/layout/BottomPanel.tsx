@@ -28,7 +28,7 @@ export function BottomPanel() {
   const bottomPanelMaximized = useStore((s) => s.bottomPanelMaximized);
   const toggleBottomPanelMaximized = useStore((s) => s.toggleBottomPanelMaximized);
   const activeServerProjectId = useStore((s) => s.activeServerProjectId);
-  const timetableSplit = useStore((s) => s.timetableSplit);
+  const timetableOppositeOpen = useStore((s) => s.timetableOppositeOpen);
   const editorPlan = useEditorPlan();
   const [panelHeight, setPanelHeight] = useState(getDefaultHeight);
   const [isDraggingState, setIsDraggingState] = useState(false);
@@ -234,7 +234,7 @@ export function BottomPanel() {
       {/* Content */}
       {bottomPanelOpen && (
         <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
-          {bottomPanelTab === 'timetable' && (timetableSplit ? <SplitTimetable /> : <TimetableGrid />)}
+          {bottomPanelTab === 'timetable' && (timetableOppositeOpen ? <SplitTimetable /> : <TimetableGrid />)}
           {bottomPanelTab === 'blocks' && <BlockGantt />}
           {bottomPanelTab === 'service-summary' && <ServiceSummary />}
           {bottomPanelTab === 'validation' && <ValidationPanel />}

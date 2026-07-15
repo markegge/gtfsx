@@ -1,52 +1,67 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 import { useStore } from '../../store';
+import { directionName } from '../../utils/constants';
 import { computeShapePatterns } from '../ui/shapePatterns';
 import { TimetableGrid, type TimetableScope } from './TimetableGrid';
 
-/** Split-view container for the timetable. The left pane is the normal,
- *  global-backed timetable (it stays synced with the map highlight and the
- *  cross-panel "View timetable" handlers); the right pane keeps its own
- *  route / direction / shape / service selection in local state so the two
- *  schedules can be read side by side. The common case — and the default the
- *  right pane opens into — is the same route's opposite direction, so you land
- *  straight on an outbound | inbound comparison to line up arrival/departure
- *  times. Stop-time edits in either pane write through the same trip-keyed store
- *  actions, so both panes stay editable and live-update together. */
+/** "Show opposite direction" container for the timetable. The left pane is the
+ *  normal, global-backed timetable. The right pane is fully DERIVED from it: the
+ *  same route and service, with the direction flipped, so outbound and inbound
+ *  trips line up side by side for comparing arrival/departure times. The right
+ *  pane has no scoping controls — it always mirrors the main pane's opposite
+ *  direction and re-derives whenever the main pane's route / direction / service
+ *  changes. Stop-time edits in either pane write through the same trip-keyed
+ *  store actions, so both stay editable and live-update together. */
 export function SplitTimetable() {
-  // Lazy one-time default for the right pane: same route as the main pane, but
-  // the opposite direction's shape so it opens into outbound | inbound.
-  const [paneB, setPaneB] = useState<{
-    routeId: string | null;
-    directionId: 0 | 1;
-    serviceId: string | null;
-    shapeId: string | null;
-  }>(() => {
-    const s = useStore.getState();
-    const routeId = s.selectedRouteId;
-    const patterns = computeShapePatterns(routeId, s.trips, s.routeStops);
-    const other =
-      patterns.find((p) => p.directionId !== s.timetableDirectionId) ??
-      patterns[1] ??
-      patterns[0];
-    return {
-      routeId,
-      directionId: (other?.directionId ?? (s.timetableDirectionId === 0 ? 1 : 0)) as 0 | 1,
-      serviceId: s.timetableServiceId,
-      shapeId: other?.shapeId ?? null,
-    };
-  });
+  const selectedRouteId = useStore((s) => s.selectedRouteId);
+  const mainDirectionId = useStore((s) => s.timetableDirectionId);
+  const serviceId = useStore((s) => s.timetableServiceId);
+  const trips = useStore((s) => s.trips);
+  const routeStops = useStore((s) => s.routeStops);
+  const routes = useStore((s) => s.routes);
+  const calendars = useStore((s) => s.calendars);
+
+  const oppositeDirectionId: 0 | 1 = mainDirectionId === 0 ? 1 : 0;
+  const route = routes.find((r) => r.route_id === selectedRouteId);
+  const oppositeLabel = `Direction ${oppositeDirectionId} · ${directionName(route, oppositeDirectionId)}`;
+
+  // The opposite direction's shape pattern (computed the same way the grid does,
+  // so the pane's derived shape is always a valid selection there). A route with
+  // no shapes at all yields no patterns — the grid then filters by direction_id.
+  const patterns = useMemo(
+    () => computeShapePatterns(selectedRouteId, trips, routeStops),
+    [selectedRouteId, trips, routeStops],
+  );
+  const oppositePattern = patterns.find((p) => p.directionId === oppositeDirectionId) ?? null;
+
+  // Effective service resolves the same way the grid does: the selected calendar
+  // if still valid, else the first calendar.
+  const activeServiceId = useMemo(() => {
+    if (serviceId && calendars.some((c) => c.service_id === serviceId)) return serviceId;
+    return calendars[0]?.service_id ?? null;
+  }, [serviceId, calendars]);
+
+  // Whether the opposite direction has any trips for the active service — this is
+  // exactly what the derived grid would render, so we key the empty state on it.
+  // With a shape pattern we match its shape; a fully shapeless route matches by
+  // direction. A route with shapes but none in the opposite direction has no
+  // opposite pattern and no shapeless fallback, so this is false.
+  const hasOppositeTrips = useMemo(() => {
+    if (!selectedRouteId) return false;
+    if (!oppositePattern && patterns.length > 0) return false;
+    return trips.some((t) =>
+      t.route_id === selectedRouteId
+      && (!activeServiceId || t.service_id === activeServiceId)
+      && (oppositePattern ? t.shape_id === oppositePattern.shapeId : t.direction_id === oppositeDirectionId),
+    );
+  }, [selectedRouteId, oppositePattern, patterns.length, activeServiceId, oppositeDirectionId, trips]);
 
   const scopeB: TimetableScope = {
-    routeId: paneB.routeId,
-    // Changing the right pane's route clears its shape so the grid re-picks the
-    // first pattern of the new route (matching the main pane's behaviour).
-    setRouteId: (id) => setPaneB((p) => ({ ...p, routeId: id, shapeId: null })),
-    directionId: paneB.directionId,
-    setDirectionId: (d) => setPaneB((p) => ({ ...p, directionId: d })),
-    serviceId: paneB.serviceId,
-    setServiceId: (id) => setPaneB((p) => ({ ...p, serviceId: id })),
-    shapeId: paneB.shapeId,
-    setShapeId: (id) => setPaneB((p) => ({ ...p, shapeId: id })),
+    routeId: selectedRouteId,
+    directionId: oppositeDirectionId,
+    serviceId,
+    shapeId: oppositePattern?.shapeId ?? null,
+    headerLabel: oppositeLabel,
   };
 
   return (
@@ -55,7 +70,18 @@ export function SplitTimetable() {
         <TimetableGrid />
       </div>
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
-        <TimetableGrid scope={scopeB} />
+        {hasOppositeTrips ? (
+          <TimetableGrid scope={scopeB} />
+        ) : (
+          <div className="p-2 flex flex-col min-h-0 flex-1">
+            <div className="shrink-0 mb-2 px-2 flex items-center gap-2 h-[30px]">
+              <span className="text-xs font-semibold text-dark-brown whitespace-nowrap">{oppositeLabel}</span>
+            </div>
+            <div className="flex-1 flex items-center justify-center text-center px-6 text-sm text-warm-gray">
+              No trips in the opposite direction for this service.
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

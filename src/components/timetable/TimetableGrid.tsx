@@ -37,21 +37,25 @@ function uniqueTripId(baseId: string, existingIds: Set<string>): string {
   return `${baseId}-${suffix}`;
 }
 
-/** A timetable pane's selection state. The main pane reads/writes the global
+/** A timetable pane's selection. The main pane reads/writes the global
  *  `timetable*` store fields (so it stays synced with the map highlight and the
- *  cross-panel "View timetable" handlers). The split view's second pane passes
- *  its own local-state-backed scope so the two panes select route / direction /
- *  shape / service independently. */
+ *  cross-panel "View timetable" handlers), and renders the full scoping toolbar.
+ *  The companion "opposite direction" pane is passed a read-only scope instead:
+ *  it mirrors the main pane's route + service with the direction flipped and has
+ *  no controls of its own, so it renders a minimal `headerLabel` in place of the
+ *  toolbar. Its selection can't change, so it exposes no setters. */
 export type TimetableScope = {
   routeId: string | null;
-  setRouteId: (id: string | null) => void;
   directionId: 0 | 1;
-  setDirectionId: (d: 0 | 1) => void;
   serviceId: string | null;
-  setServiceId: (id: string | null) => void;
   shapeId: string | null;
-  setShapeId: (id: string | null) => void;
+  /** Heading shown above the grid, replacing the scoping toolbar. */
+  headerLabel: string;
 };
+
+/** Inert selection setter for the companion pane, which mirrors the main pane
+ *  and never changes its own route / direction / service / shape. */
+const NOOP_SETTER = (_?: unknown) => {};
 
 export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
   const {
@@ -77,13 +81,16 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
   const gSetShapeId = useStore((s) => s.setTimetableShapeId);
 
   const selectedRouteId = scope ? scope.routeId : gSelectedRouteId;
-  const selectRoute = scope ? scope.setRouteId : gSelectRoute;
   const directionId = scope ? scope.directionId : gDirectionId;
-  const setDirectionId = scope ? scope.setDirectionId : gSetDirectionId;
   const selectedServiceId = scope ? scope.serviceId : gServiceId;
-  const setSelectedServiceId = scope ? scope.setServiceId : gSetServiceId;
   const selectedShapeId = scope ? scope.shapeId : gShapeId;
-  const setSelectedShapeId = scope ? scope.setShapeId : gSetShapeId;
+  // The companion pane is fully derived from the main pane, so its selection
+  // setters are inert (it never renders the controls that would call them). The
+  // shape-sync effect below also skips them because it's handed a valid shape.
+  const selectRoute: (id: string | null) => void = scope ? NOOP_SETTER : gSelectRoute;
+  const setDirectionId: (d: 0 | 1) => void = scope ? NOOP_SETTER : gSetDirectionId;
+  const setSelectedServiceId: (id: string | null) => void = scope ? NOOP_SETTER : gSetServiceId;
+  const setSelectedShapeId: (id: string | null) => void = scope ? NOOP_SETTER : gSetShapeId;
 
   const route = routes.find((r) => r.route_id === selectedRouteId);
 
@@ -91,10 +98,10 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
   // per-stop ⚑ override only appears when this feature is enabled for the feed.
   const showContinuous = useStore((s) => featureEnabled(s, 'continuousStops'));
 
-  // Split-view toggle (global UI pref). The button lives only in the main pane's
-  // toolbar; pane B never shows it.
-  const timetableSplit = useStore((s) => s.timetableSplit);
-  const setTimetableSplit = useStore((s) => s.setTimetableSplit);
+  // "Show opposite direction" toggle (global UI pref). The button lives only in
+  // the main pane's toolbar; the companion pane never shows it.
+  const oppositeOpen = useStore((s) => s.timetableOppositeOpen);
+  const setOppositeOpen = useStore((s) => s.setTimetableOppositeOpen);
 
   // Advanced: when true, every stop cell shows two inputs (arr / dep) so
   // dwell time can be authored. Persisted in the UI slice. Shared across panes.
@@ -606,7 +613,17 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
 
   return (
     <div className="p-2 flex flex-col min-h-0 flex-1">
-      {/* Toolbar — horizontally scrollable on narrow viewports so every control is reachable */}
+      {/* Header. The main pane gets the full scoping toolbar. The derived
+          companion pane gets a minimal label naming the direction it mirrors —
+          its selection is fixed to the main pane's opposite, so it needs no
+          controls. */}
+      {scope ? (
+        <div className="shrink-0 mb-2 px-2 flex items-center gap-2 h-[30px]">
+          <span className="text-xs font-semibold text-dark-brown whitespace-nowrap">{scope.headerLabel}</span>
+          <span className="text-xs text-warm-gray whitespace-nowrap">{routeTrips.length} trips</span>
+        </div>
+      ) : (
+      /* Toolbar — horizontally scrollable on narrow viewports so every control is reachable */
       <div className="shrink-0 mb-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex items-center gap-2 px-2 min-w-max">
           {/* Route selector */}
@@ -670,19 +687,17 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
           >
             Edit Stops
           </button>
-          {!scope && (
-            <button
-              onClick={() => setTimetableSplit(!timetableSplit)}
-              title="Split the timetable into two panes — compare or line up times across two patterns (e.g. outbound vs inbound)"
-              className={`px-3 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-colors ${
-                timetableSplit
-                  ? 'bg-coral text-white'
-                  : 'border-2 border-dashed border-sand text-warm-gray hover:border-coral hover:text-coral'
-              }`}
-            >
-              ⊟ Split view
-            </button>
-          )}
+          <button
+            onClick={() => setOppositeOpen(!oppositeOpen)}
+            title="Show the opposite direction's trips alongside this timetable, to line up arrival/departure times (e.g. outbound vs inbound)"
+            className={`px-3 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-colors ${
+              oppositeOpen
+                ? 'bg-coral text-white'
+                : 'border-2 border-dashed border-sand text-warm-gray hover:border-coral hover:text-coral'
+            }`}
+          >
+            ⇄ {oppositeOpen ? 'Hide opposite direction' : 'Show opposite direction'}
+          </button>
           <label
             className="flex items-center gap-1.5 text-[11px] text-warm-gray cursor-pointer select-none whitespace-nowrap"
             title="Show separate arrival and departure inputs for each stop. Use this for services with dwell time at intermediate stops (e.g. ferries, long-distance rail)."
@@ -745,6 +760,7 @@ export function TimetableGrid({ scope }: { scope?: TimetableScope } = {}) {
           </button>
         </div>
       </div>
+      )}
 
       {/* Cell-state legend. Three states per stop: a typed time, a blank
           served stop (interpolated), and a skipped stop. Kept terse so it

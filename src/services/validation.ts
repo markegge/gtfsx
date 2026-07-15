@@ -11,6 +11,16 @@ import { unreachableTimetableTripIds } from '../components/ui/shapePatterns';
 // which would make this file (and the whole validation graph) unloadable in the
 // tsx editor-test harness.
 import { feedNeedsShapes } from './shapesFromStopsPlan';
+import {
+  findDecreasingShapeDistances,
+  findDecreasingStopTimeDistances,
+  findFastTravel,
+  findStopsTooFarFromShape,
+  checkFeedExpiry,
+  findRouteLongNameContainsShort,
+  findRouteSameNameAndDesc,
+  findDuplicateRouteNames,
+} from './validationQuality';
 
 // Stable codes for validation rules the user can dismiss per feed. The code is
 // attached to EVERY message a rule emits (a rule can emit one message per
@@ -35,6 +45,13 @@ export const VALIDATION_CODES = {
   // geometry (e.g. a hand-drawn ferry alignment they'll add later) — so it's
   // dismissible like the other soft nudges above.
   noShapeGeometry: 'no-shape-geometry',
+
+  // #50 feed-expiry heads-up: feed_info.feed_end_date (or, absent that, the
+  // latest calendar end_date) falls inside MobilityData's 7/30-day pre-expiry
+  // windows. A soft "extend the feed before it lapses" nudge that auto-clears on
+  // renewal, so it's dismissible for a publisher who's shipping a short-lived
+  // feed on purpose.
+  feedExpirySoon: 'feed-expiry-soon',
 
   // ── NTD reporting (FTA) ────────────────────────────────────────────────
   // FTA's July 10, 2025 final notice (FR 2025-12813) made agency_id
@@ -89,6 +106,7 @@ export const DISMISSIBLE_RULE_LABELS: Record<string, string> = {
   [VALIDATION_CODES.holidayExceptions]: 'Holiday calendar_dates reminders',
   [VALIDATION_CODES.redundantException]: 'Redundant calendar_dates exceptions',
   [VALIDATION_CODES.noShapeGeometry]: 'No route geometry (shapes.txt) reminder',
+  [VALIDATION_CODES.feedExpirySoon]: 'Feed expiring soon (7/30-day heads-up)',
 
   [VALIDATION_CODES.ntdMissingAgencyId]: 'Missing agency_id (required in a multi-agency feed; NTD reporting)',
   [VALIDATION_CODES.ntdSingleAgencyNoAgencyId]: 'Single-agency feed omits agency_id (NTD reporting advisory)',
@@ -491,6 +509,115 @@ export function runValidation(state: AppStore): ValidationMessage[] {
         shape.shape_id,
       ));
     }
+  }
+
+  // Distance monotonicity (MobilityData decreasing_shape_distance /
+  // decreasing_or_equal_stop_time_distance). The all-zero case above is a
+  // different, benign situation the exporter repairs; here a REAL distance runs
+  // backwards, which breaks stop-placement in consumers. Errors, per MobilityData.
+  for (const f of findDecreasingShapeDistances(state.shapes)) {
+    messages.push(msg(
+      'error',
+      `Shape "${f.shape_id}" has a shape_dist_traveled that decreases at point ${f.atSequence} (${f.thisDist} after ${f.prevDist}). shape_dist_traveled must increase along a shape, or apps can't place stops on it.`,
+      'shape',
+      f.shape_id,
+    ));
+  }
+  for (const f of findDecreasingStopTimeDistances(state.trips, state.stopTimes)) {
+    messages.push(msg(
+      'error',
+      `Trip "${f.trip_id}" has a shape_dist_traveled that does not increase at stop ${f.atSequence} — ${f.thisDist} is not greater than ${f.prevDist} at the previous stop. Stop distances must strictly increase along a trip.`,
+      'trip',
+      f.trip_id,
+    ));
+  }
+
+  // Implausible travel speed (MobilityData fast_travel_between_consecutive_stops
+  // / fast_travel_between_far_stops). The speed ceiling is per route_type (a
+  // train may outrun a bus); minute-resolution times get a tolerance buffer so
+  // rounded schedules don't false-positive. Warnings; no auto-fix (whether the
+  // coordinates or the times are wrong is a judgement call).
+  for (const f of findFastTravel(state.trips, state.stopTimes, state.stops, state.routes)) {
+    const speed = Math.round(f.speedKph);
+    const km = f.distanceKm.toFixed(1);
+    messages.push(msg(
+      'warning',
+      f.kind === 'consecutive'
+        ? `Trip "${f.trip_id}" travels implausibly fast between stops "${f.fromStopName}" and "${f.toStopName}" — ${speed} km/h over ${km} km, past the ${f.maxSpeedKph} km/h ceiling for this mode. Check the stop coordinates and the times.`
+        : `Trip "${f.trip_id}" averages an implausible ${speed} km/h across ${km} km from "${f.fromStopName}" to "${f.toStopName}", past the ${f.maxSpeedKph} km/h ceiling for this mode. Check the stop coordinates and the times.`,
+      'trip', f.trip_id,
+    ));
+  }
+
+  // Stop too far from its shape (MobilityData stop_too_far_from_shape). The stop
+  // projects more than 100 m from its trip's route alignment. Warning; entity is
+  // the stop so the panel deep-links to it.
+  for (const f of findStopsTooFarFromShape(state.trips, state.stopTimes, state.stops, state.shapes)) {
+    messages.push(msg(
+      'warning',
+      `Stop "${f.stopName}" is ${Math.round(f.distanceMeters)} m from shape "${f.shape_id}" on route "${f.route_id}" — past the 100 m the alignment should stay within. Move the stop onto the route, or fix the shape.`,
+      'stop', f.stop_id,
+    ));
+  }
+
+  // Feed-expiry heads-up (MobilityData feed_expiration_date7_days / _30_days).
+  // Complements the per-service "expired" warning above with a PRE-expiry nudge —
+  // the silent failure #50 calls out for rural feeds. Dismissible per feed.
+  {
+    const now = new Date();
+    const todayInt = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+    const expiry = checkFeedExpiry(
+      state.feedInfo?.feed_end_date,
+      state.calendars.map((c) => c.end_date).filter((d): d is string => !!d),
+      todayInt,
+    );
+    if (expiry) {
+      const pretty = prettyGtfs(expiry.effectiveEndDate);
+      const when = expiry.daysRemaining < 0
+        ? `expired ${-expiry.daysRemaining} day${expiry.daysRemaining === -1 ? '' : 's'} ago`
+        : expiry.daysRemaining === 0
+          ? 'expires today'
+          : `expires in ${expiry.daysRemaining} day${expiry.daysRemaining === 1 ? '' : 's'}`;
+      const src = expiry.source === 'feed_info'
+        ? `feed_info end date ${pretty}`
+        : `latest service ends ${pretty}`;
+      messages.push(msg(
+        'warning',
+        `This feed ${when} (${src}). Trip planners drop the feed once it lapses — extend the ${expiry.source === 'feed_info' ? 'feed_info end date and the calendars' : 'calendars'} before publishing.`,
+        undefined, undefined,
+        VALIDATION_CODES.feedExpirySoon,
+      ));
+    }
+  }
+
+  // Route-naming polish (MobilityData route_long_name_contains_short_name /
+  // same_name_and_description_for_route / duplicate_route_name). Warnings.
+  for (const f of findRouteLongNameContainsShort(state.routes)) {
+    messages.push(msg(
+      'warning',
+      `Route "${f.longName}" restates its own short name "${f.shortName}" at the start of route_long_name — the long name should describe the route (e.g. its endpoints), not repeat the number.`,
+      'route', f.route_id,
+    ));
+  }
+  // same_name_and_description_for_route carries a one-click fix: clearing a
+  // route_desc that only echoes the name is unambiguous and loses no information.
+  for (const f of findRouteSameNameAndDesc(state.routes)) {
+    const m = msg(
+      'warning',
+      `Route "${f.name}" has a route_desc identical to its ${f.which} name — a description that just repeats the name adds nothing. Clear it, or write a real description.`,
+      'route', f.route_id,
+    );
+    m.fix = { id: 'clear-route-desc' };
+    messages.push(m);
+  }
+  for (const f of findDuplicateRouteNames(state.routes)) {
+    const ids = f.route_ids.join('", "');
+    const label = f.shortName || f.longName || f.route_ids[0];
+    messages.push(msg(
+      'warning',
+      `Routes "${ids}" share the same name ("${label}"), agency, and type — routes of one agency and mode should have a unique route_short_name / route_long_name combination.`,
+      'route', f.route_ids[0],
+    ));
   }
 
   // No route geometry at all — one feed-level nudge, not one per route/trip.

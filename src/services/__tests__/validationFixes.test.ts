@@ -254,3 +254,34 @@ describe('ValidationPanel Fix button (render predicate + click code path)', () =
     expect(fixButtonShown(blankBothMsg(msgs)!)).toBe(false);
   });
 });
+
+// #50 route-naming polish: the one-click fix for same_name_and_description_for_route.
+describe('clear-route-desc fix (same_name_and_description_for_route)', () => {
+  it('clears a redundant route_desc and restores it on undo', () => {
+    useStore.getState().setRoutes([
+      { route_id: 'R1', route_short_name: '1', route_long_name: 'Main Line', route_desc: 'Main Line' } as never,
+    ]);
+    const message: ValidationMessage = {
+      id: '1', severity: 'warning', message: 'x', entity_type: 'route', entity_id: 'R1',
+      fix: { id: 'clear-route-desc' },
+    };
+    const result = applyValidationFix(message);
+    expect(result).not.toBeNull();
+    expect(result!.changed).toBe(true);
+    expect(useStore.getState().routes.find((r) => r.route_id === 'R1')!.route_desc).toBe('');
+
+    result!.undo();
+    expect(useStore.getState().routes.find((r) => r.route_id === 'R1')!.route_desc).toBe('Main Line');
+  });
+
+  it('is a no-op (changed=false) when the route has no description', () => {
+    useStore.getState().setRoutes([
+      { route_id: 'R1', route_short_name: '1', route_long_name: 'Main Line' } as never,
+    ]);
+    const message: ValidationMessage = {
+      id: '1', severity: 'warning', message: 'x', entity_type: 'route', entity_id: 'R1',
+      fix: { id: 'clear-route-desc' },
+    };
+    expect(applyValidationFix(message)!.changed).toBe(false);
+  });
+});

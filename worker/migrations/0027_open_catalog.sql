@@ -1,0 +1,51 @@
+-- 0027: open-catalog listing (issue #47).
+--
+-- The pull-model public feed catalog served at feeds.<zone>/catalog.json. A
+-- machine-readable list of the published feeds whose owner opted into public
+-- listing, which MobilityData (Mobility Database) and Interline (TransitLand)
+-- scan on their own cadence. This REPLACES the abandoned push integration
+-- (worker/publication/submit.ts → project_catalog_submission), which is a dead
+-- end: the MDB v1 API rejects third-party writes with HTTP 405. Those tables
+-- are left untouched — this listing is a separate, decoupled opt-in.
+--
+-- ── feed_project: the per-project listing declaration ────────────────────────
+--
+-- catalog_publisher_type encodes BOTH the opt-in AND the required official-vs-
+-- community declaration in one nullable column:
+--   NULL         → not listed in the open catalog (the default; a feed never
+--                  appears without an explicit, affirmative declaration)
+--   'official'   → published by, or on explicit behalf of, the operating
+--                  transit agency  (emitted as is_official=true)
+--   'community'  → maintained by a third party unaffiliated with the agency
+--                  (emitted as is_official=false)
+-- There is deliberately no silent default: /catalog.json filters on
+-- `catalog_publisher_type IN ('official','community')`, so a published feed
+-- with a NULL value is simply omitted. Opt-out clears the column back to NULL,
+-- which drops the feed from the endpoint on the next scan (self-healing).
+--
+-- mdb_source_id is the numeric Mobility Database source id for the "switcher"
+-- case (an agency already in MDB that moved its hosting to GTFS-X): carried so
+-- MDB UPDATES that existing source's download URL instead of creating a
+-- duplicate. NULL when unknown. The column is additive now; automatic capture
+-- from the MDB import flow is a documented follow-up (the import path fetches
+-- the feed by feed_id but does not yet persist it onto the created project).
+ALTER TABLE feed_project ADD COLUMN catalog_publisher_type TEXT;
+ALTER TABLE feed_project ADD COLUMN mdb_source_id INTEGER;
+
+-- ── publication: per-publish catalog metadata, computed once at publish ───────
+--
+-- /catalog.json lists EVERY opted-in feed in one document, so it must never
+-- load N feed blobs from R2 per request. Instead we compute the fields that
+-- would otherwise require reading the snapshot state — the geographic bounding
+-- box, the feed_publisher_name, the feed_contact_email, and any derivable
+-- spec features — ONCE at publish time (off the response path, in the same
+-- background task that already loads the state for the thumbnail) and persist
+-- them here as JSON. The catalog route then reads D1 only.
+--
+-- Shape: { "bbox": {minLat,minLon,maxLat,maxLon} | null,
+--          "features": string[],
+--          "feedPublisherName": string | null,
+--          "feedContactEmail": string | null }
+-- NULL for feeds published before 0027 (or before their next publish); the
+-- catalog route degrades gracefully, omitting the fields it can't fill.
+ALTER TABLE publication ADD COLUMN catalog_meta_json TEXT;

@@ -258,6 +258,22 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext):
       }
     }
 
+    // Open-catalog canonical-URL redirect (issue #47). The machine-readable
+    // feed catalog is served from the FEEDS origin — feeds.<zone>/catalog.json
+    // is THE canonical URL. The app host keeps the path working (MobilityData
+    // was shown the staging app-host URL) by 301-ing to the canonical feeds
+    // URL. Placed BEFORE the static-asset handler on purpose: a worker route
+    // here wins over any file at public/catalog.json, so re-adding that retired
+    // demo file can never shadow this route or serve stale data. See
+    // docs/ARCHITECTURE.md §5.
+    if (
+      (request.method === 'GET' || request.method === 'HEAD') &&
+      url.pathname === '/catalog.json' &&
+      env.FEEDS_ORIGIN
+    ) {
+      return Response.redirect(`${env.FEEDS_ORIGIN.replace(/\/$/, '')}/catalog.json`, 301);
+    }
+
     // Demo-request funnel: GET /book-demo?src=<placement>&gclid=... serves the
     // lead form (worker-rendered, noindex). The form POSTs to /api/demo-leads,
     // which stores the lead, emits the demo_request conversion, and offers the

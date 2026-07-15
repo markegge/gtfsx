@@ -19,6 +19,12 @@ import { sha256Hex } from '../util/crypto';
 import { getFeedBlob, thumbnailKey, FALLBACK_THUMBNAIL_KEY, type ThumbnailSize } from '../projects/r2';
 import { ungzip } from './ungzip';
 import { buildDmfrDocument, stopCentroid } from './dmfr';
+import {
+  buildCatalogDocument,
+  parseCatalogMeta,
+  type CatalogFeedInput,
+  type CatalogPublisherType,
+} from './catalog';
 import { renderRouteEmbed } from '../embeds/route';
 import { renderSystemMapEmbed } from '../embeds/systemMap';
 import { renderStopEmbed } from '../embeds/stop';
@@ -230,6 +236,30 @@ export async function feedsHandler(
       status: 200,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
+  }
+
+  // Open-catalog document (origin-level, no slug): the machine-readable list of
+  // every published, opted-in feed that MobilityData / TransitLand scan. This
+  // is THE canonical URL for the catalog (feeds.<zone>/catalog.json); the app
+  // host 301-redirects www.<zone>/catalog.json here. CORS-open so registry
+  // tooling and browser validators can fetch it cross-origin. See
+  // worker/publication/catalog.ts + docs/catalog-spec.md.
+  if (url.pathname === '/catalog.json') {
+    if (method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          'Access-Control-Allow-Headers': 'If-None-Match',
+          'Access-Control-Max-Age': '86400',
+        },
+      });
+    }
+    if (method !== 'GET' && method !== 'HEAD') {
+      return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD, OPTIONS' } });
+    }
+    return serveCatalog(request, env);
   }
 
   // Declarative web-component loader (origin-level, no slug). One <script src>
@@ -700,6 +730,71 @@ async function serveDmfr(env: Env, slug: string): Promise<Response> {
       'Access-Control-Allow-Origin': '*',
     },
   });
+}
+
+// ─── catalog.json (GTFS-X open catalog) ────────────────────────────────────────
+//
+// The pull-model public feed catalog: one document listing every published feed
+// whose owner opted into public listing (feed_project.catalog_publisher_type is
+// set). Built from D1 ONLY — the per-feed geography/metadata that would need the
+// snapshot state is persisted at publish time (publication.catalog_meta_json),
+// so this never loads N feed blobs. Document shape + field semantics live in
+// worker/publication/catalog.ts and docs/catalog-spec.md.
+//
+// Self-healing by construction: the JOIN on `publication` drops unpublished
+// feeds (unpublish deletes that row), and the publisher_type filter drops
+// opted-out feeds (opt-out clears the column). An empty result is a valid,
+// empty document — never an error.
+
+interface CatalogQueryRow {
+  slug: string;
+  name: string;
+  description: string | null;
+  license_spdx: string | null;
+  catalog_publisher_type: string;
+  mdb_source_id: number | null;
+  published_at: number;
+  catalog_meta_json: string | null;
+}
+
+async function serveCatalog(request: Request, env: Env): Promise<Response> {
+  const rows = await env.DB.prepare(
+    `SELECT p.slug, p.name, p.description, p.license_spdx,
+            p.catalog_publisher_type, p.mdb_source_id,
+            pub.published_at, pub.catalog_meta_json
+       FROM feed_project p
+       JOIN publication pub ON pub.project_id = p.id
+      WHERE p.deleted_at IS NULL
+        AND p.catalog_publisher_type IN ('official', 'community')
+      ORDER BY p.slug`,
+  ).all<CatalogQueryRow>();
+
+  const feeds: CatalogFeedInput[] = (rows.results ?? []).map((r) => ({
+    slug: r.slug,
+    name: r.name,
+    description: r.description,
+    publisherType: r.catalog_publisher_type as CatalogPublisherType,
+    licenseSpdx: r.license_spdx,
+    mdbSourceId: r.mdb_source_id,
+    publishedAt: r.published_at,
+    meta: parseCatalogMeta(r.catalog_meta_json),
+  }));
+
+  const doc = buildCatalogDocument({
+    feedsOrigin: env.FEEDS_ORIGIN,
+    generatedAt: Date.now(),
+    feeds,
+  });
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+    'Access-Control-Allow-Origin': '*',
+  };
+  if (request.method === 'HEAD') {
+    return new Response(null, { status: 200, headers });
+  }
+  return new Response(JSON.stringify(doc, null, 2), { status: 200, headers });
 }
 
 // ─── GTFS-Realtime Service Alerts ────────────────────────────────────────────────

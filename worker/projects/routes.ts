@@ -1476,6 +1476,14 @@ const catalogCreateSchema = z.object({
   catalog: z.enum(['mobility_db', 'transit_land']),
 });
 
+// Open-catalog listing opt-in (issue #47). publisherType is REQUIRED — a feed
+// is listed only after its owner affirmatively declares whether it is an
+// official (published by/on behalf of the operating agency) or community
+// (third-party-maintained) feed. There is no default; opting out is DELETE.
+const catalogListingSchema = z.object({
+  publisherType: z.enum(['official', 'community']),
+});
+
 const rtFeedItemSchema = z.object({
   kind: z.enum(['vehicle_positions', 'trip_updates', 'alerts']),
   url: z.string().url().max(2000).refine((u) => u.startsWith('https://'), 'URL must be https://'),
@@ -2231,6 +2239,82 @@ projectsRouter.delete('/:id/catalog-submissions/:catalog', async (c) => {
     subjectId: project.id,
     action: 'project.catalog_opt_out',
     metadata: { catalog },
+    ip: clientIp(c.req.raw),
+  });
+
+  return c.body(null, 204);
+});
+
+// ─── Open-catalog listing (issue #47) ──────────────────────────────────────────
+//
+// The PULL-model opt-in: list this feed in feeds.<zone>/catalog.json, which
+// MobilityData / TransitLand scan on their own cadence. Distinct from the dead
+// PUSH machinery above (project_catalog_submission → the MDB v1 API, which 405s
+// on third-party writes). State lives on feed_project.catalog_publisher_type:
+// NULL = not listed; 'official' | 'community' = listed with that declaration.
+// Opt-out (DELETE) clears it, dropping the feed from the endpoint on next scan.
+
+projectsRouter.get('/:id/catalog-listing', async (c) => {
+  const user = c.var.user!;
+  const id = c.req.param('id');
+  const { row: project } = await requireOwnedProject(c.env, user, id, 'viewer');
+
+  const row = await c.env.DB.prepare(
+    `SELECT catalog_publisher_type, mdb_source_id FROM feed_project WHERE id = ?`,
+  )
+    .bind(project.id)
+    .first<{ catalog_publisher_type: string | null; mdb_source_id: number | null }>();
+
+  return c.json({
+    listing: {
+      listed: row?.catalog_publisher_type != null,
+      publisherType: row?.catalog_publisher_type ?? null,
+      mdbSourceId: row?.mdb_source_id ?? null,
+    },
+  });
+});
+
+projectsRouter.put('/:id/catalog-listing', async (c) => {
+  const user = c.var.user!;
+  const id = c.req.param('id');
+  const { row: project } = await requireOwnedProject(c.env, user, id, 'editor');
+  const body = await parseJson(c, catalogListingSchema);
+
+  await c.env.DB.prepare(
+    `UPDATE feed_project SET catalog_publisher_type = ?, updated_at = ? WHERE id = ?`,
+  )
+    .bind(body.publisherType, Date.now(), project.id)
+    .run();
+
+  await logAudit(c.env, {
+    actorUserId: user.id,
+    subjectType: 'publication',
+    subjectId: project.id,
+    action: 'project.catalog_opt_in',
+    metadata: { catalog: 'open_catalog', publisherType: body.publisherType },
+    ip: clientIp(c.req.raw),
+  });
+
+  return c.json({ listing: { listed: true, publisherType: body.publisherType } });
+});
+
+projectsRouter.delete('/:id/catalog-listing', async (c) => {
+  const user = c.var.user!;
+  const id = c.req.param('id');
+  const { row: project } = await requireOwnedProject(c.env, user, id, 'editor');
+
+  await c.env.DB.prepare(
+    `UPDATE feed_project SET catalog_publisher_type = NULL, updated_at = ? WHERE id = ?`,
+  )
+    .bind(Date.now(), project.id)
+    .run();
+
+  await logAudit(c.env, {
+    actorUserId: user.id,
+    subjectType: 'publication',
+    subjectId: project.id,
+    action: 'project.catalog_opt_out',
+    metadata: { catalog: 'open_catalog' },
     ip: clientIp(c.req.raw),
   });
 

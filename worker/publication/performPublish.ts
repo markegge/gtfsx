@@ -11,6 +11,7 @@ import { ulid } from 'ulidx';
 import type { Env } from '../env';
 import { assertIdStable } from './idStability';
 import { submitToCatalogs } from './submit';
+import { stopBoundingBox, deriveCatalogFeatures, type CatalogMeta } from './catalog';
 import { getFeedBlob, publicationZipKey, putFeedBlob } from '../projects/r2';
 import { loadFeedStateFromKey, maybeRegenerateThumbnail } from '../embeds/thumbnail';
 import { logAudit } from '../util/audit';
@@ -175,6 +176,56 @@ export async function performPublish(env: Env, input: PerformPublishInput): Prom
     })().catch((err) => console.error('[thumbnail] publish-trigger error', err)),
   );
 
+  // Persist the per-feed catalog metadata (bbox, features, feed_publisher_name,
+  // feed_contact_email) that feeds.<zone>/catalog.json needs, computed ONCE
+  // here from the snapshot state so the catalog route reads D1 only and never
+  // loads N feed blobs per request (issue #47). Off the response path; failure
+  // never breaks publish — the catalog just omits the fields it couldn't fill.
+  runBackground(
+    computeAndStoreCatalogMeta(env, project.id, snapshot.state_r2_key).catch((err) =>
+      console.error('[publish] catalog-meta error', err),
+    ),
+  );
+
   const canonicalUrl = `${feedsOrigin.replace(/\/$/, '')}/${project.slug}/gtfs.zip`;
   return { publishedBytes, canonicalUrl, wasRollback };
+}
+
+function strOrNull(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const v = value.trim();
+  return v === '' ? null : v;
+}
+
+/**
+ * Compute the catalog metadata for a just-published feed from its snapshot
+ * state and store it on the publication row (publication.catalog_meta_json).
+ * Best-effort: a missing or unreadable state leaves the column untouched (the
+ * catalog route degrades gracefully). Loads the state blob independently of the
+ * thumbnail task so it stays fully decoupled from that path.
+ */
+async function computeAndStoreCatalogMeta(env: Env, projectId: string, stateKey: string): Promise<void> {
+  const blob = await getFeedBlob(env, stateKey);
+  if (!blob) return;
+  let raw: unknown;
+  try {
+    const text = await new Response(blob.body.pipeThrough(new DecompressionStream('gzip'))).text();
+    raw = JSON.parse(text);
+  } catch {
+    return; // unreadable state — leave catalog_meta_json as-is
+  }
+  const state = raw as {
+    stops?: Array<{ stop_lat?: unknown; stop_lon?: unknown }>;
+    feedInfo?: { feed_publisher_name?: unknown; feed_contact_email?: unknown } | null;
+  };
+  const feedInfo = state.feedInfo ?? null;
+  const meta: CatalogMeta = {
+    bbox: stopBoundingBox(state.stops),
+    features: deriveCatalogFeatures(raw),
+    feedPublisherName: strOrNull(feedInfo?.feed_publisher_name),
+    feedContactEmail: strOrNull(feedInfo?.feed_contact_email),
+  };
+  await env.DB.prepare(`UPDATE publication SET catalog_meta_json = ? WHERE project_id = ?`)
+    .bind(JSON.stringify(meta), projectId)
+    .run();
 }

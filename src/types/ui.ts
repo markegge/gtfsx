@@ -71,7 +71,8 @@ export type ValidationFixId =
   | 'remove-orphan-trips'
   | 'remove-ghost-trips'
   | 'delete-unused-stop'
-  | 'generate-shapes-from-stops';
+  | 'generate-shapes-from-stops'
+  | 'clear-route-desc';
 
 export interface ValidationMessage {
   id: string;

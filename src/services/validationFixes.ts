@@ -169,6 +169,31 @@ const FIXES: Record<ValidationFixId, ValidationFix> = {
     // above). applyValidationFix / applyValidationFixBatch both skip it.
     interactive: true,
   },
+
+  'clear-route-desc': {
+    id: 'clear-route-desc',
+    label: 'Clear',
+    description:
+      'Clears route_desc on this route because it only repeats the route name, which adds '
+      + 'no information for riders. The name is unchanged; only the redundant description is '
+      + 'removed. You can undo this.',
+    apply: (message) => {
+      const routeId = message.entity_id ?? '';
+      const route = useStore.getState().routes.find((r) => r.route_id === routeId);
+      const prev = route?.route_desc;
+      const had = route !== undefined && prev !== undefined && prev !== '';
+      if (had) useStore.getState().updateRoute(routeId, { route_desc: '' });
+      const label = route?.route_short_name || route?.route_long_name || routeId;
+      return {
+        fixId: 'clear-route-desc',
+        changed: had,
+        label: had
+          ? `Cleared the redundant description on route "${label}".`
+          : `Route "${routeId}" has no redundant description — nothing changed.`,
+        undo: () => { if (had) useStore.getState().updateRoute(routeId, { route_desc: prev }); },
+      };
+    },
+  },
 };
 
 /** Look up a registered fix by id (undefined if the id isn't in the catalog —

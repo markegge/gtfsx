@@ -3,6 +3,7 @@ import { useStore } from '../../store';
 import { formatTimeShort, gtfsTimeToSeconds } from '../../utils/time';
 import { directionName } from '../../utils/constants';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
+import { serviceTripCountsAtStop, defaultStopServiceId } from '../../services/stopAnalysis';
 
 const PEAK_WINDOWS: Array<[number, number]> = [[6 * 3600, 9 * 3600], [15 * 3600, 18 * 3600]];
 const OFFPEAK_WINDOWS: Array<[number, number]> = [[10 * 3600, 14 * 3600]];
@@ -60,10 +61,21 @@ export function StopDeparturesSection() {
 
   const hiddenRouteSet = useMemo(() => new Set(hiddenRouteIds), [hiddenRouteIds]);
 
+  // Trips at THIS stop, tallied per service_id — labels the picker options and
+  // drives the default below. Built from the per-stop index (not a full
+  // stop_times rescan) so it's cheap to recompute when the stop changes.
+  const serviceTripCounts = useMemo(
+    () => (editingStopId ? serviceTripCountsAtStop(stopTimesByStop.get(editingStopId) || [], trips) : new Map<string, number>()),
+    [editingStopId, stopTimesByStop, trips],
+  );
+
   const activeServiceId = useMemo(() => {
     if (selectedServiceId && calendars.some((c) => c.service_id === selectedServiceId)) return selectedServiceId;
-    return calendars[0]?.service_id || null;
-  }, [selectedServiceId, calendars]);
+    // Default to a service that actually serves this stop (the busiest one).
+    // Feeds with one service_id per route/day-type otherwise land on an empty
+    // "Weekdays" service and the panel looks broken — issue #46.
+    return defaultStopServiceId(serviceTripCounts, calendars.map((c) => c.service_id)) || calendars[0]?.service_id || null;
+  }, [selectedServiceId, calendars, serviceTripCounts]);
 
   const departures = useMemo<Departure[]>(() => {
     if (!editingStopId) return [];
@@ -170,11 +182,14 @@ export function StopDeparturesSection() {
                 onChange={(e) => setSelectedServiceId(e.target.value)}
                 className="px-2 py-1 border border-sand rounded-md text-[11px] bg-cream focus:outline-none focus:border-coral min-w-0 flex-1"
               >
-                {calendars.map((cal) => (
-                  <option key={cal.service_id} value={cal.service_id}>
-                    {cal._description || cal.service_id}
-                  </option>
-                ))}
+                {calendars.map((cal) => {
+                  const n = serviceTripCounts.get(cal.service_id) || 0;
+                  return (
+                    <option key={cal.service_id} value={cal.service_id}>
+                      {cal._description || cal.service_id} · {n} trip{n === 1 ? '' : 's'}
+                    </option>
+                  );
+                })}
               </select>
             )}
             <div className="flex rounded-md border border-sand overflow-hidden">

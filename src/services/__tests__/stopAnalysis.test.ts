@@ -7,6 +7,8 @@ import {
   computeAccessibilityAudit,
   representativeDay,
   dominantPatterns,
+  serviceTripCountsAtStop,
+  defaultStopServiceId,
   type FeedSlice,
 } from '../stopAnalysis';
 
@@ -203,5 +205,60 @@ describe('computeAccessibilityAudit', () => {
     const r = computeAccessibilityAudit(feed({ stops }));
     expect(r.totalStops).toBe(1);        // station excluded
     expect(r.pctPopulated).toBe(100);
+  });
+});
+
+describe('serviceTripCountsAtStop / defaultStopServiceId (issue #46)', () => {
+  // Metrolink-style feed: one service_id per route per day-type. The first
+  // "Weekdays" service (WK_EMPTY) has no trips at this stop; the service that
+  // actually serves it sits further down the calendar list.
+  const trips = [
+    trip('t1', 'R1', 'WK_EMPTY'),   // weekday service, serves some other stop
+    trip('t2', 'R2', 'WK_BALDWIN'),
+    trip('t3', 'R2', 'WK_BALDWIN'),
+    trip('t4', 'R2', 'WK_BALDWIN'),
+    trip('t5', 'R3', 'SAT'),
+  ];
+  // stop_times AT the target stop only (what useStopTimesIndex.byStop returns).
+  const stopTimesAtStop = [
+    st('t2', 'BALDWIN', 3, '08:00:00'),
+    st('t3', 'BALDWIN', 3, '09:00:00'),
+    st('t4', 'BALDWIN', 3, '10:00:00'),
+    st('t5', 'BALDWIN', 5, '11:00:00'),
+    // t1 (WK_EMPTY) never stops here.
+  ];
+  const calendarOrder = ['WK_EMPTY', 'WK_BALDWIN', 'SAT'];
+
+  it('counts distinct trips per service at the stop', () => {
+    const counts = serviceTripCountsAtStop(stopTimesAtStop, trips);
+    expect(counts.get('WK_BALDWIN')).toBe(3);
+    expect(counts.get('SAT')).toBe(1);
+    expect(counts.get('WK_EMPTY')).toBeUndefined();
+  });
+
+  it('defaults to the busiest service serving the stop, not the first-listed empty one', () => {
+    const counts = serviceTripCountsAtStop(stopTimesAtStop, trips);
+    expect(defaultStopServiceId(counts, calendarOrder)).toBe('WK_BALDWIN');
+  });
+
+  it('counts a loop-route trip that visits the stop twice only once', () => {
+    const loopTrips = [trip('loop', 'R', 'WK')];
+    const loopStopTimes = [
+      st('loop', 'BALDWIN', 2, '08:00:00'),
+      st('loop', 'BALDWIN', 9, '08:45:00'),
+    ];
+    expect(serviceTripCountsAtStop(loopStopTimes, loopTrips).get('WK')).toBe(1);
+  });
+
+  it('breaks ties by calendar order (first listed wins)', () => {
+    const tiedTrips = [trip('a', 'R', 'S1'), trip('b', 'R', 'S2')];
+    const tiedStopTimes = [st('a', 'X', 1, '08:00:00'), st('b', 'X', 1, '09:00:00')];
+    const counts = serviceTripCountsAtStop(tiedStopTimes, tiedTrips);
+    expect(defaultStopServiceId(counts, ['S1', 'S2'])).toBe('S1');
+    expect(defaultStopServiceId(counts, ['S2', 'S1'])).toBe('S2');
+  });
+
+  it('returns null when no service serves the stop', () => {
+    expect(defaultStopServiceId(new Map(), calendarOrder)).toBeNull();
   });
 });

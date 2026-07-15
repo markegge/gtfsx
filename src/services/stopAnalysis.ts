@@ -580,3 +580,48 @@ export function computeAccessibilityAudit(feed: FeedSlice): AccessibilityResult 
     gapStopIds,
   };
 }
+
+/* ─────────────────── stop trips-panel service picker ─────────────────── */
+
+/**
+ * Distinct trips serving `stopId`, tallied per service_id. Feeds that define
+ * one service_id per route per day-type (spec-compliant, e.g. Metrolink) let
+ * the per-stop trips panel default to a "Weekdays" service with no trips at
+ * the stop, so it looks empty — issue #46. Callers pass the stop's already
+ * indexed stop_times (useStopTimesIndex) to avoid rescanning the whole feed.
+ */
+export function serviceTripCountsAtStop(
+  stopTimesAtStop: StopTime[],
+  trips: Trip[],
+): Map<string, number> {
+  const serviceByTrip = new Map(trips.map((t) => [t.trip_id, t.service_id]));
+  const counts = new Map<string, number>();
+  const counted = new Set<string>();
+  for (const st of stopTimesAtStop) {
+    // A loop route can hit the same stop twice on one trip; count it once.
+    if (counted.has(st.trip_id)) continue;
+    counted.add(st.trip_id);
+    const serviceId = serviceByTrip.get(st.trip_id);
+    if (serviceId !== undefined) counts.set(serviceId, (counts.get(serviceId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * The service_id the stop trips panel should default to: the one with the most
+ * trips at the stop, ties broken by `calendarOrder` (first listed wins).
+ * Returns null when no service serves the stop (caller keeps its own fallback).
+ */
+export function defaultStopServiceId(
+  counts: Map<string, number>,
+  calendarOrder: string[],
+): string | null {
+  const order = calendarOrder.length ? calendarOrder : [...counts.keys()];
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const serviceId of order) {
+    const count = counts.get(serviceId) ?? 0;
+    if (count > bestCount) { bestCount = count; best = serviceId; }
+  }
+  return best;
+}

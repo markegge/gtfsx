@@ -7,12 +7,16 @@ import {
   createCatalogSubmission,
   deleteCatalogSubmission,
   deleteRtFeed,
+  getCatalogListing,
+  putCatalogListing,
+  deleteCatalogListing,
   listCatalogSubmissions,
   listRtFeeds,
   putRtFeeds,
   type CatalogName,
   type CatalogStatus,
   type CatalogSubmission,
+  type PublisherType,
   type RtFeed,
   type RtFeedKind,
 } from '../../services/distributionApi';
@@ -64,9 +68,159 @@ export function DistributionPanel() {
 
   return (
     <div className="px-4 py-4 space-y-6">
+      <OpenCatalogSection projectId={projectId} />
       <CatalogSection projectId={projectId} />
       <RtFeedsSection projectId={projectId} />
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Open catalog listing (issue #47)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The pull-model opt-in: list this feed in the public GTFS-X open catalog
+// (feeds.<zone>/catalog.json), which MobilityData and TransitLand scan on their
+// own cadence. Requires an explicit official-vs-community declaration; opting
+// out removes the feed from the endpoint on the next scan.
+
+function OpenCatalogSection({ projectId }: { projectId: string }) {
+  const [listed, setListed] = useState(false);
+  const [publisherType, setPublisherType] = useState<PublisherType | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      setError(null);
+      const res = await getCatalogListing(projectId);
+      setListed(res.listing.listed);
+      setPublisherType(res.listing.publisherType);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not load catalog listing');
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // Toggling the checkbox on just reveals the required declaration — nothing is
+  // persisted until a type is picked (there is no default). Toggling off opts
+  // out immediately.
+  const onToggle = async (checked: boolean) => {
+    setError(null);
+    if (!checked) {
+      setBusy(true);
+      try {
+        await deleteCatalogListing(projectId);
+        setListed(false);
+        setPublisherType(null);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : 'Could not opt out');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    setListed(true);
+    // If we already have a type on record, re-listing is immediate; otherwise
+    // wait for the user to choose below.
+    if (publisherType) await pickType(publisherType);
+  };
+
+  const pickType = async (type: PublisherType) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await putCatalogListing(projectId, type);
+      setPublisherType(type);
+      setListed(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not update catalog listing');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section>
+      <SectionHeader
+        title="Public catalog listing"
+        description="List this published feed in the GTFS-X open catalog, which the Mobility Database and TransitLand scan to discover feeds. Opting out removes it on their next scan."
+      />
+      {error && (
+        <div className="mb-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm">
+          {error}
+        </div>
+      )}
+      <div className="border border-sand rounded-lg px-4 py-3">
+        <label className="flex items-start gap-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={listed}
+            disabled={busy || loading}
+            onChange={(e) => onToggle(e.target.checked)}
+            className="mt-1 accent-coral"
+          />
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-dark-brown flex items-center gap-2 flex-wrap">
+              List this feed in public catalogs
+              {listed && publisherType && <Badge variant="success">Listed</Badge>}
+            </div>
+            <div className="text-xs text-warm-gray mt-0.5">
+              Only public, published feeds are listed. Unpublishing also removes it automatically.
+            </div>
+          </div>
+        </label>
+
+        {listed && (
+          <fieldset className="mt-3 ml-7" disabled={busy || loading}>
+            <legend className="text-[11px] font-bold uppercase tracking-wide text-warm-gray mb-2">
+              Is this an official or community feed?
+            </legend>
+            <label className="flex items-start gap-2 cursor-pointer select-none mb-2">
+              <input
+                type="radio"
+                name={`pub-type-${projectId}`}
+                checked={publisherType === 'official'}
+                onChange={() => pickType('official')}
+                className="mt-1 accent-coral"
+              />
+              <div>
+                <div className="text-sm text-dark-brown font-medium">Official</div>
+                <div className="text-xs text-warm-gray">
+                  Published by, or on behalf of, the transit agency that operates the service.
+                </div>
+              </div>
+            </label>
+            <label className="flex items-start gap-2 cursor-pointer select-none">
+              <input
+                type="radio"
+                name={`pub-type-${projectId}`}
+                checked={publisherType === 'community'}
+                onChange={() => pickType('community')}
+                className="mt-1 accent-coral"
+              />
+              <div>
+                <div className="text-sm text-dark-brown font-medium">Community</div>
+                <div className="text-xs text-warm-gray">
+                  Maintained by a third party (e.g. a researcher or advocate) not affiliated with the agency.
+                </div>
+              </div>
+            </label>
+            {!publisherType && (
+              <p className="text-xs text-purple mt-2 italic">
+                Choose one to finish listing — the feed isn't listed until you do.
+              </p>
+            )}
+          </fieldset>
+        )}
+      </div>
+    </section>
   );
 }
 

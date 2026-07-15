@@ -17,6 +17,43 @@ export interface CatalogSubmission {
   lastError?: string | null;
 }
 
+// ── Open catalog listing (issue #47) ────────────────────────────────────────
+// The pull-model opt-in: list this published feed in feeds.<zone>/catalog.json,
+// which MobilityData / TransitLand scan on their own cadence. Distinct from the
+// (dead) push CatalogSubmission machinery above. publisherType is required — the
+// owner declares whether the feed is official or community; there is no default.
+
+export type PublisherType = 'official' | 'community';
+
+export interface CatalogListing {
+  listed: boolean;
+  publisherType: PublisherType | null;
+  mdbSourceId?: number | null;
+}
+
+export function getCatalogListing(projectId: string): Promise<{ listing: CatalogListing }> {
+  return requestJson<{ listing: CatalogListing }>(
+    `/api/projects/${encodeURIComponent(projectId)}/catalog-listing`,
+  );
+}
+
+export function putCatalogListing(
+  projectId: string,
+  publisherType: PublisherType,
+): Promise<{ listing: CatalogListing }> {
+  return requestJson<{ listing: CatalogListing }>(
+    `/api/projects/${encodeURIComponent(projectId)}/catalog-listing`,
+    { method: 'PUT', body: { publisherType } },
+  );
+}
+
+export function deleteCatalogListing(projectId: string): Promise<void> {
+  return requestJson<void>(
+    `/api/projects/${encodeURIComponent(projectId)}/catalog-listing`,
+    { method: 'DELETE' },
+  );
+}
+
 export type RtFeedKind = 'vehicle_positions' | 'trip_updates' | 'alerts';
 
 export interface RtFeed {

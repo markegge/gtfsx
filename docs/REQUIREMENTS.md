@@ -119,7 +119,7 @@ Stops are placed in the context of the currently-selected route. Default behavio
 - ✅ Frequency-based (headway) service entry (`frequencies.txt`) — per-trip windows with overlap/validity checks, in the Frequencies panel.
 - ✅ Block assignment UI — `block_id` is first-class: editable per trip, with a Blocks panel grouping trips by block and a soft overlap warning.
 - ✅ **Vehicle-blocking Gantt** (B3, `BlockGantt` + `blockBuilder.ts`) — a vehicle-row × time-axis view in the center pane: trip bars by route, layover gaps, deadhead connectors, ID / platform-hours / pull-out / pull-in columns, a day-type selector, and a cost header (vehicles, peak-in-service, daily/annual cost split into service/layover/deadhead with toggles). **Quick Block** greedily auto-chains feasible trips (editable, no optimizer); **Interline** allows cross-route chaining; drag a trip to reassign its vehicle; overlaps flag red and surface as a pre-publish validation warning.
-- 🔲 Marey diagram (time–distance trip chart).
+- ✅ Marey diagram (time–distance trip chart).
 
 ### 1.6 Fares
 

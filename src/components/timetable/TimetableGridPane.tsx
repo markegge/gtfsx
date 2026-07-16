@@ -5,7 +5,7 @@ import type { Trip, StopTime } from '../../types/gtfs';
 import { ActionCell, ColResizer, ColumnMenu, HeadwayToggle, RowMenu, TimeCell, TripCell } from './timetableGridParts';
 import {
   computeRowErrors, actColWidth, defaultColWidth,
-  COL_MIN, COL_MAX, TRIP_COL_MIN, TRIP_COL_MAX, TRIP_COL_DEFAULT,
+  COL_MIN, COL_MAX, TRIP_COL_MIN, TRIP_COL_DEFAULT,
   type RowActionStyle,
 } from './timetableGridHelpers';
 
@@ -72,7 +72,12 @@ export function TimetableGridPane(props: PaneProps) {
   const resizeTrip = (dx: number | null) => {
     if (dx === null) { delete dragBase.current.__trip; return; }
     if (dragBase.current.__trip === undefined) dragBase.current.__trip = tripW;
-    setTripW(Math.max(TRIP_COL_MIN, Math.min(TRIP_COL_MAX, dragBase.current.__trip + dx)));
+    // No hard cap (owner request) — but keep the Trip column within the pane so
+    // the sticky actions/pinned columns don't get pushed off-screen (a Trip
+    // column wider than the pane would put their sticky `left` past the viewport).
+    const paneW = scrollRef?.current?.clientWidth ?? 1200;
+    const ceiling = Math.max(TRIP_COL_MIN + 120, paneW - actColWidth(rowActions) - 60);
+    setTripW(Math.max(TRIP_COL_MIN, Math.min(ceiling, dragBase.current.__trip + dx)));
   };
 
   const actW = actColWidth(rowActions);

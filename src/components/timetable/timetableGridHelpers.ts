@@ -6,7 +6,6 @@ import { normalizeTimeInput } from '../../utils/time';
    ========================================================================== */
 
 export const TRIP_COL_MIN = 58;
-export const TRIP_COL_MAX = 220;
 export const TRIP_COL_DEFAULT = 78;
 export const COL_MIN = 58;
 export const COL_MAX = 300;

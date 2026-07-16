@@ -1,6 +1,7 @@
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
   useCallback,
   useRef,
   useState,
@@ -253,13 +254,34 @@ export function TripCell({ tripId, isDuplicate, width, headway, irregular, onRen
    ActionCell — sticky per-trip actions column, three presentations
    ========================================================================== */
 
-const ROW_ACTIONS: [action: string, glyph: string, label: string][] = [
-  ['interpolate', '⟿', 'Interpolate stop times — fill blanks from set times'],
-  ['estimate', '◷', 'Estimate times from road network…'],
-  ['duplicate', '⧉', 'Duplicate trip…'],
-  ['applyall', '⇶', "Apply this trip's pattern to all trips…"],
-  ['delete', '✕', 'Delete trip'],
+type ActionKind = 'interpolate' | 'estimate' | 'duplicate' | 'applyall' | 'delete';
+
+const ROW_ACTIONS: [action: ActionKind, label: string][] = [
+  ['interpolate', 'Interpolate stop times — fill blanks from set times'],
+  ['estimate', 'Estimate times from road network…'],
+  ['duplicate', 'Duplicate trip…'],
+  ['applyall', "Apply this trip's pattern to all trips…"],
+  ['delete', 'Delete trip'],
 ];
+
+// Stroke-based SVG icons (defined geometry → perfectly centered, unlike the
+// symbol glyphs they replace, which rode the text baseline unevenly). Match the
+// meanings of the prototype's ⟿ / ◷ / ⧉ / ⇶ / ✕ and the wrench's line style.
+const ACTION_PATHS: Record<ActionKind, ReactNode> = {
+  interpolate: (<><path d="M3 12h10.5" strokeDasharray="2.5 2.5" /><path d="M13 7l5 5-5 5" /></>),
+  estimate: (<><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3.2 2" /></>),
+  duplicate: (<><rect x="8.5" y="8.5" width="11" height="11" rx="2" /><path d="M15.5 8.5V6.5A2 2 0 0 0 13.5 4.5h-7A2 2 0 0 0 4.5 6.5v7A2 2 0 0 0 6.5 15.5h2" /></>),
+  applyall: (<><path d="M4 8h10M4 12h10M4 16h10" /><path d="M16 9l3 3-3 3" /></>),
+  delete: (<path d="M6 6l12 12M18 6L6 18" />),
+};
+
+function ActionGlyph({ kind, size = 14 }: { kind: ActionKind; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {ACTION_PATHS[kind]}
+    </svg>
+  );
+}
 
 const WrenchIcon = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -280,7 +302,7 @@ interface ActionCellProps {
 export function ActionCell({ mode, open, stickyLeft, canApplyAll, canEstimate, onMenu, onAct }: ActionCellProps) {
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const enabled = (id: string) => (id === 'applyall' ? canApplyAll : id === 'estimate' ? canEstimate : true);
-  const iconBtns = ROW_ACTIONS.filter(([id]) => enabled(id)).map(([id, glyph, label]) => (
+  const iconBtns = ROW_ACTIONS.filter(([id]) => enabled(id)).map(([id, label]) => (
     <button
       key={id}
       type="button"
@@ -288,11 +310,11 @@ export function ActionCell({ mode, open, stickyLeft, canApplyAll, canEstimate, o
       title={label}
       aria-label={label}
       onClick={() => onAct(id)}
-      className={`w-6 h-6 flex items-center justify-center rounded text-xs leading-none text-warm-gray hover:bg-coral-light ${
+      className={`w-6 h-6 flex items-center justify-center rounded text-warm-gray hover:bg-coral-light ${
         id === 'delete' ? 'hover:text-red-500 hover:bg-red-50' : 'hover:text-[#d4603a]'
       }`}
     >
-      {glyph}
+      <ActionGlyph kind={id} size={13} />
     </button>
   ));
 
@@ -345,14 +367,14 @@ export function ActionCell({ mode, open, stickyLeft, canApplyAll, canEstimate, o
    RowMenu — the labeled per-trip actions dropdown (fixed position)
    ========================================================================== */
 
-interface MenuItem { id: string; glyph: string; bg: string; label: string; sub?: string; danger?: boolean }
+interface MenuItem { id: ActionKind; chip: string; label: string; sub?: string; danger?: boolean }
 
 const ROW_MENU_ITEMS: MenuItem[] = [
-  { id: 'interpolate', glyph: '⟿', bg: 'bg-teal-light', label: 'Interpolate stop times', sub: 'Fill blanks from distance between set times' },
-  { id: 'estimate', glyph: '◷', bg: 'bg-gold-light', label: 'Estimate times…', sub: 'From road-network driving time' },
-  { id: 'duplicate', glyph: '⧉', bg: 'bg-coral-light', label: 'Duplicate trip…', sub: 'Same pattern, offset start time' },
-  { id: 'applyall', glyph: '⇶', bg: 'bg-purple-light', label: 'Apply to all trips…', sub: 'Push this pattern; others keep their starts' },
-  { id: 'delete', glyph: '✕', bg: 'bg-red-50', label: 'Delete trip', danger: true },
+  { id: 'interpolate', chip: 'bg-teal-light text-teal', label: 'Interpolate stop times', sub: 'Fill blanks from distance between set times' },
+  { id: 'estimate', chip: 'bg-gold-light text-[#b8860b]', label: 'Estimate times…', sub: 'From road-network driving time' },
+  { id: 'duplicate', chip: 'bg-coral-light text-coral', label: 'Duplicate trip…', sub: 'Same pattern, offset start time' },
+  { id: 'applyall', chip: 'bg-purple-light text-purple', label: 'Apply to all trips…', sub: 'Push this pattern; others keep their starts' },
+  { id: 'delete', chip: 'bg-red-50 text-red-500', label: 'Delete trip', danger: true },
 ];
 
 export function RowMenu({
@@ -387,7 +409,7 @@ export function RowMenu({
               it.danger ? 'text-red-500 hover:bg-red-50' : 'text-dark-brown hover:bg-cream'
             }`}
           >
-            <span className={`w-[22px] h-[22px] flex items-center justify-center rounded-md text-xs shrink-0 ${it.bg}`}>{it.glyph}</span>
+            <span className={`w-[22px] h-[22px] flex items-center justify-center rounded-md shrink-0 ${it.chip}`}><ActionGlyph kind={it.id} size={14} /></span>
             <span>
               <span className="block font-semibold">{it.label}</span>
               {it.sub && <span className="block text-[11px] text-warm-gray font-normal mt-px">{it.sub}</span>}

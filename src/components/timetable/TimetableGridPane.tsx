@@ -135,10 +135,14 @@ export function TimetableGridPane(props: PaneProps) {
               {rowActions === 'strip' ? (
                 <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wide text-warm-gray">
                   Actions
-                  <button type="button" onClick={onToggleRowActions} title="Collapse back to the compact menu" className="w-[18px] h-[18px] flex items-center justify-center rounded border border-sand bg-white text-warm-gray text-[11px] hover:border-coral hover:text-[#d4603a] hover:bg-coral-light">«</button>
+                  <button type="button" onClick={onToggleRowActions} title="Collapse back to the compact menu" aria-label="Collapse actions" className="w-[18px] h-[18px] flex items-center justify-center rounded border border-sand bg-white text-warm-gray hover:border-coral hover:text-[#d4603a] hover:bg-coral-light">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 6l-6 6 6 6M11 6l-6 6 6 6" /></svg>
+                  </button>
                 </span>
               ) : rowActions === 'menu' ? (
-                <button type="button" onClick={onToggleRowActions} title="Expand into an always-visible icon strip — handy when repeating the same action" className="w-[18px] h-[18px] flex items-center justify-center rounded border border-sand bg-white text-warm-gray text-[11px] hover:border-coral hover:text-[#d4603a] hover:bg-coral-light">»</button>
+                <button type="button" onClick={onToggleRowActions} title="Expand into an always-visible icon strip — handy when repeating the same action" aria-label="Expand actions" className="w-[18px] h-[18px] flex items-center justify-center rounded border border-sand bg-white text-warm-gray hover:border-coral hover:text-[#d4603a] hover:bg-coral-light">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 6l6 6-6 6M13 6l6 6-6 6" /></svg>
+                </button>
               ) : null}
             </th>
             {orderedStops.map((c, si) => {

@@ -26,7 +26,7 @@ import {
 import { TimetableGridPane } from './TimetableGridPane';
 import { SplitDivider } from './timetableGridParts';
 import { TimetableToolbar, type ToolId } from './TimetableToolbar';
-import { GenerateDrawer, RuntimeDrawer, RepeatDrawer, type GenerateInput } from './TimetableDrawers';
+import { GenerateDrawer, RuntimeDrawer, RepeatDrawer, FrequencyDrawer, type GenerateInput } from './TimetableDrawers';
 import { FlexTimetablePanel } from './FlexTimetablePanel';
 import { findFlexZoneForRoute, isFlexRoute } from './flexRouteMatch';
 import type { ShapePattern } from '../ui/shapePatterns';
@@ -167,7 +167,8 @@ export function TimetableGrid() {
   }, [selectedRouteId, patterns.length, trips, activeServiceId, oppDir, companionPattern, oppData.routeTrips.length]);
 
   /* ---------- drawer / modal / toast / cascade state ---------- */
-  const [drawer, setDrawer] = useState<'generate' | 'runtime' | 'repeat' | null>(null);
+  const [drawer, setDrawer] = useState<'generate' | 'runtime' | 'repeat' | 'frequency' | null>(null);
+  const [freqEditTripId, setFreqEditTripId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [cascade, setCascade] = useState<CascadeState>(null);
@@ -252,7 +253,7 @@ export function TimetableGrid() {
   }, []);
 
   // Reset transient UI when the route changes / the selection key changes.
-  useEffect(() => { setDrawer(null); setCascade(null); }, [selectedRouteId]);
+  useEffect(() => { setDrawer(null); setFreqEditTripId(null); setCascade(null); }, [selectedRouteId]);
   useEffect(() => { setCascade(null); }, [effectiveShapeId, activeServiceId, directionId]);
   // Relayout the map/grid when the split toggles (§8 synthetic resize).
   useEffect(() => { window.dispatchEvent(new Event('resize')); }, [oppositeOpen]);
@@ -349,6 +350,25 @@ export function TimetableGrid() {
     else if (action === 'duplicate') setModal({ type: 'duplicate', paneId, tripId });
     else if (action === 'estimate') setModal({ type: 'estimate', paneId, tripId });
     else if (action === 'applyall') setModal({ type: 'applyall', paneId, tripId });
+    else if (action === 'editfreq') { setDrawer('frequency'); setFreqEditTripId(tripId); }
+  };
+
+  // Replace a frequency template's windows wholesale (the Edit frequency drawer).
+  // Zero windows removes the frequency — the template becomes a plain trip. The
+  // grid + visualization build-out re-derive live (both subscribe to
+  // frequencies). One-step snapshot Undo.
+  const applyFrequency = (tripId: string, windows: FrequencyWindow[]) => {
+    setDrawer(null);
+    setFreqEditTripId(null);
+    withUndo(() => {
+      const st = useStore.getState();
+      const others = st.frequencies.filter((f) => f.trip_id !== tripId);
+      const next = windows.map((w) => ({ trip_id: tripId, start_time: w.start_time, end_time: w.end_time, headway_secs: w.headway_secs, exact_times: w.exact_times }));
+      st.setFrequencies([...others, ...next]);
+      return windows.length === 0
+        ? `Removed the frequency from ${tripId} — now a plain trip`
+        : `Updated ${tripId}'s frequency (${windows.length} window${windows.length === 1 ? '' : 's'})`;
+    });
   };
 
   const onAddTrip = (paneId: PaneId) => {
@@ -852,6 +872,15 @@ export function TimetableGrid() {
           tripCount={routeTrips.length}
           onApply={applyRepeat}
           onCancel={() => setDrawer(null)}
+        />
+      )}
+      {drawer === 'frequency' && freqEditTripId && (
+        <FrequencyDrawer
+          ctx={ctxLabel}
+          tripId={freqEditTripId}
+          initialWindows={frequenciesByTrip.get(freqEditTripId) ?? []}
+          onApply={(windows) => applyFrequency(freqEditTripId, windows)}
+          onCancel={() => { setDrawer(null); setFreqEditTripId(null); }}
         />
       )}
 

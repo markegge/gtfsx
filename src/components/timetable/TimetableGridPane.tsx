@@ -284,6 +284,7 @@ export function TimetableGridPane(props: PaneProps) {
                   stickyLeft={tripW}
                   canApplyAll={canApplyAll}
                   canEstimate={canEstimate}
+                  canEditFreq={frequenciesByTrip.has(trip.trip_id)}
                   onMenu={(rect) => setMenu(menu?.tripId === trip.trip_id ? null : { tripId: trip.trip_id, rect })}
                   onAct={(a) => onRowAction(a, trip.trip_id)}
                 />
@@ -345,6 +346,7 @@ export function TimetableGridPane(props: PaneProps) {
           rect={menu.rect}
           canApplyAll={canApplyAll}
           canEstimate={canEstimate}
+          canEditFreq={frequenciesByTrip.has(menu.tripId)}
           onClose={() => setMenu(null)}
           onPick={(a) => { setMenu(null); onRowAction(a, menu.tripId); }}
         />

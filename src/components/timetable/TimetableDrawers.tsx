@@ -93,34 +93,87 @@ export function GenerateDrawer({
 
 /* ---------- ⏱ Set run time ---------- */
 export function RuntimeDrawer({
-  ctx, currentRun, tripCount, onApply, onCancel,
+  ctx, currentRun, tripCount, estimateDefaults, onApply, onEstimate, onCancel,
 }: {
   ctx: string;
   currentRun: number;
   tripCount: number;
+  estimateDefaults: { dwellSec: number; speedFactor: number };
   onApply: (input: { runMin: number; scoped: boolean }) => void;
+  /** Estimate mode — async (may hit Map Matching); resolves with a status the
+   *  drawer surfaces. On success the orchestrator closes the drawer. */
+  onEstimate: (input: { dwellSec: number; speedFactor: number; scoped: boolean }) => Promise<{ ok: boolean; error?: string }>;
   onCancel: () => void;
 }) {
+  const [mode, setMode] = useState<'runtime' | 'estimate'>('runtime');
   const [run, setRun] = useState(currentRun);
   const [scoped, setScoped] = useState(false);
+  const [dwell, setDwell] = useState(estimateDefaults.dwellSec);
+  const [speed, setSpeed] = useState(estimateDefaults.speedFactor);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pickMode = (m: 'runtime' | 'estimate') => { if (!busy) { setMode(m); setError(null); } };
+
+  const handleApply = async () => {
+    if (mode === 'runtime') { onApply({ runMin: run, scoped }); return; }
+    setBusy(true);
+    setError(null);
+    const res = await onEstimate({ dwellSec: dwell, speedFactor: speed, scoped });
+    // On success the drawer unmounts; only need to recover on failure.
+    if (!res.ok) { setError(res.error ?? 'Estimate failed.'); setBusy(false); }
+  };
+
+  const trips = `${tripCount} trip${tripCount === 1 ? '' : 's'}`;
+  const count = error
+    ? <span className="text-red-500">{error}</span>
+    : mode === 'runtime'
+      ? `Current run time ${currentRun} min · re-times ${trips}`
+      : `Estimates times for ${trips}`;
+  const applyLabel = mode === 'runtime'
+    ? `Re-time ${trips}`
+    : busy ? 'Estimating…' : `Estimate ${trips}`;
+
   return (
     <Drawer
       icon="⏱"
       iconClassName="bg-teal-light text-teal"
       title="Set run time"
-      sub={`${ctx} — every trip keeps its own start time; headways stay intact.`}
-      count={`Current run time ${currentRun} min · re-times ${tripCount} trip${tripCount === 1 ? '' : 's'}`}
-      applyLabel={`Re-time ${tripCount} trip${tripCount === 1 ? '' : 's'}`}
-      canApply={run > 0 && tripCount > 0}
-      onApply={() => onApply({ runMin: run, scoped })}
+      sub={mode === 'runtime'
+        ? `${ctx} — every trip keeps its own start time; headways stay intact.`
+        : `${ctx} — lay times from the road network; every trip keeps its own start time.`}
+      count={count}
+      applyLabel={applyLabel}
+      canApply={!busy && tripCount > 0 && (mode === 'runtime' ? run > 0 : true)}
+      onApply={handleApply}
       onCancel={onCancel}
     >
-      <span>End to end, this pattern takes</span>
-      <input className={TIN_NUM} type="number" min={1} value={run} onChange={(e) => setRun(Math.max(1, Number(e.target.value) || 0))} />
-      <span>min</span>
+      <label className="inline-flex items-center gap-1.5 cursor-pointer">
+        <input type="radio" checked={mode === 'runtime'} onChange={() => pickMode('runtime')} disabled={busy} className="accent-coral" />
+        Set run time
+      </label>
+      <label className="inline-flex items-center gap-1.5 cursor-pointer">
+        <input type="radio" checked={mode === 'estimate'} onChange={() => pickMode('estimate')} disabled={busy} className="accent-coral" />
+        Estimate from route geometry
+      </label>
+      <span className="basis-full h-0" />
+      {mode === 'runtime' ? (
+        <>
+          <span>End to end, this pattern takes</span>
+          <input className={TIN_NUM} type="number" min={1} value={run} onChange={(e) => setRun(Math.max(1, Number(e.target.value) || 0))} />
+          <span>min</span>
+        </>
+      ) : (
+        <>
+          <span>Dwell</span>
+          <input className={TIN_NUM} type="number" min={0} value={dwell} disabled={busy} title="Seconds added at each stop for boarding/alighting" onChange={(e) => setDwell(Math.max(0, Number(e.target.value) || 0))} />
+          <span>sec/stop · bus runs</span>
+          <input className={TIN_NUM} type="number" min={0.1} step={0.1} value={speed} disabled={busy} title="A bus is slower than a car — driving time is multiplied by this factor" onChange={(e) => setSpeed(Math.max(0.1, Number(e.target.value) || 0.1))} />
+          <span>× slower than a car</span>
+        </>
+      )}
       {VR}
       <label className="inline-flex items-center gap-1.5 text-[12.5px] cursor-pointer">
-        <input type="checkbox" checked={scoped} onChange={(e) => setScoped(e.target.checked)} className="accent-coral" />
+        <input type="checkbox" checked={scoped} onChange={(e) => setScoped(e.target.checked)} disabled={busy} className="accent-coral" />
         This service day only
       </label>
     </Drawer>

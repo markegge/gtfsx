@@ -11,6 +11,7 @@
  */
 import { useStore } from '../store';
 import { gtfsTimeToSeconds, secondsToGtfsTime } from '../utils/time';
+import { layoutStopTimes } from './travelTime';
 import type { RouteStop, StopTime } from '../types/gtfs';
 
 export interface PatternRef {
@@ -90,6 +91,46 @@ export function applyPatternRunTime(ref: PatternRef, runSecs: number): number {
     });
     st.interpolateStopTimes(trip.trip_id);
     updated++;
+  }
+  return updated;
+}
+
+/**
+ * Lay every trip on the pattern from a road-network travel profile — the same
+ * estimation the per-trip ◷ Estimate uses, applied pattern-wide. `cumSecs` is the
+ * cumulative road-travel seconds per ordered stop (from estimateStopTravelByRoad)
+ * and MUST align index-for-index with `orderedStops`. Each trip keeps its own
+ * start time; skips are honored (only stops the trip already times are written).
+ * Returns the number of trips updated. No estimation math here — pure plumbing
+ * over layoutStopTimes.
+ */
+export function applyPatternEstimate(
+  ref: PatternRef,
+  orderedStops: { stopId: string; seq: number }[],
+  cumSecs: number[],
+  opts: { dwellSec: number; speedFactor: number },
+): number {
+  if (orderedStops.length < 2 || cumSecs.length !== orderedStops.length) return 0;
+  const st = useStore.getState();
+  const dwellSec = Math.max(0, opts.dwellSec);
+  const speedFactor = Math.max(0.1, opts.speedFactor);
+  let updated = 0;
+  for (const trip of patternTrips(ref)) {
+    const times = st.stopTimes.filter((s) => s.trip_id === trip.trip_id);
+    const start = tripStartSec(times);
+    if (start == null) continue;
+    const timings = layoutStopTimes(cumSecs, { startSec: start, dwellSec, speedFactor });
+    const timedSeqs = new Set(times.map((s) => s.stop_sequence));
+    let changed = false;
+    orderedStops.forEach((os, i) => {
+      if (!timedSeqs.has(os.seq)) return; // skip-aware — don't un-skip a skipped stop
+      st.setStopTime(trip.trip_id, os.stopId, os.seq, {
+        arrival_time: secondsToGtfsTime(timings[i].arrivalSec),
+        departure_time: secondsToGtfsTime(timings[i].departureSec),
+      });
+      changed = true;
+    });
+    if (changed) updated++;
   }
   return updated;
 }

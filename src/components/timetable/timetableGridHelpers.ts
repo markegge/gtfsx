@@ -239,6 +239,21 @@ export function nextCompanionShapeId(
   return null;
 }
 
+/** Trip ids a freshly generated batch must avoid colliding with, for minting
+ *  pithy names (item #9). "Add alongside" keeps every existing trip, so new
+ *  names take the next-highest numbers. "Replace" first drops the scope's own
+ *  trips, freeing their numbers for reuse while still dodging trips kept in
+ *  other directions/services. Pure. */
+export function generateExistingIds(
+  allTripIds: readonly string[],
+  scopeTripIds: readonly string[],
+  replace: boolean,
+): Set<string> {
+  if (!replace) return new Set(allTripIds);
+  const doomed = new Set(scopeTripIds);
+  return new Set(allTripIds.filter((id) => !doomed.has(id)));
+}
+
 /* ============================================================================
    Dismiss-on-outside hook for menus / popovers (HANDOFF §5, §6)
    ========================================================================== */

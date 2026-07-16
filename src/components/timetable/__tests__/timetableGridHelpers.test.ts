@@ -5,6 +5,7 @@ import {
   defaultColWidth,
   directionSegmentAction,
   directionSegmentValue,
+  generateExistingIds,
   nextCell,
   nextTabCell,
   nextCompanionShapeId,
@@ -200,5 +201,25 @@ describe('nextCompanionShapeId', () => {
     // Swap sets left='in', right=old-left='out'. After the left-change effect,
     // 'out' ≠ 'in' and valid → the right keeps the swapped pattern.
     expect(nextCompanionShapeId('out', 'in', patterns)).toBe('out');
+  });
+});
+
+// ── Generate: which existing ids new trips must dodge (item #9) ───────────────
+describe('generateExistingIds', () => {
+  const all = ['Blue-1', 'Blue-2', 'Blue-3', 'Blue-4-in']; // -in kept in the other direction
+  const scope = ['Blue-1', 'Blue-2', 'Blue-3'];
+
+  it('Add alongside keeps every existing id (new names take next-highest)', () => {
+    expect(generateExistingIds(all, scope, false)).toEqual(new Set(all));
+  });
+
+  it('Replace frees the scope ids for reuse but still dodges kept trips', () => {
+    // The three scope trips go away → only the other-direction trip is left, so
+    // the fresh batch can re-mint Blue-1..3.
+    expect(generateExistingIds(all, scope, true)).toEqual(new Set(['Blue-4-in']));
+  });
+
+  it('Replace with nothing else in the feed frees all numbers', () => {
+    expect(generateExistingIds(scope, scope, true)).toEqual(new Set());
   });
 });

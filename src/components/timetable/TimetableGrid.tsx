@@ -19,7 +19,7 @@ import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
 import { Toast, type ToastState } from '../ui/Toast';
 import { type PaneScope, useTimetableData } from './useTimetableData';
-import { planCascade, nextCompanionShapeId } from './timetableGridHelpers';
+import { planCascade, nextCompanionShapeId, generateExistingIds } from './timetableGridHelpers';
 import { TimetableGridPane } from './TimetableGridPane';
 import { TimetableToolbar, type ToolId } from './TimetableToolbar';
 import { GenerateDrawer, RuntimeDrawer, RepeatDrawer, type GenerateInput } from './TimetableDrawers';
@@ -45,6 +45,7 @@ type ModalState =
   | { type: 'estimate'; paneId: PaneId; tripId: string }
   | { type: 'applyall'; paneId: PaneId; tripId: string }
   | { type: 'removeall' }
+  | { type: 'generate-confirm'; input: GenerateInput; existingCount: number }
   | null;
 type CascadeState = { paneId: PaneId; seq: number; stopId: string; stopName: string; deltaMin: number; laterIds: string[] } | null;
 
@@ -367,27 +368,51 @@ export function TimetableGrid() {
     return secs ? Math.round(secs / 60) : 20;
   }, [selectedRouteId, directionId, mainGenShapeId]);
 
-  const applyGenerate = (input: GenerateInput) => {
+  // Generate lays out a fresh day of service, so when the pane already has trips
+  // the usual intent is to REPLACE them, not stack a second set on top. Apply
+  // therefore asks (Replace / Add / Cancel) whenever the scope is non-empty; an
+  // empty scope generates straight through. A frequency template counts as an
+  // existing trip, so re-generating over one prompts too.
+  const runGenerate = (input: GenerateInput, replace: boolean) => {
     if (!selectedRouteId || !activeServiceId) return;
+    const doomed = replace ? routeTrips.map((t) => t.trip_id) : [];
+    const doomedSet = new Set(doomed);
+    // Mint new IDs against everything that will SURVIVE the replace, so names
+    // never collide with kept trips (other directions/services) yet still reuse
+    // the numbers freed up by the trips we're about to drop.
     const params: GenerateTripsParams = {
       routeId: selectedRouteId, directionId, shapeId: mainGenShapeId, serviceId: activeServiceId,
       startTime: input.startTime, endTime: input.endTime, headwaySecs: input.headwaySecs, runSecs: input.runSecs,
       mode: input.mode, routeStops: mainPatternRouteStops, stops, shape, headsign: route?.route_short_name || undefined,
       tripIdPrefix: tripIdPrefixForRoute(route),
-      existingTripIds: new Set(trips.map((t) => t.trip_id)),
+      existingTripIds: generateExistingIds(trips.map((t) => t.trip_id), doomed, replace),
     };
     const result = generateTrips(params);
     if (result.trips.length === 0) { say('Nothing to generate — check the inputs.'); return; }
     setDrawer(null);
+    setModal(null);
     withUndo(() => {
+      if (replace) {
+        for (const id of doomed) removeTrip(id); // drops the trip + its stop_times
+        const s = useStore.getState();
+        s.setFrequencies(s.frequencies.filter((f) => !doomedSet.has(f.trip_id))); // removeTrip leaves frequencies behind
+      }
       const st = useStore.getState();
       st.setTrips([...st.trips, ...result.trips]);
       st.setStopTimes([...st.stopTimes, ...result.stopTimes]);
       result.frequencies.forEach((f) => st.addFrequency(f));
-      return input.mode === 'frequency'
-        ? 'Created a reference trip + frequency window'
-        : `Generated ${result.trips.length} trip${result.trips.length === 1 ? '' : 's'}`;
+      const made = input.mode === 'frequency'
+        ? 'a reference trip + frequency window'
+        : `${result.trips.length} trip${result.trips.length === 1 ? '' : 's'}`;
+      if (replace) return `Replaced ${doomed.length} trip${doomed.length === 1 ? '' : 's'} with ${made}`;
+      return input.mode === 'frequency' ? 'Created a reference trip + frequency window' : `Generated ${made}`;
     });
+  };
+
+  const applyGenerate = (input: GenerateInput) => {
+    if (!selectedRouteId || !activeServiceId) return;
+    if (routeTrips.length > 0) { setModal({ type: 'generate-confirm', input, existingCount: routeTrips.length }); return; }
+    runGenerate(input, false);
   };
 
   const applyRuntime = ({ runMin, scoped }: { runMin: number; scoped: boolean }) => {
@@ -893,6 +918,29 @@ export function TimetableGrid() {
           onConfirm={confirmRemoveAll}
           onCancel={() => setModal(null)}
         />
+      )}
+
+      {modal?.type === 'generate-confirm' && (
+        <Modal
+          open
+          onClose={() => setModal(null)}
+          title="Replace the existing trips?"
+          showClose={false}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setModal(null)}>Cancel</Button>
+              <Button variant="secondary" onClick={() => runGenerate(modal.input, false)}>Add alongside</Button>
+              <Button variant="primary" onClick={() => runGenerate(modal.input, true)}>
+                Replace {modal.existingCount} trip{modal.existingCount === 1 ? '' : 's'}
+              </Button>
+            </>
+          }
+        >
+          <div className="text-sm text-warm-gray">
+            {ctxLabel} already has <b>{modal.existingCount} trip{modal.existingCount === 1 ? '' : 's'}</b>. Replace
+            them with the freshly generated service, or add the new trips alongside what&rsquo;s already there?
+          </div>
+        </Modal>
       )}
 
       {toast && <Toast toast={toast} />}

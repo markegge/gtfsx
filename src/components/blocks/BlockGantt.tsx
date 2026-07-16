@@ -199,9 +199,13 @@ export function BlockGantt() {
     [dayTrips, stopTimes, stops, calendars, costLayover, costDeadhead],
   );
   const svcCost = cost.perService.find((p) => p.serviceId === activeService);
+  // Peak in service is a concurrency (service-operated) metric, so it must count
+  // frequency-based departures — pass frequencies so a headway trip contributes
+  // its whole run of concurrent vehicles instead of one. (calculateBlockCost's
+  // "Vehicles"/cost are block-assignment metrics and take no frequencies arg.)
   const peakInService = useMemo(
-    () => calculateSystemPeakVehicles({ trips: dayTrips, stopTimes }),
-    [dayTrips, stopTimes],
+    () => calculateSystemPeakVehicles({ trips: dayTrips, stopTimes, frequencies }),
+    [dayTrips, stopTimes, frequencies],
   );
 
   // "Vehicles in service over the day" mini chart — concurrent trips per 30-min bin.

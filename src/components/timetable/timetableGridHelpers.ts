@@ -117,7 +117,10 @@ function focusCell(table: HTMLTableElement, t: number, s: number, part?: string)
 function domProbe(table: HTMLTableElement, part?: string): GridProbe {
   return {
     hasInput: (t, s) => !!table.querySelector(`input[data-ti="${t}"][data-si="${s}"]` + (part ? `[data-part="${part}"]` : '')),
-    rowExists: (t) => !!table.querySelector(`input[data-ti="${t}"]`),
+    // Match the row element (tr[data-ti]), not just inputs, so a read-only
+    // frequency build-out row (item #8) counts as an existing row: keyboard nav
+    // then hops OVER it (no input to land on) instead of halting at it.
+    rowExists: (t) => !!table.querySelector(`[data-ti="${t}"]`),
   };
 }
 

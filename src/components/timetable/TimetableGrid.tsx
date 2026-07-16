@@ -27,6 +27,7 @@ import { FlexTimetablePanel } from './FlexTimetablePanel';
 import { findFlexZoneForRoute, isFlexRoute } from './flexRouteMatch';
 import type { ShapePattern } from '../ui/shapePatterns';
 import { mintTripId, tripIdPrefixForRoute } from '../../services/tripNaming';
+import { windowDepartureCount, type FrequencyWindow } from '../../services/frequencyExpansion';
 
 /** Feed arrays captured before a bulk op, for snapshot-based undo. Immer keeps
  *  replaced arrays immutable, so holding a reference is a valid point-in-time
@@ -86,6 +87,20 @@ export function TimetableGrid() {
   const showContinuous = useStore((s) => featureEnabled(s, 'continuousStops'));
   const demandResponseOn = useStore((s) => featureEnabled(s, 'demandResponse'));
   const flexZones = useStore((s) => s.flexZones);
+
+  // frequencies.txt windows grouped by their template trip_id — drives the
+  // read-only build-out rows in both panes (item #8). One map for the whole feed;
+  // each pane only looks up the trip_ids it actually renders.
+  const frequencies = useStore((s) => s.frequencies);
+  const frequenciesByTrip = useMemo(() => {
+    const m = new Map<string, FrequencyWindow[]>();
+    for (const f of frequencies) {
+      const w: FrequencyWindow = { start_time: f.start_time, end_time: f.end_time, headway_secs: f.headway_secs, exact_times: f.exact_times };
+      const arr = m.get(f.trip_id);
+      if (arr) arr.push(w); else m.set(f.trip_id, [w]);
+    }
+    return m;
+  }, [frequencies]);
 
   /* ---------- pane data ---------- */
   const mainScope: PaneScope = { routeId: selectedRouteId, directionId, serviceId: selectedServiceId, shapeId: selectedShapeId };
@@ -603,6 +618,7 @@ export function TimetableGrid() {
         timepointStopIds={mainData.timepointStopIds}
         continuousOverrides={mainData.continuousOverrides}
         findStopTime={mainData.findStopTime}
+        frequenciesByTrip={frequenciesByTrip}
         arrDepStops={arrDepStops}
         rowActions={rowActions}
         showHeadways={headwayHints}
@@ -640,6 +656,7 @@ export function TimetableGrid() {
         timepointStopIds={oppData.timepointStopIds}
         continuousOverrides={oppData.continuousOverrides}
         findStopTime={oppData.findStopTime}
+        frequenciesByTrip={frequenciesByTrip}
         arrDepStops={arrDepStops}
         rowActions={rowActions}
         showHeadways={headwayHints}
@@ -679,6 +696,23 @@ export function TimetableGrid() {
     setCompanionShapeId(oldLeft);
   };
 
+  // Honest per-pane accounting when a frequency template is in scope: how many
+  // template trips, and the true rider-facing departures they build out to
+  // (item #8). null when there are no frequency-based trips.
+  const departureSummary = (tripsArr: Trip[]) => {
+    let templates = 0, departures = 0;
+    for (const t of tripsArr) {
+      const w = frequenciesByTrip.get(t.trip_id);
+      if (w && w.length) { templates += 1; departures += windowDepartureCount(w); }
+      else departures += 1;
+    }
+    return templates > 0 ? { templates, departures } : null;
+  };
+  const mainSummary = departureSummary(routeTrips);
+  const oppSummary = departureSummary(oppData.routeTrips);
+  const summaryNote = (s: { templates: number; departures: number } | null) =>
+    s ? `· ${s.templates} freq → ${s.departures} departures` : null;
+
   return (
     <div className="flex flex-col min-h-0 flex-1">
       <TimetableToolbar
@@ -692,6 +726,7 @@ export function TimetableGrid() {
         effectiveShapeId={effectiveShapeId}
         directionId={directionId}
         tripCount={routeTrips.length}
+        departureNote={oppositeOpen ? null : summaryNote(mainSummary)}
         removeAllCount={removeAllIds.length}
         oppositeOpen={oppositeOpen}
         onSelectRoute={(id) => selectRoute(id)}
@@ -736,7 +771,7 @@ export function TimetableGrid() {
               ) : (
                 <span>Direction {directionId} · {directionName(route, directionId)}</span>
               )}
-              <span className="font-body font-normal text-[12.5px] text-warm-gray">{routeTrips.length} trips</span>
+              <span className="font-body font-normal text-[12.5px] text-warm-gray">{routeTrips.length} trips {summaryNote(mainSummary)}</span>
             </div>
           )}
           {renderMainPane()}
@@ -754,7 +789,7 @@ export function TimetableGrid() {
               ) : (
                 <span>Direction {companionDir} · {directionName(route, companionDir)}</span>
               )}
-              <span className="font-body font-normal text-[12.5px] text-warm-gray">{oppData.routeTrips.length} trips</span>
+              <span className="font-body font-normal text-[12.5px] text-warm-gray">{oppData.routeTrips.length} trips {summaryNote(oppSummary)}</span>
               <div className="ml-auto flex items-center gap-2">
                 {companionPattern && patterns.length >= 2 && (
                   <button

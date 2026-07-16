@@ -1,7 +1,8 @@
 import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
-import { gtfsTimeToSeconds } from '../../utils/time';
+import { formatTimeShort, gtfsTimeToSeconds } from '../../utils/time';
 import type { OrderedStop } from './useTimetableData';
 import type { Trip, StopTime } from '../../types/gtfs';
+import { expandFrequencyTrip, type FrequencyWindow, type VirtualTrip } from '../../services/frequencyExpansion';
 import { ActionCell, ColResizer, ColumnMenu, HeadwayToggle, RowMenu, TimeCell, TripCell } from './timetableGridParts';
 import {
   computeRowErrors, actColWidth, defaultColWidth,
@@ -18,6 +19,9 @@ interface PaneProps {
   timepointStopIds: Set<string>;
   continuousOverrides: Map<string, { pickup?: 0 | 1 | 2 | 3; dropOff?: 0 | 1 | 2 | 3 }>;
   findStopTime: (tripId: string, seq: number) => StopTime | undefined;
+  /** frequencies.txt windows per template trip_id in scope — drives the
+   *  read-only frequency build-out rows (item #8). */
+  frequenciesByTrip: Map<string, FrequencyWindow[]>;
   arrDepStops: string[];
   rowActions: RowActionStyle;
   showHeadways: boolean;
@@ -45,7 +49,7 @@ interface PaneProps {
 export function TimetableGridPane(props: PaneProps) {
   const {
     orderedStops, routeTrips, allTripIds, timepointStopIds, continuousOverrides, findStopTime,
-    arrDepStops, rowActions, showHeadways, showColumnMenu, showContinuous, scrollRef,
+    frequenciesByTrip, arrDepStops, rowActions, showHeadways, showColumnMenu, showContinuous, scrollRef,
     onCell, onSkip, onRestore, onRename, onRowAction, onAddTrip, onToggleRowActions, onToggleHeadways,
     onTimepoint, onArrDep, onContinuous,
   } = props;
@@ -107,6 +111,33 @@ export function TimetableGridPane(props: PaneProps) {
     for (const id of allTripIds) { if (seen.has(id)) dup.add(id); seen.add(id); }
     return dup;
   }, [allTripIds]);
+  const deltaByTripId = new Map(routeTrips.map((t, i) => [t.trip_id, deltas[i]]));
+
+  // Rows = the real trips PLUS the read-only build-out of any frequency-based
+  // template trips (item #8), interleaved chronologically so the grid reads like
+  // actual service. Projections re-derive here whenever the template's times
+  // change; they never enter the store.
+  const mergedRows = useMemo(() => {
+    const firstDep = (tripId: string) => {
+      for (const col of orderedStops) {
+        const st = findStopTime(tripId, col.seq);
+        const t = st?.departure_time || st?.arrival_time;
+        if (t) return gtfsTimeToSeconds(t);
+      }
+      return Number.MAX_SAFE_INTEGER;
+    };
+    const rows: ({ kind: 'real'; trip: Trip; startSec: number } | { kind: 'virtual'; v: VirtualTrip; startSec: number })[] =
+      routeTrips.map((trip) => ({ kind: 'real', trip, startSec: firstDep(trip.trip_id) }));
+    if (frequenciesByTrip.size > 0) {
+      for (const trip of routeTrips) {
+        const windows = frequenciesByTrip.get(trip.trip_id);
+        if (!windows || windows.length === 0) continue;
+        const sts = orderedStops.map((c) => findStopTime(trip.trip_id, c.seq)).filter((x): x is StopTime => !!x);
+        for (const v of expandFrequencyTrip(trip.trip_id, sts, windows)) rows.push({ kind: 'virtual', v, startSec: v.departureSec });
+      }
+    }
+    return rows.sort((a, b) => a.startSec - b.startSec);
+  }, [routeTrips, frequenciesByTrip, orderedStops, findStopTime]);
 
   const canApplyAll = routeTrips.length > 1;
   const canEstimate = orderedStops.length >= 2;
@@ -188,21 +219,58 @@ export function TimetableGridPane(props: PaneProps) {
           </tr>
         </thead>
         <tbody>
-          {routeTrips.map((trip, ti) => {
+          {mergedRows.map((row, ti) => {
+            if (row.kind === 'virtual') {
+              const bySeq = new Map(row.v.stopTimes.map((s) => [s.stop_sequence, s]));
+              const tip = `Derived from the ${row.v.templateTripId} frequency template — every ${Math.round(row.v.headwaySecs / 60)}m${row.v.exactTimes === 0 ? ' (approximate)' : ''}. Edit the template to reshape it.`;
+              return (
+                <tr key={row.v.key} data-ti={ti} title={tip}>
+                  <th scope="row" className="sticky left-0 z-[2] bg-[#FBF6EF] border-r border-sand border-b border-[#F5F0EB] px-2 whitespace-nowrap overflow-hidden text-left" style={{ width: tripW, maxWidth: tripW }}>
+                    <span className="inline-flex items-center gap-1 text-[11px] italic text-warm-gray/70">
+                      <span aria-hidden="true">↳</span>{row.v.exactTimes === 0 ? '≈' : ''} freq
+                    </span>
+                  </th>
+                  <td className="sticky z-[2] bg-[#FBF6EF] border-r-2 border-r-sand border-b border-[#F5F0EB] p-0 text-center" style={{ left: tripW }}>
+                    <span className="text-warm-gray/30 text-[11px]" aria-hidden="true">·</span>
+                  </td>
+                  {orderedStops.map((col, si) => {
+                    const vst = bySeq.get(col.seq);
+                    const arrDep = arrDepSet.has(col.stop.stop_id);
+                    const a = vst?.arrival_time || '';
+                    const d = vst?.departure_time || '';
+                    const text = !vst ? '–' : arrDep && a !== d ? `${formatTimeShort(a)} / ${formatTimeShort(d)}` : formatTimeShort(a || d || '');
+                    const isTp = timepointStopIds.has(col.stop.stop_id);
+                    const pin = pinFirst && si === 0;
+                    const bg = isTp ? 'bg-[#FCF4EC]' : 'bg-[#FBF6EF]';
+                    return (
+                      <td
+                        key={col.uid}
+                        className={`h-9 px-2 border-b border-[#F5F0EB] font-mono text-[13px] tabular-nums ${!vst ? 'text-warm-gray/30' : 'text-warm-gray/60'} ${bg} ${pin ? 'sticky z-[2] border-r-2 border-r-sand' : ''}`}
+                        style={pin ? { left: pinLeft } : undefined}
+                      >
+                        {text}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            }
+            const trip = row.trip;
             const rowTimes = orderedStops.map((col) => {
               const st = findStopTime(trip.trip_id, col.seq);
               if (!st) return null;
               return st.arrival_time || st.departure_time || '';
             });
             const errors = computeRowErrors(rowTimes);
+            const delta = deltaByTripId.get(trip.trip_id) ?? null;
             return (
-              <tr key={trip.trip_id}>
+              <tr key={trip.trip_id} data-ti={ti}>
                 <TripCell
                   tripId={trip.trip_id}
                   isDuplicate={dupIds.has(trip.trip_id)}
                   width={tripW}
-                  headway={showHeadways && deltas[ti] != null ? `${(deltas[ti] as number) > 0 ? '+' : ''}${deltas[ti]}m` : null}
-                  irregular={hwCommon != null && deltas[ti] != null && deltas[ti] !== hwCommon}
+                  headway={showHeadways && delta != null ? `${delta > 0 ? '+' : ''}${delta}m` : null}
+                  irregular={hwCommon != null && delta != null && delta !== hwCommon}
                   onRename={(id) => onRename(trip.trip_id, id)}
                 />
                 <ActionCell

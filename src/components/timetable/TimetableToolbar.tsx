@@ -21,6 +21,9 @@ interface ToolbarProps {
   effectiveShapeId: string | null;
   directionId: 0 | 1;
   tripCount: number;
+  /** Honest departure build-out note ("· K freq → M departures") shown after the
+   *  trip count when a frequency template is in scope; null otherwise (item #8). */
+  departureNote?: string | null;
   /** Trips the danger "Remove all trips" would clear — both directions when the
    *  Both split is open, so a companion-only direction isn't trapped. */
   removeAllCount: number;
@@ -176,7 +179,7 @@ function DirectionControl({
 export function TimetableToolbar(props: ToolbarProps) {
   const {
     route, routes, shapes, calendars, activeServiceId, patterns, effectiveShapeId,
-    directionId, tripCount, removeAllCount, oppositeOpen,
+    directionId, tripCount, departureNote, removeAllCount, oppositeOpen,
     onSelectRoute, onSelectService, onSelectPattern, onSelectDirection, onSetOpposite,
     onEditStops, onTool,
   } = props;
@@ -211,7 +214,7 @@ export function TimetableToolbar(props: ToolbarProps) {
           onSetOpposite={onSetOpposite}
         />
         <span className="inline-flex items-center gap-1.5 text-[12.5px] text-warm-gray whitespace-nowrap">
-          {tripCount} trips
+          {tripCount} trips{departureNote ? ` ${departureNote}` : ''}
           <HintPopover />
         </span>
         <span className="flex-1 min-w-[12px]" />

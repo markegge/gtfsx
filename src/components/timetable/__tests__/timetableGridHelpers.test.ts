@@ -84,9 +84,19 @@ const GRID = probe([
   [true, true, true],
 ]);
 
+// A grid whose middle row exists but has NO inputs — a read-only frequency
+// build-out row (item #8). Nav must hop over it, not stop at it.
+const GRID_WITH_VIRTUAL: GridProbe = {
+  hasInput: (t, s) => (t === 0 || t === 2) && s >= 0 && s < 3, // rows 0 and 2 are real
+  rowExists: (t) => t >= 0 && t <= 2,                          // row 1 exists (the tr) but has no inputs
+};
+
 describe('nextCell (↑↓ / ←→)', () => {
   it('moves down within a column', () => {
     expect(nextCell(GRID, { t: 0, s: 0 }, 1, 0)).toEqual({ t: 1, s: 0 });
+  });
+  it('hops over a read-only (input-less) build-out row when moving down', () => {
+    expect(nextCell(GRID_WITH_VIRTUAL, { t: 0, s: 1 }, 1, 0)).toEqual({ t: 2, s: 1 });
   });
   it('hops over a SKIP cell when moving down a column', () => {
     // From trip 0 stop 1, down: trip 1 stop 1 is skipped → land on trip 2 stop 1.

@@ -125,7 +125,7 @@ export function TimetableGridPane(props: PaneProps) {
         </colgroup>
         <thead>
           <tr>
-            <th className="sticky left-0 z-[4] bg-white border-b-2 border-sand border-r border-sand px-2 py-2 text-left align-middle overflow-visible" style={{ width: tripW }}>
+            <th className="sticky top-0 left-0 z-[5] bg-white border-b-2 border-sand border-r border-sand px-2 py-2 text-left align-middle overflow-visible" style={{ width: tripW }}>
               <span className="relative inline-flex items-center gap-1.5 font-heading font-bold text-[11.5px] text-brown">
                 Trip
                 <HeadwayToggle on={showHeadways} onToggle={onToggleHeadways} />
@@ -133,7 +133,7 @@ export function TimetableGridPane(props: PaneProps) {
               <ColResizer onResize={resizeTrip} />
             </th>
             <th
-              className="sticky z-[4] bg-white border-b-2 border-sand border-r-2 border-r-sand text-center align-middle"
+              className="sticky top-0 z-[5] bg-white border-b-2 border-sand border-r-2 border-r-sand text-center align-middle"
               style={{ left: tripW }}
               aria-label="Trip actions"
             >
@@ -161,7 +161,7 @@ export function TimetableGridPane(props: PaneProps) {
                 <th
                   key={c.uid}
                   title={c.stop.stop_name}
-                  className={`relative border-b-2 border-sand border-r border-r-sand/60 px-2 py-2 text-left font-heading font-bold text-[11.5px] whitespace-nowrap ${bg} ${isTp ? 'text-[#d4603a]' : 'text-brown'} ${pin ? 'sticky z-[4] border-r-2 border-r-sand' : ''}`}
+                  className={`sticky top-0 border-b-2 border-sand border-r border-r-sand/60 px-2 py-2 text-left font-heading font-bold text-[11.5px] whitespace-nowrap ${bg} ${isTp ? 'text-[#d4603a]' : 'text-brown'} ${pin ? 'z-[5] border-r-2 border-r-sand' : 'z-[3]'}`}
                   style={pin ? { left: pinLeft } : undefined}
                 >
                   <div className="flex items-center gap-1 min-w-0">

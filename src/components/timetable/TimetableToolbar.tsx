@@ -213,7 +213,21 @@ export function TimetableToolbar(props: ToolbarProps) {
         </span>
         <span className="flex-1 min-w-[12px]" />
         <Button variant="ghost" onClick={onEditStops} title="Add or reorder this route's stops">
-          Edit Stops ↗
+          <span>Edit Stops</span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={3.25}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M6 6h12v12" />
+            <path d="M6 18 18 6" />
+          </svg>
         </Button>
       </div>
 

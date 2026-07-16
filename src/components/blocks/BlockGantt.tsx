@@ -5,9 +5,11 @@ import {
 } from '@dnd-kit/core';
 import { useStore } from '../../store';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
-import { computeTripSpans, findBlockOverlaps, buildBlocks } from '../../services/blockBuilder';
+import { computeTripSpans, findBlockOverlaps, buildBlocks, classifyBlockScope } from '../../services/blockBuilder';
 import { calculateBlockCost, calculateSystemPeakVehicles } from '../../services/costEstimation';
 import { secondsToGtfsTime, formatTimeShort } from '../../utils/time';
+import { EmptyState } from '../ui/EmptyState';
+import { Banner } from '../ui/Banner';
 
 const PX_PER_HOUR = 64;
 const UNASSIGNED = '__unassigned__';
@@ -114,6 +116,7 @@ export function BlockGantt() {
   const stops = useStore((s) => s.stops);
   const routes = useStore((s) => s.routes);
   const calendars = useStore((s) => s.calendars);
+  const frequencies = useStore((s) => s.frequencies);
   const updateTrip = useStore((s) => s.updateTrip);
   useStopTimesIndex(); // keep the shared index warm
 
@@ -129,8 +132,17 @@ export function BlockGantt() {
     () => trips.filter((t) => t.service_id === activeService),
     [trips, activeService],
   );
+  // Frequency-based trips can't be blocked (one template stands in for a whole
+  // day of departures), so the Gantt operates on the FIXED trips only and gates
+  // on how the scope splits. The cost/peak-vehicle header stays on the full
+  // dayTrips set (unchanged).
+  const freqTripIds = useMemo(() => new Set(frequencies.map((f) => f.trip_id)), [frequencies]);
+  const dayFixedTrips = useMemo(() => dayTrips.filter((t) => !freqTripIds.has(t.trip_id)), [dayTrips, freqTripIds]);
+  const dayFreqCount = dayTrips.length - dayFixedTrips.length;
+  const scopeKind = classifyBlockScope(dayTrips.length, dayFreqCount);
+
   const spans = useMemo(() => computeTripSpans(dayTrips, stopTimes), [dayTrips, stopTimes]);
-  const overlaps = useMemo(() => findBlockOverlaps(dayTrips, stopTimes, activeService), [dayTrips, stopTimes, activeService]);
+  const overlaps = useMemo(() => findBlockOverlaps(dayFixedTrips, stopTimes, activeService), [dayFixedTrips, stopTimes, activeService]);
   const overlapTripIds = useMemo(() => {
     const s = new Set<string>();
     for (const o of overlaps) { s.add(o.tripA); s.add(o.tripB); }
@@ -154,7 +166,7 @@ export function BlockGantt() {
   // Rows: blocks (sorted), then a holding row for unassigned trips.
   const rows = useMemo(() => {
     const groups = new Map<string, BarInfo[]>();
-    for (const t of dayTrips) {
+    for (const t of dayFixedTrips) {
       const sp = spans.get(t.trip_id);
       if (!sp) continue;
       const key = t.block_id || UNASSIGNED;
@@ -178,7 +190,7 @@ export function BlockGantt() {
     const ordered = blockKeys.map((k) => ({ id: k, bars: groups.get(k)!.sort((a, b) => a.startSec - b.startSec) }));
     if (groups.has(UNASSIGNED)) ordered.push({ id: UNASSIGNED, bars: groups.get(UNASSIGNED)!.sort((a, b) => a.startSec - b.startSec) });
     return ordered;
-  }, [dayTrips, spans, routeById, overlapTripIds]);
+  }, [dayFixedTrips, spans, routeById, overlapTripIds]);
 
   const cost = useMemo(
     () => calculateBlockCost({ trips: dayTrips, stopTimes, stops, calendars, calendarDates: [] }, {
@@ -187,9 +199,13 @@ export function BlockGantt() {
     [dayTrips, stopTimes, stops, calendars, costLayover, costDeadhead],
   );
   const svcCost = cost.perService.find((p) => p.serviceId === activeService);
+  // Peak in service is a concurrency (service-operated) metric, so it must count
+  // frequency-based departures — pass frequencies so a headway trip contributes
+  // its whole run of concurrent vehicles instead of one. (calculateBlockCost's
+  // "Vehicles"/cost are block-assignment metrics and take no frequencies arg.)
   const peakInService = useMemo(
-    () => calculateSystemPeakVehicles({ trips: dayTrips, stopTimes }),
-    [dayTrips, stopTimes],
+    () => calculateSystemPeakVehicles({ trips: dayTrips, stopTimes, frequencies }),
+    [dayTrips, stopTimes, frequencies],
   );
 
   // "Vehicles in service over the day" mini chart — concurrent trips per 30-min bin.
@@ -215,14 +231,14 @@ export function BlockGantt() {
   const blockIds = rows.map((r) => r.id).filter((id) => id !== UNASSIGNED);
 
   const handleQuickBlock = () => {
-    const map = buildBlocks(dayTrips, stopTimes, stops, { serviceId: activeService, interline, deadheadSpeedMph: 25 });
-    for (const t of dayTrips) {
+    const map = buildBlocks(dayFixedTrips, stopTimes, stops, { serviceId: activeService, interline, deadheadSpeedMph: 25 });
+    for (const t of dayFixedTrips) {
       const b = map.get(t.trip_id);
       if (b && b !== t.block_id) updateTrip(t.trip_id, { block_id: b });
     }
   };
   const handleUnblock = () => {
-    for (const t of dayTrips) if (t.block_id) updateTrip(t.trip_id, { block_id: undefined });
+    for (const t of dayFixedTrips) if (t.block_id) updateTrip(t.trip_id, { block_id: undefined });
   };
   const reassignTrip = (tripId: string, target: string) => {
     updateTrip(tripId, { block_id: target === UNASSIGNED ? undefined : target });
@@ -246,6 +262,31 @@ export function BlockGantt() {
 
   if (calendars.length === 0) {
     return <div className="relative flex-1 min-h-0 bg-white flex items-center justify-center text-warm-gray text-sm">Add a calendar (service day) to start blocking.</div>;
+  }
+
+  // Every trip in this service is frequency-based → nothing discrete to block.
+  // Keep the service switcher so the planner can hop to a trips-based day.
+  if (scopeKind === 'all-freq') {
+    return (
+      <div className="relative flex-1 min-h-0 bg-white flex flex-col">
+        <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-sand">
+          <select
+            value={activeService}
+            onChange={(e) => setServiceId(e.target.value)}
+            className="px-2 py-1 border border-sand rounded-md text-xs font-semibold bg-cream focus:outline-none focus:border-coral"
+          >
+            {calendars.map((c) => <option key={c.service_id} value={c.service_id}>{c._description || c.service_id}</option>)}
+          </select>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <EmptyState
+            icon="🚌"
+            title="Blocks aren't available for frequency-based schedules"
+            description="This service runs on frequencies (headways) instead of fixed trips, so there are no discrete trips to assign to vehicles. Convert it to a trips-based schedule to build blocks."
+          />
+        </div>
+      </div>
+    );
   }
 
   const leftColsHeader = (
@@ -306,6 +347,14 @@ export function BlockGantt() {
         <label className="flex items-center gap-1 text-[11px] cursor-pointer whitespace-nowrap"><input type="checkbox" checked={costLayover} onChange={(e) => setCostLayover(e.target.checked)} className="accent-coral" />Cost layover</label>
         <label className="flex items-center gap-1 text-[11px] cursor-pointer whitespace-nowrap"><input type="checkbox" checked={costDeadhead} onChange={(e) => setCostDeadhead(e.target.checked)} className="accent-coral" />Cost deadhead</label>
       </div>
+
+      {/* Some fixed trips, some frequency templates → block the fixed ones and
+          say why the frequency trips aren't on the board. */}
+      {scopeKind === 'mixed' && (
+        <Banner variant="warning" icon="⚠">
+          {dayFreqCount} frequency-based trip{dayFreqCount === 1 ? '' : 's'} {dayFreqCount === 1 ? 'is' : 'are'} excluded from blocking — convert {dayFreqCount === 1 ? 'it' : 'them'} to a trips-based schedule to include {dayFreqCount === 1 ? 'it' : 'them'}.
+        </Banner>
+      )}
 
       {/* Gantt grid */}
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>

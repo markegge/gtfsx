@@ -346,8 +346,10 @@ export function ActionCell({ mode, open, stickyLeft, canApplyAll, canEstimate, o
 
   if (mode === 'flyout') {
     return (
-      <td className="sticky z-[2] bg-white border-r-2 border-r-sand border-b border-[#F5F0EB] p-0 text-center overflow-visible group/act" style={{ left: stickyLeft }}>
-        {wrench}
+      <td className="sticky z-[2] bg-white border-r-2 border-r-sand border-b border-[#F5F0EB] p-0 overflow-visible group/act" style={{ left: stickyLeft }}>
+        {/* flex-center the wrench: a display:flex button ignores the cell's
+            text-align, so center it explicitly on the column's centerline. */}
+        <div className="flex items-center justify-center">{wrench}</div>
         <div className="hidden group-hover/act:flex absolute left-[30px] top-1/2 -translate-y-1/2 z-[5] gap-0.5 p-1 bg-white border border-sand rounded-lg shadow-md">
           {iconBtns}
         </div>
@@ -357,8 +359,8 @@ export function ActionCell({ mode, open, stickyLeft, canApplyAll, canEstimate, o
 
   // "menu"
   return (
-    <td className="sticky z-[2] bg-white border-r-2 border-r-sand border-b border-[#F5F0EB] p-0 text-center" style={{ left: stickyLeft }}>
-      {wrench}
+    <td className="sticky z-[2] bg-white border-r-2 border-r-sand border-b border-[#F5F0EB] p-0" style={{ left: stickyLeft }}>
+      <div className="flex items-center justify-center">{wrench}</div>
     </td>
   );
 }

@@ -3,8 +3,6 @@ import {
   actColWidth,
   computeRowErrors,
   defaultColWidth,
-  directionSegmentAction,
-  directionSegmentValue,
   generateExistingIds,
   nextCell,
   nextTabCell,
@@ -155,23 +153,6 @@ describe('planCascade', () => {
 
   it('returns null when the edited trip is the last one', () => {
     expect(planCascade({ orderedTripIds: ids, editedTripId: 't3', prevSec: 100, newSec: 400, hasTimeAt: hasTimeAll })).toBeNull();
-  });
-});
-
-// ── Direction / split control state machine ──────────────────────────────────
-describe('direction segment control', () => {
-  it('lights the Both segment (index = patternCount) when the split is open', () => {
-    expect(directionSegmentValue(true, 0, 2)).toBe(2);
-  });
-  it('lights the selected pattern when the split is closed', () => {
-    expect(directionSegmentValue(false, 1, 2)).toBe(1);
-  });
-  it('opens the split when the trailing Both segment is clicked', () => {
-    expect(directionSegmentAction(2, 2)).toEqual({ type: 'both' });
-  });
-  it('selects a pattern (and closes the split) for the other segments', () => {
-    expect(directionSegmentAction(0, 2)).toEqual({ type: 'select', index: 0 });
-    expect(directionSegmentAction(1, 2)).toEqual({ type: 'select', index: 1 });
   });
 });
 

@@ -1,7 +1,26 @@
 // B3 — Quick Block heuristic + overlap sweep.
 import { describe, expect, it } from 'vitest';
-import { buildBlocks, findBlockOverlaps } from '../blockBuilder';
+import { buildBlocks, findBlockOverlaps, classifyBlockScope } from '../blockBuilder';
 import type { Trip, StopTime, Stop } from '../../types/gtfs';
+
+// Blocks-view gating for frequency-based schedules (item #11).
+describe('classifyBlockScope', () => {
+  it('is "none" when no trip is frequency-based', () => {
+    expect(classifyBlockScope(10, 0)).toBe('none');
+    expect(classifyBlockScope(0, 0)).toBe('none'); // empty day
+  });
+  it('is "all-freq" when every trip is frequency-based', () => {
+    expect(classifyBlockScope(3, 3)).toBe('all-freq');
+    expect(classifyBlockScope(1, 1)).toBe('all-freq');
+  });
+  it('is "mixed" when some (but not all) trips are frequency-based', () => {
+    expect(classifyBlockScope(20, 1)).toBe('mixed');
+    expect(classifyBlockScope(20, 19)).toBe('mixed');
+  });
+  it('treats freq >= total defensively as all-freq', () => {
+    expect(classifyBlockScope(2, 5)).toBe('all-freq');
+  });
+});
 
 const STOPS: Stop[] = [
   { stop_id: 's1', stop_name: 's1', stop_lat: 45.00, stop_lon: -111, wheelchair_boarding: 0 } as Stop,

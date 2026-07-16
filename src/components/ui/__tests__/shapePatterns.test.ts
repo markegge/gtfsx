@@ -152,6 +152,23 @@ describe('No-shape bucket + ghost detection', () => {
     expect([...unreachableTimetableTripIds(trips, [])].sort()).toEqual(['i-ghost', 'o-ghost']);
   });
 
+  // Live reactivity: the timetable must pick up a shape added via Routes > Shapes
+  // even before it has any stops/trips, so the direction control morphs live.
+  it('surfaces a freshly drawn shape as a timetable pattern (shapes arg)', () => {
+    const shape = (id: string, routeId?: string) => ({ shape_id: id, points: [], _route_id: routeId }) as never;
+    // One real outbound shape; a second shape was just drawn (no stops/trips yet).
+    const trips = [t('o1', { shape_id: 'out' })];
+    // Without the drawn shape → 1 pattern (static-label territory).
+    expect(computeTimetablePatterns('R', trips, [], [])).toEqual([{ shapeId: 'out', directionId: 0 }]);
+    // With it → 2 patterns, so the control morphs to segmented and Split enables.
+    expect(computeTimetablePatterns('R', trips, [], [shape('out', 'R'), shape('in', 'R')])).toEqual([
+      { shapeId: 'out', directionId: 0 },
+      { shapeId: 'in', directionId: 1 },
+    ]);
+    // A drawn shape carries no trips, so it never creates ghosts.
+    expect(unreachableTimetableTripIds(trips, []).size).toBe(0);
+  });
+
   it("a trip's own non-empty shape_id always forms a reachable pattern (never a ghost)", () => {
     // Even a dangling shape_id (the Shape row was deleted) is reachable: like
     // computeShapePatterns, the helper turns every non-empty trip shape_id into

@@ -10,7 +10,7 @@ import {
   generateTrips, validateGenerateParams, estimateRunSecs,
   type GenerateTripsParams, type GenerateValidation,
 } from '../../services/timetableGen';
-import { applyPatternRunTime, currentPatternRunSecs, type PatternRef } from '../../services/runtimes';
+import { applyPatternRunTime, applyPatternEstimate, currentPatternRunSecs, type PatternRef } from '../../services/runtimes';
 import { estimateStopTravelByRoad, layoutStopTimes } from '../../services/travelTime';
 import { Modal } from '../ui/Modal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -32,6 +32,10 @@ import { windowDepartureCount, type FrequencyWindow } from '../../services/frequ
 /** Feed arrays captured before a bulk op, for snapshot-based undo. Immer keeps
  *  replaced arrays immutable, so holding a reference is a valid point-in-time
  *  snapshot without cloning. */
+/** Shared defaults for road-network time estimation — used by both the per-trip
+ *  ◷ Estimate action and the Set run time drawer's Estimate mode. */
+const ESTIMATE_DEFAULTS = { dwellSec: 18, speedFactor: 1.3 };
+
 type Snap = { trips: Trip[]; stopTimes: StopTime[]; frequencies: Frequency[] };
 function snapshotFeed(): Snap {
   const st = useStore.getState();
@@ -123,6 +127,12 @@ export function TimetableGrid() {
   useEffect(() => {
     setCompanionShapeId((prev) => nextCompanionShapeId(prev, effectiveShapeId, patterns.map((p) => p.shapeId)));
   }, [effectiveShapeId, patterns]);
+  // Split is now toggled independently of direction selection (standalone Split
+  // View button). Keep the state honest: a route with nothing to compare (<2
+  // patterns) can't be split, so close it if it was left open.
+  useEffect(() => {
+    if (patterns.length < 2 && oppositeOpen) setOppositeOpen(false);
+  }, [patterns.length, oppositeOpen, setOppositeOpen]);
 
   const companionPattern: ShapePattern | null = useMemo(() => {
     const chosen = companionShapeId && companionShapeId !== effectiveShapeId
@@ -427,6 +437,31 @@ export function TimetableGrid() {
     });
   };
 
+  // The "Set run time" drawer's Estimate mode: lay the whole pattern from the
+  // road network (same estimation service as the per-trip ◷ action), keeping
+  // each trip's start. Async (Map Matching); returns a status the drawer shows.
+  const applyEstimate = async ({ dwellSec, speedFactor, scoped }: { dwellSec: number; speedFactor: number; scoped: boolean }): Promise<{ ok: boolean; error?: string }> => {
+    if (!selectedRouteId || !activeServiceId) return { ok: false, error: 'Select a route first.' };
+    if (orderedStops.length < 2) return { ok: false, error: 'Add at least two stops to this pattern first.' };
+    const ref: PatternRef = scoped
+      ? { routeId: selectedRouteId, directionId, shapeId: mainGenShapeId, serviceId: activeServiceId }
+      : { routeId: selectedRouteId, directionId, shapeId: mainGenShapeId };
+    let cum: number[] | null;
+    try {
+      cum = await estimateStopTravelByRoad(orderedStops.map((c) => [c.stop.stop_lon, c.stop.stop_lat] as [number, number]));
+    } catch {
+      return { ok: false, error: 'Something went wrong estimating times. Please try again.' };
+    }
+    if (!cum) return { ok: false, error: "Couldn't match this pattern to the road network. Try again, or set times manually." };
+    const os = orderedStops.map((c) => ({ stopId: c.stop.stop_id, seq: c.seq }));
+    const snap = snapshotFeed();
+    const n = applyPatternEstimate(ref, os, cum, { dwellSec, speedFactor });
+    if (n === 0) return { ok: false, error: 'No trips with times to estimate on this pattern.' };
+    setDrawer(null);
+    undoToast(`Estimated times for ${n} trip${n === 1 ? '' : 's'} from the road network`, snap);
+    return { ok: true };
+  };
+
   const applyRepeat = ({ headway, copies }: { headway: number; copies: number }) => {
     if (routeTrips.length === 0) return;
     setDrawer(null);
@@ -475,8 +510,8 @@ export function TimetableGrid() {
   /* ---------- modal confirms ---------- */
   const [dupStartTime, setDupStartTime] = useState('');
   const [estStart, setEstStart] = useState('08:00');
-  const [estDwell, setEstDwell] = useState(18);
-  const [estSpeed, setEstSpeed] = useState(1.3);
+  const [estDwell, setEstDwell] = useState(ESTIMATE_DEFAULTS.dwellSec);
+  const [estSpeed, setEstSpeed] = useState(ESTIMATE_DEFAULTS.speedFactor);
   const [estimating, setEstimating] = useState(false);
   const [estError, setEstError] = useState<string | null>(null);
 
@@ -767,7 +802,7 @@ export function TimetableGrid() {
         <GenerateDrawer ctx={ctxLabel} endToEndDefault={endToEndDefault} getPreview={genPreview} onApply={applyGenerate} onCancel={() => setDrawer(null)} />
       )}
       {drawer === 'runtime' && (
-        <RuntimeDrawer ctx={ctxLabel} currentRun={currentRunMin} tripCount={routeTrips.length} onApply={applyRuntime} onCancel={() => setDrawer(null)} />
+        <RuntimeDrawer ctx={ctxLabel} currentRun={currentRunMin} tripCount={routeTrips.length} estimateDefaults={ESTIMATE_DEFAULTS} onApply={applyRuntime} onEstimate={applyEstimate} onCancel={() => setDrawer(null)} />
       )}
       {drawer === 'repeat' && (
         <RepeatDrawer

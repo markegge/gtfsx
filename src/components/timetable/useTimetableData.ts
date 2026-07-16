@@ -31,6 +31,7 @@ export function useTimetableData(scope: PaneScope, syncSelection: boolean) {
   const trips = useStore((s) => s.trips);
   const stops = useStore((s) => s.stops);
   const routeStops = useStore((s) => s.routeStops);
+  const shapes = useStore((s) => s.shapes);
   const calendars = useStore((s) => s.calendars);
   const setSelectedShapeId = useStore((s) => s.setTimetableShapeId);
   const setDirectionId = useStore((s) => s.setTimetableDirectionId);
@@ -53,8 +54,8 @@ export function useTimetableData(scope: PaneScope, syncSelection: boolean) {
   }, [serviceId, calendars]);
 
   const patterns = useMemo(
-    () => computeTimetablePatterns(routeId, trips, routeStops),
-    [routeId, trips, routeStops],
+    () => computeTimetablePatterns(routeId, trips, routeStops, shapes),
+    [routeId, trips, routeStops, shapes],
   );
 
   // Main pane: keep the stored shape/direction pointing at a valid pattern.

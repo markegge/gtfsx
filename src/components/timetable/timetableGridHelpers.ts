@@ -222,6 +222,20 @@ export function directionSegmentAction(index: number, patternCount: number): Dir
   return index >= patternCount ? { type: 'both' } : { type: 'select', index };
 }
 
+/** Resolve the companion (right) pane's pattern after the main (left) pane's
+ *  pattern changes in Both view: keep the user's EXPLICIT right choice unless it
+ *  now collides with the new left pattern or is no longer a valid pattern — then
+ *  fall back to derived-opposite (null). `prev === null` means already derived.
+ *  Pure state-machine step for the pane direction control (item #7). */
+export function nextCompanionShapeId(
+  prev: string | null,
+  leftShapeId: string | null,
+  patternShapeIds: readonly string[],
+): string | null {
+  if (prev && prev !== leftShapeId && patternShapeIds.includes(prev)) return prev;
+  return null;
+}
+
 /* ============================================================================
    Dismiss-on-outside hook for menus / popovers (HANDOFF §5, §6)
    ========================================================================== */

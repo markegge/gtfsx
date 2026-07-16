@@ -19,7 +19,7 @@ import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
 import { Toast, type ToastState } from '../ui/Toast';
 import { type PaneScope, useTimetableData } from './useTimetableData';
-import { planCascade } from './timetableGridHelpers';
+import { planCascade, nextCompanionShapeId } from './timetableGridHelpers';
 import { TimetableGridPane } from './TimetableGridPane';
 import { TimetableToolbar, type ToolId } from './TimetableToolbar';
 import { GenerateDrawer, RuntimeDrawer, RepeatDrawer, type GenerateInput } from './TimetableDrawers';
@@ -98,8 +98,15 @@ export function TimetableGrid() {
   // opposite direction. `hasOpposite` gates rendering so a stale shape can't leak
   // the main direction into the companion.
   const oppDir: 0 | 1 = directionId === 0 ? 1 : 0;
+  // The companion (right) pane's pattern. null = auto-derived (opposite of the
+  // left); a shapeId = the user's explicit pick. A new route drops any choice; a
+  // left-pattern change keeps an explicit right choice unless it now collides
+  // with the left or is stale (item #7).
   const [companionShapeId, setCompanionShapeId] = useState<string | null>(null);
-  useEffect(() => { setCompanionShapeId(null); }, [selectedRouteId, effectiveShapeId]);
+  useEffect(() => { setCompanionShapeId(null); }, [selectedRouteId]);
+  useEffect(() => {
+    setCompanionShapeId((prev) => nextCompanionShapeId(prev, effectiveShapeId, patterns.map((p) => p.shapeId)));
+  }, [effectiveShapeId, patterns]);
 
   const companionPattern: ShapePattern | null = useMemo(() => {
     const chosen = companionShapeId && companionShapeId !== effectiveShapeId
@@ -656,6 +663,22 @@ export function TimetableGrid() {
 
   const companionOtherPatterns = patterns.filter((p) => p.shapeId !== effectiveShapeId);
 
+  // Move the LEFT (main) pane onto a pattern — the shared action for the toolbar
+  // direction control AND the left split header, so they stay in lockstep.
+  const handleSelectPattern = (p: ShapePattern) => {
+    setSelectedShapeId(p.shapeId);
+    if (p.directionId !== directionId) setDirectionId(p.directionId);
+  };
+  // ⇄ Swap the left and right pane selections in one click. The old left becomes
+  // the explicit right pick; the old right becomes the left.
+  const handleSwapPanes = () => {
+    const oldLeft = effectiveShapeId;
+    const target = companionPattern;
+    if (!target) return;
+    handleSelectPattern(target);
+    setCompanionShapeId(oldLeft);
+  };
+
   return (
     <div className="flex flex-col min-h-0 flex-1">
       <TimetableToolbar
@@ -673,7 +696,7 @@ export function TimetableGrid() {
         oppositeOpen={oppositeOpen}
         onSelectRoute={(id) => selectRoute(id)}
         onSelectService={(id) => setSelectedServiceId(id)}
-        onSelectPattern={(p) => { setSelectedShapeId(p.shapeId); if (p.directionId !== directionId) setDirectionId(p.directionId); }}
+        onSelectPattern={handleSelectPattern}
         onSelectDirection={(d) => setDirectionId(d)}
         onSetOpposite={(v) => setOppositeOpen(v)}
         onEditStops={onEditStops}
@@ -697,12 +720,22 @@ export function TimetableGrid() {
 
       <div className="flex-1 min-h-0 flex">
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
-          {/* In split view the main pane gets its own static direction header
-              (HANDOFF §3), matching the companion header's height/style so both
-              grids' column rows line up for the outbound/inbound compare. */}
+          {/* In split view the main (left) pane gets its own header — a pattern
+              dropdown in lockstep with the toolbar direction control (item #7),
+              or a static label for a single-pattern route. Same 47px container as
+              the companion header so both grids' column rows line up. */}
           {oppositeOpen && (
             <div className="shrink-0 flex items-center gap-2 px-3.5 h-[47px] border-b border-sand bg-cream font-heading font-extrabold text-xs text-dark-brown">
-              <span>Direction {directionId} · {directionName(route, directionId)}</span>
+              {patterns.length >= 2 ? (
+                <Select
+                  value={effectiveShapeId ?? patterns[0].shapeId}
+                  onChange={(v) => { const p = patterns.find((pp) => pp.shapeId === v); if (p) handleSelectPattern(p); }}
+                  options={patterns.map((p) => ({ id: p.shapeId, name: directionName(route, p.directionId) }))}
+                  aria-label="Left pane pattern"
+                />
+              ) : (
+                <span>Direction {directionId} · {directionName(route, directionId)}</span>
+              )}
               <span className="font-body font-normal text-[12.5px] text-warm-gray">{routeTrips.length} trips</span>
             </div>
           )}
@@ -722,17 +755,32 @@ export function TimetableGrid() {
                 <span>Direction {companionDir} · {directionName(route, companionDir)}</span>
               )}
               <span className="font-body font-normal text-[12.5px] text-warm-gray">{oppData.routeTrips.length} trips</span>
-              <button
-                type="button"
-                onClick={() => setSyncScroll((v) => !v)}
-                title="Keep both panes' vertical scroll aligned, trip-for-trip"
-                className={`h-[22px] px-2.5 rounded-md border font-heading font-bold text-[11px] ${
-                  syncScroll ? 'bg-coral-light border-coral text-[#d4603a]' : 'bg-white border-sand text-warm-gray'
-                }`}
-              >
-                ⇅ Synced
-              </button>
-              <span className="ml-auto font-mono text-[10px] uppercase tracking-wide text-warm-gray bg-white border border-sand px-1.5 py-0.5 rounded" title="No toolbar of its own — same route & service; re-derives when the main pane changes">derived</span>
+              <div className="ml-auto flex items-center gap-2">
+                {companionPattern && patterns.length >= 2 && (
+                  <button
+                    type="button"
+                    onClick={handleSwapPanes}
+                    title="Swap the left and right panes"
+                    aria-label="Swap panes"
+                    className="h-[22px] px-1.5 rounded-md border bg-white border-sand text-warm-gray hover:border-coral hover:text-[#d4603a] flex items-center justify-center"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 4L3 8l4 4M3 8h13M17 20l4-4-4-4M21 16H8" /></svg>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSyncScroll((v) => !v)}
+                  title="Keep both panes' vertical scroll aligned, trip-for-trip"
+                  className={`h-[22px] px-2.5 rounded-md border font-heading font-bold text-[11px] ${
+                    syncScroll ? 'bg-coral-light border-coral text-[#d4603a]' : 'bg-white border-sand text-warm-gray'
+                  }`}
+                >
+                  ⇅ Synced
+                </button>
+                {companionShapeId === null && (
+                  <span className="font-mono text-[10px] uppercase tracking-wide text-warm-gray bg-white border border-sand px-1.5 py-0.5 rounded" title="Auto-derived — the opposite of the left pane; pick a pattern here to choose it explicitly">derived</span>
+                )}
+              </div>
             </div>
             {renderCompanionPane()}
           </div>

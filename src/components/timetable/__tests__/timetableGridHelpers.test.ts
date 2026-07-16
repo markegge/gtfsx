@@ -7,6 +7,7 @@ import {
   directionSegmentValue,
   nextCell,
   nextTabCell,
+  nextCompanionShapeId,
   planCascade,
   type GridProbe,
 } from '../timetableGridHelpers';
@@ -160,5 +161,34 @@ describe('direction segment control', () => {
   it('selects a pattern (and closes the split) for the other segments', () => {
     expect(directionSegmentAction(0, 2)).toEqual({ type: 'select', index: 0 });
     expect(directionSegmentAction(1, 2)).toEqual({ type: 'select', index: 1 });
+  });
+});
+
+// ── Companion (right) pane pattern preservation in Both view (item #7) ────────
+describe('nextCompanionShapeId', () => {
+  const patterns = ['out', 'in', 'branch'];
+
+  it('stays derived (null) when already derived and the left changes', () => {
+    expect(nextCompanionShapeId(null, 'in', patterns)).toBeNull();
+  });
+
+  it('keeps an explicit right choice when the left moves to a different pattern', () => {
+    // left → 'out', right explicitly 'branch' (≠ left, valid) → preserved.
+    expect(nextCompanionShapeId('branch', 'out', patterns)).toBe('branch');
+  });
+
+  it('falls back to derived when the left collides with the right choice', () => {
+    // user drives the left onto the right pane's pattern → right re-derives.
+    expect(nextCompanionShapeId('in', 'in', patterns)).toBeNull();
+  });
+
+  it('falls back to derived when the explicit choice is no longer a valid pattern', () => {
+    expect(nextCompanionShapeId('gone', 'out', patterns)).toBeNull();
+  });
+
+  it('models a swap: old-left becomes the explicit right and survives the left change', () => {
+    // Swap sets left='in', right=old-left='out'. After the left-change effect,
+    // 'out' ≠ 'in' and valid → the right keeps the swapped pattern.
+    expect(nextCompanionShapeId('out', 'in', patterns)).toBe('out');
   });
 });

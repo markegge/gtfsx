@@ -61,6 +61,9 @@ export interface UISlice {
    *  arrival/departure times. The companion pane is fully derived from the main
    *  pane's selection; it has no scoping controls of its own. */
   timetableOppositeOpen: boolean;
+  /** Left-pane width fraction (0–1) of the split view's draggable divider. 0.5 =
+   *  even; clamped so neither pane collapses. In-memory UI pref like the others. */
+  timetableSplitRatio: number;
   selectedRouteId: string | null;
   selectedStopId: string | null;
   selectedTripId: string | null;
@@ -158,6 +161,7 @@ export interface UISlice {
   setTimetableRowActions: (v: TimetableRowActionStyle) => void;
   setTimetableHeadwayHints: (v: boolean) => void;
   setTimetableOppositeOpen: (v: boolean) => void;
+  setTimetableSplitRatio: (v: number) => void;
   selectRoute: (id: string | null) => void;
   selectStop: (id: string | null) => void;
   selectTrip: (id: string | null) => void;
@@ -202,6 +206,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   timetableRowActions: 'menu',
   timetableHeadwayHints: false,
   timetableOppositeOpen: false,
+  timetableSplitRatio: 0.5,
   selectedRouteId: null,
   selectedStopId: null,
   selectedTripId: null,
@@ -332,6 +337,7 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   }),
   setTimetableRowActions: (v) => set((state) => { state.timetableRowActions = v; }),
   setTimetableHeadwayHints: (v) => set((state) => { state.timetableHeadwayHints = v; }),
+  setTimetableSplitRatio: (v) => set((state) => { state.timetableSplitRatio = v; }),
   setTimetableOppositeOpen: (v) => set((state) => { state.timetableOppositeOpen = v; }),
   selectRoute: (id) => set((state) => { state.selectedRouteId = id; }),
   selectStop: (id) => set((state) => { state.selectedStopId = id; }),

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   actColWidth,
+  clampSplitRatio,
   computeRowErrors,
   defaultColWidth,
   generateExistingIds,
@@ -8,6 +9,8 @@ import {
   nextTabCell,
   nextCompanionShapeId,
   planCascade,
+  splitRatioFromPointer,
+  splitResizable,
   type GridProbe,
 } from '../timetableGridHelpers';
 
@@ -202,5 +205,47 @@ describe('generateExistingIds', () => {
 
   it('Replace with nothing else in the feed frees all numbers', () => {
     expect(generateExistingIds(scope, scope, true)).toEqual(new Set());
+  });
+});
+
+// ── Split-view divider ratio (draggable resize, min 300px/pane) ───────────────
+describe('clampSplitRatio', () => {
+  it('leaves a comfortable ratio untouched', () => {
+    expect(clampSplitRatio(0.5, 1000)).toBe(0.5);
+    expect(clampSplitRatio(0.6, 1000)).toBe(0.6);
+  });
+  it('clamps so neither pane drops below 300px', () => {
+    // 1000px → min ratio 0.3, max 0.7.
+    expect(clampSplitRatio(0.05, 1000)).toBeCloseTo(0.3, 5);
+    expect(clampSplitRatio(0.98, 1000)).toBeCloseTo(0.7, 5);
+  });
+  it('pins to 0.5 when the container cannot fit two min-width panes', () => {
+    expect(clampSplitRatio(0.8, 500)).toBe(0.5);   // < 600
+    expect(clampSplitRatio(0.2, 599)).toBe(0.5);
+    expect(clampSplitRatio(0.3, 600)).toBe(0.5);   // exactly 2×min → only 0.5 fits
+    expect(clampSplitRatio(0.5, 0)).toBe(0.5);     // no measurement yet
+  });
+});
+
+describe('splitResizable', () => {
+  it('is true only when both panes can meet the 300px minimum', () => {
+    expect(splitResizable(1000)).toBe(true);
+    expect(splitResizable(600)).toBe(true);
+    expect(splitResizable(599)).toBe(false);
+    expect(splitResizable(390)).toBe(false); // mobile → fixed 50/50
+  });
+});
+
+describe('splitRatioFromPointer', () => {
+  it('maps a pointer x within the container to a clamped ratio', () => {
+    // container [100, 1100), width 1000.
+    expect(splitRatioFromPointer(600, 100, 1000)).toBe(0.5);
+    expect(splitRatioFromPointer(400, 100, 1000)).toBeCloseTo(0.3, 5); // 0.3 raw, at the clamp floor
+    expect(splitRatioFromPointer(150, 100, 1000)).toBeCloseTo(0.3, 5); // 0.05 raw → clamped up
+    expect(splitRatioFromPointer(1090, 100, 1000)).toBeCloseTo(0.7, 5); // 0.99 raw → clamped down
+  });
+  it('pins to 0.5 in a non-resizable container regardless of pointer', () => {
+    expect(splitRatioFromPointer(120, 100, 500)).toBe(0.5);
+    expect(splitRatioFromPointer(590, 100, 500)).toBe(0.5);
   });
 });

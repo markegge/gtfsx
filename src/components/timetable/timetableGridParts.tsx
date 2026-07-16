@@ -521,6 +521,50 @@ export function ColResizer({ onResize }: { onResize: (dx: number | null) => void
 }
 
 /* ============================================================================
+   SplitDivider — draggable divider between the two split-view panes
+   ========================================================================== */
+
+/** Vertical divider between the two split panes. Drag reports the pointer x to
+ *  the orchestrator (which converts it to a clamped ratio); double-click resets.
+ *  Non-interactive when the container is too narrow to resize (fixed 50/50).
+ *  Mirrors ColResizer's coral hover/active affordance. */
+export function SplitDivider({ resizable, onDrag, onDragEnd, onReset }: {
+  resizable: boolean;
+  onDrag: (clientX: number) => void;
+  onDragEnd: () => void;
+  onReset: () => void;
+}) {
+  const [active, setActive] = useState(false);
+  const start = (e: ReactMouseEvent) => {
+    if (!resizable) return;
+    e.preventDefault();
+    setActive(true);
+    const move = (ev: MouseEvent) => onDrag(ev.clientX);
+    const up = () => {
+      setActive(false);
+      onDragEnd();
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  };
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize panes"
+      onMouseDown={start}
+      onDoubleClick={resizable ? onReset : undefined}
+      title={resizable ? 'Drag to resize · double-click to reset' : undefined}
+      className={`group/split relative shrink-0 self-stretch z-[6] w-[9px] -mx-[4px] ${resizable ? 'cursor-col-resize' : 'pointer-events-none'}`}
+    >
+      <span className={`absolute inset-y-0 left-1/2 -translate-x-1/2 rounded-full ${active ? 'w-0.5 bg-coral' : 'w-px bg-sand group-hover/split:w-0.5 group-hover/split:bg-coral'}`} />
+    </div>
+  );
+}
+
+/* ============================================================================
    HeadwayToggle — the tiny "+m" toggle in the Trip header
    ========================================================================== */
 

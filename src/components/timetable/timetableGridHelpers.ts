@@ -10,6 +10,35 @@ export const TRIP_COL_DEFAULT = 78;
 export const COL_MIN = 58;
 export const COL_MAX = 300;
 
+/* ============================================================================
+   Split-view divider ratio (draggable pane resize)
+   ========================================================================== */
+
+/** Neither split pane may drop below this — a timetable narrower than this is
+ *  unusable (Trip + actions + a couple of stop columns). */
+export const SPLIT_MIN_PANE_PX = 300;
+export const SPLIT_DEFAULT_RATIO = 0.5;
+
+/** Clamp a left-pane width fraction so both panes keep SPLIT_MIN_PANE_PX. When
+ *  the container can't fit two min-width panes (narrow / 390px mobile), the split
+ *  is pinned even (0.5) — the caller also disables dragging there. Pure. */
+export function clampSplitRatio(ratio: number, containerWidth: number, minPanePx = SPLIT_MIN_PANE_PX): number {
+  if (!(containerWidth > 0) || containerWidth < 2 * minPanePx) return SPLIT_DEFAULT_RATIO;
+  const min = minPanePx / containerWidth;
+  return Math.min(1 - min, Math.max(min, ratio));
+}
+
+/** Whether the divider can be dragged at a given container width (both panes can
+ *  still meet the minimum). Below this the split is a fixed even 50/50. */
+export function splitResizable(containerWidth: number, minPanePx = SPLIT_MIN_PANE_PX): boolean {
+  return containerWidth >= 2 * minPanePx;
+}
+
+/** The left-pane fraction for a pointer x within the container, clamped. Pure. */
+export function splitRatioFromPointer(pointerX: number, containerLeft: number, containerWidth: number, minPanePx = SPLIT_MIN_PANE_PX): number {
+  return clampSplitRatio((pointerX - containerLeft) / containerWidth, containerWidth, minPanePx);
+}
+
 export type RowActionStyle = 'menu' | 'strip' | 'flyout';
 
 /** Width of the sticky actions column for a given presentation. */

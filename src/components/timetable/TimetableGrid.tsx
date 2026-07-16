@@ -19,8 +19,12 @@ import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
 import { Toast, type ToastState } from '../ui/Toast';
 import { type PaneScope, useTimetableData } from './useTimetableData';
-import { planCascade, nextCompanionShapeId, generateExistingIds } from './timetableGridHelpers';
+import {
+  planCascade, nextCompanionShapeId, generateExistingIds,
+  clampSplitRatio, splitResizable, splitRatioFromPointer, SPLIT_MIN_PANE_PX, SPLIT_DEFAULT_RATIO,
+} from './timetableGridHelpers';
 import { TimetableGridPane } from './TimetableGridPane';
+import { SplitDivider } from './timetableGridParts';
 import { TimetableToolbar, type ToolId } from './TimetableToolbar';
 import { GenerateDrawer, RuntimeDrawer, RepeatDrawer, type GenerateInput } from './TimetableDrawers';
 import { FlexTimetablePanel } from './FlexTimetablePanel';
@@ -172,6 +176,44 @@ export function TimetableGrid() {
   const cascadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const oppScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Split-view divider: a persisted left-pane ratio, dragged imperatively (no
+  // re-render per pointermove — set the left pane's flex-basis directly) and
+  // committed to the store on drag-end.
+  const splitRatio = useStore((s) => s.timetableSplitRatio);
+  const setSplitRatio = useStore((s) => s.setTimetableSplitRatio);
+  const splitContainerRef = useRef<HTMLDivElement | null>(null);
+  const leftPaneRef = useRef<HTMLDivElement | null>(null);
+  const dragRatioRef = useRef<number | null>(null);
+  const [splitContainerW, setSplitContainerW] = useState(0);
+  useEffect(() => {
+    const el = splitContainerRef.current;
+    if (!el) return;
+    setSplitContainerW(el.clientWidth);
+    const ro = new ResizeObserver((entries) => setSplitContainerW(entries[0].contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const splitIsResizable = oppositeOpen && splitResizable(splitContainerW);
+  const effectiveSplitRatio = splitIsResizable ? clampSplitRatio(splitRatio, splitContainerW) : SPLIT_DEFAULT_RATIO;
+  const handleSplitDrag = useCallback((clientX: number) => {
+    const box = splitContainerRef.current, left = leftPaneRef.current;
+    if (!box || !left) return;
+    const rect = box.getBoundingClientRect();
+    const r = splitRatioFromPointer(clientX, rect.left, rect.width);
+    dragRatioRef.current = r;
+    left.style.flexBasis = `${r * 100}%`; // imperative during drag — smooth, no React churn
+  }, []);
+  const handleSplitDragEnd = useCallback(() => {
+    if (dragRatioRef.current != null) setSplitRatio(dragRatioRef.current);
+    dragRatioRef.current = null;
+    window.dispatchEvent(new Event('resize')); // §8: grids re-measure sticky offsets + column math
+  }, [setSplitRatio]);
+  const handleSplitReset = useCallback(() => {
+    dragRatioRef.current = null;
+    setSplitRatio(SPLIT_DEFAULT_RATIO);
+    window.dispatchEvent(new Event('resize'));
+  }, [setSplitRatio]);
 
   const say = useCallback((message: string) => {
     setToast({ message });
@@ -813,8 +855,12 @@ export function TimetableGrid() {
         />
       )}
 
-      <div className="flex-1 min-h-0 flex">
-        <div className="flex-1 min-w-0 flex flex-col min-h-0">
+      <div ref={splitContainerRef} className="flex-1 min-h-0 flex">
+        <div
+          ref={leftPaneRef}
+          className={`min-w-0 flex flex-col min-h-0 ${oppositeOpen ? 'grow-0 shrink-0' : 'flex-1'}`}
+          style={oppositeOpen ? { flexBasis: `${effectiveSplitRatio * 100}%`, minWidth: splitIsResizable ? SPLIT_MIN_PANE_PX : undefined } : undefined}
+        >
           {/* In split view the main (left) pane gets its own header — a pattern
               dropdown in lockstep with the toolbar direction control (item #7),
               or a static label for a single-pattern route. Same 47px container as
@@ -837,7 +883,18 @@ export function TimetableGrid() {
           {renderMainPane()}
         </div>
         {oppositeOpen && (
-          <div className="flex-1 min-w-0 flex flex-col min-h-0 border-l border-sand">
+          <SplitDivider
+            resizable={splitIsResizable}
+            onDrag={handleSplitDrag}
+            onDragEnd={handleSplitDragEnd}
+            onReset={handleSplitReset}
+          />
+        )}
+        {oppositeOpen && (
+          <div
+            className="flex-1 min-w-0 flex flex-col min-h-0"
+            style={splitIsResizable ? { minWidth: SPLIT_MIN_PANE_PX } : undefined}
+          >
             <div className="shrink-0 flex items-center gap-2 px-3.5 h-[47px] border-b border-sand bg-cream font-heading font-extrabold text-xs text-dark-brown">
               {companionOtherPatterns.length > 1 && companionPattern ? (
                 <Select

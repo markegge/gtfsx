@@ -6,6 +6,7 @@ import { PatternSelector } from '../ui/ShapePatternSelector';
 import { directionName } from '../../utils/constants';
 import { secondsToGtfsTime, formatTimeShort } from '../../utils/time';
 import { buildMareyData } from '../../services/marey';
+import { expandFrequencyTrip, type FrequencyWindow } from '../../services/frequencyExpansion';
 import type { Route } from '../../types/gtfs';
 
 // Layout constants for the SVG chart. The plot area sits inside these margins;
@@ -75,9 +76,28 @@ export function MareyChart() {
     [effectiveShapeId, shapes],
   );
 
+  // Frequency build-out — the SAME pure expansion the grid uses (item #10). Any
+  // template trip in scope contributes its full run of projected departures as
+  // derived lines. Re-derives whenever the template's stop_times change.
+  const frequencies = useStore((s) => s.frequencies);
+  const virtualTrips = useMemo(() => {
+    if (frequencies.length === 0) return [];
+    const byTrip = new Map<string, FrequencyWindow[]>();
+    for (const f of frequencies) {
+      const w: FrequencyWindow = { start_time: f.start_time, end_time: f.end_time, headway_secs: f.headway_secs, exact_times: f.exact_times };
+      const arr = byTrip.get(f.trip_id);
+      if (arr) arr.push(w); else byTrip.set(f.trip_id, [w]);
+    }
+    return routeTrips.flatMap((t) => {
+      const windows = byTrip.get(t.trip_id);
+      const sts = stopTimesByTrip.get(t.trip_id);
+      return windows && windows.length && sts ? expandFrequencyTrip(t.trip_id, sts, windows) : [];
+    });
+  }, [frequencies, routeTrips, stopTimesByTrip]);
+
   const data = useMemo(
-    () => buildMareyData({ orderedStops, shape, trips: routeTrips, stopTimesByTrip }),
-    [orderedStops, shape, routeTrips, stopTimesByTrip],
+    () => buildMareyData({ orderedStops, shape, trips: routeTrips, stopTimesByTrip, virtualTrips }),
+    [orderedStops, shape, routeTrips, stopTimesByTrip, virtualTrips],
   );
 
   if (!route) {
@@ -133,9 +153,15 @@ export function MareyChart() {
         ) : (
           <DirectionSelect directionId={directionId} onChange={setDirectionId} route={route} />
         )}
-        <span className="text-xs text-warm-gray whitespace-nowrap">
-          {data.trips.length} trip{data.trips.length === 1 ? '' : 's'} plotted
-        </span>
+        {(() => {
+          const projected = data.trips.filter((t) => t.derived).length;
+          const real = data.trips.length - projected;
+          return (
+            <span className="text-xs text-warm-gray whitespace-nowrap">
+              {real} trip{real === 1 ? '' : 's'} plotted{projected > 0 ? ` · ${projected} projected` : ''}
+            </span>
+          );
+        })()}
         {data.distanceSource !== 'shape' && data.trips.length > 0 && (
           <span
             className="text-[11px] text-warm-gray italic"
@@ -288,36 +314,47 @@ function MareyBody({
           );
         })}
 
-        {/* Trip polylines */}
-        {data.trips.map((trip) => {
-          const pts = trip.points
-            .map((p) => `${xOf(p.timeSec).toFixed(1)},${yOf(p.distanceKm).toFixed(1)}`)
-            .join(' ');
-          const isHover = hoverTrip === trip.tripId;
-          return (
-            <polyline
-              key={trip.tripId}
-              points={pts}
-              fill="none"
-              stroke={routeColor}
-              strokeWidth={isHover ? 3 : 1.5}
-              strokeOpacity={hoverTrip && !isHover ? 0.25 : 0.85}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              onMouseEnter={() => setHoverTrip(trip.tripId)}
-              onMouseLeave={() => setHoverTrip(null)}
-              style={{ cursor: 'pointer' }}
-            >
-              <title>
-                {trip.headsign ? `${trip.headsign} — ` : ''}{trip.tripId}
-                {' · '}
-                {formatTimeShort(secondsToGtfsTime(trip.points[0].timeSec))}
-                {' → '}
-                {formatTimeShort(secondsToGtfsTime(trip.points[trip.points.length - 1].timeSec))}
-              </title>
-            </polyline>
-          );
-        })}
+        {/* Trip polylines — derived (frequency) lines first so the real/template
+            lines paint on top. Derived: lighter + dashed (finer dashes when the
+            window is approximate, exact_times=0). */}
+        {[...data.trips]
+          .sort((a, b) => Number(!!a.derived) - Number(!!b.derived))
+          .map((trip) => {
+            const pts = trip.points
+              .map((p) => `${xOf(p.timeSec).toFixed(1)},${yOf(p.distanceKm).toFixed(1)}`)
+              .join(' ');
+            const isHover = hoverTrip === trip.tripId;
+            const dimmed = !!hoverTrip && !isHover;
+            const style = trip.derived
+              ? { width: isHover ? 2.5 : 1, opacity: dimmed ? 0.12 : 0.42, dash: trip.exactTimes === 0 ? '2 4' : '5 3' }
+              : { width: isHover ? 3 : 1.5, opacity: dimmed ? 0.25 : 0.85, dash: undefined as string | undefined };
+            return (
+              <polyline
+                key={trip.tripId}
+                points={pts}
+                fill="none"
+                stroke={routeColor}
+                strokeWidth={style.width}
+                strokeOpacity={style.opacity}
+                strokeDasharray={style.dash}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                onMouseEnter={() => setHoverTrip(trip.tripId)}
+                onMouseLeave={() => setHoverTrip(null)}
+                style={{ cursor: 'pointer' }}
+              >
+                <title>
+                  {trip.derived
+                    ? `Projected · every ${Math.round((trip.headwaySecs ?? 0) / 60)}m from ${trip.templateTripId}${trip.exactTimes === 0 ? ' (approximate)' : ''}`
+                    : `${trip.headsign ? `${trip.headsign} — ` : ''}${trip.tripId}`}
+                  {' · '}
+                  {formatTimeShort(secondsToGtfsTime(trip.points[0].timeSec))}
+                  {' → '}
+                  {formatTimeShort(secondsToGtfsTime(trip.points[trip.points.length - 1].timeSec))}
+                </title>
+              </polyline>
+            );
+          })}
 
         {/* Axis frame */}
         <line
@@ -337,6 +374,11 @@ function MareyBody({
           strokeWidth={1}
         />
       </svg>
+      {data.trips.some((t) => t.derived) && (
+        <p className="text-[11px] text-warm-gray px-2 pb-1">
+          Dashed lines are frequency-based departures projected from the template trip; finer dashes mark approximate (exact_times = 0) windows.
+        </p>
+      )}
       {data.hasOvernight && (
         <p className="text-[11px] text-warm-gray px-2 pb-2">
           Times past midnight (24:00+) are plotted on the same axis continuing rightward.

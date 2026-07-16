@@ -19,6 +19,7 @@ import { useStore } from '../../store';
 import { gtfsTimeToSeconds } from '../../utils/time';
 import { directionName } from '../../utils/constants';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
+import { expandFrequencyTrip, type FrequencyWindow } from '../../services/frequencyExpansion';
 import { MareyChart } from './MareyChart';
 
 type SummaryView = 'summary' | 'marey';
@@ -31,6 +32,11 @@ interface TripDot {
   timeSeconds: number;
   timeLabel: string;
   tripId: string;
+  /** A projected frequency departure (item #10) — drawn as a hollow ring. */
+  derived?: boolean;
+  templateTripId?: string;
+  headwaySecs?: number;
+  exactTimes?: 0 | 1;
 }
 
 export function ServiceSummary() {
@@ -68,7 +74,20 @@ function SummaryView() {
     routes, trips, calendars, routeStops,
     hiddenRouteIds,
   } = useStore();
+  const frequencies = useStore((s) => s.frequencies);
   const { byTrip: stopTimesByTrip } = useStopTimesIndex();
+
+  // frequencies.txt windows per template trip — feeds the projected start-time
+  // dots (item #10), the same expansion the grid and Marey use.
+  const windowsByTrip = useMemo(() => {
+    const m = new Map<string, FrequencyWindow[]>();
+    for (const f of frequencies) {
+      const w: FrequencyWindow = { start_time: f.start_time, end_time: f.end_time, headway_secs: f.headway_secs, exact_times: f.exact_times };
+      const arr = m.get(f.trip_id);
+      if (arr) arr.push(w); else m.set(f.trip_id, [w]);
+    }
+    return m;
+  }, [frequencies]);
 
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
 
@@ -183,6 +202,29 @@ function SummaryView() {
           timeLabel: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
           tripId: trip.trip_id,
         });
+
+        // Frequency template → add a hollow dot for every projected departure.
+        const windows = windowsByTrip.get(trip.trip_id);
+        if (windows && windows.length) {
+          for (const v of expandFrequencyTrip(trip.trip_id, tripSTs, windows)) {
+            const vhour = v.departureSec / 3600;
+            if (vhour < earliest) earliest = vhour;
+            if (vhour > latest) latest = vhour;
+            dots.push({
+              routeName: route.route_short_name || route.route_long_name || route.route_id,
+              routeColor: route.route_color,
+              serviceLabel: cal?._description || trip.service_id,
+              direction: directionName(route, 0),
+              timeSeconds: v.departureSec,
+              timeLabel: `${String(Math.floor(v.departureSec / 3600)).padStart(2, '0')}:${String(Math.floor((v.departureSec % 3600) / 60)).padStart(2, '0')}`,
+              tripId: v.key,
+              derived: true,
+              templateTripId: v.templateTripId,
+              headwaySecs: v.headwaySecs,
+              exactTimes: v.exactTimes,
+            });
+          }
+        }
       }
 
       dots.sort((a, b) => a.timeSeconds - b.timeSeconds);
@@ -199,7 +241,7 @@ function SummaryView() {
       minHour: Math.floor(earliest),
       maxHour: Math.ceil(latest) + 1,
     };
-  }, [orderedVisibleRoutes, trips, stopTimesByTrip, calendars, routeStops, activeServiceId]);
+  }, [orderedVisibleRoutes, trips, stopTimesByTrip, calendars, routeStops, activeServiceId, windowsByTrip]);
 
   const hours = useMemo(() => {
     const h: number[] = [];
@@ -238,9 +280,15 @@ function SummaryView() {
               ))}
             </select>
           )}
-          <span className="text-[11px] text-warm-gray whitespace-nowrap">
-            {routeRows.reduce((sum, r) => sum + r.dots.length, 0)} trips
-          </span>
+          {(() => {
+            const projected = routeRows.reduce((sum, r) => sum + r.dots.filter((d) => d.derived).length, 0);
+            const real = routeRows.reduce((sum, r) => sum + r.dots.length, 0) - projected;
+            return (
+              <span className="text-[11px] text-warm-gray whitespace-nowrap">
+                {real} trips{projected > 0 ? ` · ${projected} projected` : ''}
+              </span>
+            );
+          })()}
         </div>
       </div>
 
@@ -331,14 +379,17 @@ function SortableRouteRow({ row, hours, minHour, totalSeconds }: {
         ))}
         {row.dots.map((dot, i) => {
           const pct = ((dot.timeSeconds - minHour * 3600) / totalSeconds) * 100;
+          const title = dot.derived
+            ? `Projected ${dot.timeLabel} · every ${Math.round((dot.headwaySecs ?? 0) / 60)}m from ${dot.templateTripId}${dot.exactTimes === 0 ? ' (approximate)' : ''}`
+            : `${dot.timeLabel} — ${dot.serviceLabel} (${dot.tripId})`;
           return (
             <div
               key={i}
               className="absolute top-1/2 -translate-y-1/2 -ml-[5px]"
               style={{ left: `${pct}%` }}
-              title={`${dot.timeLabel} — ${dot.serviceLabel} (${dot.tripId})`}
+              title={title}
             >
-              <ShapeIcon shape="circle" color={`#${dot.routeColor}`} size={10} />
+              <ShapeIcon shape="circle" color={`#${dot.routeColor}`} size={10} hollow={dot.derived} />
             </div>
           );
         })}
@@ -347,13 +398,17 @@ function SortableRouteRow({ row, hours, minHour, totalSeconds }: {
   );
 }
 
-function ShapeIcon({ shape, color, size }: { shape: string; color: string; size: number }) {
+function ShapeIcon({ shape, color, size, hollow }: { shape: string; color: string; size: number; hollow?: boolean }) {
   const s = size;
   const half = s / 2;
+  // A projected (frequency) departure reads as a hollow ring in the route colour.
+  const fillProps = hollow
+    ? { fill: 'none', stroke: color, strokeWidth: 1.5, opacity: 0.7 }
+    : { fill: color };
   return (
     <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} className="shrink-0">
       {shape === 'circle' && (
-        <circle cx={half} cy={half} r={half - 0.5} fill={color} />
+        <circle cx={half} cy={half} r={half - 0.9} {...fillProps} />
       )}
       {shape === 'diamond' && (
         <polygon points={`${half},0.5 ${s - 0.5},${half} ${half},${s - 0.5} 0.5,${half}`} fill={color} />

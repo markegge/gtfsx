@@ -25,6 +25,7 @@ import distance from '@turf/distance';
 import { lineString, point } from '@turf/helpers';
 import { gtfsTimeToSeconds } from '../utils/time';
 import type { Shape, Stop, StopTime } from '../types/gtfs';
+import type { VirtualTrip } from './frequencyExpansion';
 
 export type LngLat = [number, number];
 
@@ -49,6 +50,14 @@ export interface MareyTrip {
   tripId: string;
   headsign?: string;
   points: MareyPoint[];
+  /** A read-only frequency projection (item #10), drawn lighter/dashed. The
+   *  editable template trip is a normal (non-derived) line at full weight. */
+  derived?: boolean;
+  /** Derived lines only: the template + headway behind them, for the hover
+   *  label and the approximate-times cue. */
+  templateTripId?: string;
+  headwaySecs?: number;
+  exactTimes?: 0 | 1;
 }
 
 export interface MareyData {
@@ -141,6 +150,9 @@ export interface BuildMareyInput {
   trips: { trip_id: string; trip_headsign?: string }[];
   /** stop_times grouped by trip_id (e.g. from useStopTimesIndex's byTrip). */
   stopTimesByTrip: Map<string, StopTime[]>;
+  /** Frequency projections to draw as derived lines (item #10). Same pure
+   *  expansion the grid uses; each carries its own shifted stop_times. */
+  virtualTrips?: VirtualTrip[];
 }
 
 /**
@@ -168,13 +180,11 @@ export function buildMareyData(input: BuildMareyInput): MareyData {
   let maxTimeSec = -Infinity;
   let hasOvernight = false;
 
-  const mareyTrips: MareyTrip[] = [];
-  for (const trip of trips) {
-    const sts = stopTimesByTrip.get(trip.trip_id);
-    if (!sts || sts.length === 0) continue;
+  // Project a trip's stop_times onto the chart, tracking the shared time bounds
+  // and overnight flag. Shared by real trips and the derived frequency lines.
+  const plotPoints = (sts: StopTime[]): MareyPoint[] => {
     const byStop = new Map<string, StopTime>();
     for (const st of sts) byStop.set(st.stop_id, st);
-
     const points: MareyPoint[] = [];
     for (const s of stops) {
       const st = byStop.get(s.stopId);
@@ -187,8 +197,31 @@ export function buildMareyData(input: BuildMareyInput): MareyData {
       if (timeSec < minTimeSec) minTimeSec = timeSec;
       if (timeSec > maxTimeSec) maxTimeSec = timeSec;
     }
+    return points;
+  };
+
+  const mareyTrips: MareyTrip[] = [];
+  for (const trip of trips) {
+    const sts = stopTimesByTrip.get(trip.trip_id);
+    if (!sts || sts.length === 0) continue;
+    const points = plotPoints(sts);
     if (points.length < 2) continue; // a single point can't draw a line
     mareyTrips.push({ tripId: trip.trip_id, headsign: trip.trip_headsign, points });
+  }
+
+  // Derived frequency projections — the same expansion the grid renders, drawn
+  // as extra (lighter/dashed) lines. Never stored or exported.
+  for (const vt of input.virtualTrips ?? []) {
+    const points = plotPoints(vt.stopTimes);
+    if (points.length < 2) continue;
+    mareyTrips.push({
+      tripId: vt.key,
+      points,
+      derived: true,
+      templateTripId: vt.templateTripId,
+      headwaySecs: vt.headwaySecs,
+      exactTimes: vt.exactTimes,
+    });
   }
 
   if (!Number.isFinite(minTimeSec)) { minTimeSec = 0; maxTimeSec = 0; }

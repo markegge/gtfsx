@@ -129,4 +129,34 @@ describe('buildMareyData', () => {
     const data = buildMareyData({ orderedStops: stops, trips: [{ trip_id: 't3' }], stopTimesByTrip: sparse });
     expect(data.trips).toHaveLength(0);
   });
+
+  it('plots frequency projections as derived lines alongside the template (item #10)', () => {
+    const projections = [
+      {
+        templateTripId: 't1', key: 't1~f0k1', departureSec: 8 * 3600 + 1800, headwaySecs: 1800, exactTimes: 0 as const,
+        stopTimes: [
+          { trip_id: 't1', stop_id: 'a', stop_sequence: 1, arrival_time: '08:30:00', departure_time: '08:30:00' },
+          { trip_id: 't1', stop_id: 'b', stop_sequence: 2, arrival_time: '08:40:00', departure_time: '08:40:00' },
+          { trip_id: 't1', stop_id: 'c', stop_sequence: 3, arrival_time: '08:50:00', departure_time: '08:50:00' },
+        ],
+      },
+    ];
+    const data = buildMareyData({
+      orderedStops: stops, shape: straightShape,
+      trips: [{ trip_id: 't1' }], stopTimesByTrip: byTrip, virtualTrips: projections,
+    });
+    // The template line (real, full weight) + one derived projection.
+    expect(data.trips).toHaveLength(2);
+    const template = data.trips.find((t) => t.tripId === 't1')!;
+    const derived = data.trips.find((t) => t.tripId === 't1~f0k1')!;
+    expect(template.derived).toBeFalsy();
+    expect(derived.derived).toBe(true);
+    expect(derived.templateTripId).toBe('t1');
+    expect(derived.exactTimes).toBe(0);
+    // The projection's shifted times land on the same stop order, +30 min.
+    expect(derived.points.map((p) => p.stopId)).toEqual(['a', 'b', 'c']);
+    expect(derived.points[0].timeSec).toBe(8 * 3600 + 1800);
+    // The derived departure widens the plotted time extent.
+    expect(data.maxTimeSec).toBe(8 * 3600 + 1800 + 1200);
+  });
 });

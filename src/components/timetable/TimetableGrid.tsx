@@ -509,12 +509,22 @@ export function TimetableGrid() {
     });
   };
 
+  // In Both view, "Remove all trips" clears BOTH visible directions — otherwise
+  // the companion (second) direction's trips are trapped with no way to remove
+  // them. Single view is unchanged (the current direction only). The other bulk
+  // tools stay main-pane-only by design (the companion is derived), which is
+  // fine because they CREATE/retime trips rather than trapping existing ones.
+  const removeAllAcrossBoth = oppositeOpen && hasOpposite && oppData.routeTrips.length > 0;
+  const removeAllIds = removeAllAcrossBoth
+    ? [...new Set([...routeTrips.map((t) => t.trip_id), ...oppData.routeTrips.map((t) => t.trip_id)])]
+    : routeTrips.map((t) => t.trip_id);
+
   const confirmRemoveAll = () => {
-    const doomed = routeTrips.map((t) => t.trip_id);
+    const doomed = removeAllIds;
     setModal(null);
     withUndo(() => {
       for (const id of doomed) removeTrip(id);
-      return `Removed all ${doomed.length} trip${doomed.length === 1 ? '' : 's'}`;
+      return `Removed all ${doomed.length} trip${doomed.length === 1 ? '' : 's'}${removeAllAcrossBoth ? ' across both directions' : ''}`;
     });
   };
 
@@ -659,6 +669,7 @@ export function TimetableGrid() {
         effectiveShapeId={effectiveShapeId}
         directionId={directionId}
         tripCount={routeTrips.length}
+        removeAllCount={removeAllIds.length}
         oppositeOpen={oppositeOpen}
         onSelectRoute={(id) => selectRoute(id)}
         onSelectService={(id) => setSelectedServiceId(id)}
@@ -791,9 +802,11 @@ export function TimetableGrid() {
       {modal?.type === 'removeall' && (
         <ConfirmDialog
           danger
-          title="Remove all trips?"
-          body={<>Deletes all <b>{routeTrips.length} trip{routeTrips.length === 1 ? '' : 's'}</b> on {ctxLabel}. Stops and shape are kept, so you can add a fresh trip and replicate it.</>}
-          confirmLabel={`Remove ${routeTrips.length} trip${routeTrips.length === 1 ? '' : 's'}`}
+          title={removeAllAcrossBoth ? 'Remove all trips across both directions?' : 'Remove all trips?'}
+          body={removeAllAcrossBoth
+            ? <>Deletes all <b>{removeAllIds.length} trip{removeAllIds.length === 1 ? '' : 's'}</b> on {route.route_short_name || route.route_long_name || route.route_id} — both {directionName(route, directionId).toLowerCase()} and {directionName(route, companionDir).toLowerCase()}. Stops and shapes are kept, so you can add fresh trips and replicate them.</>
+            : <>Deletes all <b>{removeAllIds.length} trip{removeAllIds.length === 1 ? '' : 's'}</b> on {ctxLabel}. Stops and shape are kept, so you can add a fresh trip and replicate it.</>}
+          confirmLabel={`Remove ${removeAllIds.length} trip${removeAllIds.length === 1 ? '' : 's'}`}
           onConfirm={confirmRemoveAll}
           onCancel={() => setModal(null)}
         />

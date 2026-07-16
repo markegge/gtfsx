@@ -21,6 +21,9 @@ interface ToolbarProps {
   effectiveShapeId: string | null;
   directionId: 0 | 1;
   tripCount: number;
+  /** Trips the danger "Remove all trips" would clear — both directions when the
+   *  Both split is open, so a companion-only direction isn't trapped. */
+  removeAllCount: number;
   oppositeOpen: boolean;
   onSelectRoute: (id: string | null) => void;
   onSelectService: (id: string) => void;
@@ -173,7 +176,7 @@ function DirectionControl({
 export function TimetableToolbar(props: ToolbarProps) {
   const {
     route, routes, shapes, calendars, activeServiceId, patterns, effectiveShapeId,
-    directionId, tripCount, oppositeOpen,
+    directionId, tripCount, removeAllCount, oppositeOpen,
     onSelectRoute, onSelectService, onSelectPattern, onSelectDirection, onSetOpposite,
     onEditStops, onTool,
   } = props;
@@ -234,7 +237,7 @@ export function TimetableToolbar(props: ToolbarProps) {
         {/* Danger action sits with the other trip tools (owner reference), not
             pushed to the far right — a small gap sets it apart. */}
         <span className="w-3 shrink-0" aria-hidden="true" />
-        <Button variant="ghost" danger onClick={() => onTool('removeall')} disabled={tripCount === 0}>
+        <Button variant="ghost" danger onClick={() => onTool('removeall')} disabled={removeAllCount === 0}>
           Remove all trips
         </Button>
       </div>

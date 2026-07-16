@@ -123,6 +123,12 @@ export function TimetableGrid() {
   useEffect(() => {
     setCompanionShapeId((prev) => nextCompanionShapeId(prev, effectiveShapeId, patterns.map((p) => p.shapeId)));
   }, [effectiveShapeId, patterns]);
+  // Split is now toggled independently of direction selection (standalone Split
+  // View button). Keep the state honest: a route with nothing to compare (<2
+  // patterns) can't be split, so close it if it was left open.
+  useEffect(() => {
+    if (patterns.length < 2 && oppositeOpen) setOppositeOpen(false);
+  }, [patterns.length, oppositeOpen, setOppositeOpen]);
 
   const companionPattern: ShapePattern | null = useMemo(() => {
     const chosen = companionShapeId && companionShapeId !== effectiveShapeId

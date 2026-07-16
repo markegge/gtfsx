@@ -206,25 +206,6 @@ export function planCascade(params: {
   return { deltaMin, laterIds };
 }
 
-/* ============================================================================
-   Direction / split control state machine (HANDOFF §3)
-   ========================================================================== */
-
-export type DirectionSegmentAction = { type: 'both' } | { type: 'select'; index: number };
-
-/** Which segment of the [pattern | pattern │ ⇄ Both] control is active: the
- *  Both segment (index = patternCount) when the split is open, else the selected
- *  pattern's index. */
-export function directionSegmentValue(oppositeOpen: boolean, selectedIndex: number, patternCount: number): number {
-  return oppositeOpen ? patternCount : Math.max(0, selectedIndex);
-}
-
-/** What clicking segment `index` does: the trailing segment opens the split,
- *  the others select that pattern (and close the split). */
-export function directionSegmentAction(index: number, patternCount: number): DirectionSegmentAction {
-  return index >= patternCount ? { type: 'both' } : { type: 'select', index };
-}
-
 /** Resolve the companion (right) pane's pattern after the main (left) pane's
  *  pattern changes in Both view: keep the user's EXPLICIT right choice unless it
  *  now collides with the new left pattern or is no longer a valid pattern — then

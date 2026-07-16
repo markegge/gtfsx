@@ -39,6 +39,33 @@ export function splitRatioFromPointer(pointerX: number, containerLeft: number, c
   return clampSplitRatio((pointerX - containerLeft) / containerWidth, containerWidth, minPanePx);
 }
 
+/* ============================================================================
+   Default direction on route select — the direction that begins service first
+   ========================================================================== */
+
+/** The direction a freshly selected route should default to: the one with the
+ *  earliest first departure among the given trips (each carries its first-stop
+ *  time in seconds, or null if untimed). Direction 1 wins only when it is
+ *  STRICTLY earlier; ties and no-times fall back to 0. Pure. */
+export function earliestDepartureDirection(trips: { directionId: 0 | 1; firstSec: number | null }[]): 0 | 1 {
+  let min0: number | null = null;
+  let min1: number | null = null;
+  for (const t of trips) {
+    if (t.firstSec == null) continue;
+    if (t.directionId === 1) { if (min1 == null || t.firstSec < min1) min1 = t.firstSec; }
+    else { if (min0 == null || t.firstSec < min0) min0 = t.firstSec; }
+  }
+  if (min1 != null && (min0 == null || min1 < min0)) return 1;
+  return 0;
+}
+
+/** Flip direction_id (0↔1) on every item of one route, leaving other routes
+ *  untouched. Works for trips and route_stops alike (both carry route_id +
+ *  direction_id). Pure — returns a new array. */
+export function swapRouteDirections<T extends { route_id: string; direction_id: 0 | 1 }>(items: T[], routeId: string): T[] {
+  return items.map((it) => (it.route_id === routeId ? { ...it, direction_id: (it.direction_id === 0 ? 1 : 0) as 0 | 1 } : it));
+}
+
 export type RowActionStyle = 'menu' | 'strip' | 'flyout';
 
 /** Width of the sticky actions column for a given presentation. */

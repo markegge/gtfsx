@@ -22,6 +22,7 @@ import { type PaneScope, useTimetableData } from './useTimetableData';
 import {
   planCascade, nextCompanionShapeId, generateExistingIds,
   clampSplitRatio, splitResizable, splitRatioFromPointer, SPLIT_MIN_PANE_PX, SPLIT_DEFAULT_RATIO,
+  swapRouteDirections,
 } from './timetableGridHelpers';
 import { TimetableGridPane } from './TimetableGridPane';
 import { SplitDivider } from './timetableGridParts';
@@ -40,10 +41,13 @@ import { windowDepartureCount, type FrequencyWindow } from '../../services/frequ
  *  ◷ Estimate action and the Set run time drawer's Estimate mode. */
 const ESTIMATE_DEFAULTS = { dwellSec: 18, speedFactor: 1.3 };
 
-type Snap = { trips: Trip[]; stopTimes: StopTime[]; frequencies: Frequency[] };
+type Snap = { trips: Trip[]; stopTimes: StopTime[]; frequencies: Frequency[]; routeStops: RouteStop[] };
 function snapshotFeed(): Snap {
   const st = useStore.getState();
-  return { trips: st.trips, stopTimes: st.stopTimes, frequencies: st.frequencies };
+  // routeStops rides along so the Swap-directions edit (which flips route_stops
+  // too) reverts in one Undo. Other ops don't touch it, so restoring the same
+  // reference is a no-op for them.
+  return { trips: st.trips, stopTimes: st.stopTimes, frequencies: st.frequencies, routeStops: st.routeStops };
 }
 
 type PaneId = 'main' | 'opp';
@@ -54,6 +58,7 @@ type ModalState =
   | { type: 'applyall'; paneId: PaneId; tripId: string }
   | { type: 'removeall' }
   | { type: 'generate-confirm'; input: GenerateInput; existingCount: number }
+  | { type: 'swapdir' }
   | null;
 type CascadeState = { paneId: PaneId; seq: number; stopId: string; stopName: string; deltaMin: number; laterIds: string[] } | null;
 
@@ -234,6 +239,7 @@ export function TimetableGrid() {
         s.setTrips(snap.trips);
         s.setStopTimes(snap.stopTimes);
         s.setFrequencies(snap.frequencies);
+        s.setRouteStops(snap.routeStops);
         setToast({ message: 'Undone' });
         if (toastTimer.current) clearTimeout(toastTimer.current);
         toastTimer.current = setTimeout(() => setToast(null), 1800);
@@ -672,6 +678,29 @@ export function TimetableGrid() {
     });
   };
 
+  // Swap inbound/outbound: flip direction_id (0↔1) on EVERY trip of the route and
+  // its route_stops (so patterns re-derive consistently). Route-level, all
+  // services. One-step Undo (the snapshot covers route_stops too).
+  const routeDirCounts = useMemo(() => {
+    let d0 = 0, d1 = 0;
+    for (const t of trips) {
+      if (t.route_id !== selectedRouteId) continue;
+      if (t.direction_id === 1) d1 += 1; else d0 += 1;
+    }
+    return { d0, d1, total: d0 + d1 };
+  }, [trips, selectedRouteId]);
+  const confirmSwapDirections = () => {
+    const rid = selectedRouteId;
+    setModal(null);
+    if (!rid) return;
+    withUndo(() => {
+      const st = useStore.getState();
+      st.setTrips(swapRouteDirections(st.trips, rid));
+      st.setRouteStops(swapRouteDirections(st.routeStops, rid));
+      return `Swapped directions on ${route?.route_short_name || route?.route_long_name || rid} — flipped ${routeDirCounts.total} trip${routeDirCounts.total === 1 ? '' : 's'}`;
+    });
+  };
+
   /* ---------- render guards ---------- */
   if (!route) {
     if (routes.length > 0) selectRoute(routes[0].route_id);
@@ -856,6 +885,8 @@ export function TimetableGrid() {
         onSelectPattern={handleSelectPattern}
         onSelectDirection={(d) => setDirectionId(d)}
         onSetOpposite={(v) => setOppositeOpen(v)}
+        canSwapDirections={routeDirCounts.total > 0}
+        onSwapDirections={() => setModal({ type: 'swapdir' })}
         onEditStops={onEditStops}
         onTool={onTool}
       />
@@ -1037,6 +1068,16 @@ export function TimetableGrid() {
             : <>Deletes all <b>{removeAllIds.length} trip{removeAllIds.length === 1 ? '' : 's'}</b> on {ctxLabel}. Stops and shape are kept, so you can add a fresh trip and replicate it.</>}
           confirmLabel={`Remove ${removeAllIds.length} trip${removeAllIds.length === 1 ? '' : 's'}`}
           onConfirm={confirmRemoveAll}
+          onCancel={() => setModal(null)}
+        />
+      )}
+
+      {modal?.type === 'swapdir' && (
+        <ConfirmDialog
+          title="Swap inbound and outbound?"
+          body={<>Flips the direction of every trip on {route.route_short_name || route.route_long_name || route.route_id}: <b>{routeDirCounts.d0} {directionName(route, 0).toLowerCase()}</b> ↔ <b>{routeDirCounts.d1} {directionName(route, 1).toLowerCase()}</b>. Use this when the feed labels the directions the wrong way round. One Undo puts it back.</>}
+          confirmLabel={`Swap ${routeDirCounts.total} trip${routeDirCounts.total === 1 ? '' : 's'}`}
+          onConfirm={confirmSwapDirections}
           onCancel={() => setModal(null)}
         />
       )}

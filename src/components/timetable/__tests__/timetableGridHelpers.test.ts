@@ -4,6 +4,7 @@ import {
   clampSplitRatio,
   computeRowErrors,
   defaultColWidth,
+  earliestDepartureDirection,
   generateExistingIds,
   nextCell,
   nextTabCell,
@@ -11,8 +12,11 @@ import {
   planCascade,
   splitRatioFromPointer,
   splitResizable,
+  swapRouteDirections,
   type GridProbe,
 } from '../timetableGridHelpers';
+import { computeShapePatterns } from '../../ui/shapePatterns';
+import type { Trip, RouteStop } from '../../../types/gtfs';
 
 // ── Row-order validation (the red-highlight / computeBad logic) ──────────────
 describe('computeRowErrors', () => {
@@ -247,5 +251,49 @@ describe('splitRatioFromPointer', () => {
   it('pins to 0.5 in a non-resizable container regardless of pointer', () => {
     expect(splitRatioFromPointer(120, 100, 500)).toBe(0.5);
     expect(splitRatioFromPointer(590, 100, 500)).toBe(0.5);
+  });
+});
+
+// ── Default direction on route select (earliest first departure) ──────────────
+describe('earliestDepartureDirection', () => {
+  it('picks the direction that begins service first', () => {
+    expect(earliestDepartureDirection([
+      { directionId: 0, firstSec: 8 * 3600 },
+      { directionId: 1, firstSec: 6 * 3600 }, // inbound starts earlier
+    ])).toBe(1);
+  });
+  it('direction 1 wins only when STRICTLY earlier; ties fall back to 0', () => {
+    expect(earliestDepartureDirection([
+      { directionId: 0, firstSec: 7 * 3600 },
+      { directionId: 1, firstSec: 7 * 3600 }, // tie
+    ])).toBe(0);
+  });
+  it('uses each direction\'s EARLIEST trip, not trip order', () => {
+    expect(earliestDepartureDirection([
+      { directionId: 1, firstSec: 9 * 3600 },
+      { directionId: 0, firstSec: 8 * 3600 },
+      { directionId: 1, firstSec: 6 * 3600 }, // dir 1's earliest beats dir 0's 8:00
+    ])).toBe(1);
+  });
+  it('falls back to 0 when there are no times', () => {
+    expect(earliestDepartureDirection([{ directionId: 1, firstSec: null }])).toBe(0);
+    expect(earliestDepartureDirection([])).toBe(0);
+  });
+});
+
+// ── Swap inbound/outbound directions ──────────────────────────────────────────
+describe('swapRouteDirections', () => {
+  const t = (id: string, route: string, dir: 0 | 1): Trip => ({ trip_id: id, route_id: route, service_id: 'wk', direction_id: dir } as Trip);
+  it('flips direction_id only on the given route, leaving others untouched', () => {
+    const flipped = swapRouteDirections([t('a', 'R', 0), t('b', 'R', 1), t('c', 'OTHER', 0)], 'R');
+    expect(flipped.map((x) => [x.trip_id, x.direction_id])).toEqual([['a', 1], ['b', 0], ['c', 0]]);
+  });
+  it('lets patterns re-derive with the flipped direction', () => {
+    const trips = [t('a', 'R', 0)];
+    const rs = [{ route_id: 'R', stop_id: 's1', stop_sequence: 1, direction_id: 0, shape_id: 'sh' } as RouteStop];
+    expect(computeShapePatterns('R', trips, rs)).toEqual([{ shapeId: 'sh', directionId: 0 }]);
+    const swappedTrips = swapRouteDirections(trips, 'R');
+    const swappedRs = swapRouteDirections(rs, 'R');
+    expect(computeShapePatterns('R', swappedTrips, swappedRs)).toEqual([{ shapeId: 'sh', directionId: 1 }]);
   });
 });

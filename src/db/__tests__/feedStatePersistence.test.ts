@@ -74,6 +74,39 @@ describe('feed-state persistence (license + agency external_id)', () => {
     useStore.getState().setLicenseSpdx('  ');
     expect(useStore.getState().licenseSpdx).toBeNull();
   });
+
+  it('round-trips mdbSourceId as feed state and clears it across projects (issue #47)', () => {
+    const s = useStore.getState();
+    s.setMdbSourceId(1749);
+    expect(useStore.getState().mdbSourceId).toBe(1749);
+
+    const snapshot = buildSnapshot();
+    expect(snapshot.mdbSourceId).toBe(1749);
+
+    // Survives the JSON round-trip that actually reaches the server snapshot.
+    const wire = JSON.parse(JSON.stringify(snapshot));
+    expect(wire.mdbSourceId).toBe(1749);
+
+    // Opening a *different* project with no MDB provenance must clear it — never
+    // inherit the previous project's switcher id.
+    applySnapshotToStore({});
+    expect(useStore.getState().mdbSourceId).toBeNull();
+
+    applySnapshotToStore(wire);
+    expect(useStore.getState().mdbSourceId).toBe(1749);
+  });
+
+  it('rejects non-positive-integer mdbSourceId values (normalized to null)', () => {
+    const s = useStore.getState();
+    s.setMdbSourceId(1749);
+    // 0, negatives, and non-integers are not real MDB source ids.
+    s.setMdbSourceId(0);
+    expect(useStore.getState().mdbSourceId).toBeNull();
+    s.setMdbSourceId(12.5);
+    expect(useStore.getState().mdbSourceId).toBeNull();
+    s.setMdbSourceId(-3);
+    expect(useStore.getState().mdbSourceId).toBeNull();
+  });
 });
 
 // Regression for #42: opening a feed must not leak the previous feed's

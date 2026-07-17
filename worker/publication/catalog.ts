@@ -50,7 +50,8 @@ export interface CatalogBoundingBox {
 export interface CatalogMeta {
   /** Geographic bounds of the published feed's stops. Null when no stop has usable coords. */
   bbox: CatalogBoundingBox | null;
-  /** Derivable GTFS spec features present in the feed (e.g. 'flex'). */
+  /** GTFS spec features detected in the feed, in MobilityData's validator
+   *  vocabulary (e.g. 'Fare Products'). See deriveCatalogFeatures. */
   features: string[];
   /** feed_info.txt feed_publisher_name, when the feed declares one. */
   feedPublisherName: string | null;
@@ -252,18 +253,110 @@ export function buildCatalogDocument(input: BuildCatalogInput): CatalogDocument 
 }
 
 /**
- * Derive the spec-feature tags we can cheaply detect from a parsed feed-state
- * blob at publish time. v0.2 detects GTFS-Flex (the editor models flex service
- * as `flexZones`); fares and other features are a documented follow-up. Kept
- * permissive about the state shape — it is user JSON.
+ * Detectable GTFS spec features, named with MobilityData's OWN vocabulary so a
+ * consumer can map them straight onto a Mobility Database source. The strings
+ * are the exact `FeatureMetadata` names emitted by MobilityData's Canonical
+ * GTFS Validator (github.com/MobilityData/gtfs-validator →
+ * reportsummary/model/FeedMetadata.java), which is what populates the "GTFS
+ * Features" list on a Mobility Database dataset.
+ *
+ * We deliberately emit ONLY features whose validator trigger is
+ * presence-of-records in a file the editor actually persists in its snapshot —
+ * the same signal the validator's file-presence pass uses — so we don't
+ * over-claim. Features the validator derives from cross-file references
+ * (Zone-Based / Route-Based / Time-Based Fares) or from scanning fields
+ * (Continuous Stops) are intentionally omitted: guessing them from mere file
+ * presence would emit names the validator itself would not, and a wrong name is
+ * worse than a missing one. transfers/translations/attributions are validator
+ * features too but the editor does not persist them in the snapshot, so they
+ * are not detectable here. See docs/catalog-spec.md §8.
+ *
+ * Each entry maps a persisted state array to the feature it evidences; a feature
+ * is emitted when that array has at least one record.
+ */
+const CATALOG_FEATURE_RULES: ReadonlyArray<{ key: string; feature: string }> = [
+  // GTFS-Fares v1.
+  { key: 'fareAttributes', feature: 'Fares V1' },
+  // GTFS-Fares v2 (the file-presence subset the validator reports directly).
+  { key: 'fareProducts', feature: 'Fare Products' },
+  { key: 'fareMedia', feature: 'Fare Media' },
+  { key: 'riderCategories', feature: 'Rider Categories' },
+  { key: 'fareTransferRules', feature: 'Fare Transfers' },
+  // Stations & pathways.
+  { key: 'pathways', feature: 'Pathway Connections' },
+  { key: 'levels', feature: 'Levels' },
+  // Base.
+  { key: 'shapes', feature: 'Shapes' },
+  { key: 'frequencies', feature: 'Frequencies' },
+  // GTFS-Flex is NOT a simple key→feature: see deriveCatalogFeatures, where a
+  // flex zone's shape decides between two different validator feature strings.
+];
+
+/** MobilityData feature name for a flex zone that exports a polygon service
+ *  area (locations.geojson → stop_times.location_id). */
+const FLEX_ZONE_BASED = 'Zone-Based Demand Responsive Services';
+/** MobilityData feature name for a flex zone that exports a stop group
+ *  (location_groups.txt → stop_times.location_group_id). Note the trailing word
+ *  is "Transit" here vs. "Services" above — verified against FeedMetadata.java,
+ *  not gtfs.org (which disagrees). */
+const FLEX_FIXED_STOPS = 'Fixed-Stops Demand Responsive Transit';
+
+/**
+ * Derive the GTFS spec features present in a parsed feed-state blob at publish
+ * time, named with MobilityData's vocabulary (see CATALOG_FEATURE_RULES). Kept
+ * permissive about the state shape — it is user JSON — and order-stable.
  */
 export function deriveCatalogFeatures(state: unknown): string[] {
+  if (!state || typeof state !== 'object') return [];
+  const s = state as Record<string, unknown>;
   const features: string[] = [];
-  if (state && typeof state === 'object') {
-    const flexZones = (state as { flexZones?: unknown }).flexZones;
-    if (Array.isArray(flexZones) && flexZones.length > 0) features.push('flex');
+  for (const { key, feature } of CATALOG_FEATURE_RULES) {
+    const arr = s[key];
+    if (Array.isArray(arr) && arr.length > 0) features.push(feature);
+  }
+
+  // GTFS-Flex. The editor's `flexZones` collapse two distinct MobilityData
+  // features that the validator emits under DIFFERENT strings, so we inspect
+  // each zone's shape rather than emit one blanket name (which would mislabel a
+  // stop-group-only feed): a polygon zone (`geojson.features`) exports a
+  // location_id reference → zone-based DRT; a stop-group zone (`stopIds`)
+  // exports location_groups.txt + a location_group_id reference → fixed-stops
+  // DRT. A "mixed" zone has both and contributes both. A zone with neither
+  // (a placeholder) contributes nothing. We do NOT try to detect the validator's
+  // third flex feature, "Predefined Routes with Deviation" — it needs stop_times
+  // analysis (flex refs mixed with regular timed stops), not just the zone list.
+  const flexZones = s.flexZones;
+  if (Array.isArray(flexZones)) {
+    let hasPolygonZone = false;
+    let hasStopGroupZone = false;
+    for (const z of flexZones) {
+      if (!z || typeof z !== 'object') continue;
+      const geojson = (z as { geojson?: unknown }).geojson;
+      const geoFeatures =
+        geojson && typeof geojson === 'object' ? (geojson as { features?: unknown }).features : undefined;
+      if (Array.isArray(geoFeatures) && geoFeatures.length > 0) hasPolygonZone = true;
+      const stopIds = (z as { stopIds?: unknown }).stopIds;
+      if (Array.isArray(stopIds) && stopIds.length > 0) hasStopGroupZone = true;
+    }
+    if (hasPolygonZone) features.push(FLEX_ZONE_BASED);
+    if (hasStopGroupZone) features.push(FLEX_FIXED_STOPS);
   }
   return features;
+}
+
+/**
+ * The Mobility Database source id carried as import provenance inside a feed's
+ * saved state (store field `mdbSourceId`, persisted with the snapshot). Returned
+ * so performPublish can project it onto feed_project.mdb_source_id at publish
+ * time — the same read-from-the-snapshot pattern as bbox/features. Only a
+ * positive integer is a real source id; anything else (absent, null, 0,
+ * negative, non-integer, string) yields null so we never stamp a bogus switcher
+ * id. Kept permissive about the state shape — it is user JSON.
+ */
+export function deriveImportedMdbSourceId(state: unknown): number | null {
+  if (!state || typeof state !== 'object') return null;
+  const raw = (state as { mdbSourceId?: unknown }).mdbSourceId;
+  return typeof raw === 'number' && Number.isInteger(raw) && raw > 0 ? raw : null;
 }
 
 /** Parse a persisted catalog_meta_json string into CatalogMeta, or null. */

@@ -87,7 +87,7 @@ empty value, so a consumer can treat presence as meaningful.
 | `license_spdx_identifier` | string | no | SPDX short identifier of the feed's license (e.g. `CC-BY-4.0`). Omitted when the publisher hasn't declared one. |
 | `license_url` | string (URL) | no | Canonical URL for `license_spdx_identifier`, when GTFS-X can map it. Omitted for unmapped or undeclared licenses. |
 | `feed_contact_email` | string | no | `feed_contact_email` from the feed's `feed_info.txt`, when present. |
-| `features` | string[] | no | Derivable GTFS spec features present in the feed (e.g. `["flex"]`). Omitted when none are detected (see §8 for coverage). |
+| `features` | string[] | no | GTFS spec features detected in the published feed, named with MobilityData's own Canonical GTFS Validator vocabulary (e.g. `["Fare Products", "Pathway Connections", "Zone-Based Demand Responsive Services"]`). Omitted when none are detected (see §8 for the detectable set). |
 | `bounding_box` | object | no | Geographic extent of the feed's stops: `{ minimum_latitude, minimum_longitude, maximum_latitude, maximum_longitude }`. Omitted when the feed has no usable stop coordinates. |
 
 Note: administrative location fields (`country_code`, `subdivision_name`,
@@ -153,12 +153,50 @@ blindly create:
 The following are defined in this schema but not yet populated in 0.2. They are
 documented here so consumers can rely on their semantics when they appear:
 
-- **`mdb_source_id` / `supersedes_download_url`.** The columns exist and are
-  emitted when set. Automatic capture from the GTFS-X "import from Mobility
-  Database" flow (which already fetches a feed by its Mobility Database id) is a
-  planned addition; until then these are populated only when set out of band.
-- **`features`.** 0.2 detects GTFS-Flex. Additional features (Fares v1/v2, etc.)
-  are planned.
+- **`mdb_source_id`.** Auto-captured: importing a feed **from the Mobility
+  Database** (the in-editor catalog search or a `?source=mobilitydb&feed_id=`
+  deep link) stamps that source id onto the feed as import provenance, which is
+  projected onto the feed at its next publish and emitted here. Population is
+  first-write-wins — an id already recorded (manually or by an earlier publish)
+  is never overwritten, and a feed with no MDB provenance simply omits the
+  field. Feeds imported by pasting a raw URL, or uploaded, carry no MDB id.
+- **`supersedes_download_url`.** The column exists and is emitted when set, but
+  is not yet auto-populated; set only out of band for now.
+- **`features`.** Detected at publish time from the published snapshot and named
+  with MobilityData's own vocabulary — the exact `FeatureMetadata` strings from
+  their [Canonical GTFS Validator](https://github.com/MobilityData/gtfs-validator)
+  (`reportsummary/model/FeedMetadata.java`), the same list shown as "GTFS
+  Features" on a Mobility Database dataset — so an entry maps straight onto a
+  source. The **detectable set** (emitted when the feed contains at least one
+  record of the corresponding file):
+
+  | Feature string | Evidenced by |
+  |---|---|
+  | `Fares V1` | `fare_attributes.txt` |
+  | `Fare Products` | `fare_products.txt` |
+  | `Fare Media` | `fare_media.txt` |
+  | `Rider Categories` | `rider_categories.txt` |
+  | `Fare Transfers` | `fare_transfer_rules.txt` |
+  | `Pathway Connections` | `pathways.txt` |
+  | `Levels` | `levels.txt` |
+  | `Shapes` | `shapes.txt` |
+  | `Frequencies` | `frequencies.txt` |
+  | `Zone-Based Demand Responsive Services` | a GTFS-Flex polygon zone (`locations.geojson` → `location_id`) |
+  | `Fixed-Stops Demand Responsive Transit` | a GTFS-Flex stop-group zone (`location_groups.txt` → `location_group_id`) |
+
+  Emitted only where the editor's persisted snapshot carries the same evidence
+  the validator keys on: record presence for the file-based features above, and,
+  for the two flex features, the zone's shape (a polygon service area vs. a stop
+  group — a "mixed" zone emits both). We deliberately do **not** emit features
+  the validator derives from cross-file references (`Zone-Based Fares`,
+  `Route-Based Fares`, `Time-Based Fares`), by scanning field values
+  (`Continuous Stops`), or from trip/stop-time structure the zone list alone
+  can't establish (`Predefined Routes with Deviation`): inferring them would emit
+  a name the validator itself would withhold, and a wrong name is worse than a
+  missing one. `Transfers`, `Translations`, and `Attributions` are validator
+  features the editor does not persist in its snapshot, so they are not
+  detectable here. Existing publications gain features on their next republish
+  (no backfill), like `bounding_box`.
 - **`country_code` / `subdivision_name` / `municipality`.** Not captured by
   GTFS-X today; consumers can geolocate from `bounding_box`.
 
@@ -171,4 +209,4 @@ ignore unknown fields. Removing or repurposing a field bumps the version.
 | Version | Notes |
 |---|---|
 | 0.1-draft | Static demo document (`feat/catalog-endpoint-demo`), sample data, for the initial MobilityData discussion. Used `specification: "gtfsx-open-catalog"`, a per-feed `license_url` only, and per-feed location fields (`country_code`, `subdivision_name`, `municipality`) that were never wired to real data. |
-| **0.2** | First production schema. Dynamic, opt-in-driven. Adds `is_official` (official-vs-community, publisher-declared); `license_spdx_identifier` alongside `license_url`; a definition of the canonical URL and update/dedup semantics. `direct_download_url`, `mdb_source_id`, and `bounding_box` carried over from 0.1-draft. Location fields dropped pending real data. |
+| **0.2** | First production schema. Dynamic, opt-in-driven. Adds `is_official` (official-vs-community, publisher-declared); `license_spdx_identifier` alongside `license_url`; a definition of the canonical URL and update/dedup semantics. `direct_download_url`, `mdb_source_id`, and `bounding_box` carried over from 0.1-draft. Location fields dropped pending real data. `mdb_source_id` is auto-captured from Mobility Database imports and `features` is emitted with MobilityData's Canonical GTFS Validator vocabulary across the detectable set (§8) — both value/coverage refinements within the 0.2 field shapes (no schema change). |

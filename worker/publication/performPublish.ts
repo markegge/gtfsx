@@ -11,7 +11,12 @@ import { ulid } from 'ulidx';
 import type { Env } from '../env';
 import { assertIdStable } from './idStability';
 import { submitToCatalogs } from './submit';
-import { stopBoundingBox, deriveCatalogFeatures, type CatalogMeta } from './catalog';
+import {
+  stopBoundingBox,
+  deriveCatalogFeatures,
+  deriveImportedMdbSourceId,
+  type CatalogMeta,
+} from './catalog';
 import { getFeedBlob, publicationZipKey, putFeedBlob } from '../projects/r2';
 import { loadFeedStateFromKey, maybeRegenerateThumbnail } from '../embeds/thumbnail';
 import { logAudit } from '../util/audit';
@@ -228,4 +233,20 @@ async function computeAndStoreCatalogMeta(env: Env, projectId: string, stateKey:
   await env.DB.prepare(`UPDATE publication SET catalog_meta_json = ? WHERE project_id = ?`)
     .bind(JSON.stringify(meta), projectId)
     .run();
+
+  // Project the Mobility Database import provenance carried in the feed state
+  // (store field `mdbSourceId`) onto feed_project.mdb_source_id — the "switcher"
+  // id the open catalog emits so MDB updates an existing source instead of
+  // duplicating it (issue #47). COALESCE keeps it first-write-wins: we only fill
+  // a NULL column, so a value set manually/out-of-band or by an earlier publish
+  // is never overwritten, and a feed with no MDB provenance is left untouched
+  // (never nulled). Only runs when the snapshot actually carries a source id.
+  const importedMdbSourceId = deriveImportedMdbSourceId(raw);
+  if (importedMdbSourceId != null) {
+    await env.DB.prepare(
+      `UPDATE feed_project SET mdb_source_id = COALESCE(mdb_source_id, ?) WHERE id = ?`,
+    )
+      .bind(importedMdbSourceId, projectId)
+      .run();
+  }
 }

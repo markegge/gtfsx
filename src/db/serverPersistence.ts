@@ -48,6 +48,12 @@ const DATA_KEYS = [
   // hasn't published yet. (An agency's `external_id` needs no key of its own —
   // it rides along inside the already-persisted `agencies` entity.)
   'licenseSpdx',
+  // The Mobility Database source id this feed was imported from (issue #47's
+  // switcher/dedup signal). Feed-state for the same reason as licenseSpdx: the
+  // D1 `mdb_source_id` column is only projected at publish, so the working-state
+  // snapshot is what carries import provenance from an anonymous draft, across
+  // the sign-in migration, and into the first server publish.
+  'mdbSourceId',
 ] as const;
 
 type DataKey = (typeof DATA_KEYS)[number];
@@ -112,6 +118,7 @@ export function resetStoreEntities() {
   state.setFeatureSettings({});
   state.setDismissedValidations([]);
   state.setLicenseSpdx(null);
+  state.setMdbSourceId(null);
 }
 
 /**
@@ -260,6 +267,10 @@ function applySnapshotToStoreInner(
   // explicitly-null key correctly leaves a fresh/cleared feed rather than
   // leaking the previous project's license.
   if (typeof g('licenseSpdx') === 'string') state.setLicenseSpdx(g('licenseSpdx') as string);
+  // Same story as licenseSpdx: resetEditorState() cleared this to null, so an
+  // absent/null key correctly leaves the feed with no import provenance rather
+  // than leaking the previous project's mdb_source_id.
+  if (typeof g('mdbSourceId') === 'number') state.setMdbSourceId(g('mdbSourceId') as number);
   // Older saved blobs may still carry a `visibilitySets` key (the removed
   // "Scenarios" feature). It's intentionally ignored here — unknown keys are
   // harmless and never re-applied.

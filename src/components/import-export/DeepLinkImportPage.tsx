@@ -4,6 +4,7 @@ import { importGtfsZip, loadImportIntoStore } from '../../services/gtfsImport';
 import { useStore } from '../../store';
 import { AppBrand } from '../layout/AppBrand';
 import { resolvePartnerLabel } from './partnerAttribution';
+import { parseMdbSourceId } from '../../services/mdbSourceId';
 
 interface ImportErrorPayload {
   code: string;
@@ -107,6 +108,16 @@ export function DeepLinkImportPage() {
 
         loadImportIntoStore(data);
         useStore.getState().setProjectName(filename.replace(/\.zip$/i, ''));
+        // A `?source=mobilitydb&feed_id=<mdb-n>` deep link carries the Mobility
+        // Database source id — stamp it as switcher provenance (issue #47) so it
+        // rides the working-state snapshot to feed_project.mdb_source_id at
+        // publish. loadImportIntoStore reset the store first, so a non-MDB deep
+        // link (plain ?url=) correctly leaves it cleared. parseMdbSourceId
+        // rejects non-MDB ids, so we never guess.
+        if (source === 'mobilitydb') {
+          const mdbSourceId = parseMdbSourceId(feedId);
+          if (mdbSourceId != null) useStore.getState().setMdbSourceId(mdbSourceId);
+        }
         useStore.getState().markSaved();
 
         // Stash attribution for the editor banner. Source wins over ref — a

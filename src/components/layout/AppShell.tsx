@@ -11,6 +11,7 @@ import { VariantBanner } from '../variants/VariantBanner';
 // become interactive before the map bundle is fetched and initialized.
 const MapView = lazy(() => import('../map/MapView').then((m) => ({ default: m.MapView })));
 import { RouteDeleteDialog } from '../routes/RouteDeleteDialog';
+import { FrequencyConvertDialog } from '../timetable/FrequencyConvertDialog';
 import { FloatingHelp } from './FloatingHelp';
 import { ProUpgradeToast } from '../billing/ProUpgradeToast';
 import { HistoryToast } from './HistoryToast';
@@ -87,6 +88,7 @@ export function AppShell() {
         </div>
       </div>
       <RouteDeleteDialog />
+      <FrequencyConvertDialog />
       <ProUpgradeToast />
       <HistoryToast />
     </div>

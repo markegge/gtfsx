@@ -118,6 +118,7 @@ export function BlockGantt() {
   const calendars = useStore((s) => s.calendars);
   const frequencies = useStore((s) => s.frequencies);
   const updateTrip = useStore((s) => s.updateTrip);
+  const requestFrequencyConversion = useStore((s) => s.requestFrequencyConversion);
   useStopTimesIndex(); // keep the shared index warm
 
   const [serviceId, setServiceId] = useState<string>(() => calendars[0]?.service_id ?? '');
@@ -140,6 +141,13 @@ export function BlockGantt() {
   const dayFixedTrips = useMemo(() => dayTrips.filter((t) => !freqTripIds.has(t.trip_id)), [dayTrips, freqTripIds]);
   const dayFreqCount = dayTrips.length - dayFixedTrips.length;
   const scopeKind = classifyBlockScope(dayTrips.length, dayFreqCount);
+  // The frequency templates on this service day — the scope the "Convert to a
+  // trips-based schedule" notices materialize (issue #65).
+  const dayFreqTripIds = useMemo(
+    () => dayTrips.filter((t) => freqTripIds.has(t.trip_id)).map((t) => t.trip_id),
+    [dayTrips, freqTripIds],
+  );
+  const convertDayFrequencies = () => { if (dayFreqTripIds.length) requestFrequencyConversion(dayFreqTripIds); };
 
   const spans = useMemo(() => computeTripSpans(dayTrips, stopTimes), [dayTrips, stopTimes]);
   const overlaps = useMemo(() => findBlockOverlaps(dayFixedTrips, stopTimes, activeService), [dayFixedTrips, stopTimes, activeService]);
@@ -283,6 +291,9 @@ export function BlockGantt() {
             icon="🚌"
             title="Blocks aren't available for frequency-based schedules"
             description="This service runs on frequencies (headways) instead of fixed trips, so there are no discrete trips to assign to vehicles. Convert it to a trips-based schedule to build blocks."
+            actionLabel="Convert to a trips-based schedule"
+            actionPrefix=""
+            onAction={convertDayFrequencies}
           />
         </div>
       </div>
@@ -351,7 +362,19 @@ export function BlockGantt() {
       {/* Some fixed trips, some frequency templates → block the fixed ones and
           say why the frequency trips aren't on the board. */}
       {scopeKind === 'mixed' && (
-        <Banner variant="warning" icon="⚠">
+        <Banner
+          variant="warning"
+          icon="⚠"
+          actions={
+            <button
+              type="button"
+              onClick={convertDayFrequencies}
+              className="shrink-0 px-3 py-1 rounded-md text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 transition-colors whitespace-nowrap"
+            >
+              Convert to trips
+            </button>
+          }
+        >
           {dayFreqCount} frequency-based trip{dayFreqCount === 1 ? '' : 's'} {dayFreqCount === 1 ? 'is' : 'are'} excluded from blocking — convert {dayFreqCount === 1 ? 'it' : 'them'} to a trips-based schedule to include {dayFreqCount === 1 ? 'it' : 'them'}.
         </Banner>
       )}

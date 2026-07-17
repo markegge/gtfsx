@@ -129,6 +129,14 @@ export interface UISlice {
   importDialogSource: 'upload' | 'myfeeds' | null;
   requestImportDialog: (source: 'upload' | 'myfeeds') => void;
   clearImportDialogRequest: () => void;
+  /** Cross-component request to open the frequency→trips converter (issue #65).
+   *  The app-level FrequencyConvertDialog owns the confirm + undo flow; the
+   *  timetable row action and the Blocks notice both set the template trip_ids
+   *  to convert here, and the dialog clears it on confirm/cancel. null = no
+   *  request pending. */
+  frequencyConvertTripIds: string[] | null;
+  requestFrequencyConversion: (tripIds: string[]) => void;
+  clearFrequencyConversionRequest: () => void;
   /** Active publish/hosting-intent upgrade toast (nudge "a"). Set when a
    *  logged-in free user exports a feed; rendered by ProUpgradeToast in the
    *  editor shell. Survives the ExportDialog closing because it lives here, not
@@ -250,6 +258,9 @@ export const createUISlice: StateCreator<UISlice, [['zustand/immer', never]], []
   importDialogSource: null,
   requestImportDialog: (source) => set((state) => { state.importDialogSource = source; }),
   clearImportDialogRequest: () => set((state) => { state.importDialogSource = null; }),
+  frequencyConvertTripIds: null,
+  requestFrequencyConversion: (tripIds) => set((state) => { state.frequencyConvertTripIds = tripIds; }),
+  clearFrequencyConversionRequest: () => set((state) => { state.frequencyConvertTripIds = null; }),
   proNudgeToast: null,
   setProNudgeToast: (toast) => set((state) => { state.proNudgeToast = toast; }),
   toggleRouteVisibility: (routeId) => set((state) => {

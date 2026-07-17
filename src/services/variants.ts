@@ -48,6 +48,22 @@ export function baselineVariant(): FeedVariant | null {
 }
 
 /**
+ * Pure gate predicate for the Save flow (#66): true when a NON-baseline variant
+ * is the active one, i.e. the live store holds an experiment rather than the
+ * baseline feed. TopBar uses this to intercept Save (which serializes the live
+ * store) so it can't silently overwrite the project's baseline with a variant.
+ * Pure over its args so it's testable without the store.
+ */
+export function nonBaselineVariantActive(
+  variants: Pick<FeedVariant, 'id' | 'baseline'>[],
+  activeVariantId: string | null,
+): boolean {
+  if (!activeVariantId) return false;
+  const active = variants.find((v) => v.id === activeVariantId);
+  return !!active && !active.baseline;
+}
+
+/**
  * Fork a new variant from the current live feed. The first fork also captures
  * the current feed as the "Baseline" (the comparison reference). The new
  * variant starts identical to the feed and becomes active. Returns its id.
@@ -89,7 +105,8 @@ export function switchToVariant(id: string): void {
   if (st.activeVariantId) st.updateVariantSnapshot(st.activeVariantId, buildSnapshot());
   const target = useStore.getState().variants.find((v) => v.id === id);
   if (!target) return;
-  applySnapshotToStore(target.snapshot);
+  // Within-set switch — keep the variant layer across the feed reset (#66).
+  applySnapshotToStore(target.snapshot, { preserveVariants: true });
   useStore.getState().setActiveVariantId(id);
 }
 
@@ -104,7 +121,7 @@ export function deleteVariant(id: string): void {
   if (wasActive) {
     const baseline = useStore.getState().variants.find((x) => x.baseline);
     if (baseline) {
-      applySnapshotToStore(baseline.snapshot);
+      applySnapshotToStore(baseline.snapshot, { preserveVariants: true });
       useStore.getState().setActiveVariantId(baseline.id);
     }
   }

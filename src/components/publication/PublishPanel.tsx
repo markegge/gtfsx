@@ -72,10 +72,12 @@ async function renderSnapshotZip(projectId: string, snapshotId: string): Promise
   const snapshotBefore = buildSnapshot();
   const snapshotState = await fetchSnapshotState(projectId, snapshotId);
   try {
-    applySnapshotToStore(snapshotState);
+    // Transient swap for the export, not a feed boundary — keep any active
+    // variant layer intact across it (#66).
+    applySnapshotToStore(snapshotState, { preserveVariants: true });
     return await exportGtfsZip();
   } finally {
-    applySnapshotToStore(snapshotBefore);
+    applySnapshotToStore(snapshotBefore, { preserveVariants: true });
   }
 }
 

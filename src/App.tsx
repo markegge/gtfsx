@@ -304,7 +304,11 @@ function App() {
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (!useStore.getState().isDirty) return;
+      const s = useStore.getState();
+      // Warn on unsaved edits OR on any live variants: variants are session-only
+      // (never persisted yet — #66), so a reload silently discards the whole
+      // variant layer. Treat their mere existence as unsaved work.
+      if (!s.isDirty && s.variants.length === 0) return;
       e.preventDefault();
       // Most modern browsers ignore the message and show a generic prompt,
       // but assigning returnValue is what triggers the prompt at all.

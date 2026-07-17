@@ -157,19 +157,52 @@ export function resetEditorState() {
   state.setIsProfilingWalksheds(false);
   state.setWalkshedProfileError(null);
   state.setStopAnalysisOverlay(null);
+  // Session variant layer belongs to the OUTGOING feed — clear it so variants
+  // forked from one feed can't bleed onto the next feed opened in the same
+  // session (#66). The variant-management callers that legitimately run through
+  // this reset mid-operation (switchToVariant / deleteVariant / discardVariants,
+  // and the publish-preview snapshot swap) go through applySnapshotToStore with
+  // { preserveVariants: true }, which captures and restores the layer around
+  // this reset so a switch doesn't wipe the set.
+  state.setVariants([]);
+  state.setActiveVariantId(null);
   // Feed entities last.
   resetStoreEntities();
 }
 
-export function applySnapshotToStore(snapshot: Record<string, unknown>) {
+export interface ApplySnapshotOptions {
+  /**
+   * Keep the in-memory variant layer (variants + activeVariantId) across the
+   * apply. resetEditorState() clears it as a feed boundary (#66); the
+   * variant-management callers (switchToVariant / deleteVariant /
+   * discardVariants) and the publish-preview snapshot swap are NOT feed
+   * boundaries — they're operating within one variant set — so they set this to
+   * capture the layer before the reset and restore it after.
+   */
+  preserveVariants?: boolean;
+}
+
+export function applySnapshotToStore(
+  snapshot: Record<string, unknown>,
+  opts?: ApplySnapshotOptions,
+) {
   // Loading a snapshot (server load, snapshot restore, variant switch) replaces
   // the whole feed — suppress undo capture and reset history so undo/redo can't
   // cross the boundary (#49).
-  loadingFeed(() => applySnapshotToStoreInner(snapshot));
+  loadingFeed(() => applySnapshotToStoreInner(snapshot, opts));
 }
 
-function applySnapshotToStoreInner(snapshot: Record<string, unknown>) {
+function applySnapshotToStoreInner(
+  snapshot: Record<string, unknown>,
+  opts?: ApplySnapshotOptions,
+) {
   const state = useStore.getState();
+
+  // Snapshot the variant layer before the reset when the caller is switching
+  // WITHIN a variant set rather than crossing a feed boundary (#66).
+  const preservedVariants = opts?.preserveVariants
+    ? { variants: state.variants, activeVariantId: state.activeVariantId }
+    : null;
 
   // Clean-slate the editor first: selection, in-progress editing, map mode,
   // visibility filters, derived overlays, AND every entity slice. A partial
@@ -231,6 +264,13 @@ function applySnapshotToStoreInner(snapshot: Record<string, unknown>) {
   // "Scenarios" feature). It's intentionally ignored here — unknown keys are
   // harmless and never re-applied.
 
+  // Restore the variant layer for within-set callers (see preserveVariants):
+  // the reset above cleared it, but a variant switch must keep the set intact.
+  if (preservedVariants) {
+    state.setVariants(preservedVariants.variants);
+    state.setActiveVariantId(preservedVariants.activeVariantId);
+  }
+
   state.markSaved();
 }
 
@@ -273,13 +313,22 @@ export async function loadProjectFromServer(projectId: string): Promise<void> {
  * `gb:working-state-conflict` event (so the existing ConflictDialog handles
  * resolution) and resolves without throwing.
  */
-export async function saveProjectNow(projectId: string): Promise<void> {
-  const snapshot = buildSnapshot();
+export async function saveProjectNow(
+  projectId: string,
+  snapshotOverride?: Record<string, unknown>,
+): Promise<void> {
+  // Normally we persist the live store. The #66 stopgap passes an override to
+  // persist the BASELINE snapshot while a non-baseline variant is live in the
+  // store, so Save never silently writes the experiment into the feed slot.
+  const snapshot = snapshotOverride ?? buildSnapshot();
   const ifMatch = getCurrentWorkingStateVersion(projectId);
   try {
     const { workingStateVersion } = await saveWorkingState(projectId, snapshot, ifMatch);
     setCurrentWorkingStateVersion(projectId, workingStateVersion);
-    useStore.getState().markSaved();
+    // Only clear the dirty flag when we saved the LIVE store. With an override
+    // the live store still holds unsaved variant work that isn't on the server,
+    // so leave the editor marked dirty (the reload guard warns on it too).
+    if (!snapshotOverride) useStore.getState().markSaved();
   } catch (err) {
     if (err instanceof ConflictError) {
       window.dispatchEvent(

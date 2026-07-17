@@ -10,6 +10,8 @@ import { patchProject } from '../../services/projectsApi';
 import { saveProjectNow } from '../../db/serverPersistence';
 import { AppBrand } from './AppBrand';
 import { VariantSwitcher } from '../variants/VariantSwitcher';
+import { VariantSaveGateDialog } from '../variants/VariantSaveGateDialog';
+import { nonBaselineVariantActive, baselineVariant } from '../../services/variants';
 import { UndoRedoControls } from './UndoRedoControls';
 import { UserMenu, UserMenuItems } from './UserMenu';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -31,6 +33,8 @@ export function TopBar() {
   const routesCount = useStore((s) => s.routes.length);
   const stopsCount = useStore((s) => s.stops.length);
   const agenciesCount = useStore((s) => s.agencies.length);
+  const variants = useStore((s) => s.variants);
+  const activeVariantId = useStore((s) => s.activeVariantId);
   const navigate = useNavigate();
   // /demo is a read-only preview surface — drop the Save button so
   // visitors don't get prompted to upgrade or create an account just
@@ -44,6 +48,9 @@ export function TopBar() {
   const [showSaveAs, setShowSaveAs] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // #66 stopgap: Save intercept shown when a non-baseline variant is active so
+  // the live-store experiment can't silently overwrite the baseline feed.
+  const [showVariantGate, setShowVariantGate] = useState(false);
   // Mobile-only: Save / Import / Export collapse into a single overflow menu
   // (alongside the user-menu avatar) so the top bar stops overflowing on
   // phones. Below the same 600px breakpoint the rails use.
@@ -70,6 +77,30 @@ export function TopBar() {
   // worth exporting — no agency, no routes, no stops.
   const hasContent = agenciesCount > 0 || routesCount > 0 || stopsCount > 0;
 
+  // Core server save. `snapshotOverride` lets the #66 gate persist the baseline
+  // snapshot instead of the live store. Returns whether it succeeded so the
+  // gate can stay open (and show the error) on failure.
+  const performServerSave = async (snapshotOverride?: Record<string, unknown>): Promise<boolean> => {
+    if (!activeServerProjectId) return false;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await saveProjectNow(activeServerProjectId, snapshotOverride);
+      const proj = feedsProjects.find((p) => p.id === activeServerProjectId);
+      if (proj && proj.name !== projectName) {
+        const updated = await patchProject(activeServerProjectId, { name: projectName });
+        upsertFeedProject(updated);
+      }
+      return true;
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err as Error)?.message ?? 'Save failed';
+      setSaveError(msg);
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSaveClick = async () => {
     setSaveError(null);
     if (!currentUser) {
@@ -81,20 +112,31 @@ export function TopBar() {
       setShowSaveAs(true);
       return;
     }
-    setSaving(true);
-    try {
-      await saveProjectNow(activeServerProjectId);
-      const proj = feedsProjects.find((p) => p.id === activeServerProjectId);
-      if (proj && proj.name !== projectName) {
-        const updated = await patchProject(activeServerProjectId, { name: projectName });
-        upsertFeedProject(updated);
-      }
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : (err as Error)?.message ?? 'Save failed';
-      setSaveError(msg);
-    } finally {
-      setSaving(false);
+    // #66: saving while a non-baseline variant is active would serialize the
+    // experiment into the project's single feed slot, silently replacing the
+    // baseline. Intercept with an explicit choice instead of overwriting.
+    if (nonBaselineVariantActive(variants, activeVariantId)) {
+      setShowVariantGate(true);
+      return;
     }
+    await performServerSave();
+  };
+
+  // Gate primary: persist the BASELINE snapshot without touching the live store,
+  // so the user's real feed is saved and they stay in their variant.
+  const handleGateSaveBaseline = async () => {
+    const base = baselineVariant();
+    if (!base) {
+      setShowVariantGate(false);
+      return;
+    }
+    if (await performServerSave(base.snapshot)) setShowVariantGate(false);
+  };
+
+  // Gate secondary: the consented overwrite — persist the live store (the
+  // variant) into the feed slot, replacing the baseline (today's behavior).
+  const handleGateOverwrite = async () => {
+    if (await performServerSave()) setShowVariantGate(false);
   };
 
   return (
@@ -250,6 +292,16 @@ export function TopBar() {
       )}
       {showExport && <ExportDialog onClose={() => setShowExport(false)} />}
       {showSaveAs && <SaveAsDialog onClose={() => setShowSaveAs(false)} />}
+      {showVariantGate && (
+        <VariantSaveGateDialog
+          variantName={variants.find((v) => v.id === activeVariantId)?.name ?? 'this variant'}
+          saving={saving}
+          error={saveError}
+          onSaveBaseline={handleGateSaveBaseline}
+          onOverwrite={handleGateOverwrite}
+          onCancel={() => { setShowVariantGate(false); setSaveError(null); }}
+        />
+      )}
 
       {showResetConfirm && (
         <ConfirmDialog

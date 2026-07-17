@@ -47,6 +47,37 @@ export function templateStartSec(stopTimes: StopTime[]): number | null {
 const shift = (hms: string, deltaSec: number): string =>
   hms ? secondsToGtfsTime(gtfsTimeToSeconds(hms) + deltaSec) : hms;
 
+/** Inline validation for the frequency-window editor. Hard errors (bad range /
+ *  non-positive headway) block apply; overlapping windows are a warning only
+ *  (GTFS permits adjacent windows — end == next start — but true overlaps are
+ *  almost always a mistake). `overlaps` holds the indices flagged. Pure. */
+export interface WindowIssues {
+  errors: { badRange: boolean; badHeadway: boolean }[];
+  overlaps: number[];
+  ok: boolean;
+}
+export function validateFrequencyWindows(windows: FrequencyWindow[]): WindowIssues {
+  const errors = windows.map((w) => {
+    const start = gtfsTimeToSeconds(w.start_time);
+    const end = gtfsTimeToSeconds(w.end_time);
+    return { badRange: !(end > start), badHeadway: !(w.headway_secs > 0) };
+  });
+  // Overlap sweep over the VALID windows (sorted by start): a window whose start
+  // falls before the running max end so far overlaps an earlier one. Adjacency
+  // (start == an earlier end) is allowed.
+  const valid = windows
+    .map((w, i) => ({ i, start: gtfsTimeToSeconds(w.start_time), end: gtfsTimeToSeconds(w.end_time) }))
+    .filter((w) => w.end > w.start)
+    .sort((a, b) => a.start - b.start);
+  const overlaps: number[] = [];
+  let maxEnd = -Infinity;
+  for (const w of valid) {
+    if (w.start < maxEnd) overlaps.push(w.i);
+    if (w.end > maxEnd) maxEnd = w.end;
+  }
+  return { errors, overlaps: overlaps.sort((a, b) => a - b), ok: errors.every((e) => !e.badRange && !e.badHeadway) };
+}
+
 /** Total projected departures across a set of windows (INCLUDING the departure
  *  that coincides with the template row) — for the honest "→ M departures"
  *  header summary. */

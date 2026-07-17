@@ -5,6 +5,8 @@ import {
   createVariantFromCurrent,
   switchToVariant,
   compareActiveToBaseline,
+  compareVariants,
+  variantFeedState,
   deleteVariant,
   baselineVariant,
   activeVariant,
@@ -91,5 +93,54 @@ describe('feed variants', () => {
     deleteVariant(vid);
     expect(useStore.getState().variants).toHaveLength(0);
     expect(useStore.getState().activeVariantId).toBeNull();
+  });
+});
+
+describe('A-vs-B variant comparison (compareVariants)', () => {
+  it('the default pickers (baseline vs active) reproduce compareActiveToBaseline exactly', () => {
+    const vid = createVariantFromCurrent('Add a run');
+    addTrip('t2');
+    const baseId = baselineVariant()!.id;
+
+    const viaBaseline = compareActiveToBaseline();
+    const viaVariants = compareVariants(baseId, vid);
+    expect(viaVariants!.trips.delta).toBe(viaBaseline!.trips.delta);
+    expect(viaVariants!.kpi.delta).toEqual(viaBaseline!.kpi.delta);
+    expect(viaVariants!.identical).toBe(viaBaseline!.identical);
+  });
+
+  it('diffs two non-baseline variants against each other (B − A)', () => {
+    const v1 = createVariantFromCurrent('V1');
+    addTrip('t2'); // V1 = t1, t2
+    const v2 = createVariantFromCurrent('V2'); // forks from V1 → V2 = t1, t2
+    addTrip('t3'); // V2 (active) = t1, t2, t3
+
+    // V1 is inactive (frozen snapshot, 2 trips); V2 is active (live, 3 trips).
+    const diff = compareVariants(v1, v2);
+    expect(diff!.trips.a).toBe(2);
+    expect(diff!.trips.b).toBe(3);
+    expect(diff!.trips.delta).toBe(1);
+
+    // Order flips the sign.
+    expect(compareVariants(v2, v1)!.trips.delta).toBe(-1);
+  });
+
+  it('reads the LIVE store for the active variant (unsaved edits) and the frozen snapshot for inactive ones', () => {
+    const v1 = createVariantFromCurrent('V1'); // active, = t1
+    addTrip('t2'); // live edit to the active variant, snapshot not yet re-serialized
+    const baseId = baselineVariant()!.id;
+
+    // Active variant reflects the unsaved edit…
+    expect(variantFeedState(v1)!.trips.map((t) => t.trip_id).sort()).toEqual(['t1', 't2']);
+    // …the frozen baseline does not.
+    expect(variantFeedState(baseId)!.trips.map((t) => t.trip_id)).toEqual(['t1']);
+    // Unknown id → null.
+    expect(variantFeedState('nope')).toBeNull();
+  });
+
+  it('returns null when either side is an unknown variant id', () => {
+    createVariantFromCurrent('V1');
+    expect(compareVariants('nope', baselineVariant()!.id)).toBeNull();
+    expect(compareVariants(baselineVariant()!.id, 'nope')).toBeNull();
   });
 });

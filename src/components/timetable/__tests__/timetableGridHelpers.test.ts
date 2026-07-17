@@ -1,15 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import {
   actColWidth,
+  clampSplitRatio,
   computeRowErrors,
   defaultColWidth,
+  earliestDepartureDirection,
   generateExistingIds,
   nextCell,
   nextTabCell,
   nextCompanionShapeId,
   planCascade,
+  splitRatioFromPointer,
+  splitResizable,
+  swapRouteDirections,
   type GridProbe,
 } from '../timetableGridHelpers';
+import { computeShapePatterns } from '../../ui/shapePatterns';
+import type { Trip, RouteStop } from '../../../types/gtfs';
 
 // ── Row-order validation (the red-highlight / computeBad logic) ──────────────
 describe('computeRowErrors', () => {
@@ -202,5 +209,91 @@ describe('generateExistingIds', () => {
 
   it('Replace with nothing else in the feed frees all numbers', () => {
     expect(generateExistingIds(scope, scope, true)).toEqual(new Set());
+  });
+});
+
+// ── Split-view divider ratio (draggable resize, min 300px/pane) ───────────────
+describe('clampSplitRatio', () => {
+  it('leaves a comfortable ratio untouched', () => {
+    expect(clampSplitRatio(0.5, 1000)).toBe(0.5);
+    expect(clampSplitRatio(0.6, 1000)).toBe(0.6);
+  });
+  it('clamps so neither pane drops below 300px', () => {
+    // 1000px → min ratio 0.3, max 0.7.
+    expect(clampSplitRatio(0.05, 1000)).toBeCloseTo(0.3, 5);
+    expect(clampSplitRatio(0.98, 1000)).toBeCloseTo(0.7, 5);
+  });
+  it('pins to 0.5 when the container cannot fit two min-width panes', () => {
+    expect(clampSplitRatio(0.8, 500)).toBe(0.5);   // < 600
+    expect(clampSplitRatio(0.2, 599)).toBe(0.5);
+    expect(clampSplitRatio(0.3, 600)).toBe(0.5);   // exactly 2×min → only 0.5 fits
+    expect(clampSplitRatio(0.5, 0)).toBe(0.5);     // no measurement yet
+  });
+});
+
+describe('splitResizable', () => {
+  it('is true only when both panes can meet the 300px minimum', () => {
+    expect(splitResizable(1000)).toBe(true);
+    expect(splitResizable(600)).toBe(true);
+    expect(splitResizable(599)).toBe(false);
+    expect(splitResizable(390)).toBe(false); // mobile → fixed 50/50
+  });
+});
+
+describe('splitRatioFromPointer', () => {
+  it('maps a pointer x within the container to a clamped ratio', () => {
+    // container [100, 1100), width 1000.
+    expect(splitRatioFromPointer(600, 100, 1000)).toBe(0.5);
+    expect(splitRatioFromPointer(400, 100, 1000)).toBeCloseTo(0.3, 5); // 0.3 raw, at the clamp floor
+    expect(splitRatioFromPointer(150, 100, 1000)).toBeCloseTo(0.3, 5); // 0.05 raw → clamped up
+    expect(splitRatioFromPointer(1090, 100, 1000)).toBeCloseTo(0.7, 5); // 0.99 raw → clamped down
+  });
+  it('pins to 0.5 in a non-resizable container regardless of pointer', () => {
+    expect(splitRatioFromPointer(120, 100, 500)).toBe(0.5);
+    expect(splitRatioFromPointer(590, 100, 500)).toBe(0.5);
+  });
+});
+
+// ── Default direction on route select (earliest first departure) ──────────────
+describe('earliestDepartureDirection', () => {
+  it('picks the direction that begins service first', () => {
+    expect(earliestDepartureDirection([
+      { directionId: 0, firstSec: 8 * 3600 },
+      { directionId: 1, firstSec: 6 * 3600 }, // inbound starts earlier
+    ])).toBe(1);
+  });
+  it('direction 1 wins only when STRICTLY earlier; ties fall back to 0', () => {
+    expect(earliestDepartureDirection([
+      { directionId: 0, firstSec: 7 * 3600 },
+      { directionId: 1, firstSec: 7 * 3600 }, // tie
+    ])).toBe(0);
+  });
+  it('uses each direction\'s EARLIEST trip, not trip order', () => {
+    expect(earliestDepartureDirection([
+      { directionId: 1, firstSec: 9 * 3600 },
+      { directionId: 0, firstSec: 8 * 3600 },
+      { directionId: 1, firstSec: 6 * 3600 }, // dir 1's earliest beats dir 0's 8:00
+    ])).toBe(1);
+  });
+  it('falls back to 0 when there are no times', () => {
+    expect(earliestDepartureDirection([{ directionId: 1, firstSec: null }])).toBe(0);
+    expect(earliestDepartureDirection([])).toBe(0);
+  });
+});
+
+// ── Swap inbound/outbound directions ──────────────────────────────────────────
+describe('swapRouteDirections', () => {
+  const t = (id: string, route: string, dir: 0 | 1): Trip => ({ trip_id: id, route_id: route, service_id: 'wk', direction_id: dir } as Trip);
+  it('flips direction_id only on the given route, leaving others untouched', () => {
+    const flipped = swapRouteDirections([t('a', 'R', 0), t('b', 'R', 1), t('c', 'OTHER', 0)], 'R');
+    expect(flipped.map((x) => [x.trip_id, x.direction_id])).toEqual([['a', 1], ['b', 0], ['c', 0]]);
+  });
+  it('lets patterns re-derive with the flipped direction', () => {
+    const trips = [t('a', 'R', 0)];
+    const rs = [{ route_id: 'R', stop_id: 's1', stop_sequence: 1, direction_id: 0, shape_id: 'sh' } as RouteStop];
+    expect(computeShapePatterns('R', trips, rs)).toEqual([{ shapeId: 'sh', directionId: 0 }]);
+    const swappedTrips = swapRouteDirections(trips, 'R');
+    const swappedRs = swapRouteDirections(rs, 'R');
+    expect(computeShapePatterns('R', swappedTrips, swappedRs)).toEqual([{ shapeId: 'sh', directionId: 1 }]);
   });
 });

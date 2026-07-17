@@ -3,6 +3,8 @@ import { useStore } from '../../store';
 import { ensureDefaultCalendar } from '../../services/defaultCalendar';
 import { useStopTimesIndex } from '../../hooks/useStopTimesIndex';
 import { computeTimetablePatterns, isNoShapeBucket } from '../ui/shapePatterns';
+import { earliestDepartureDirection } from './timetableGridHelpers';
+import { gtfsTimeToSeconds } from '../../utils/time';
 import type { Stop, StopTime } from '../../types/gtfs';
 
 /** A resolved scope for one timetable pane. The main pane's scope proxies the
@@ -58,6 +60,30 @@ export function useTimetableData(scope: PaneScope, syncSelection: boolean) {
     [routeId, trips, routeStops, shapes],
   );
 
+  // The direction a fresh route defaults to: whichever begins service first (by
+  // earliest first departure of the active service). Only used when there's no
+  // valid current selection — an explicit pick keeps the shape valid and wins.
+  const defaultDirection = useMemo(() => {
+    if (!routeId) return 0 as 0 | 1;
+    const rows = trips
+      .filter((t) => t.route_id === routeId && (!activeServiceId || t.service_id === activeServiceId))
+      .map((t) => {
+        const sts = (stopTimesByTrip.get(t.trip_id) ?? [])
+          .filter((s) => s.arrival_time || s.departure_time)
+          .sort((a, b) => a.stop_sequence - b.stop_sequence);
+        const first = sts[0];
+        return { directionId: t.direction_id, firstSec: first ? gtfsTimeToSeconds(first.departure_time || first.arrival_time) : null };
+      });
+    return earliestDepartureDirection(rows);
+  }, [routeId, trips, activeServiceId, stopTimesByTrip]);
+
+  // The default pattern to land on: prefer one in the earliest-departure
+  // direction, else the first pattern.
+  const defaultPattern = useMemo(
+    () => patterns.find((p) => p.directionId === defaultDirection) ?? patterns[0],
+    [patterns, defaultDirection],
+  );
+
   // Main pane: keep the stored shape/direction pointing at a valid pattern.
   useEffect(() => {
     if (!syncSelection) return;
@@ -66,18 +92,17 @@ export function useTimetableData(scope: PaneScope, syncSelection: boolean) {
       return;
     }
     const current = patterns.find((p) => p.shapeId === shapeId);
-    if (!current) {
-      const first = patterns[0];
-      setSelectedShapeId(first.shapeId);
-      if (first.directionId !== directionId) setDirectionId(first.directionId);
+    if (!current && defaultPattern) {
+      setSelectedShapeId(defaultPattern.shapeId);
+      if (defaultPattern.directionId !== directionId) setDirectionId(defaultPattern.directionId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncSelection, routeId, patterns]);
 
   const effectiveShapeId = useMemo(() => {
     if (patterns.length === 0) return null;
-    return patterns.some((p) => p.shapeId === shapeId) ? shapeId : patterns[0].shapeId;
-  }, [patterns, shapeId]);
+    return patterns.some((p) => p.shapeId === shapeId) ? shapeId : (defaultPattern?.shapeId ?? patterns[0].shapeId);
+  }, [patterns, shapeId, defaultPattern]);
 
   const noShapeBucket = isNoShapeBucket(effectiveShapeId);
   const realShapeIds = useMemo(

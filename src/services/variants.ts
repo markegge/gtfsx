@@ -140,3 +140,37 @@ export function compareActiveToBaseline(opts?: DiffOptions): FeedDiff | null {
   if (!baseline) return null;
   return diffFeedState(toFeedState(baseline.snapshot), toFeedState(liveSnap), opts);
 }
+
+/**
+ * Feed state for any variant by id, for the A-vs-B compare (compareVariants) and
+ * its spatial metrics (variantSpatialMetrics.ts read stops/routes/routeStops off
+ * this).
+ *
+ * The active variant's stored snapshot is deliberately allowed to go stale (the
+ * live store is its source of truth), so for it we read the LIVE store via
+ * buildSnapshot() rather than its frozen snapshot; every inactive variant reads
+ * its frozen snapshot. buildSnapshot() only READS the store, so this is a pure
+ * read that never mutates state — safe to call from a component's render or an
+ * effect. Returns null for an unknown id.
+ */
+export function variantFeedState(id: string): FeedState | null {
+  const st = useStore.getState();
+  if (id === st.activeVariantId) return toFeedState(buildSnapshot());
+  const v = st.variants.find((x) => x.id === id);
+  return v ? toFeedState(v.snapshot) : null;
+}
+
+/**
+ * Diff any two variants (A vs B), delta = B − A. The generalization of
+ * compareActiveToBaseline: with a = baseline and b = the active variant it
+ * produces the identical result, so the compare modal's default picker values
+ * reproduce the old "compare to baseline" view exactly. Reads live for the
+ * active side (see variantFeedState) so it reflects unsaved edits without
+ * mutating any snapshot. Returns null if either id is unknown.
+ */
+export function compareVariants(aId: string, bId: string, opts?: DiffOptions): FeedDiff | null {
+  const a = variantFeedState(aId);
+  const b = variantFeedState(bId);
+  if (!a || !b) return null;
+  return diffFeedState(a, b, opts);
+}

@@ -10,6 +10,62 @@ export const TRIP_COL_DEFAULT = 78;
 export const COL_MIN = 58;
 export const COL_MAX = 300;
 
+/* ============================================================================
+   Split-view divider ratio (draggable pane resize)
+   ========================================================================== */
+
+/** Neither split pane may drop below this — a timetable narrower than this is
+ *  unusable (Trip + actions + a couple of stop columns). */
+export const SPLIT_MIN_PANE_PX = 300;
+export const SPLIT_DEFAULT_RATIO = 0.5;
+
+/** Clamp a left-pane width fraction so both panes keep SPLIT_MIN_PANE_PX. When
+ *  the container can't fit two min-width panes (narrow / 390px mobile), the split
+ *  is pinned even (0.5) — the caller also disables dragging there. Pure. */
+export function clampSplitRatio(ratio: number, containerWidth: number, minPanePx = SPLIT_MIN_PANE_PX): number {
+  if (!(containerWidth > 0) || containerWidth < 2 * minPanePx) return SPLIT_DEFAULT_RATIO;
+  const min = minPanePx / containerWidth;
+  return Math.min(1 - min, Math.max(min, ratio));
+}
+
+/** Whether the divider can be dragged at a given container width (both panes can
+ *  still meet the minimum). Below this the split is a fixed even 50/50. */
+export function splitResizable(containerWidth: number, minPanePx = SPLIT_MIN_PANE_PX): boolean {
+  return containerWidth >= 2 * minPanePx;
+}
+
+/** The left-pane fraction for a pointer x within the container, clamped. Pure. */
+export function splitRatioFromPointer(pointerX: number, containerLeft: number, containerWidth: number, minPanePx = SPLIT_MIN_PANE_PX): number {
+  return clampSplitRatio((pointerX - containerLeft) / containerWidth, containerWidth, minPanePx);
+}
+
+/* ============================================================================
+   Default direction on route select — the direction that begins service first
+   ========================================================================== */
+
+/** The direction a freshly selected route should default to: the one with the
+ *  earliest first departure among the given trips (each carries its first-stop
+ *  time in seconds, or null if untimed). Direction 1 wins only when it is
+ *  STRICTLY earlier; ties and no-times fall back to 0. Pure. */
+export function earliestDepartureDirection(trips: { directionId: 0 | 1; firstSec: number | null }[]): 0 | 1 {
+  let min0: number | null = null;
+  let min1: number | null = null;
+  for (const t of trips) {
+    if (t.firstSec == null) continue;
+    if (t.directionId === 1) { if (min1 == null || t.firstSec < min1) min1 = t.firstSec; }
+    else { if (min0 == null || t.firstSec < min0) min0 = t.firstSec; }
+  }
+  if (min1 != null && (min0 == null || min1 < min0)) return 1;
+  return 0;
+}
+
+/** Flip direction_id (0↔1) on every item of one route, leaving other routes
+ *  untouched. Works for trips and route_stops alike (both carry route_id +
+ *  direction_id). Pure — returns a new array. */
+export function swapRouteDirections<T extends { route_id: string; direction_id: 0 | 1 }>(items: T[], routeId: string): T[] {
+  return items.map((it) => (it.route_id === routeId ? { ...it, direction_id: (it.direction_id === 0 ? 1 : 0) as 0 | 1 } : it));
+}
+
 export type RowActionStyle = 'menu' | 'strip' | 'flyout';
 
 /** Width of the sticky actions column for a given presentation. */

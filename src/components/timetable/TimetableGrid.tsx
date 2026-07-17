@@ -19,10 +19,15 @@ import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
 import { Toast, type ToastState } from '../ui/Toast';
 import { type PaneScope, useTimetableData } from './useTimetableData';
-import { planCascade, nextCompanionShapeId, generateExistingIds } from './timetableGridHelpers';
+import {
+  planCascade, nextCompanionShapeId, generateExistingIds,
+  clampSplitRatio, splitResizable, splitRatioFromPointer, SPLIT_MIN_PANE_PX, SPLIT_DEFAULT_RATIO,
+  swapRouteDirections,
+} from './timetableGridHelpers';
 import { TimetableGridPane } from './TimetableGridPane';
+import { SplitDivider } from './timetableGridParts';
 import { TimetableToolbar, type ToolId } from './TimetableToolbar';
-import { GenerateDrawer, RuntimeDrawer, RepeatDrawer, type GenerateInput } from './TimetableDrawers';
+import { GenerateDrawer, RuntimeDrawer, RepeatDrawer, FrequencyDrawer, type GenerateInput } from './TimetableDrawers';
 import { FlexTimetablePanel } from './FlexTimetablePanel';
 import { findFlexZoneForRoute, isFlexRoute } from './flexRouteMatch';
 import type { ShapePattern } from '../ui/shapePatterns';
@@ -36,10 +41,13 @@ import { windowDepartureCount, type FrequencyWindow } from '../../services/frequ
  *  ◷ Estimate action and the Set run time drawer's Estimate mode. */
 const ESTIMATE_DEFAULTS = { dwellSec: 18, speedFactor: 1.3 };
 
-type Snap = { trips: Trip[]; stopTimes: StopTime[]; frequencies: Frequency[] };
+type Snap = { trips: Trip[]; stopTimes: StopTime[]; frequencies: Frequency[]; routeStops: RouteStop[] };
 function snapshotFeed(): Snap {
   const st = useStore.getState();
-  return { trips: st.trips, stopTimes: st.stopTimes, frequencies: st.frequencies };
+  // routeStops rides along so the Swap-directions edit (which flips route_stops
+  // too) reverts in one Undo. Other ops don't touch it, so restoring the same
+  // reference is a no-op for them.
+  return { trips: st.trips, stopTimes: st.stopTimes, frequencies: st.frequencies, routeStops: st.routeStops };
 }
 
 type PaneId = 'main' | 'opp';
@@ -50,6 +58,7 @@ type ModalState =
   | { type: 'applyall'; paneId: PaneId; tripId: string }
   | { type: 'removeall' }
   | { type: 'generate-confirm'; input: GenerateInput; existingCount: number }
+  | { type: 'swapdir' }
   | null;
 type CascadeState = { paneId: PaneId; seq: number; stopId: string; stopName: string; deltaMin: number; laterIds: string[] } | null;
 
@@ -163,7 +172,8 @@ export function TimetableGrid() {
   }, [selectedRouteId, patterns.length, trips, activeServiceId, oppDir, companionPattern, oppData.routeTrips.length]);
 
   /* ---------- drawer / modal / toast / cascade state ---------- */
-  const [drawer, setDrawer] = useState<'generate' | 'runtime' | 'repeat' | null>(null);
+  const [drawer, setDrawer] = useState<'generate' | 'runtime' | 'repeat' | 'frequency' | null>(null);
+  const [freqEditTripId, setFreqEditTripId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [cascade, setCascade] = useState<CascadeState>(null);
@@ -172,6 +182,44 @@ export function TimetableGrid() {
   const cascadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const oppScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Split-view divider: a persisted left-pane ratio, dragged imperatively (no
+  // re-render per pointermove — set the left pane's flex-basis directly) and
+  // committed to the store on drag-end.
+  const splitRatio = useStore((s) => s.timetableSplitRatio);
+  const setSplitRatio = useStore((s) => s.setTimetableSplitRatio);
+  const splitContainerRef = useRef<HTMLDivElement | null>(null);
+  const leftPaneRef = useRef<HTMLDivElement | null>(null);
+  const dragRatioRef = useRef<number | null>(null);
+  const [splitContainerW, setSplitContainerW] = useState(0);
+  useEffect(() => {
+    const el = splitContainerRef.current;
+    if (!el) return;
+    setSplitContainerW(el.clientWidth);
+    const ro = new ResizeObserver((entries) => setSplitContainerW(entries[0].contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const splitIsResizable = oppositeOpen && splitResizable(splitContainerW);
+  const effectiveSplitRatio = splitIsResizable ? clampSplitRatio(splitRatio, splitContainerW) : SPLIT_DEFAULT_RATIO;
+  const handleSplitDrag = useCallback((clientX: number) => {
+    const box = splitContainerRef.current, left = leftPaneRef.current;
+    if (!box || !left) return;
+    const rect = box.getBoundingClientRect();
+    const r = splitRatioFromPointer(clientX, rect.left, rect.width);
+    dragRatioRef.current = r;
+    left.style.flexBasis = `${r * 100}%`; // imperative during drag — smooth, no React churn
+  }, []);
+  const handleSplitDragEnd = useCallback(() => {
+    if (dragRatioRef.current != null) setSplitRatio(dragRatioRef.current);
+    dragRatioRef.current = null;
+    window.dispatchEvent(new Event('resize')); // §8: grids re-measure sticky offsets + column math
+  }, [setSplitRatio]);
+  const handleSplitReset = useCallback(() => {
+    dragRatioRef.current = null;
+    setSplitRatio(SPLIT_DEFAULT_RATIO);
+    window.dispatchEvent(new Event('resize'));
+  }, [setSplitRatio]);
 
   const say = useCallback((message: string) => {
     setToast({ message });
@@ -191,6 +239,7 @@ export function TimetableGrid() {
         s.setTrips(snap.trips);
         s.setStopTimes(snap.stopTimes);
         s.setFrequencies(snap.frequencies);
+        s.setRouteStops(snap.routeStops);
         setToast({ message: 'Undone' });
         if (toastTimer.current) clearTimeout(toastTimer.current);
         toastTimer.current = setTimeout(() => setToast(null), 1800);
@@ -210,7 +259,7 @@ export function TimetableGrid() {
   }, []);
 
   // Reset transient UI when the route changes / the selection key changes.
-  useEffect(() => { setDrawer(null); setCascade(null); }, [selectedRouteId]);
+  useEffect(() => { setDrawer(null); setFreqEditTripId(null); setCascade(null); }, [selectedRouteId]);
   useEffect(() => { setCascade(null); }, [effectiveShapeId, activeServiceId, directionId]);
   // Relayout the map/grid when the split toggles (§8 synthetic resize).
   useEffect(() => { window.dispatchEvent(new Event('resize')); }, [oppositeOpen]);
@@ -307,6 +356,25 @@ export function TimetableGrid() {
     else if (action === 'duplicate') setModal({ type: 'duplicate', paneId, tripId });
     else if (action === 'estimate') setModal({ type: 'estimate', paneId, tripId });
     else if (action === 'applyall') setModal({ type: 'applyall', paneId, tripId });
+    else if (action === 'editfreq') { setDrawer('frequency'); setFreqEditTripId(tripId); }
+  };
+
+  // Replace a frequency template's windows wholesale (the Edit frequency drawer).
+  // Zero windows removes the frequency — the template becomes a plain trip. The
+  // grid + visualization build-out re-derive live (both subscribe to
+  // frequencies). One-step snapshot Undo.
+  const applyFrequency = (tripId: string, windows: FrequencyWindow[]) => {
+    setDrawer(null);
+    setFreqEditTripId(null);
+    withUndo(() => {
+      const st = useStore.getState();
+      const others = st.frequencies.filter((f) => f.trip_id !== tripId);
+      const next = windows.map((w) => ({ trip_id: tripId, start_time: w.start_time, end_time: w.end_time, headway_secs: w.headway_secs, exact_times: w.exact_times }));
+      st.setFrequencies([...others, ...next]);
+      return windows.length === 0
+        ? `Removed the frequency from ${tripId} — now a plain trip`
+        : `Updated ${tripId}'s frequency (${windows.length} window${windows.length === 1 ? '' : 's'})`;
+    });
   };
 
   const onAddTrip = (paneId: PaneId) => {
@@ -610,6 +678,29 @@ export function TimetableGrid() {
     });
   };
 
+  // Swap inbound/outbound: flip direction_id (0↔1) on EVERY trip of the route and
+  // its route_stops (so patterns re-derive consistently). Route-level, all
+  // services. One-step Undo (the snapshot covers route_stops too).
+  const routeDirCounts = useMemo(() => {
+    let d0 = 0, d1 = 0;
+    for (const t of trips) {
+      if (t.route_id !== selectedRouteId) continue;
+      if (t.direction_id === 1) d1 += 1; else d0 += 1;
+    }
+    return { d0, d1, total: d0 + d1 };
+  }, [trips, selectedRouteId]);
+  const confirmSwapDirections = () => {
+    const rid = selectedRouteId;
+    setModal(null);
+    if (!rid) return;
+    withUndo(() => {
+      const st = useStore.getState();
+      st.setTrips(swapRouteDirections(st.trips, rid));
+      st.setRouteStops(swapRouteDirections(st.routeStops, rid));
+      return `Swapped directions on ${route?.route_short_name || route?.route_long_name || rid} — flipped ${routeDirCounts.total} trip${routeDirCounts.total === 1 ? '' : 's'}`;
+    });
+  };
+
   /* ---------- render guards ---------- */
   if (!route) {
     if (routes.length > 0) selectRoute(routes[0].route_id);
@@ -794,6 +885,8 @@ export function TimetableGrid() {
         onSelectPattern={handleSelectPattern}
         onSelectDirection={(d) => setDirectionId(d)}
         onSetOpposite={(v) => setOppositeOpen(v)}
+        canSwapDirections={routeDirCounts.total > 0}
+        onSwapDirections={() => setModal({ type: 'swapdir' })}
         onEditStops={onEditStops}
         onTool={onTool}
       />
@@ -812,9 +905,22 @@ export function TimetableGrid() {
           onCancel={() => setDrawer(null)}
         />
       )}
+      {drawer === 'frequency' && freqEditTripId && (
+        <FrequencyDrawer
+          ctx={ctxLabel}
+          tripId={freqEditTripId}
+          initialWindows={frequenciesByTrip.get(freqEditTripId) ?? []}
+          onApply={(windows) => applyFrequency(freqEditTripId, windows)}
+          onCancel={() => { setDrawer(null); setFreqEditTripId(null); }}
+        />
+      )}
 
-      <div className="flex-1 min-h-0 flex">
-        <div className="flex-1 min-w-0 flex flex-col min-h-0">
+      <div ref={splitContainerRef} className="flex-1 min-h-0 flex">
+        <div
+          ref={leftPaneRef}
+          className={`min-w-0 flex flex-col min-h-0 ${oppositeOpen ? 'grow-0 shrink-0' : 'flex-1'}`}
+          style={oppositeOpen ? { flexBasis: `${effectiveSplitRatio * 100}%`, minWidth: splitIsResizable ? SPLIT_MIN_PANE_PX : undefined } : undefined}
+        >
           {/* In split view the main (left) pane gets its own header — a pattern
               dropdown in lockstep with the toolbar direction control (item #7),
               or a static label for a single-pattern route. Same 47px container as
@@ -837,7 +943,18 @@ export function TimetableGrid() {
           {renderMainPane()}
         </div>
         {oppositeOpen && (
-          <div className="flex-1 min-w-0 flex flex-col min-h-0 border-l border-sand">
+          <SplitDivider
+            resizable={splitIsResizable}
+            onDrag={handleSplitDrag}
+            onDragEnd={handleSplitDragEnd}
+            onReset={handleSplitReset}
+          />
+        )}
+        {oppositeOpen && (
+          <div
+            className="flex-1 min-w-0 flex flex-col min-h-0"
+            style={splitIsResizable ? { minWidth: SPLIT_MIN_PANE_PX } : undefined}
+          >
             <div className="shrink-0 flex items-center gap-2 px-3.5 h-[47px] border-b border-sand bg-cream font-heading font-extrabold text-xs text-dark-brown">
               {companionOtherPatterns.length > 1 && companionPattern ? (
                 <Select
@@ -951,6 +1068,16 @@ export function TimetableGrid() {
             : <>Deletes all <b>{removeAllIds.length} trip{removeAllIds.length === 1 ? '' : 's'}</b> on {ctxLabel}. Stops and shape are kept, so you can add a fresh trip and replicate it.</>}
           confirmLabel={`Remove ${removeAllIds.length} trip${removeAllIds.length === 1 ? '' : 's'}`}
           onConfirm={confirmRemoveAll}
+          onCancel={() => setModal(null)}
+        />
+      )}
+
+      {modal?.type === 'swapdir' && (
+        <ConfirmDialog
+          title="Swap inbound and outbound?"
+          body={<>Flips the direction of every trip on {route.route_short_name || route.route_long_name || route.route_id}: <b>{routeDirCounts.d0} {directionName(route, 0).toLowerCase()}</b> ↔ <b>{routeDirCounts.d1} {directionName(route, 1).toLowerCase()}</b>. Use this when the feed labels the directions the wrong way round. One Undo puts it back.</>}
+          confirmLabel={`Swap ${routeDirCounts.total} trip${routeDirCounts.total === 1 ? '' : 's'}`}
+          onConfirm={confirmSwapDirections}
           onCancel={() => setModal(null)}
         />
       )}

@@ -1,6 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import { expandFrequencyTrip, templateStartSec, windowDepartureCount, type FrequencyWindow } from '../frequencyExpansion';
+import { expandFrequencyTrip, templateStartSec, windowDepartureCount, validateFrequencyWindows, type FrequencyWindow } from '../frequencyExpansion';
 import type { StopTime } from '../../types/gtfs';
+
+const win = (start: string, end: string, headwaySecs: number): FrequencyWindow =>
+  ({ start_time: start, end_time: end, headway_secs: headwaySecs, exact_times: 0 });
+
+describe('validateFrequencyWindows', () => {
+  it('passes a clean single window', () => {
+    const r = validateFrequencyWindows([win('06:00:00', '22:00:00', 1800)]);
+    expect(r.ok).toBe(true);
+    expect(r.errors).toEqual([{ badRange: false, badHeadway: false }]);
+    expect(r.overlaps).toEqual([]);
+  });
+  it('flags end-not-after-start and non-positive headway as hard errors', () => {
+    const r = validateFrequencyWindows([win('08:00:00', '08:00:00', 1800), win('06:00:00', '07:00:00', 0)]);
+    expect(r.errors[0].badRange).toBe(true);
+    expect(r.errors[1].badHeadway).toBe(true);
+    expect(r.ok).toBe(false);
+  });
+  it('warns on overlapping windows but stays ok (GTFS allows adjacency)', () => {
+    const overlap = validateFrequencyWindows([win('06:00:00', '08:00:00', 1800), win('07:00:00', '09:00:00', 1800)]);
+    expect(overlap.overlaps).toEqual([1]); // the later window is flagged
+    expect(overlap.ok).toBe(true);         // a warning, not a block
+    const adjacent = validateFrequencyWindows([win('06:00:00', '08:00:00', 1800), win('08:00:00', '10:00:00', 1800)]);
+    expect(adjacent.overlaps).toEqual([]); // end == next start is fine
+  });
+  it('treats zero windows as valid (the template becomes a plain trip)', () => {
+    expect(validateFrequencyWindows([]).ok).toBe(true);
+    expect(windowDepartureCount([])).toBe(0);
+  });
+});
 
 const st = (seq: number, hms: string): StopTime => ({
   trip_id: 'FQ', stop_id: `s${seq}`, stop_sequence: seq, arrival_time: hms, departure_time: hms,

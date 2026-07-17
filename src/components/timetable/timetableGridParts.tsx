@@ -254,13 +254,14 @@ export function TripCell({ tripId, isDuplicate, width, headway, irregular, onRen
    ActionCell — sticky per-trip actions column, three presentations
    ========================================================================== */
 
-type ActionKind = 'interpolate' | 'estimate' | 'duplicate' | 'applyall' | 'delete';
+type ActionKind = 'interpolate' | 'estimate' | 'duplicate' | 'applyall' | 'editfreq' | 'delete';
 
 const ROW_ACTIONS: [action: ActionKind, label: string][] = [
   ['interpolate', 'Interpolate stop times — fill blanks from set times'],
   ['estimate', 'Estimate times from road network…'],
   ['duplicate', 'Duplicate trip…'],
   ['applyall', "Apply this trip's pattern to all trips…"],
+  ['editfreq', 'Edit frequency windows…'],
   ['delete', 'Delete trip'],
 ];
 
@@ -272,6 +273,7 @@ const ACTION_PATHS: Record<ActionKind, ReactNode> = {
   estimate: (<><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3.2 2" /></>),
   duplicate: (<><rect x="8.5" y="8.5" width="11" height="11" rx="2" /><path d="M15.5 8.5V6.5A2 2 0 0 0 13.5 4.5h-7A2 2 0 0 0 4.5 6.5v7A2 2 0 0 0 6.5 15.5h2" /></>),
   applyall: (<><path d="M4 8h10M4 12h10M4 16h10" /><path d="M16 9l3 3-3 3" /></>),
+  editfreq: (<><path d="M5 5v14M12 5v14M19 5v14" /></>),
   delete: (<path d="M6 6l12 12M18 6L6 18" />),
 };
 
@@ -295,13 +297,15 @@ interface ActionCellProps {
   stickyLeft: number;
   canApplyAll: boolean;
   canEstimate: boolean;
+  /** Only frequency-template trips get the Edit frequency action. */
+  canEditFreq: boolean;
   onMenu: (rect: DOMRect) => void;
   onAct: (action: string) => void;
 }
 
-export function ActionCell({ mode, open, stickyLeft, canApplyAll, canEstimate, onMenu, onAct }: ActionCellProps) {
+export function ActionCell({ mode, open, stickyLeft, canApplyAll, canEstimate, canEditFreq, onMenu, onAct }: ActionCellProps) {
   const btnRef = useRef<HTMLButtonElement | null>(null);
-  const enabled = (id: string) => (id === 'applyall' ? canApplyAll : id === 'estimate' ? canEstimate : true);
+  const enabled = (id: string) => (id === 'applyall' ? canApplyAll : id === 'estimate' ? canEstimate : id === 'editfreq' ? canEditFreq : true);
   const iconBtns = ROW_ACTIONS.filter(([id]) => enabled(id)).map(([id, label]) => (
     <button
       key={id}
@@ -376,15 +380,17 @@ const ROW_MENU_ITEMS: MenuItem[] = [
   { id: 'estimate', chip: 'bg-gold-light text-[#b8860b]', label: 'Estimate times…', sub: 'From road-network driving time' },
   { id: 'duplicate', chip: 'bg-coral-light text-coral', label: 'Duplicate trip…', sub: 'Same pattern, offset start time' },
   { id: 'applyall', chip: 'bg-purple-light text-purple', label: 'Apply to all trips…', sub: 'Push this pattern; others keep their starts' },
+  { id: 'editfreq', chip: 'bg-teal-light text-teal', label: 'Edit frequency…', sub: 'Change the headway windows' },
   { id: 'delete', chip: 'bg-red-50 text-red-500', label: 'Delete trip', danger: true },
 ];
 
 export function RowMenu({
-  rect, canApplyAll, canEstimate, onPick, onClose,
+  rect, canApplyAll, canEstimate, canEditFreq, onPick, onClose,
 }: {
   rect: DOMRect;
   canApplyAll: boolean;
   canEstimate: boolean;
+  canEditFreq: boolean;
   onPick: (action: string) => void;
   onClose: () => void;
 }) {
@@ -392,7 +398,7 @@ export function RowMenu({
   useDismiss(ref, onClose, '[data-rowmenu-trigger]');
   const pos = useAnchoredMenuPosition(ref, rect, 4);
   const items = ROW_MENU_ITEMS.filter((it) =>
-    (it.id !== 'applyall' || canApplyAll) && (it.id !== 'estimate' || canEstimate));
+    (it.id !== 'applyall' || canApplyAll) && (it.id !== 'estimate' || canEstimate) && (it.id !== 'editfreq' || canEditFreq));
   return (
     <div
       ref={ref}
@@ -517,6 +523,50 @@ export function ColResizer({ onResize }: { onResize: (dx: number | null) => void
     >
       <span className={`absolute right-[3px] top-[22%] bottom-[22%] w-0.5 rounded-full ${active ? 'bg-coral' : 'bg-transparent group-hover/rz:bg-coral'}`} />
     </span>
+  );
+}
+
+/* ============================================================================
+   SplitDivider — draggable divider between the two split-view panes
+   ========================================================================== */
+
+/** Vertical divider between the two split panes. Drag reports the pointer x to
+ *  the orchestrator (which converts it to a clamped ratio); double-click resets.
+ *  Non-interactive when the container is too narrow to resize (fixed 50/50).
+ *  Mirrors ColResizer's coral hover/active affordance. */
+export function SplitDivider({ resizable, onDrag, onDragEnd, onReset }: {
+  resizable: boolean;
+  onDrag: (clientX: number) => void;
+  onDragEnd: () => void;
+  onReset: () => void;
+}) {
+  const [active, setActive] = useState(false);
+  const start = (e: ReactMouseEvent) => {
+    if (!resizable) return;
+    e.preventDefault();
+    setActive(true);
+    const move = (ev: MouseEvent) => onDrag(ev.clientX);
+    const up = () => {
+      setActive(false);
+      onDragEnd();
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  };
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize panes"
+      onMouseDown={start}
+      onDoubleClick={resizable ? onReset : undefined}
+      title={resizable ? 'Drag to resize · double-click to reset' : undefined}
+      className={`group/split relative shrink-0 self-stretch z-[6] w-[9px] -mx-[4px] ${resizable ? 'cursor-col-resize' : 'pointer-events-none'}`}
+    >
+      <span className={`absolute inset-y-0 left-1/2 -translate-x-1/2 rounded-full ${active ? 'w-0.5 bg-coral' : 'w-px bg-sand group-hover/split:w-0.5 group-hover/split:bg-coral'}`} />
+    </div>
   );
 }
 

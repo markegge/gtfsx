@@ -33,6 +33,9 @@ interface ToolbarProps {
   onSelectPattern: (p: ShapePattern) => void;
   onSelectDirection: (d: 0 | 1) => void;
   onSetOpposite: (v: boolean) => void;
+  /** Route-level flip of every trip's direction_id (0↔1). Disabled with no trips. */
+  canSwapDirections: boolean;
+  onSwapDirections: () => void;
   onEditStops: () => void;
   onTool: (id: ToolId) => void;
 }
@@ -194,7 +197,7 @@ export function TimetableToolbar(props: ToolbarProps) {
     route, routes, shapes, calendars, activeServiceId, patterns, effectiveShapeId,
     directionId, tripCount, departureNote, removeAllCount, oppositeOpen,
     onSelectRoute, onSelectService, onSelectPattern, onSelectDirection, onSetOpposite,
-    onEditStops, onTool,
+    canSwapDirections, onSwapDirections, onEditStops, onTool,
   } = props;
 
   return (
@@ -229,6 +232,20 @@ export function TimetableToolbar(props: ToolbarProps) {
           oppositeOpen={oppositeOpen}
           onSetOpposite={onSetOpposite}
         />
+        <button
+          type="button"
+          onClick={onSwapDirections}
+          disabled={!canSwapDirections}
+          title="Swap inbound/outbound — flips every trip's direction on this route"
+          aria-label="Swap directions"
+          className={`shrink-0 inline-flex items-center justify-center h-[30px] w-[34px] rounded-md border ${
+            canSwapDirections ? 'bg-white border-sand text-warm-gray hover:border-coral hover:text-[#d4603a]' : 'bg-white border-sand text-warm-gray/40 cursor-not-allowed'
+          }`}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M8 4v16M8 4L5 7M8 4l3 3M16 20V4M16 20l-3-3M16 20l3-3" />
+          </svg>
+        </button>
         <span className="inline-flex items-center gap-1.5 text-[12.5px] text-warm-gray whitespace-nowrap">
           {tripCount} trips{departureNote ? ` ${departureNote}` : ''}
           <HintPopover />

@@ -153,10 +153,15 @@ blindly create:
 The following are defined in this schema but not yet populated in 0.2. They are
 documented here so consumers can rely on their semantics when they appear:
 
-- **`mdb_source_id` / `supersedes_download_url`.** The columns exist and are
-  emitted when set. Automatic capture from the GTFS-X "import from Mobility
-  Database" flow (which already fetches a feed by its Mobility Database id) is a
-  planned addition; until then these are populated only when set out of band.
+- **`mdb_source_id`.** Auto-captured: importing a feed **from the Mobility
+  Database** (the in-editor catalog search or a `?source=mobilitydb&feed_id=`
+  deep link) stamps that source id onto the feed as import provenance, which is
+  projected onto the feed at its next publish and emitted here. Population is
+  first-write-wins — an id already recorded (manually or by an earlier publish)
+  is never overwritten, and a feed with no MDB provenance simply omits the
+  field. Feeds imported by pasting a raw URL, or uploaded, carry no MDB id.
+- **`supersedes_download_url`.** The column exists and is emitted when set, but
+  is not yet auto-populated; set only out of band for now.
 - **`features`.** 0.2 detects GTFS-Flex. Additional features (Fares v1/v2, etc.)
   are planned.
 - **`country_code` / `subdivision_name` / `municipality`.** Not captured by

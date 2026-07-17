@@ -23,6 +23,7 @@ import {
   licenseUrlForSpdx,
   stopBoundingBox,
   deriveCatalogFeatures,
+  deriveImportedMdbSourceId,
   type CatalogFeedInput,
 } from '../publication/catalog';
 
@@ -138,6 +139,16 @@ describe('catalog builder (pure)', () => {
     expect(deriveCatalogFeatures({})).toEqual([]);
     expect(deriveCatalogFeatures(null)).toEqual([]);
   });
+
+  it('deriveImportedMdbSourceId reads a positive integer, rejects everything else', () => {
+    expect(deriveImportedMdbSourceId({ mdbSourceId: 1749 })).toBe(1749);
+    expect(deriveImportedMdbSourceId({ mdbSourceId: 0 })).toBeNull();
+    expect(deriveImportedMdbSourceId({ mdbSourceId: -5 })).toBeNull();
+    expect(deriveImportedMdbSourceId({ mdbSourceId: 12.5 })).toBeNull();
+    expect(deriveImportedMdbSourceId({ mdbSourceId: '1749' })).toBeNull(); // must be a real number
+    expect(deriveImportedMdbSourceId({})).toBeNull();
+    expect(deriveImportedMdbSourceId(null)).toBeNull();
+  });
 });
 
 // ─── End-to-end route ─────────────────────────────────────────────────────────
@@ -174,6 +185,9 @@ interface FeedState {
   feedInfo?: Record<string, unknown>;
   stops?: Array<{ stop_id: string; stop_lat?: number; stop_lon?: number }>;
   flexZones?: unknown[];
+  // Mobility Database import provenance carried in the saved state (issue #47).
+  mdbSourceId?: number;
+  [key: string]: unknown;
 }
 
 async function createSnapshot(client: TestClient, projectId: string, state: FeedState): Promise<{ snapshot: { id: string } }> {
@@ -341,6 +355,61 @@ describe('/catalog.json (open catalog endpoint)', () => {
     const doc = await fetchCatalog();
     const entry = doc.feeds.find((f) => f.id === `gtfsx:${proj.slug}`);
     expect(entry!.mdb_source_id).toBe(5678);
+  });
+
+  it('auto-captures mdb_source_id from the snapshot state at publish (import provenance, issue #47)', async () => {
+    // A feed imported FROM the Mobility Database carries `mdbSourceId` in its
+    // saved state; performPublish projects it onto feed_project.mdb_source_id so
+    // the catalog emits the switcher id — with NO manual column write.
+    const client = await loggedInClient('cat-prov@example.com');
+    const proj = await createProject(client, 'Imported From MDB');
+    await optInAndPublish(client, proj.id, 'official', sampleState({ mdbSourceId: 1749 }));
+
+    let entry: CatalogDoc['feeds'][number] | undefined;
+    for (let i = 0; i < 40; i += 1) {
+      const doc = await fetchCatalog();
+      entry = doc.feeds.find((f) => f.id === `gtfsx:${proj.slug}`);
+      if (entry?.mdb_source_id != null) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(entry!.mdb_source_id).toBe(1749);
+  });
+
+  it('does not overwrite an existing mdb_source_id with import provenance (first-write-wins)', async () => {
+    // The switcher id was already set (manually / by an earlier publish); a
+    // later publish whose state carries a DIFFERENT provenance id must not
+    // clobber it — the COALESCE guard keeps the existing value.
+    const client = await loggedInClient('cat-prov-keep@example.com');
+    const proj = await createProject(client, 'Already Catalogued');
+    await optInAndPublish(client, proj.id, 'official', sampleState());
+    await dbRun(`UPDATE feed_project SET mdb_source_id = 5678 WHERE id = ?`, proj.id);
+
+    // Republish with a snapshot that carries a different imported id.
+    const v = await createSnapshot(client, proj.id, sampleState({ mdbSourceId: 1749 }));
+    expect((await publish(client, proj.id, v.snapshot.id)).status).toBe(200);
+
+    // Give the background catalog-meta task time to run, then confirm it stuck.
+    for (let i = 0; i < 20; i += 1) await new Promise((r) => setTimeout(r, 25));
+    const doc = await fetchCatalog();
+    const entry = doc.feeds.find((f) => f.id === `gtfsx:${proj.slug}`);
+    expect(entry!.mdb_source_id).toBe(5678);
+  });
+
+  it('leaves mdb_source_id absent for a feed with no import provenance', async () => {
+    const client = await loggedInClient('cat-prov-none@example.com');
+    const proj = await createProject(client, 'Hand Built');
+    await optInAndPublish(client, proj.id, 'official', sampleState({ flexZones: [{ id: 'z1' }] }));
+
+    // Wait for catalog_meta (bbox) to land so we know the publish task finished,
+    // then assert mdb_source_id was never set.
+    let entry: CatalogDoc['feeds'][number] | undefined;
+    for (let i = 0; i < 40; i += 1) {
+      const doc = await fetchCatalog();
+      entry = doc.feeds.find((f) => f.id === `gtfsx:${proj.slug}`);
+      if (entry?.bounding_box) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(entry!.mdb_source_id).toBeUndefined();
   });
 
   it('GET catalog-listing reflects opt-in state', async () => {

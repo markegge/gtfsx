@@ -7,6 +7,7 @@ import { MyFeedsSource } from './MyFeedsSource';
 import { resolveMyFeedImportData, type MyFeedItem } from '../../services/myFeedsImport';
 import { feedNeedsShapes } from '../../services/shapesFromStops';
 import { detectRtapFeed } from '../../services/rtapDetect';
+import { parseMdbSourceId } from '../../services/mdbSourceId';
 import { ShapesFromStopsDialog } from '../shapes/ShapesFromStopsDialog';
 
 type ImportSource = 'upload' | 'url' | 'catalog' | 'myfeeds';
@@ -94,7 +95,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
   // (expensive, main-thread-blocking) parse so the user can back out instead
   // of hanging/crashing the tab.
   const [pendingLarge, setPendingLarge] = useState<
-    { file: File; info: Awaited<ReturnType<typeof inspectGtfsZip>>; sourceUrl: string | null } | null
+    { file: File; info: Awaited<ReturnType<typeof inspectGtfsZip>>; sourceUrl: string | null; mdbSourceId: number | null } | null
   >(null);
 
   // Success state
@@ -115,6 +116,14 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
   // of what its bytes say; a bare upload of the exact same bytes is not
   // knowable as RTAP at all, and the copy is written to admit that honestly.
   const [importSourceUrl, setImportSourceUrl] = useState<string | null>(null);
+  // Mobility Database source id when this import came from an MDB catalog pick
+  // (null otherwise). Stashed like importSourceUrl — it's provenance about THIS
+  // import action, not a property of the parsed feed — and applied to the store
+  // only on a full REPLACE (see doReplaceImport). A merge pulls a few routes
+  // into a different feed, so it must NOT claim the base feed is that MDB source
+  // (issue #47). Threaded as an explicit arg into doReplaceImport as well, so
+  // the auto-import-on-empty-project path doesn't read stale state.
+  const [importMdbSourceId, setImportMdbSourceId] = useState<number | null>(null);
 
   // Async completion state (only used when onComplete is provided).
   const [completing, setCompleting] = useState(false);
@@ -139,9 +148,16 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
    * the first-time-import flow: clear all existing state, load the new feed,
    * rename the project, pan/zoom the map to the new routes, and surface the
    * success screen. */
-  const doReplaceImport = useCallback((data: ImportData, name: string) => {
+  const doReplaceImport = useCallback((data: ImportData, name: string, mdbSourceId: number | null = null) => {
     loadImportIntoStore(data);
     useStore.getState().setProjectName(name);
+    // Stamp Mobility Database import provenance AFTER loadImportIntoStore, which
+    // resets editor state (clearing any previous feed's mdbSourceId). Only a
+    // genuine MDB catalog import sets it — non-MDB replaces leave it cleared —
+    // and it rides the working-state snapshot to feed_project.mdb_source_id at
+    // publish (issue #47). Passed as an explicit arg so the empty-project
+    // auto-import can't read a stale importMdbSourceId from state.
+    if (mdbSourceId != null) useStore.getState().setMdbSourceId(mdbSourceId);
     fitMapToImport(data);
     // Treat the import as a load, not an edit — clear dirty so the
     // beforeunload prompt only fires once the user actually modifies the
@@ -167,12 +183,13 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
    * it's provenance about THIS import action, not a property of the parsed
    * feed itself — it survives untouched whether we replace immediately or the
    * user lands on the mode-selection screen first. */
-  const presentImportData = useCallback((data: ImportData, name: string, sourceUrl: string | null = null) => {
+  const presentImportData = useCallback((data: ImportData, name: string, sourceUrl: string | null = null, mdbSourceId: number | null = null) => {
     setImportWarnings(data.warnings);
     setImportSourceUrl(sourceUrl);
+    setImportMdbSourceId(mdbSourceId);
     // If the project is empty, skip the options screen and import immediately
     if (useStore.getState().routes.length === 0) {
-      doReplaceImport(data, name);
+      doReplaceImport(data, name, mdbSourceId);
       return;
     }
     setParsedData(data);
@@ -183,7 +200,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
 
   // The actual (expensive) parse. Always reached via parseFile so every entry
   // point — upload, URL, catalog — goes through the size pre-flight first.
-  const runParse = useCallback(async (file: File, sourceUrl: string | null = null) => {
+  const runParse = useCallback(async (file: File, sourceUrl: string | null = null, mdbSourceId: number | null = null) => {
     setParsing(true);
     setProgress(null);
     setError(null);
@@ -192,7 +209,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
         setProgress(rows ? `${phase} ${rows.toLocaleString()} rows` : phase),
       );
       const name = file.name.replace(/\.zip$/i, '');
-      presentImportData(data, name, sourceUrl);
+      presentImportData(data, name, sourceUrl, mdbSourceId);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to parse GTFS feed');
     } finally {
@@ -201,7 +218,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
     }
   }, [presentImportData]);
 
-  const parseFile = useCallback(async (file: File, sourceUrl: string | null = null) => {
+  const parseFile = useCallback(async (file: File, sourceUrl: string | null = null, mdbSourceId: number | null = null) => {
     setError(null);
     // Cheap pre-flight: if stop_times is large, gate behind a confirmation
     // instead of charging into a parse that can hang or crash the tab. If the
@@ -209,20 +226,20 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
     try {
       const info = await inspectGtfsZip(file);
       if (info.isLarge) {
-        setPendingLarge({ file, info, sourceUrl });
+        setPendingLarge({ file, info, sourceUrl, mdbSourceId });
         return;
       }
     } catch {
       /* ignore — proceed to the normal parse path */
     }
-    await runParse(file, sourceUrl);
+    await runParse(file, sourceUrl, mdbSourceId);
   }, [runParse]);
 
   const proceedWithLarge = useCallback(() => {
     if (!pendingLarge) return;
-    const { file, sourceUrl } = pendingLarge;
+    const { file, sourceUrl, mdbSourceId } = pendingLarge;
     setPendingLarge(null);
-    runParse(file, sourceUrl);
+    runParse(file, sourceUrl, mdbSourceId);
   }, [pendingLarge, runParse]);
 
   const cancelLarge = useCallback(() => {
@@ -257,7 +274,11 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
     // rapid.nationalrtap.org, so hosted_url alone would never match. Fall back
     // to hosted_url if there's no producer URL; worse case it just doesn't
     // match nationalrtap.org, same as passing nothing at all.
-    await parseFile(file, feed.source_info?.producer_url ?? url);
+    //
+    // feed.id is the Mobility Database id (`mdb-<n>`); carry its numeric source
+    // id as switcher provenance (issue #47). parseMdbSourceId returns null for
+    // anything that isn't a clean MDB id, so we never guess.
+    await parseFile(file, feed.source_info?.producer_url ?? url, parseMdbSourceId(feed.id));
   }, [parseFile]);
 
   // "My feeds" import: resolve the selected feed — published OR draft — from its
@@ -330,7 +351,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
     if (!parsedData) return;
 
     if (mode === 'replace') {
-      doReplaceImport(parsedData, fileName);
+      doReplaceImport(parsedData, fileName, importMdbSourceId);
     } else {
       if (selectedRouteIds.size === 0) return;
       mergeImportIntoStore(parsedData, selectedRouteIds);
@@ -563,7 +584,7 @@ export function ImportDialog({ onClose, onComplete, completeLabel, initialSource
               onClick={() => {
                 if (!parsedData) return;
                 setMode('replace');
-                doReplaceImport(parsedData, fileName);
+                doReplaceImport(parsedData, fileName, importMdbSourceId);
               }}
               className="flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors bg-white text-warm-gray border-sand hover:border-coral hover:text-dark-brown"
             >

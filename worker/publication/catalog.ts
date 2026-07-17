@@ -266,6 +266,21 @@ export function deriveCatalogFeatures(state: unknown): string[] {
   return features;
 }
 
+/**
+ * The Mobility Database source id carried as import provenance inside a feed's
+ * saved state (store field `mdbSourceId`, persisted with the snapshot). Returned
+ * so performPublish can project it onto feed_project.mdb_source_id at publish
+ * time — the same read-from-the-snapshot pattern as bbox/features. Only a
+ * positive integer is a real source id; anything else (absent, null, 0,
+ * negative, non-integer, string) yields null so we never stamp a bogus switcher
+ * id. Kept permissive about the state shape — it is user JSON.
+ */
+export function deriveImportedMdbSourceId(state: unknown): number | null {
+  if (!state || typeof state !== 'object') return null;
+  const raw = (state as { mdbSourceId?: unknown }).mdbSourceId;
+  return typeof raw === 'number' && Number.isInteger(raw) && raw > 0 ? raw : null;
+}
+
 /** Parse a persisted catalog_meta_json string into CatalogMeta, or null. */
 export function parseCatalogMeta(json: string | null | undefined): CatalogMeta | null {
   if (!json) return null;

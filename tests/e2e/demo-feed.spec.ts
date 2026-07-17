@@ -29,7 +29,16 @@ test('demo feed loads with its known routes/stops/calendars and no console error
     for (const arg of msg.args()) {
       try {
         const d = await arg.evaluate((v) => {
-          if (v instanceof Error) return v.stack || v.message || String(v);
+          if (v instanceof Error) {
+            // mapbox-gl AjaxError-style objects carry the failing request URL +
+            // HTTP status on the error itself. Include them: since mapbox-gl 3.26
+            // logs tile-load failures from a worker whose stack is only a blob:
+            // URL, the request URL is the sole thing that attributes them to
+            // api.mapbox.com so the IGNORED allowlist can filter them.
+            const ax = v as Error & { url?: string; status?: number };
+            const extra = [ax.url, ax.status].filter((x) => x != null).join(' ');
+            return [v.stack || v.message || String(v), extra].filter(Boolean).join(' ');
+          }
           if (typeof v === 'string') return v;
           try { return JSON.stringify(v); } catch { return String(v); }
         });

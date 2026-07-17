@@ -95,7 +95,7 @@ describe('catalog builder (pure)', () => {
           mdbSourceId: 1234,
           meta: {
             bbox: { minimum_latitude: 45.6, minimum_longitude: -111.2, maximum_latitude: 45.7, maximum_longitude: -111.0 },
-            features: ['flex'],
+            features: ['Fare Products'],
             feedPublisherName: 'Sunset Valley Transit Authority',
             feedContactEmail: 'gtfs@svt.example',
           },
@@ -107,7 +107,7 @@ describe('catalog builder (pure)', () => {
     expect(full.mdb_source_id).toBe(1234);
     expect(full.provider).toBe('Sunset Valley Transit Authority'); // publisher name wins over project name
     expect(full.feed_contact_email).toBe('gtfs@svt.example');
-    expect(full.features).toEqual(['flex']);
+    expect(full.features).toEqual(['Fare Products']);
     expect(full.bounding_box).toEqual({
       minimum_latitude: 45.6, minimum_longitude: -111.2, maximum_latitude: 45.7, maximum_longitude: -111.0,
     });
@@ -134,10 +134,45 @@ describe('catalog builder (pure)', () => {
       ]),
     ).toEqual({ minimum_latitude: 45.68, minimum_longitude: -111.04, maximum_latitude: 45.7, maximum_longitude: -111.02 });
 
-    expect(deriveCatalogFeatures({ flexZones: [{ id: 'z1' }] })).toEqual(['flex']);
-    expect(deriveCatalogFeatures({ flexZones: [] })).toEqual([]);
     expect(deriveCatalogFeatures({})).toEqual([]);
     expect(deriveCatalogFeatures(null)).toEqual([]);
+  });
+
+  it('deriveCatalogFeatures maps each persisted file to its MobilityData feature name', () => {
+    // Positive fixtures: one record present → the validator-vocabulary name.
+    // Names verified against MobilityData's Canonical GTFS Validator
+    // (FeedMetadata.java) and a live Mobility Database validation report.
+    const cases: Array<[string, string]> = [
+      ['fareAttributes', 'Fares V1'],
+      ['fareProducts', 'Fare Products'],
+      ['fareMedia', 'Fare Media'],
+      ['riderCategories', 'Rider Categories'],
+      ['fareTransferRules', 'Fare Transfers'],
+      ['pathways', 'Pathway Connections'],
+      ['levels', 'Levels'],
+      ['shapes', 'Shapes'],
+      ['frequencies', 'Frequencies'],
+      ['flexZones', 'Zone-Based Demand Responsive Services'],
+    ];
+    for (const [key, feature] of cases) {
+      expect(deriveCatalogFeatures({ [key]: [{ id: 'x' }] })).toEqual([feature]);
+      // Negative: an empty array is not the feature.
+      expect(deriveCatalogFeatures({ [key]: [] })).toEqual([]);
+    }
+  });
+
+  it('deriveCatalogFeatures emits multiple features in a stable order and ignores unknown keys', () => {
+    const features = deriveCatalogFeatures({
+      shapes: [{ id: 's1' }],
+      fareProducts: [{ id: 'p1' }],
+      flexZones: [{ id: 'z1' }],
+      // Not persisted / not a detectable feature — must never leak in.
+      transfers: [{ from: 'a', to: 'b' }],
+      routes: [{ route_id: 'r1' }],
+    });
+    // Fares before pathways before base before flexible-services (rule order).
+    expect(features).toEqual(['Fare Products', 'Shapes', 'Zone-Based Demand Responsive Services']);
+    expect(features).not.toContain('Transfers');
   });
 
   it('deriveImportedMdbSourceId reads a positive integer, rejects everything else', () => {
@@ -343,7 +378,32 @@ describe('/catalog.json (open catalog endpoint)', () => {
       minimum_latitude: 45.68, minimum_longitude: -111.04, maximum_latitude: 45.7, maximum_longitude: -111.02,
     });
     expect(entry!.feed_contact_email).toBe('gtfs@svt.example');
-    expect(entry!.features).toEqual(['flex']);
+    expect(entry!.features).toEqual(['Zone-Based Demand Responsive Services']);
+  });
+
+  it('detects Fares v2 + pathways + shapes from the snapshot with MobilityData feature names', async () => {
+    const client = await loggedInClient('cat-feat@example.com');
+    const proj = await createProject(client, 'Feature Rich');
+    await optInAndPublish(
+      client,
+      proj.id,
+      'official',
+      sampleState({
+        fareProducts: [{ fare_product_id: 'fp1' }],
+        fareMedia: [{ fare_media_id: 'fm1' }],
+        pathways: [{ pathway_id: 'pw1' }],
+        shapes: [{ shape_id: 'sh1' }],
+      }),
+    );
+
+    let entry: CatalogDoc['feeds'][number] | undefined;
+    for (let i = 0; i < 40; i += 1) {
+      const doc = await fetchCatalog();
+      entry = doc.feeds.find((f) => f.id === `gtfsx:${proj.slug}`);
+      if (entry?.features && entry.features.length > 0) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(entry!.features).toEqual(['Fare Products', 'Fare Media', 'Pathway Connections', 'Shapes']);
   });
 
   it('carries mdb_source_id when persisted on the project (switcher case)', async () => {

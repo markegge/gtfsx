@@ -50,7 +50,8 @@ export interface CatalogBoundingBox {
 export interface CatalogMeta {
   /** Geographic bounds of the published feed's stops. Null when no stop has usable coords. */
   bbox: CatalogBoundingBox | null;
-  /** Derivable GTFS spec features present in the feed (e.g. 'flex'). */
+  /** GTFS spec features detected in the feed, in MobilityData's validator
+   *  vocabulary (e.g. 'Fare Products'). See deriveCatalogFeatures. */
   features: string[];
   /** feed_info.txt feed_publisher_name, when the feed declares one. */
   feedPublisherName: string | null;
@@ -252,16 +253,58 @@ export function buildCatalogDocument(input: BuildCatalogInput): CatalogDocument 
 }
 
 /**
- * Derive the spec-feature tags we can cheaply detect from a parsed feed-state
- * blob at publish time. v0.2 detects GTFS-Flex (the editor models flex service
- * as `flexZones`); fares and other features are a documented follow-up. Kept
- * permissive about the state shape — it is user JSON.
+ * Detectable GTFS spec features, named with MobilityData's OWN vocabulary so a
+ * consumer can map them straight onto a Mobility Database source. The strings
+ * are the exact `FeatureMetadata` names emitted by MobilityData's Canonical
+ * GTFS Validator (github.com/MobilityData/gtfs-validator →
+ * reportsummary/model/FeedMetadata.java), which is what populates the "GTFS
+ * Features" list on a Mobility Database dataset.
+ *
+ * We deliberately emit ONLY features whose validator trigger is
+ * presence-of-records in a file the editor actually persists in its snapshot —
+ * the same signal the validator's file-presence pass uses — so we don't
+ * over-claim. Features the validator derives from cross-file references
+ * (Zone-Based / Route-Based / Time-Based Fares) or from scanning fields
+ * (Continuous Stops) are intentionally omitted: guessing them from mere file
+ * presence would emit names the validator itself would not, and a wrong name is
+ * worse than a missing one. transfers/translations/attributions are validator
+ * features too but the editor does not persist them in the snapshot, so they
+ * are not detectable here. See docs/catalog-spec.md §8.
+ *
+ * Each entry maps a persisted state array to the feature it evidences; a feature
+ * is emitted when that array has at least one record.
+ */
+const CATALOG_FEATURE_RULES: ReadonlyArray<{ key: string; feature: string }> = [
+  // GTFS-Fares v1.
+  { key: 'fareAttributes', feature: 'Fares V1' },
+  // GTFS-Fares v2 (the file-presence subset the validator reports directly).
+  { key: 'fareProducts', feature: 'Fare Products' },
+  { key: 'fareMedia', feature: 'Fare Media' },
+  { key: 'riderCategories', feature: 'Rider Categories' },
+  { key: 'fareTransferRules', feature: 'Fare Transfers' },
+  // Stations & pathways.
+  { key: 'pathways', feature: 'Pathway Connections' },
+  { key: 'levels', feature: 'Levels' },
+  // Base.
+  { key: 'shapes', feature: 'Shapes' },
+  { key: 'frequencies', feature: 'Frequencies' },
+  // Flexible services. The editor models GTFS-Flex as GeoJSON service areas
+  // (`flexZones`), which is exactly the validator's zone-based DRT feature.
+  { key: 'flexZones', feature: 'Zone-Based Demand Responsive Services' },
+];
+
+/**
+ * Derive the GTFS spec features present in a parsed feed-state blob at publish
+ * time, named with MobilityData's vocabulary (see CATALOG_FEATURE_RULES). Kept
+ * permissive about the state shape — it is user JSON — and order-stable.
  */
 export function deriveCatalogFeatures(state: unknown): string[] {
+  if (!state || typeof state !== 'object') return [];
+  const s = state as Record<string, unknown>;
   const features: string[] = [];
-  if (state && typeof state === 'object') {
-    const flexZones = (state as { flexZones?: unknown }).flexZones;
-    if (Array.isArray(flexZones) && flexZones.length > 0) features.push('flex');
+  for (const { key, feature } of CATALOG_FEATURE_RULES) {
+    const arr = s[key];
+    if (Array.isArray(arr) && arr.length > 0) features.push(feature);
   }
   return features;
 }

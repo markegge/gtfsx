@@ -18,10 +18,32 @@
     <meta name="twitter:site" content="@gtfsxapp" />
     <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
     <style>
-      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --accent-ink:#fff; --rule:#EADBC8; --card:#fff; }
+      /* Brand fonts — same self-hosted variable files the marketing homepage
+         uses (see public/home/colors.css); served from /home/fonts/. */
+      @font-face {
+        font-family: "Nunito";
+        src: url("/home/fonts/Nunito/Nunito-VariableFont_wght.ttf") format("truetype-variations");
+        font-weight: 200 1000;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Inter";
+        src: url("/home/fonts/Inter/Inter-VariableFont_opsz,wght.ttf") format("truetype-variations");
+        font-weight: 100 900;
+        font-style: normal;
+        font-display: swap;
+      }
+      :root {
+        --bg:#FFF8F0; --ink:#3D2E22; --brown:#5C4A3A; --muted:#6B5A4D; --accent:#E8734A; --accent-ink:#fff; --rule:#EADBC8; --card:#fff;
+        --font-heading: "Nunito", ui-rounded, system-ui, sans-serif;
+        --font-body: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+      }
       * { box-sizing: border-box; }
       html, body { overflow-x: hidden; }
-      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.55; }
+      body { margin:0; font-family: var(--font-body); color:var(--ink); background:var(--bg); line-height:1.55; -webkit-font-smoothing: antialiased; }
+      h1, h2, h3 { font-family: var(--font-heading); letter-spacing: -0.02em; }
+      h2, h3 { font-weight: 800; }
       a { color: var(--accent); }
       .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
       .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
@@ -30,7 +52,7 @@
       .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
       .site-header nav a:hover { color:var(--ink); background:var(--bg); }
       .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:10px; }
-      .site-header .cta { background:var(--accent); color:var(--accent-ink); padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:600; font-size:14px; white-space:nowrap; min-height:44px; display:inline-flex; align-items:center; }
+      .site-header .cta { font-family: var(--font-heading); background:var(--accent); color:var(--accent-ink); padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:800; font-size:14px; white-space:nowrap; min-height:44px; display:inline-flex; align-items:center; }
       @media (max-width: 720px) {
         .site-header nav { display:none; }
         .site-header { padding: 0 12px; gap:8px; }
@@ -40,13 +62,13 @@
       section > .inner { max-width: 880px; margin: 0 auto; }
       @media (max-width: 640px) { section { padding: 36px 20px; } }
       .hero { padding-top: 36px; padding-bottom: 24px; }
-      .hero h1 { font-size: clamp(26px, 5vw, 44px); line-height: 1.15; letter-spacing: -0.015em; margin: 0 0 14px; text-wrap: balance; }
-      .hero .subhead { font-size: clamp(17px, 2.2vw, 21px); color: var(--ink); margin: 0 0 10px; max-width: 760px; }
+      .hero h1 { font-weight: 900; font-size: clamp(26px, 5vw, 44px); line-height: 1.08; letter-spacing: -0.03em; margin: 0 0 14px; text-wrap: balance; }
+      .hero .subhead { font-family: var(--font-heading); font-weight: 600; font-size: clamp(17px, 2.2vw, 21px); letter-spacing: -0.01em; color: var(--brown); margin: 0 0 10px; max-width: 760px; }
       .hero .subhead-support { font-size: clamp(15px, 1.9vw, 17px); color: var(--muted); margin: 0 0 22px; }
-      .price-strip { color: var(--muted); font-size: 14px; font-weight: 600; margin: 14px 0 0; }
+      .price-strip { font-family: var(--font-heading); color: var(--muted); font-size: 14px; font-weight: 700; margin: 14px 0 0; }
       .trust-strip { color: var(--muted); font-size: 13px; font-weight: 500; margin: 6px 0 0; }
       .cta-row { display:flex; flex-wrap:wrap; gap:14px; align-items:center; }
-      .btn-primary { background:var(--accent); color:var(--accent-ink); padding:14px 24px; border-radius:8px; text-decoration:none; font-weight:700; font-size:17px; display:inline-flex; align-items:center; min-height:48px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+      .btn-primary { font-family: var(--font-heading); background:var(--accent); color:var(--accent-ink); padding:14px 24px; border-radius:8px; text-decoration:none; font-weight:800; font-size:17px; display:inline-flex; align-items:center; min-height:48px; box-shadow: 0 8px 22px rgba(232,115,74,0.32); }
       .btn-primary:hover { filter: brightness(0.96); }
       .btn-trial { color:var(--muted); text-decoration:underline; font-weight:500; font-size:14px; padding:10px 4px; }
       .btn-trial:hover { color:var(--ink); }

@@ -14,6 +14,7 @@ export type SidebarSection =
   | 'stop-analysis'
   | 'access-isochrones'
   | 'alerts'
+  | 'variants'
   | 'settings';
 
 /**

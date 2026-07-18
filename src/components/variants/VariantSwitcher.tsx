@@ -10,14 +10,16 @@ import { VariantCompareDialog } from './VariantCompareDialog';
 import { useCanUseVariants } from './useCanUseVariants';
 
 /**
- * A2b — feed-variant switcher (header). Fork the feed into named variants,
- * switch the active one, mark a baseline, and open the baseline comparison.
- * Distinct from the basic per-route visibility toggle (hiddenRouteIds).
+ * A2b — feed-variant switcher (header). A lightweight dropdown for FAST switching
+ * between the baseline and variants, plus quick new / delete / compare / discard.
+ * Full lifecycle management (rename, duplicate, promote-to-baseline, per-row
+ * compare + stats) lives in the RightRail "Variants" panel, opened from the
+ * "Manage variants…" item here. Agency+ (self-hides otherwise).
  */
 export function VariantSwitcher() {
   const variants = useStore((s) => s.variants);
   const activeVariantId = useStore((s) => s.activeVariantId);
-  const setBaselineVariant = useStore((s) => s.setBaselineVariant);
+  const setSidebarSection = useStore((s) => s.setSidebarSection);
   const canUse = useCanUseVariants();
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState('');
@@ -32,6 +34,11 @@ export function VariantSwitcher() {
     createVariantFromCurrent(newName);
     setNewName('');
     setOpen(false);
+  };
+
+  const openManage = () => {
+    setOpen(false);
+    setSidebarSection('variants'); // opens the RightRail variants panel
   };
 
   return (
@@ -50,6 +57,11 @@ export function VariantSwitcher() {
           <path d="M6 8.5v7M8.4 6.6c4 .3 6.5 1.2 7.4 2.4" />
         </svg>
         <span className="truncate">{active ? active.name : 'Variants'}</span>
+        {variants.length > 0 && (
+          <span className="shrink-0 rounded-full bg-sand text-warm-gray text-[10px] font-bold px-1.5 py-0.5 leading-none">
+            {variants.length}
+          </span>
+        )}
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="shrink-0 text-warm-gray">
           <polyline points="6 9 12 15 18 9" />
         </svg>
@@ -77,22 +89,13 @@ export function VariantSwitcher() {
                       {v.baseline && <span className="shrink-0 px-1 py-0.5 rounded bg-sand text-[9px] font-bold text-warm-gray">BASE</span>}
                     </button>
                     {!v.baseline && (
-                      <>
-                        <button
-                          onClick={() => setBaselineVariant(v.id)}
-                          title="Make this the baseline"
-                          className="px-1.5 py-1.5 text-warm-gray hover:text-teal transition-colors shrink-0 opacity-0 group-hover:opacity-100 text-xs"
-                        >
-                          ⌖
-                        </button>
-                        <button
-                          onClick={() => deleteVariant(v.id)}
-                          title="Delete variant"
-                          className="px-1.5 py-1.5 text-warm-gray hover:text-red-600 transition-colors shrink-0"
-                        >
-                          ×
-                        </button>
-                      </>
+                      <button
+                        onClick={() => deleteVariant(v.id)}
+                        title="Delete variant"
+                        className="px-1.5 py-1.5 text-warm-gray hover:text-red-600 transition-colors shrink-0"
+                      >
+                        ×
+                      </button>
                     )}
                   </div>
                 ))}
@@ -137,6 +140,16 @@ export function VariantSwitcher() {
                 </button>
               </>
             )}
+
+            <div className="border-t border-sand my-1" />
+            {/* Full management (rename, duplicate, promote-to-baseline, per-row
+                compare + stats) lives in the RightRail panel. */}
+            <button
+              onClick={openManage}
+              className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left font-semibold text-coral hover:bg-cream transition-colors"
+            >
+              <span aria-hidden>⚙</span> Manage variants…
+            </button>
           </div>
         </>
       )}

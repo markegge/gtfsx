@@ -6,9 +6,9 @@ import { useCanUseVariants } from './useCanUseVariants';
 
 /**
  * Slim banner shown while a NON-baseline variant is active, so it's always
- * obvious you're editing a fork (not your baseline / saved feed). Variants are
- * session-only today (#66): they aren't persisted and are lost on reload, and
- * Save writes your BASELINE feed, not the variant — the copy says so plainly.
+ * obvious you're editing a fork (not your baseline / saved feed). Save persists
+ * your baseline as the canonical feed and keeps every variant alongside it, so
+ * the copy makes clear edits here land in this variant, not the baseline.
  * Mirrors WelcomeBanner / PartnerBanner placement. Agency+ only (mirrors
  * VariantSwitcher's useCanUseVariants gate).
  */
@@ -31,10 +31,7 @@ export function VariantBanner() {
         </svg>
         Editing variant: {active.name}
       </span>
-      <span className="text-warm-gray">
-        Session only — not saved, lost on reload.
-        <span className="hidden md:inline"> Save writes your baseline feed, not this variant.</span>
-      </span>
+      <span className="text-warm-gray hidden sm:inline">Changes here stay in this variant. Save keeps your baseline as the feed and all variants alongside it.</span>
       <span className="flex-1" />
       <button onClick={() => setShowCompare(true)} className="font-semibold text-coral hover:underline">Compare</button>
       <button

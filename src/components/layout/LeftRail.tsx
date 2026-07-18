@@ -198,6 +198,16 @@ const ICON_PATHS: Record<SidebarSection, ReactNode> = {
       <path d="M18 9a3 3 0 0 1 0 6" />
     </>
   ),
+  // Variants — fork / branch (matches the TopBar variants dropdown glyph). The
+  // variants panel is opened from that dropdown's "Manage variants…", so there
+  // is no LeftRail nav item for it; this entry only satisfies the exhaustive
+  // ICON_PATHS map (Record<SidebarSection, …>).
+  variants: (
+    <>
+      <circle cx="6" cy="6" r="2" /><circle cx="6" cy="18" r="2" /><circle cx="18" cy="9" r="2" />
+      <path d="M6 8v8M8.4 6.6c4 .3 6.5 1.2 7.4 2.4" />
+    </>
+  ),
   // Settings — gear
   settings: (
     <>

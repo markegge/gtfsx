@@ -19,6 +19,7 @@ import { deleteFlexZoneWithRoute } from '../flex/flexHelpers';
 import { StationsPanel } from '../stations/StationsPanel';
 import { FrequenciesEditor } from '../frequencies/FrequenciesEditor';
 import { BlocksPanel } from '../blocks/BlocksPanel';
+import { VariantsPanel } from '../variants/VariantsPanel';
 import { AlertsEditor } from '../alerts/AlertsEditor';
 import { FeatureSettingsPanel } from '../settings/FeatureSettingsPanel';
 import { PaywallOverlay } from '../billing/PaywallOverlay';
@@ -51,6 +52,7 @@ const SECTION_TITLES: Record<SidebarSection, string> = {
   'stop-analysis': 'Stop Analysis',
   'access-isochrones': 'Access Isochrones',
   alerts: 'Service Alerts',
+  variants: 'Variants',
   settings: 'Feature settings',
 };
 
@@ -70,6 +72,7 @@ const SECTION_GROUP: Record<SidebarSection, string | null> = {
   'stop-analysis': 'Analysis',
   'access-isochrones': 'Analysis',
   alerts: 'Operations',
+  variants: 'Planning',
   settings: null,
 };
 
@@ -126,6 +129,10 @@ function PanelBody({ section }: { section: SidebarSection }) {
           <AlertsEditor />
         </PaywallOverlay>
       );
+    case 'variants':
+      // Agency+ feature; the only entry point (the TopBar variants dropdown's
+      // "Manage variants…") is itself plan-gated, and VariantsPanel self-guards.
+      return <VariantsPanel />;
     case 'settings':
       return <FeatureSettingsPanel />;
     default:

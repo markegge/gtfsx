@@ -11,6 +11,11 @@ import type { FeedDiff } from '../../services/feedDiff';
 
 interface Props {
   onClose: () => void;
+  /** Prefill the A / B pickers (e.g. the panel's per-row "compare to baseline"
+   *  shortcut passes A = baseline, B = that variant). Falls back to
+   *  A = baseline, B = active variant. */
+  initialAId?: string;
+  initialBId?: string;
 }
 
 /* ──────────────────────────── formatting ──────────────────────────── */
@@ -185,15 +190,15 @@ function useSpatialMetrics(variantId: string): SpatialState {
  *    and are cached per variant (variantSpatialMetrics.ts). Each side shows a
  *    computing spinner on a cache miss and renders instantly on a hit.
  */
-export function VariantCompareDialog({ onClose }: Props) {
+export function VariantCompareDialog({ onClose, initialAId, initialBId }: Props) {
   const variants = useStore((s) => s.variants);
   const activeVariantId = useStore((s) => s.activeVariantId);
 
   const baselineId = variants.find((v) => v.baseline)?.id ?? variants[0]?.id ?? '';
   const defaultBId = activeVariantId ?? baselineId;
 
-  const [aId, setAId] = useState(baselineId);
-  const [bId, setBId] = useState(defaultBId);
+  const [aId, setAId] = useState(initialAId ?? baselineId);
+  const [bId, setBId] = useState(initialBId ?? defaultBId);
 
   const diff: FeedDiff | null = useMemo(
     () => (aId && bId ? compareVariants(aId, bId) : null),
@@ -251,7 +256,10 @@ export function VariantCompareDialog({ onClose }: Props) {
         : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    // z-[60] so it stacks above the RightRail variants panel and any confirm
+    // dialog (Radix z-50) when opened from a per-row compare shortcut; also fine
+    // standalone (the VariantBanner / dropdown "Compare to baseline").
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col">
         <div className="flex items-start justify-between p-5 pb-3 border-b border-sand">

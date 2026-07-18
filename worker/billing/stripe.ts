@@ -33,7 +33,13 @@ export function getStripe(env: Env): Stripe {
   }
   if (cached) return cached;
   cached = new Stripe(env.STRIPE_SECRET_KEY, {
-    apiVersion: '2026-04-22.dahlia',
+    // Kept in sync with the SDK's pinned API version (stripe-node 22.3.x pins
+    // 2026-06-24.dahlia). The 2026-04-22 → 2026-06-24 API diff (via 2026-05-27)
+    // only touches Reserve.Hold, BalanceTransaction.type, Billing.CreditGrant,
+    // and V2.Commerce/Account capabilities — none of which this worker uses
+    // (we call only checkout.sessions, customers, billingPortal.sessions, and
+    // webhooks). Bump this in lockstep with the SDK.
+    apiVersion: '2026-06-24.dahlia',
     httpClient: Stripe.createFetchHttpClient(),
   });
   return cached;

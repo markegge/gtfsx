@@ -32,6 +32,9 @@ interface SerializedVariant {
   name: string;
   baseline: boolean;
   createdAt: number;
+  /** Optional for backward compatibility: envelopes written before the panel
+   *  work have no modifiedAt, and load with modifiedAt = createdAt. */
+  modifiedAt?: number;
   /** Override diff from the baseline snapshot; null for the baseline entry
    *  itself (it IS the flat top-level feed). */
   diff: VariantDiff | null;
@@ -61,6 +64,7 @@ export function buildVariantsEnvelope(
       name: v.name,
       baseline: v.baseline,
       createdAt: v.createdAt,
+      modifiedAt: v.modifiedAt,
       diff: v.baseline ? null : diffVariant(baseSnap, v.snapshot),
     })),
   };
@@ -92,6 +96,7 @@ export function parseVariantsEnvelope(
     name: e.name,
     baseline: !!e.baseline,
     createdAt: e.createdAt,
+    modifiedAt: e.modifiedAt ?? e.createdAt,
     // Baseline (or a defensive missing diff) IS the flat feed; others overlay.
     snapshot: e.baseline || !e.diff ? { ...baseFlat } : applyVariantDiff(baseFlat, e.diff),
   }));

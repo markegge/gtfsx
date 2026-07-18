@@ -11,6 +11,7 @@ const v = (id: string, baseline: boolean): FeedVariant => ({
   name: id,
   baseline,
   createdAt: 0,
+  modifiedAt: 0,
   snapshot: {},
 });
 

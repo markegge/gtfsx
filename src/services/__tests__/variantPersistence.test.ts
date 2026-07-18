@@ -22,7 +22,7 @@ function snap(over: Record<string, unknown> = {}): Record<string, unknown> {
 }
 
 function variant(id: string, name: string, baseline: boolean, snapshot: Record<string, unknown>): FeedVariant {
-  return { id, name, baseline, createdAt: 1, snapshot };
+  return { id, name, baseline, createdAt: 1, modifiedAt: 1, snapshot };
 }
 
 describe('buildVariantsEnvelope + parseVariantsEnvelope round-trip', () => {

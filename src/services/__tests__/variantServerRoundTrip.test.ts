@@ -29,6 +29,7 @@ import {
   createVariantFromCurrent,
   switchToVariant,
   baselineVariant,
+  promoteToBaseline,
 } from '../variants';
 import { VARIANTS_ENVELOPE_KEY } from '../variantPersistence';
 import type { Route, Trip, StopTime } from '../../types/gtfs';
@@ -135,6 +136,39 @@ describe('variant persistence save → reload round-trip', () => {
     // Switching to baseline reverts the live transfers to the single one.
     switchToVariant(baselineVariant()!.id);
     expect(useStore.getState().transfers).toHaveLength(1);
+  });
+
+  it('promote → save → reload lands the promoted world (baseline = promoted, prior preserved)', async () => {
+    const v1 = createVariantFromCurrent('V1');
+    addRoute('R2'); // V1 = R1, R2
+    switchToVariant(baselineVariant()!.id);
+    createVariantFromCurrent('V2');
+    addTrip('t2'); // V2 = R1 (t1, t2)
+
+    promoteToBaseline(v1); // baseline := V1's content; old baseline kept as variant
+
+    await saveProjectNow(PID);
+    // Flat top-level feed is now the PROMOTED baseline (R1, R2).
+    expect((h.saved.snapshot!.routes as Route[]).map((r) => r.route_id).sort()).toEqual(['R1', 'R2']);
+
+    // Hard reload.
+    resetEditorState();
+    useStore.getState().setVariants([]);
+    useStore.getState().setActiveVariantId(null);
+    await loadProjectFromServer(PID);
+
+    const st = useStore.getState();
+    // Baseline is the promoted feed and is active.
+    expect(st.variants.find((v) => v.baseline)!.id).toBe(st.activeVariantId);
+    expect(st.routes.map((r) => r.route_id).sort()).toEqual(['R1', 'R2']);
+    // Prior baseline preserved as a variant with its original content.
+    const prior = st.variants.find((v) => v.name === 'Baseline (before V1)')!;
+    expect(prior).toBeTruthy();
+    expect((prior.snapshot.routes as Route[]).map((r) => r.route_id)).toEqual(['R1']);
+    // V2 kept its forked state; the promoted variant is gone.
+    const v2 = st.variants.find((v) => v.name === 'V2')!;
+    expect((v2.snapshot.trips as Trip[]).map((t) => t.trip_id).sort()).toEqual(['t1', 't2']);
+    expect(st.variants.some((v) => v.name === 'V1')).toBe(false);
   });
 
   it('a feed with no variants saves a flat, envelope-free blob (backward compatible)', async () => {

@@ -43,7 +43,7 @@
     "@turf/union": "^7.3.4",
     "date-fns": "^4.4.0",
     "dexie": "^4.4.4",
-    "flatgeobuf": "^3.36.0",
+    "flatgeobuf": "^4.4.0",
     "gtfs-realtime-bindings": "^2.1.0",
     "hono": "^4.12.30",
     "immer": "^11.1.11",

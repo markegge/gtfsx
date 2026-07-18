@@ -26,6 +26,10 @@ const SMALL_KEYS = [
   'dismissedValidations',
   'projectId', 'projectName',
   'licenseSpdx',
+  // Mobility Database import provenance (issue #47). Cached locally alongside
+  // licenseSpdx so an anonymous draft imported from MDB still carries its
+  // source id after a reload and through the sign-in → server-migration flow.
+  'mdbSourceId',
 ] as const;
 
 // Union used for "did any persisted data change?" detection in the autosave
@@ -173,6 +177,7 @@ export async function loadProject(projectId: string) {
     if (snapshot.projectName) state.setProjectName(snapshot.projectName);
     if (snapshot.projectId) state.setProjectId(snapshot.projectId);
     if (typeof snapshot.licenseSpdx === 'string') state.setLicenseSpdx(snapshot.licenseSpdx);
+    if (typeof snapshot.mdbSourceId === 'number') state.setMdbSourceId(snapshot.mdbSourceId);
 
     // Seed the bulk-write trackers to the just-loaded references so the next
     // autosave doesn't needlessly rewrite stop_times/shapes we only just read.

@@ -76,6 +76,17 @@ export interface TripSlice {
   /** Revert a removeTripWithSnapshot: restores the trip, its stop_times, and
    *  its frequency windows. No-op if snapshot.trip is undefined. */
   restoreTrip: (snapshot: TripRemovalSnapshot) => void;
+  /** Apply a precomputed frequency→trips conversion (issue #65): append the
+   *  materialized trips + their stop_times and drop the converted templates'
+   *  frequency windows, in one commit. Undone by snapshotting {trips, stopTimes,
+   *  frequencies} beforehand and restoring them wholesale (the timetable bulk-op
+   *  pattern). The trips/stopTimes/removedTemplateIds come from
+   *  `computeFrequencyConversion`. */
+  applyFrequencyConversion: (result: {
+    newTrips: Trip[];
+    newStopTimes: StopTime[];
+    removedTemplateIds: string[];
+  }) => void;
 }
 
 function addMinutesToGtfsTime(time: string, minutes: number): string {
@@ -379,6 +390,15 @@ export const createTripSlice: StateCreator<TripSlice, [['zustand/immer', never]]
     if (cross.frequencies && snapshot.frequencies.length > 0) {
       const cur = get() as unknown as TripWithFreqState;
       cross.frequencies = [...(cur.frequencies ?? []), ...snapshot.frequencies];
+    }
+  }),
+  applyFrequencyConversion: ({ newTrips, newStopTimes, removedTemplateIds }) => set((state) => {
+    for (const t of newTrips) state.trips.push(t);
+    for (const st of newStopTimes) state.stopTimes.push(st);
+    const removed = new Set(removedTemplateIds);
+    const cross = state as unknown as TripWithFreqState;
+    if (cross.frequencies) {
+      cross.frequencies = cross.frequencies.filter((f) => !removed.has(f.trip_id));
     }
   }),
 });

@@ -97,6 +97,7 @@ export function TimetableGrid() {
   const setRowActions = useStore((s) => s.setTimetableRowActions);
   const headwayHints = useStore((s) => s.timetableHeadwayHints);
   const setHeadwayHints = useStore((s) => s.setTimetableHeadwayHints);
+  const requestFrequencyConversion = useStore((s) => s.requestFrequencyConversion);
 
   const showContinuous = useStore((s) => featureEnabled(s, 'continuousStops'));
   const demandResponseOn = useStore((s) => featureEnabled(s, 'demandResponse'));
@@ -357,6 +358,7 @@ export function TimetableGrid() {
     else if (action === 'estimate') setModal({ type: 'estimate', paneId, tripId });
     else if (action === 'applyall') setModal({ type: 'applyall', paneId, tripId });
     else if (action === 'editfreq') { setDrawer('frequency'); setFreqEditTripId(tripId); }
+    else if (action === 'convert') requestFrequencyConversion([tripId]);
   };
 
   // Replace a frequency template's windows wholesale (the Edit frequency drawer).

@@ -129,8 +129,10 @@ describe('Editor / Planner / Enterprise lineup (2026-07 pricing overhaul)', () =
     for (const src of ['planning_hero', 'planning_footer', 'planning_header', 'planning_sticky']) {
       expect(html).toContain(`href="/book-demo?src=${src}"`);
     }
-    // Trial survives as the secondary CTA with its existing anchor.
-    expect(html).toContain('href="/pricing/#agency"');
+    // Trial survives as the secondary CTA, deep-linking straight into the
+    // agency-trial checkout (auto-fires once signed in) rather than the old
+    // pricing-page anchor.
+    expect(html).toContain('href="/pricing?plan=agency&amp;interval=year"');
     expect(html).toContain('or start a 14-day free trial');
     // Planner is qualified on first mention (never a rider trip-planner).
     expect(html).toContain('the service-planning suite for transit agencies');

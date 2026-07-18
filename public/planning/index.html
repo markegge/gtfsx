@@ -63,8 +63,8 @@
       @media (max-width: 640px) { section { padding: 36px 20px; } }
       .hero { padding-top: 32px; padding-bottom: 32px; }
       /* Two-column hero: copy left, demo video right; stacks below 900px. */
-      .hero > .inner { max-width: 1100px; }
-      .hero-grid { display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 9fr); gap: 40px; align-items: center; }
+      .hero > .inner { max-width: 1240px; }
+      .hero-grid { display: grid; grid-template-columns: minmax(0, 9fr) minmax(0, 11fr); gap: 44px; align-items: center; }
       .hero h1 { font-weight: 900; font-size: clamp(26px, 3.6vw, 40px); line-height: 1.08; letter-spacing: -0.03em; margin: 0 0 14px; text-wrap: balance; }
       .hero .subhead { font-family: var(--font-heading); font-weight: 600; font-size: clamp(17px, 2.2vw, 20px); letter-spacing: -0.01em; color: var(--brown); margin: 0 0 10px; max-width: 760px; }
       .hero .subhead-support { font-size: clamp(15px, 1.9vw, 17px); color: var(--muted); margin: 0 0 22px; }
@@ -91,8 +91,8 @@
          drops to full width below the text on narrow screens. */
       .tool .shot { float: right; width: 360px; max-width: 42%; margin: 2px 0 12px 28px; border: 1px solid var(--rule); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); height: auto; background: var(--card); }
       @media (max-width: 700px) { .tool .shot { float: none; width: 100%; max-width: none; margin: 6px 0 14px; } }
-      .video-wrap { background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; border: 1px solid var(--rule); box-shadow: 0 10px 30px rgba(61,46,34,0.10); }
-      .video-wrap video { width: 100%; height: 100%; display: block; background: #000; }
+      .video-wrap { background: var(--bg); border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; border: 1px solid var(--rule); box-shadow: 0 10px 30px rgba(61,46,34,0.10); }
+      .video-wrap video { width: 100%; height: 100%; display: block; background: var(--bg); }
       .video-note { color: var(--muted); font-size: 12.5px; text-align: center; margin: 10px 0 0; }
       .free-tag { font-size: 0.62em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; background:#E8EFD9; color:#3F6014; border:1px solid #C9D9A1; vertical-align: middle; }
       .compare { background: var(--bg); }
@@ -210,7 +210,7 @@
               <div class="video-wrap">
                 <video controls preload="metadata" poster="/assets/planning/video-poster.png" playsinline>
                   <source src="https://videos.gtfsx.com/lp_planning_demo-v3.mp4" type="video/mp4" />
-                  <track kind="captions" src="/planning/captions.vtt" srclang="en" label="English" default />
+                  <track kind="captions" src="/planning/captions.vtt" srclang="en" label="English" />
                   Your browser can&#39;t play HTML5 video. <a href="https://videos.gtfsx.com/lp_planning_demo-v3.mp4">Download the demo (MP4)</a>.
                 </video>
               </div>

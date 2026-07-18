@@ -23,6 +23,7 @@ import {
   licenseUrlForSpdx,
   stopBoundingBox,
   deriveCatalogFeatures,
+  deriveImportedMdbSourceId,
   type CatalogFeedInput,
 } from '../publication/catalog';
 
@@ -94,7 +95,7 @@ describe('catalog builder (pure)', () => {
           mdbSourceId: 1234,
           meta: {
             bbox: { minimum_latitude: 45.6, minimum_longitude: -111.2, maximum_latitude: 45.7, maximum_longitude: -111.0 },
-            features: ['flex'],
+            features: ['Fare Products'],
             feedPublisherName: 'Sunset Valley Transit Authority',
             feedContactEmail: 'gtfs@svt.example',
           },
@@ -106,7 +107,7 @@ describe('catalog builder (pure)', () => {
     expect(full.mdb_source_id).toBe(1234);
     expect(full.provider).toBe('Sunset Valley Transit Authority'); // publisher name wins over project name
     expect(full.feed_contact_email).toBe('gtfs@svt.example');
-    expect(full.features).toEqual(['flex']);
+    expect(full.features).toEqual(['Fare Products']);
     expect(full.bounding_box).toEqual({
       minimum_latitude: 45.6, minimum_longitude: -111.2, maximum_latitude: 45.7, maximum_longitude: -111.0,
     });
@@ -133,10 +134,72 @@ describe('catalog builder (pure)', () => {
       ]),
     ).toEqual({ minimum_latitude: 45.68, minimum_longitude: -111.04, maximum_latitude: 45.7, maximum_longitude: -111.02 });
 
-    expect(deriveCatalogFeatures({ flexZones: [{ id: 'z1' }] })).toEqual(['flex']);
-    expect(deriveCatalogFeatures({ flexZones: [] })).toEqual([]);
     expect(deriveCatalogFeatures({})).toEqual([]);
     expect(deriveCatalogFeatures(null)).toEqual([]);
+  });
+
+  it('deriveCatalogFeatures maps each persisted file to its MobilityData feature name', () => {
+    // Positive fixtures: one record present → the validator-vocabulary name.
+    // Names verified against MobilityData's Canonical GTFS Validator
+    // (FeedMetadata.java) and a live Mobility Database validation report.
+    const cases: Array<[string, string]> = [
+      ['fareAttributes', 'Fares V1'],
+      ['fareProducts', 'Fare Products'],
+      ['fareMedia', 'Fare Media'],
+      ['riderCategories', 'Rider Categories'],
+      ['fareTransferRules', 'Fare Transfers'],
+      ['pathways', 'Pathway Connections'],
+      ['levels', 'Levels'],
+      ['shapes', 'Shapes'],
+      ['frequencies', 'Frequencies'],
+    ];
+    for (const [key, feature] of cases) {
+      expect(deriveCatalogFeatures({ [key]: [{ id: 'x' }] })).toEqual([feature]);
+      // Negative: an empty array is not the feature.
+      expect(deriveCatalogFeatures({ [key]: [] })).toEqual([]);
+    }
+  });
+
+  it('deriveCatalogFeatures maps flex zones to the right DRT feature by zone shape', () => {
+    // A polygon zone → location_id → zone-based DRT.
+    expect(
+      deriveCatalogFeatures({ flexZones: [{ id: 'z', geojson: { features: [{ type: 'Feature' }] } }] }),
+    ).toEqual(['Zone-Based Demand Responsive Services']);
+    // A stop-group zone → location_group_id → fixed-stops DRT (note: "Transit").
+    expect(
+      deriveCatalogFeatures({ flexZones: [{ id: 'z', geojson: { features: [] }, stopIds: ['S1', 'S2'] }] }),
+    ).toEqual(['Fixed-Stops Demand Responsive Transit']);
+    // A mixed zone contributes both.
+    expect(
+      deriveCatalogFeatures({ flexZones: [{ id: 'z', geojson: { features: [{}] }, stopIds: ['S1'] }] }),
+    ).toEqual(['Zone-Based Demand Responsive Services', 'Fixed-Stops Demand Responsive Transit']);
+    // A placeholder zone with neither polygon nor group contributes nothing.
+    expect(deriveCatalogFeatures({ flexZones: [{ id: 'z' }] })).toEqual([]);
+    expect(deriveCatalogFeatures({ flexZones: [] })).toEqual([]);
+  });
+
+  it('deriveCatalogFeatures emits multiple features in a stable order and ignores unknown keys', () => {
+    const features = deriveCatalogFeatures({
+      shapes: [{ id: 's1' }],
+      fareProducts: [{ id: 'p1' }],
+      flexZones: [{ id: 'z1', geojson: { features: [{}] } }],
+      // Not persisted / not a detectable feature — must never leak in.
+      transfers: [{ from: 'a', to: 'b' }],
+      routes: [{ route_id: 'r1' }],
+    });
+    // Fares before pathways before base before flexible-services (rule order).
+    expect(features).toEqual(['Fare Products', 'Shapes', 'Zone-Based Demand Responsive Services']);
+    expect(features).not.toContain('Transfers');
+  });
+
+  it('deriveImportedMdbSourceId reads a positive integer, rejects everything else', () => {
+    expect(deriveImportedMdbSourceId({ mdbSourceId: 1749 })).toBe(1749);
+    expect(deriveImportedMdbSourceId({ mdbSourceId: 0 })).toBeNull();
+    expect(deriveImportedMdbSourceId({ mdbSourceId: -5 })).toBeNull();
+    expect(deriveImportedMdbSourceId({ mdbSourceId: 12.5 })).toBeNull();
+    expect(deriveImportedMdbSourceId({ mdbSourceId: '1749' })).toBeNull(); // must be a real number
+    expect(deriveImportedMdbSourceId({})).toBeNull();
+    expect(deriveImportedMdbSourceId(null)).toBeNull();
   });
 });
 
@@ -174,6 +237,9 @@ interface FeedState {
   feedInfo?: Record<string, unknown>;
   stops?: Array<{ stop_id: string; stop_lat?: number; stop_lon?: number }>;
   flexZones?: unknown[];
+  // Mobility Database import provenance carried in the saved state (issue #47).
+  mdbSourceId?: number;
+  [key: string]: unknown;
 }
 
 async function createSnapshot(client: TestClient, projectId: string, state: FeedState): Promise<{ snapshot: { id: string } }> {
@@ -314,7 +380,12 @@ describe('/catalog.json (open catalog endpoint)', () => {
   it('persists bbox + publisher name + contact email + features from the snapshot state', async () => {
     const client = await loggedInClient('cat-meta@example.com');
     const proj = await createProject(client, 'Meta Feed');
-    await optInAndPublish(client, proj.id, 'official', sampleState({ flexZones: [{ id: 'z1' }] }));
+    await optInAndPublish(
+      client,
+      proj.id,
+      'official',
+      sampleState({ flexZones: [{ id: 'z1', geojson: { features: [{ type: 'Feature' }] } }] }),
+    );
 
     // catalog_meta is computed in a background (waitUntil) task — poll for it.
     let entry: CatalogDoc['feeds'][number] | undefined;
@@ -329,7 +400,32 @@ describe('/catalog.json (open catalog endpoint)', () => {
       minimum_latitude: 45.68, minimum_longitude: -111.04, maximum_latitude: 45.7, maximum_longitude: -111.02,
     });
     expect(entry!.feed_contact_email).toBe('gtfs@svt.example');
-    expect(entry!.features).toEqual(['flex']);
+    expect(entry!.features).toEqual(['Zone-Based Demand Responsive Services']);
+  });
+
+  it('detects Fares v2 + pathways + shapes from the snapshot with MobilityData feature names', async () => {
+    const client = await loggedInClient('cat-feat@example.com');
+    const proj = await createProject(client, 'Feature Rich');
+    await optInAndPublish(
+      client,
+      proj.id,
+      'official',
+      sampleState({
+        fareProducts: [{ fare_product_id: 'fp1' }],
+        fareMedia: [{ fare_media_id: 'fm1' }],
+        pathways: [{ pathway_id: 'pw1' }],
+        shapes: [{ shape_id: 'sh1' }],
+      }),
+    );
+
+    let entry: CatalogDoc['feeds'][number] | undefined;
+    for (let i = 0; i < 40; i += 1) {
+      const doc = await fetchCatalog();
+      entry = doc.feeds.find((f) => f.id === `gtfsx:${proj.slug}`);
+      if (entry?.features && entry.features.length > 0) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(entry!.features).toEqual(['Fare Products', 'Fare Media', 'Pathway Connections', 'Shapes']);
   });
 
   it('carries mdb_source_id when persisted on the project (switcher case)', async () => {
@@ -341,6 +437,61 @@ describe('/catalog.json (open catalog endpoint)', () => {
     const doc = await fetchCatalog();
     const entry = doc.feeds.find((f) => f.id === `gtfsx:${proj.slug}`);
     expect(entry!.mdb_source_id).toBe(5678);
+  });
+
+  it('auto-captures mdb_source_id from the snapshot state at publish (import provenance, issue #47)', async () => {
+    // A feed imported FROM the Mobility Database carries `mdbSourceId` in its
+    // saved state; performPublish projects it onto feed_project.mdb_source_id so
+    // the catalog emits the switcher id — with NO manual column write.
+    const client = await loggedInClient('cat-prov@example.com');
+    const proj = await createProject(client, 'Imported From MDB');
+    await optInAndPublish(client, proj.id, 'official', sampleState({ mdbSourceId: 1749 }));
+
+    let entry: CatalogDoc['feeds'][number] | undefined;
+    for (let i = 0; i < 40; i += 1) {
+      const doc = await fetchCatalog();
+      entry = doc.feeds.find((f) => f.id === `gtfsx:${proj.slug}`);
+      if (entry?.mdb_source_id != null) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(entry!.mdb_source_id).toBe(1749);
+  });
+
+  it('does not overwrite an existing mdb_source_id with import provenance (first-write-wins)', async () => {
+    // The switcher id was already set (manually / by an earlier publish); a
+    // later publish whose state carries a DIFFERENT provenance id must not
+    // clobber it — the COALESCE guard keeps the existing value.
+    const client = await loggedInClient('cat-prov-keep@example.com');
+    const proj = await createProject(client, 'Already Catalogued');
+    await optInAndPublish(client, proj.id, 'official', sampleState());
+    await dbRun(`UPDATE feed_project SET mdb_source_id = 5678 WHERE id = ?`, proj.id);
+
+    // Republish with a snapshot that carries a different imported id.
+    const v = await createSnapshot(client, proj.id, sampleState({ mdbSourceId: 1749 }));
+    expect((await publish(client, proj.id, v.snapshot.id)).status).toBe(200);
+
+    // Give the background catalog-meta task time to run, then confirm it stuck.
+    for (let i = 0; i < 20; i += 1) await new Promise((r) => setTimeout(r, 25));
+    const doc = await fetchCatalog();
+    const entry = doc.feeds.find((f) => f.id === `gtfsx:${proj.slug}`);
+    expect(entry!.mdb_source_id).toBe(5678);
+  });
+
+  it('leaves mdb_source_id absent for a feed with no import provenance', async () => {
+    const client = await loggedInClient('cat-prov-none@example.com');
+    const proj = await createProject(client, 'Hand Built');
+    await optInAndPublish(client, proj.id, 'official', sampleState({ flexZones: [{ id: 'z1' }] }));
+
+    // Wait for catalog_meta (bbox) to land so we know the publish task finished,
+    // then assert mdb_source_id was never set.
+    let entry: CatalogDoc['feeds'][number] | undefined;
+    for (let i = 0; i < 40; i += 1) {
+      const doc = await fetchCatalog();
+      entry = doc.feeds.find((f) => f.id === `gtfsx:${proj.slug}`);
+      if (entry?.bounding_box) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(entry!.mdb_source_id).toBeUndefined();
   });
 
   it('GET catalog-listing reflects opt-in state', async () => {

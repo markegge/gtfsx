@@ -254,7 +254,7 @@ export function TripCell({ tripId, isDuplicate, width, headway, irregular, onRen
    ActionCell — sticky per-trip actions column, three presentations
    ========================================================================== */
 
-type ActionKind = 'interpolate' | 'estimate' | 'duplicate' | 'applyall' | 'editfreq' | 'delete';
+type ActionKind = 'interpolate' | 'estimate' | 'duplicate' | 'applyall' | 'editfreq' | 'convert' | 'delete';
 
 const ROW_ACTIONS: [action: ActionKind, label: string][] = [
   ['interpolate', 'Interpolate stop times — fill blanks from set times'],
@@ -262,6 +262,7 @@ const ROW_ACTIONS: [action: ActionKind, label: string][] = [
   ['duplicate', 'Duplicate trip…'],
   ['applyall', "Apply this trip's pattern to all trips…"],
   ['editfreq', 'Edit frequency windows…'],
+  ['convert', 'Convert frequency to individual trips…'],
   ['delete', 'Delete trip'],
 ];
 
@@ -274,6 +275,8 @@ const ACTION_PATHS: Record<ActionKind, ReactNode> = {
   duplicate: (<><rect x="8.5" y="8.5" width="11" height="11" rx="2" /><path d="M15.5 8.5V6.5A2 2 0 0 0 13.5 4.5h-7A2 2 0 0 0 4.5 6.5v7A2 2 0 0 0 6.5 15.5h2" /></>),
   applyall: (<><path d="M4 8h10M4 12h10M4 16h10" /><path d="M16 9l3 3-3 3" /></>),
   editfreq: (<><path d="M5 5v14M12 5v14M19 5v14" /></>),
+  // one template forking into individual trips (materialize the build-out)
+  convert: (<><path d="M4 12h4" /><path d="M8 12l4-5M8 12l4 5M8 12h4" /><path d="M12 7h8M12 12h8M12 17h8" /></>),
   delete: (<path d="M6 6l12 12M18 6L6 18" />),
 };
 
@@ -305,7 +308,8 @@ interface ActionCellProps {
 
 export function ActionCell({ mode, open, stickyLeft, canApplyAll, canEstimate, canEditFreq, onMenu, onAct }: ActionCellProps) {
   const btnRef = useRef<HTMLButtonElement | null>(null);
-  const enabled = (id: string) => (id === 'applyall' ? canApplyAll : id === 'estimate' ? canEstimate : id === 'editfreq' ? canEditFreq : true);
+  // 'convert' is only meaningful for a frequency template, same as 'editfreq'.
+  const enabled = (id: string) => (id === 'applyall' ? canApplyAll : id === 'estimate' ? canEstimate : (id === 'editfreq' || id === 'convert') ? canEditFreq : true);
   const iconBtns = ROW_ACTIONS.filter(([id]) => enabled(id)).map(([id, label]) => (
     <button
       key={id}
@@ -381,6 +385,7 @@ const ROW_MENU_ITEMS: MenuItem[] = [
   { id: 'duplicate', chip: 'bg-coral-light text-coral', label: 'Duplicate trip…', sub: 'Same pattern, offset start time' },
   { id: 'applyall', chip: 'bg-purple-light text-purple', label: 'Apply to all trips…', sub: 'Push this pattern; others keep their starts' },
   { id: 'editfreq', chip: 'bg-teal-light text-teal', label: 'Edit frequency…', sub: 'Change the headway windows' },
+  { id: 'convert', chip: 'bg-purple-light text-purple', label: 'Convert to trips…', sub: 'Materialize the headways into individual trips' },
   { id: 'delete', chip: 'bg-red-50 text-red-500', label: 'Delete trip', danger: true },
 ];
 
@@ -398,7 +403,8 @@ export function RowMenu({
   useDismiss(ref, onClose, '[data-rowmenu-trigger]');
   const pos = useAnchoredMenuPosition(ref, rect, 4);
   const items = ROW_MENU_ITEMS.filter((it) =>
-    (it.id !== 'applyall' || canApplyAll) && (it.id !== 'estimate' || canEstimate) && (it.id !== 'editfreq' || canEditFreq));
+    (it.id !== 'applyall' || canApplyAll) && (it.id !== 'estimate' || canEstimate)
+    && ((it.id !== 'editfreq' && it.id !== 'convert') || canEditFreq));
   return (
     <div
       ref={ref}

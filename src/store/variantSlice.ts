@@ -7,13 +7,15 @@ import type { StateCreator } from 'zustand';
  * branched from a baseline, so a planner can answer "what does this service
  * change cost vs. today?". Exactly one variant is the baseline.
  *
- * v1 is SESSION-SCOPED and CLIENT-SIDE: variants live in memory and are
- * deliberately NOT in serverPersistence's DATA_KEYS, so they never enter the
- * working-state blob and can't touch the existing save path. The live store
- * always holds the *active* variant's working copy; inactive variants keep a
- * frozen snapshot (the buildSnapshot() shape). The high-level fork / switch /
- * compare actions live in services/variants.ts (they need buildSnapshot +
- * applySnapshotToStore); this slice is just the state + low-level setters.
+ * PERSISTENCE (#66): the variant layer is saved with the project. Save writes
+ * the BASELINE feed to the project's canonical feed slot and stores the variant
+ * layer in the working-state blob's `__variants` envelope (non-baseline variants
+ * as diffs from baseline — see services/variantPersistence.ts); load rehydrates
+ * it and re-applies the active variant. The live store always holds the *active*
+ * variant's working copy; inactive variants keep a frozen snapshot (the
+ * buildSnapshot() shape). The high-level fork / switch / compare actions live in
+ * services/variants.ts (they need buildSnapshot + applySnapshotToStore); this
+ * slice is just the in-memory state + low-level setters.
  *
  * Naming: "variants" is deliberately distinct from the basic per-route
  * visibility toggle (hiddenRouteIds) — a variant carries real, independent

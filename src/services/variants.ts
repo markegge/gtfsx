@@ -7,11 +7,13 @@
  * serializes the live store into the outgoing variant, then loads the incoming
  * one. Comparing diffs the baseline's snapshot against the live store.
  *
- * Session-scoped + client-side: nothing here touches the server or the
- * working-state blob (variants aren't in DATA_KEYS). Server projects only
- * persist on an explicit Save, so an experimental variant never auto-clobbers a
- * saved feed — though saving WHILE a non-baseline variant is active will save
- * that variant (the active-variant banner makes that state obvious).
+ * These actions mutate only the in-memory store; nothing here writes to the
+ * server. Persistence happens on an explicit Save (#66): saveProjectNow always
+ * writes the BASELINE as the project's canonical feed and stores the variant
+ * layer (as diffs) in the working-state envelope, so saving while a non-baseline
+ * variant is active never clobbers the baseline — it saves baseline + every
+ * variant together, and a reload restores them. Because these mutations are
+ * unsaved until then, each marks the editor dirty.
  */
 import { useStore } from '../store';
 import { buildSnapshot, applySnapshotToStore } from '../db/serverPersistence';

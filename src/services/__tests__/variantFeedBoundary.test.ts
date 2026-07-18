@@ -69,3 +69,24 @@ describe('switching a variant does not drop the layer', () => {
     expect(useStore.getState().activeVariantId).toBe(vid);
   });
 });
+
+describe('unsaved variant work marks the editor dirty (beforeunload coverage)', () => {
+  // The reload guard fires only on isDirty now (variants persist, so their mere
+  // existence isn't a warning). This confirms isDirty actually tracks variant
+  // work, so the guard still catches genuinely unsaved forks/switches.
+  it('forking and switching mark dirty', () => {
+    useStore.getState().markSaved();
+    expect(useStore.getState().isDirty).toBe(false);
+
+    const vid = createVariantFromCurrent('X');
+    expect(useStore.getState().isDirty).toBe(true);
+
+    useStore.getState().markSaved();
+    switchToVariant(baselineVariant()!.id);
+    expect(useStore.getState().isDirty).toBe(true);
+
+    useStore.getState().markSaved();
+    switchToVariant(vid);
+    expect(useStore.getState().isDirty).toBe(true);
+  });
+});

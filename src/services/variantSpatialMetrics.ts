@@ -141,9 +141,10 @@ export function stopSetFingerprint(input: SpatialInput): string {
  *     tram-service change, shifts the fingerprint → miss → recompute. Any other
  *     edit leaves it unchanged → hit (correctly — the coverage didn't change).
  *
- * The cache lives here (module scope) rather than in a store slice for the same
- * reason variants themselves do: it is session-scoped, in-memory, and outside
- * the persisted working state.
+ * The cache lives here (module scope) rather than in a store slice because it is
+ * purely derived: it is session-scoped, in-memory, and deliberately outside the
+ * persisted working state (recomputed on demand, never serialized). Note the
+ * variant layer itself IS persisted now (#66); only this derived cache isn't.
  */
 
 interface CacheEntry {

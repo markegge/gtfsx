@@ -173,8 +173,12 @@ export function VariantsPanel() {
               </p>
               <p>
                 Your current baseline is kept as a variant named{' '}
-                <strong className="text-dark-brown">{priorBaselineName(confirmPromote.name)}</strong>, and your
-                other variants keep their changes. Nothing is lost. Save to persist the new arrangement.
+                <strong className="text-dark-brown">
+                  {priorBaselineName(
+                    confirmPromote.name,
+                    ['Baseline', ...variants.filter((v) => v.id !== confirmPromote.id && !v.baseline).map((v) => v.name)],
+                  )}
+                </strong>, and your other variants keep their changes. Nothing is lost. Save to persist the new arrangement.
               </p>
             </div>
           }

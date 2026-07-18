@@ -10,6 +10,7 @@ import {
   baselineVariant,
   activeVariant,
   deleteVariant,
+  priorBaselineName,
 } from '../variants';
 import type { Route, Trip } from '../../types/gtfs';
 
@@ -88,6 +89,55 @@ describe('promoteToBaseline', () => {
     promoteToBaseline(v1);
     const names = useStore.getState().variants.map((v) => v.name).sort();
     expect(names).toEqual(['Baseline', 'Baseline (before V1)']);
+  });
+});
+
+describe('priorBaselineName (auto-name for the preserved baseline)', () => {
+  it('normal case reads "Baseline (before {name})"', () => {
+    expect(priorBaselineName('Add AM run', [])).toBe('Baseline (before Add AM run)');
+  });
+
+  it('avoids nesting: a promoted former-baseline gets a timestamped name', () => {
+    const at = new Date(2026, 6, 18, 14, 37).getTime(); // local 2026-07-18 14:37
+    const name = priorBaselineName('Baseline (before Morning)', [], at);
+    expect(name).toBe('Baseline (before promotion — 2026-07-18 14:37)');
+    expect(name).not.toMatch(/before Baseline \(before/);
+  });
+
+  it('de-duplicates against existing names with a counter', () => {
+    expect(priorBaselineName('X', ['Baseline (before X)'])).toBe('Baseline (before X) (2)');
+    expect(
+      priorBaselineName('X', ['Baseline (before X)', 'Baseline (before X) (2)']),
+    ).toBe('Baseline (before X) (3)');
+  });
+});
+
+describe('promoteToBaseline naming (nesting + collision)', () => {
+  it('promoting a former-baseline variant does not nest the preserved name', () => {
+    const v1 = createVariantFromCurrent('V1');
+    addRoute('R2');
+    promoteToBaseline(v1); // → baseline + "Baseline (before V1)"
+    const prior = useStore.getState().variants.find((v) => v.name === 'Baseline (before V1)')!;
+    expect(prior).toBeTruthy();
+
+    promoteToBaseline(prior.id); // promoting a "Baseline (before …)" variant
+    const names = useStore.getState().variants.map((v) => v.name);
+    expect(names.some((n) => /^Baseline \(before promotion — /.test(n))).toBe(true);
+    expect(names.some((n) => /before Baseline \(before/.test(n))).toBe(false);
+  });
+
+  it('appends a counter when the auto-name collides with an existing variant', () => {
+    // Pre-create a variant literally named "Baseline (before V1)".
+    createVariantFromCurrent('Baseline (before V1)');
+    switchToVariant(baselineVariant()!.id);
+    const v1 = createVariantFromCurrent('V1');
+    addRoute('R2');
+
+    promoteToBaseline(v1);
+    const names = useStore.getState().variants.map((v) => v.name);
+    // The pre-existing name stays; the preserved old baseline gets the counter.
+    expect(names).toContain('Baseline (before V1)');
+    expect(names).toContain('Baseline (before V1) (2)');
   });
 });
 

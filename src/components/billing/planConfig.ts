@@ -22,6 +22,7 @@ export type FeatureKey =
   | 'variants'
   | 'geojson_export'
   | 'access_isochrones'
+  | 'assistant'
   | 'phone_support';
 
 // Pricing v4 (Jul 2026): the Pro tier is retired. Everything that was Pro+
@@ -47,6 +48,9 @@ export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
   variants:            ['agency', 'enterprise'],
   geojson_export:      ['free', 'agency', 'enterprise'],
   access_isochrones:   ['agency', 'enterprise'],
+  // "Ask GTFS·X" help assistant — every tier, differentiated by a per-plan
+  // daily message quota enforced server-side. See worker/billing/plans.ts.
+  assistant:           ['free', 'agency', 'enterprise'],
   phone_support:       ['agency', 'enterprise'],
 };
 
@@ -154,5 +158,9 @@ export const FEATURE_COPY: Record<FeatureKey, { title: string; description: stri
   access_isochrones: {
     title: 'Transit access isochrones',
     description: 'Drop a pin and see where a rider can reach on your network in 15 / 30 / 45 minutes (combining walk access, wait, and in-vehicle time), with the population, jobs, and equity populations inside each contour.',
+  },
+  assistant: {
+    title: 'Ask GTFS·X',
+    description: 'The in-editor help assistant that answers "how do I…" questions with real click-paths, cites the docs, and is honest about what the product can and cannot do. Every plan gets it; higher plans get a higher daily message limit.',
   },
 };

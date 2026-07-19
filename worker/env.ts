@@ -63,6 +63,11 @@ export interface Env {
   // Secrets (wrangler secret put)
   RESEND_API_KEY: string;
   MOBILITY_DATABASE_REFRESH_TOKEN: string;
+  // Claude API key for the "Ask GTFS·X" help assistant (issue #68). Optional:
+  // when unset, POST /api/assistant/chat returns a clean 503 the UI surfaces
+  // gracefully, and the rest of the worker stays healthy. Set per-environment
+  // via `wrangler secret put ANTHROPIC_API_KEY [--env staging]`.
+  ANTHROPIC_API_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SIGNING_SECRET?: string;

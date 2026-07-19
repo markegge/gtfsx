@@ -26,6 +26,7 @@ import { createFeaturesSlice, type FeaturesSlice } from './featuresSlice';
 import { createVariantSlice, type VariantSlice } from './variantSlice';
 import { createAccessIsochroneSlice, type AccessIsochroneSlice } from './accessIsochroneSlice';
 import { createWalkshedProfileSlice, type WalkshedProfileSlice } from './walkshedProfileSlice';
+import { createAssistantSlice, type AssistantSlice } from './assistantSlice';
 
 export type AppStore = AgencySlice &
   CalendarSlice &
@@ -51,7 +52,8 @@ export type AppStore = AgencySlice &
   FeaturesSlice &
   VariantSlice &
   AccessIsochroneSlice &
-  WalkshedProfileSlice;
+  WalkshedProfileSlice &
+  AssistantSlice;
 
 // Zustand-immer slice composition: each create*Slice is typed against its
 // own slice (e.g. `StateCreator<AgencySlice, ..., [], AgencySlice>`), but
@@ -87,6 +89,7 @@ export const useStore = create<AppStore>()(
     ...(createVariantSlice as any)(...a),
     ...(createAccessIsochroneSlice as any)(...a),
     ...(createWalkshedProfileSlice as any)(...a),
+    ...(createAssistantSlice as any)(...a),
   }))
 );
 /* eslint-enable @typescript-eslint/no-explicit-any */

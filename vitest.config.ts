@@ -68,6 +68,10 @@ export default defineConfig(async () => {
             // tests; OWNER_DIGEST_EMAIL unset so it falls back to OWNER_NOTIFY_EMAIL.
             RESEND_API_KEY: 'test-resend-key',
             MOBILITY_DATABASE_REFRESH_TOKEN: 'test-md-token',
+            // Ask GTFS·X assistant (issue #68). Deterministic test key so the
+            // /api/assistant/chat "configured" path runs; the outbound Claude API
+            // HTTP call is mocked in assistant.test.ts.
+            ANTHROPIC_API_KEY: 'test-anthropic-key',
             // Google OAuth (issue #20). Deterministic test creds so the
             // /auth/google/* routes run; the outbound token + userinfo HTTP
             // calls are mocked in auth.googleOauth.test.ts.

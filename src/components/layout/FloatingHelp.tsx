@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { useStore } from '../../store';
 import { isPaidPlan } from '../../utils/planRank';
+import { AskGtfsxPanel } from '../assistant/AskGtfsxPanel';
 
 const SUPPORT_EMAIL = 'support@gtfsx.com';
 
@@ -27,6 +28,8 @@ export function FloatingHelp() {
 
   const currentUser = useStore((s) => s.currentUser);
   const userOrgs = useStore((s) => s.userOrgs);
+  const openAssistant = useStore((s) => s.openAssistant);
+  const assistantOpen = useStore((s) => s.assistantOpen);
 
   // Hide on narrow viewports when the right-rail panel overlays the screen
   // (z-20), because the help button (z-30, absolute) would appear on top of
@@ -49,9 +52,10 @@ export function FloatingHelp() {
   }, [currentUser, userOrgs]);
 
   // ── Narrow-viewport guard ──────────────────────────────────────
-  // When the right-rail panel fills the screen on mobile, this button sits
-  // at z-30 (above the z-20 panel) and covers the last content row. Hide it.
-  if (isNarrow && sidebarSection && rightRailOpen) return null;
+  // When the right-rail panel fills the screen on mobile, this pill sits
+  // at z-30 (above the z-20 panel) and covers the last content row. Hide the
+  // pill — but keep the chat panel mountable so an open conversation survives.
+  const pillHidden = isNarrow && !!sidebarSection && rightRailOpen && !assistantOpen;
 
   // ── Clipboard copy ─────────────────────────────────────────────
   const handleCopy = () => {
@@ -86,6 +90,9 @@ export function FloatingHelp() {
     'flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm text-dark-brown hover:bg-cream transition-colors';
 
   return (
+    <>
+      <AskGtfsxPanel />
+      {!pillHidden && (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <button
@@ -104,6 +111,15 @@ export function FloatingHelp() {
           sideOffset={8}
           className="z-50 bg-white rounded-xl shadow-lg border border-sand p-1.5 w-52 outline-none"
         >
+          <button
+            type="button"
+            onClick={() => { openAssistant(); setOpen(false); }}
+            className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm font-heading font-bold text-coral bg-coral-light/50 hover:bg-coral-light transition-colors"
+          >
+            <span>Ask GTFS·X</span>
+            <SparkleIcon />
+          </button>
+          <div className="my-1 border-t border-sand" aria-hidden />
           <a
             href="/docs/quick-start/"
             target="_blank"
@@ -154,6 +170,16 @@ export function FloatingHelp() {
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+      )}
+    </>
+  );
+}
+
+function SparkleIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden>
+      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z" />
+    </svg>
   );
 }
 

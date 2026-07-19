@@ -23,6 +23,7 @@ export type FeatureKey =
   | 'service_alerts'       // author GTFS-Realtime Service Alerts
   | 'geojson_export'       // export routes + stops as GeoJSON for GIS
   | 'access_isochrones'    // schedule-based transit travel-time reach analysis
+  | 'assistant'            // "Ask GTFS·X" embedded help assistant (all tiers; per-plan daily quota)
   | 'phone_support';       // SLA-backed phone support
 
 // Per-feature: which plans grant access. Free is excluded by absence.
@@ -50,6 +51,10 @@ export const FEATURE_PLANS: Record<FeatureKey, readonly Plan[]> = {
   service_alerts:      ['agency', 'enterprise'],
   geojson_export:      ['free', 'agency', 'enterprise'],
   access_isochrones:   ['agency', 'enterprise'],
+  // "Ask GTFS·X" is available to every logged-in tier; the differentiation is a
+  // per-plan daily message quota enforced server-side (see worker/assistant/quota.ts),
+  // not plan membership.
+  assistant:           ['free', 'agency', 'enterprise'],
   phone_support:       ['agency', 'enterprise'],
 };
 

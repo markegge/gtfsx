@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/build-docs-search-index.mjs && node scripts/build-sitemap.mjs && tsc -b && vite build",
+    "build": "node scripts/build-docs-search-index.mjs && node scripts/build-assistant-corpus.mjs && node scripts/build-sitemap.mjs && tsc -b && vite build",
     "build:prod": "node scripts/build-prod.mjs",
     "check:prod-bundle": "node scripts/check-prod-bundle.mjs",
     "deploy:prod": "npm run build:prod && wrangler deploy",
     "build:docs-index": "node scripts/build-docs-search-index.mjs",
+    "build:assistant-corpus": "node scripts/build-docs-search-index.mjs && node scripts/build-assistant-corpus.mjs",
     "build:sitemap": "node scripts/build-sitemap.mjs",
     "lint": "eslint .",
     "preview": "vite preview",

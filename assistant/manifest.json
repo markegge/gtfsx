@@ -1,0 +1,584 @@
+{
+  "version": "1",
+  "note": "Hand-curated capabilities manifest for the Ask GTFS·X assistant (issue #68). Source of truth for the assistant's click-paths, plan gates, and honest not-supported list. When you add/rename a panel, tool, or guided fix, update this file (PR checklist). deepLink.sidebarSection ids must be real SidebarSection values and deepLink.bottomTab ids real BottomPanelTab values (validated by src/assistant/__tests__/manifest.test.ts); every docs url must exist in the docs search index; every plan is 'all' or a real FeatureKey.",
+  "capabilities": [
+    {
+      "id": "agency",
+      "name": "Agency setup",
+      "category": "panel",
+      "purpose": "Enter the agency-level fields every feed needs: agency_name, agency_url, agency_timezone, plus agency_id and NTD ID for FTA reporting.",
+      "whenToUse": "First thing on a new feed, or when agency details, timezone, or NTD ID need fixing.",
+      "clickPath": "Left rail → Agency.",
+      "deepLink": { "sidebarSection": "agency" },
+      "plan": "all",
+      "docs": ["/docs/agency-setup/", "/docs/ntd-id/"],
+      "limitations": ""
+    },
+    {
+      "id": "calendars",
+      "name": "Service calendars",
+      "category": "panel",
+      "purpose": "Define service patterns (which days service runs) in calendar.txt and calendar_dates.txt, including holiday exceptions.",
+      "whenToUse": "Setting weekday/weekend/holiday service, or adding a US-holiday exception day.",
+      "clickPath": "Left rail → Calendars. Exceptions live on the Exceptions tab of a calendar (with an 'Add US holidays' picker).",
+      "deepLink": { "sidebarSection": "calendar" },
+      "plan": "all",
+      "docs": ["/docs/service-calendars/"],
+      "limitations": ""
+    },
+    {
+      "id": "fares",
+      "name": "Fares (v1 and v2 Areas)",
+      "category": "panel",
+      "purpose": "Author fare_attributes/fare_rules (Fares v1), and — with Fares v2 enabled — the Areas editor (areas.txt + stop_areas.txt). Transfers are edited here too.",
+      "whenToUse": "Adding fares to a feed, or defining fare areas.",
+      "clickPath": "Left rail → Fares. Fares v2 tabs appear once you enable 'Fares v2' in Settings.",
+      "deepLink": { "sidebarSection": "fares" },
+      "plan": "all",
+      "docs": ["/docs/fares/"],
+      "limitations": "Fares v2 in-app currently ships the Areas editor only; the rest of the v2 model (fare products, leg/transfer rules, rider categories) is not fully editable yet, though imported v2 files are preserved on export."
+    },
+    {
+      "id": "routes",
+      "name": "Routes & shapes",
+      "category": "panel",
+      "purpose": "Create and edit routes (route_type, names, colors), draw route geometry on the map, and manage each route's shapes/patterns.",
+      "whenToUse": "Adding or editing a route, drawing a route line, or setting route type/color.",
+      "clickPath": "Left rail → Routes. Open a route to reach its Details / Stops / Trips / Shapes tabs.",
+      "deepLink": { "sidebarSection": "routes" },
+      "plan": "all",
+      "docs": ["/docs/routes-and-shapes/"],
+      "limitations": ""
+    },
+    {
+      "id": "stops",
+      "name": "Stops",
+      "category": "panel",
+      "purpose": "Place, name, and edit stops on the map; set wheelchair_boarding and other stop fields; filter the stop list.",
+      "whenToUse": "Adding stops, renaming, fixing accessibility flags, or finding a specific stop.",
+      "clickPath": "Left rail → Stops. Use 'Place Stops on Map' to add; stop names auto-suggest from the nearest intersection.",
+      "deepLink": { "sidebarSection": "stops" },
+      "plan": "all",
+      "docs": ["/docs/stops/"],
+      "limitations": ""
+    },
+    {
+      "id": "stations",
+      "name": "Stations, levels & pathways",
+      "category": "panel",
+      "purpose": "Model multi-level stations with levels.txt and pathways.txt (walkways, stairs, elevators between platforms).",
+      "whenToUse": "Building a station complex with pathways/levels.",
+      "clickPath": "Enable 'Stations & pathways' in Settings, then Left rail → Stations.",
+      "deepLink": { "sidebarSection": "stations" },
+      "plan": "all",
+      "docs": ["/docs/stations/"],
+      "limitations": "The Stations nav item appears only when the 'Stations & pathways' feature is enabled in Settings (or the feed already contains levels/pathways)."
+    },
+    {
+      "id": "frequencies",
+      "name": "Frequency-based service",
+      "category": "panel",
+      "purpose": "Author headway-based service (e.g. 'a bus every 15 minutes') in frequencies.txt instead of explicit per-trip times.",
+      "whenToUse": "Modeling turn-up-and-go service by headway rather than a fixed timetable.",
+      "clickPath": "Enable 'Frequency-based service' in Settings, then Left rail → Frequencies.",
+      "deepLink": { "sidebarSection": "frequencies" },
+      "plan": "all",
+      "docs": ["/docs/timetables-and-trips/"],
+      "limitations": "The Frequencies nav item appears only when the 'Frequency-based service' feature is enabled in Settings (or the feed already has frequencies.txt)."
+    },
+    {
+      "id": "blocks",
+      "name": "Blocks (vehicle interlining)",
+      "category": "panel",
+      "purpose": "Group the trips a single vehicle runs in sequence (block_id) and visualize/validate them on a Gantt, including the Quick Block auto-blocker.",
+      "whenToUse": "Assigning trips to vehicle blocks or checking for block overlaps.",
+      "clickPath": "Enable 'Blocks' in Settings, then Left rail → Blocks.",
+      "deepLink": { "sidebarSection": "blocks" },
+      "plan": "all",
+      "docs": ["/docs/service-planning/"],
+      "limitations": "The Blocks nav item stays hidden until you enable 'Blocks' in Settings, even if the feed already carries block_id."
+    },
+    {
+      "id": "flex-zones",
+      "name": "Flex Zones (GTFS-Flex) & booking rules",
+      "category": "panel",
+      "purpose": "Author demand-response / paratransit service: draw GTFS-Flex zones (locations.geojson) and attach booking_rules.txt.",
+      "whenToUse": "Modeling dial-a-ride, microtransit, deviated-route, or paratransit service.",
+      "clickPath": "Left rail → Flex Zones (on by default; toggle under 'Demand response' in Settings).",
+      "deepLink": { "sidebarSection": "flex" },
+      "plan": "all",
+      "docs": ["/docs/flex-zones-and-booking-rules/"],
+      "limitations": ""
+    },
+    {
+      "id": "costs",
+      "name": "Cost estimation",
+      "category": "panel",
+      "purpose": "Estimate operating cost from service levels; system-level summary is free, per-route breakdown is on the Planner suite.",
+      "whenToUse": "Estimating what a service plan costs to operate.",
+      "clickPath": "Left rail → Costs.",
+      "deepLink": { "sidebarSection": "costs" },
+      "plan": "analysis_basic",
+      "docs": ["/docs/cost-estimation/"],
+      "limitations": "System-level cost is free; the per-route breakdown requires the Planner plan (FeatureKey analysis_basic)."
+    },
+    {
+      "id": "stop-analysis",
+      "name": "Stop analysis",
+      "category": "panel",
+      "purpose": "Analyze stop spacing/balancing, trips-per-day intensity, and accessibility gaps, with map overlays.",
+      "whenToUse": "Checking stop balance, service intensity by stop, or accessibility gaps.",
+      "clickPath": "Left rail → Stop Analysis.",
+      "deepLink": { "sidebarSection": "stop-analysis" },
+      "plan": "all",
+      "docs": ["/docs/stop-analysis/"],
+      "limitations": "Accessibility gaps hand off to the Validation 'fill wheelchair_boarding' fix rather than editing stops directly."
+    },
+    {
+      "id": "coverage",
+      "name": "Demographic coverage",
+      "category": "panel",
+      "purpose": "Measure population and jobs within walking distance of service using census data; per-route breakdown on Planner.",
+      "whenToUse": "Reporting who your service reaches, or comparing coverage across routes.",
+      "clickPath": "Left rail → Coverage.",
+      "deepLink": { "sidebarSection": "coverage" },
+      "plan": "analysis_basic",
+      "docs": ["/docs/demographic-coverage/"],
+      "limitations": "System-level coverage is free; the per-route breakdown requires the Planner plan (FeatureKey analysis_basic)."
+    },
+    {
+      "id": "access-isochrones",
+      "name": "Transit access isochrones",
+      "category": "panel",
+      "purpose": "Drop a pin and see where a rider can reach on your network in 15/30/45 minutes (walk + wait + in-vehicle), with population, jobs, and equity populations in each contour.",
+      "whenToUse": "Showing schedule-based travel-time reach from a point.",
+      "clickPath": "Left rail → Access, then drop a pin on the map.",
+      "deepLink": { "sidebarSection": "access-isochrones" },
+      "plan": "access_isochrones",
+      "docs": ["/docs/access-isochrones/"],
+      "limitations": "Requires the Planner plan (FeatureKey access_isochrones)."
+    },
+    {
+      "id": "title-vi",
+      "name": "Title VI equity analysis",
+      "category": "panel",
+      "purpose": "Generate FTA-aligned Title VI reports comparing service levels across minority and low-income populations.",
+      "whenToUse": "Preparing a Title VI service-equity analysis.",
+      "clickPath": "Left rail → Title VI.",
+      "deepLink": { "sidebarSection": "titlevi" },
+      "plan": "analysis_title_vi",
+      "docs": ["/docs/title-vi-analysis/"],
+      "limitations": "Requires the Planner plan (FeatureKey analysis_title_vi)."
+    },
+    {
+      "id": "service-alerts",
+      "name": "Service Alerts (GTFS-Realtime)",
+      "category": "panel",
+      "purpose": "Author GTFS-Realtime Service Alerts (detours, delays, stop closures) published to a live feed apps consume, without republishing the schedule.",
+      "whenToUse": "Posting a detour, delay, or stop-closure alert on a published feed.",
+      "clickPath": "Enable 'Service Alerts' in Settings (on by default once the feed is published), then Left rail → Service Alerts.",
+      "deepLink": { "sidebarSection": "alerts" },
+      "plan": "service_alerts",
+      "docs": ["/docs/service-alerts/"],
+      "limitations": "Requires the Planner plan (FeatureKey service_alerts). Only Service Alerts are authored in-app — not TripUpdates or VehiclePositions."
+    },
+    {
+      "id": "variants",
+      "name": "Feed variants",
+      "category": "panel",
+      "purpose": "Fork a feed into named service alternatives, compare cost and service metrics side by side, and export any variant as a standalone GTFS feed.",
+      "whenToUse": "Comparing service scenarios (A vs B) or exporting an alternative.",
+      "clickPath": "Top bar → variants dropdown → 'Manage variants…' (variants have no left-rail item).",
+      "deepLink": { "sidebarSection": "variants" },
+      "plan": "variants",
+      "docs": ["/docs/service-planning/"],
+      "limitations": "Requires the Planner plan (FeatureKey variants). Opened from the top-bar variants dropdown, not the left rail."
+    },
+    {
+      "id": "settings",
+      "name": "Feature settings",
+      "category": "panel",
+      "purpose": "Turn advanced GTFS features on/off per feed (Stations & pathways, Frequencies, Blocks, Demand response, Service Alerts, Fares v2, Flag-stop service) so the editor stays lean.",
+      "whenToUse": "Revealing an advanced feature's panel/controls, or hiding ones you don't use.",
+      "clickPath": "Left rail → Settings.",
+      "deepLink": { "sidebarSection": "settings" },
+      "plan": "all",
+      "docs": ["/docs/feature-settings/"],
+      "limitations": ""
+    },
+    {
+      "id": "transfers",
+      "name": "Transfers",
+      "category": "panel",
+      "purpose": "Author transfers.txt — transfer rules between routes/stops (timed connections, minimum transfer times).",
+      "whenToUse": "Defining timed connections or minimum transfer times.",
+      "clickPath": "Enable 'Transfers' in Settings, then edit them from the Fares panel (Transfers tab).",
+      "deepLink": { "sidebarSection": "fares" },
+      "plan": "all",
+      "docs": ["/docs/transfers/"],
+      "limitations": "Transfers have no standalone nav section — they're a tab inside the Fares panel, revealed by the Transfers feature toggle."
+    },
+    {
+      "id": "timetable",
+      "name": "Timetables & trips editor",
+      "category": "panel",
+      "purpose": "Edit trips and stop_times in a spreadsheet-style grid: per-cell times, arrival/departure split, skip/interpolate/timed stop states, opposite-direction companion view.",
+      "whenToUse": "Entering or editing schedule times, adding trips, or reading inbound/outbound side by side.",
+      "clickPath": "Bottom panel → Timetable tab (pick a route + service from the toolbar).",
+      "deepLink": { "bottomTab": "timetable" },
+      "plan": "all",
+      "docs": ["/docs/timetables-and-trips/"],
+      "limitations": ""
+    },
+    {
+      "id": "validation",
+      "name": "Validation",
+      "category": "panel",
+      "purpose": "Continuously validate the feed against the GTFS spec and surface errors/warnings, many with one-click fixes.",
+      "whenToUse": "Diagnosing why a feed is failing validation, or clearing spec errors before export.",
+      "clickPath": "Bottom panel → Validation tab.",
+      "deepLink": { "bottomTab": "validation" },
+      "plan": "all",
+      "docs": ["/docs/validation/"],
+      "limitations": ""
+    },
+    {
+      "id": "service-summary",
+      "name": "Service summary",
+      "category": "panel",
+      "purpose": "See a rolled-up summary of the feed's service — trips, spans, and service levels — for a sanity check.",
+      "whenToUse": "Getting a quick overview of what service the feed describes.",
+      "clickPath": "Bottom panel → Service Summary tab.",
+      "deepLink": { "bottomTab": "service-summary" },
+      "plan": "all",
+      "docs": ["/docs/service-summary/"],
+      "limitations": ""
+    },
+    {
+      "id": "snapshots",
+      "name": "Named snapshots",
+      "category": "panel",
+      "purpose": "Keep a history of named snapshots of the feed and restore any prior state.",
+      "whenToUse": "Saving a checkpoint before a big edit, or rolling back.",
+      "clickPath": "Bottom panel → Snapshots tab.",
+      "deepLink": { "bottomTab": "snapshots" },
+      "plan": "snapshot_history",
+      "docs": ["/docs/hosted-publishing/"],
+      "limitations": "Requires the Planner plan (FeatureKey snapshot_history)."
+    },
+    {
+      "id": "publish",
+      "name": "Hosted publishing",
+      "category": "panel",
+      "purpose": "Publish the feed to a stable public URL riders, regulators, and the Mobility Database can rely on, with a rider mini-site and embeds.",
+      "whenToUse": "Turning a feed into a hosted, shareable GTFS URL.",
+      "clickPath": "Bottom panel → Publish tab.",
+      "deepLink": { "bottomTab": "publish" },
+      "plan": "managed_publishing",
+      "docs": ["/docs/hosted-publishing/"],
+      "limitations": "Requires the Planner plan (FeatureKey managed_publishing)."
+    },
+    {
+      "id": "embeds",
+      "name": "Rider mini-site & embed widgets",
+      "category": "panel",
+      "purpose": "Generate copy-paste embed snippets (schedules, route maps, stop times) and a rider mini-site for a published feed.",
+      "whenToUse": "Putting schedules/maps on an agency website.",
+      "clickPath": "Bottom panel → Embed tab (feed must be published).",
+      "deepLink": { "bottomTab": "embed" },
+      "plan": "embeds",
+      "docs": ["/docs/embed-widgets/", "/docs/rider-mini-site/"],
+      "limitations": "Requires the Planner plan (FeatureKey embeds)."
+    },
+    {
+      "id": "validation-fixes",
+      "name": "One-click validation fixes",
+      "category": "fix",
+      "purpose": "Auto-fix common validation issues: fill blank first/last-stop times, bulk-fill missing wheelchair_boarding, remove orphan/ghost trips, delete unused stops, clear a route_desc that only repeats the name.",
+      "whenToUse": "A validation message shows a 'Fix' button — clearing a class of errors quickly.",
+      "clickPath": "Bottom panel → Validation tab → 'Fix' on a message (or 'Fix all N of this type').",
+      "deepLink": { "bottomTab": "validation" },
+      "plan": "all",
+      "docs": ["/docs/validation/"],
+      "limitations": "Only issues with a registered fix show a Fix button; others are manual."
+    },
+    {
+      "id": "shapes-from-stops",
+      "name": "Generate shapes from stops",
+      "category": "fix",
+      "purpose": "Create shapes.txt geometry for a feed that has stops but no shapes, routing through the stops (snapped to roads or straight lines).",
+      "whenToUse": "A feed imports without shapes and you want route lines on the map / in the export.",
+      "clickPath": "Post-import success screen → 'Generate shapes from stops', or Bottom panel → Validation tab → the 'Generate shapes' fix. Both open the Shapes-from-Stops dialog (Snap to roads vs straight lines).",
+      "deepLink": { "bottomTab": "validation" },
+      "plan": "all",
+      "docs": ["/docs/shapes-from-stops/"],
+      "limitations": "Uses Mapbox Directions through stops as waypoints; quality depends on the stop sequence. Snap-to-roads needs road-network coverage."
+    },
+    {
+      "id": "snap-to-road",
+      "name": "Snap drawn routes to roads",
+      "category": "tool",
+      "purpose": "Snap a hand-drawn route line to the road network (Mapbox Map Matching) so shapes follow streets.",
+      "whenToUse": "Drawing a route and wanting it to hug the roads.",
+      "clickPath": "'Snap to road' is a global setting (on by default); it applies when you finish drawing a route on the map.",
+      "deepLink": { "sidebarSection": "routes" },
+      "plan": "all",
+      "docs": ["/docs/routes-and-shapes/"],
+      "limitations": "If the match looks wrong you can keep the raw drawn line instead."
+    },
+    {
+      "id": "simplify-shape",
+      "name": "Simplify shape",
+      "category": "tool",
+      "purpose": "Reduce the number of points in a shape (Ramer–Douglas–Peucker) for a lighter, cleaner geometry, with a live preview.",
+      "whenToUse": "A shape has too many vertices and you want to thin it.",
+      "clickPath": "Left rail → Routes → open a route → Shapes tab → 'Simplify' on a shape (pick a level).",
+      "deepLink": { "sidebarSection": "routes" },
+      "plan": "all",
+      "docs": ["/docs/routes-and-shapes/"],
+      "limitations": ""
+    },
+    {
+      "id": "generate-trips",
+      "name": "Generate trips",
+      "category": "generator",
+      "purpose": "Generate a set of trips for a route/pattern from either explicit start times or a frequency/headway, laying out stop_times automatically.",
+      "whenToUse": "Building a timetable from scratch for a route.",
+      "clickPath": "Bottom panel → Timetable tab → toolbar → 'Generate trips…'.",
+      "deepLink": { "bottomTab": "timetable" },
+      "plan": "all",
+      "docs": ["/docs/timetables-and-trips/"],
+      "limitations": ""
+    },
+    {
+      "id": "set-run-time",
+      "name": "Set run time",
+      "category": "tool",
+      "purpose": "Re-lay every trip on a pattern to a new end-to-end run time (start times fixed, intermediate stops re-interpolated).",
+      "whenToUse": "Adjusting how long the route takes end to end across all its trips.",
+      "clickPath": "Bottom panel → Timetable tab → toolbar → 'Set run time…'.",
+      "deepLink": { "bottomTab": "timetable" },
+      "plan": "all",
+      "docs": ["/docs/timetables-and-trips/"],
+      "limitations": ""
+    },
+    {
+      "id": "estimate-times",
+      "name": "Estimate travel times",
+      "category": "tool",
+      "purpose": "Estimate stop-to-stop times by driving directions (Mapbox) and lay them into a trip's stop_times.",
+      "whenToUse": "You need realistic times but don't have a timetable to copy.",
+      "clickPath": "Bottom panel → Timetable tab → a trip's actions menu → 'Estimate times…'.",
+      "deepLink": { "bottomTab": "timetable" },
+      "plan": "all",
+      "docs": ["/docs/timetables-and-trips/"],
+      "limitations": "Road-driving estimate; review before publishing."
+    },
+    {
+      "id": "interpolate-times",
+      "name": "Interpolate stop times",
+      "category": "tool",
+      "purpose": "Fill in intermediate stop_times evenly between the timed stops you've entered.",
+      "whenToUse": "You've set a few key times and want the rest filled in.",
+      "clickPath": "Bottom panel → Timetable tab → a trip's actions menu → 'Interpolate stop times'.",
+      "deepLink": { "bottomTab": "timetable" },
+      "plan": "all",
+      "docs": ["/docs/timetables-and-trips/"],
+      "limitations": ""
+    },
+    {
+      "id": "frequency-to-trips",
+      "name": "Convert frequencies to individual trips",
+      "category": "tool",
+      "purpose": "Materialize a frequency/headway template into real, individual trips (and drop the frequencies row).",
+      "whenToUse": "You authored headway service but need explicit per-trip times.",
+      "clickPath": "Bottom panel → Timetable tab → a trip's actions menu → 'Convert to trips…' (also offered from the Blocks Gantt).",
+      "deepLink": { "bottomTab": "timetable" },
+      "plan": "all",
+      "docs": ["/docs/timetables-and-trips/"],
+      "limitations": ""
+    },
+    {
+      "id": "quick-block",
+      "name": "Quick Block (auto-blocking)",
+      "category": "generator",
+      "purpose": "Automatically group trips into vehicle blocks with a greedy heuristic, then review on the Gantt.",
+      "whenToUse": "You want a first-pass block assignment instead of assigning block_id by hand.",
+      "clickPath": "Left rail → Blocks → the Gantt → '⚡ Quick Block'.",
+      "deepLink": { "sidebarSection": "blocks" },
+      "plan": "all",
+      "docs": ["/docs/service-planning/"],
+      "limitations": "Heuristic first pass; review the result for overlaps."
+    },
+    {
+      "id": "continuous-stops",
+      "name": "Continuous pickup/drop-off (flag-stop service)",
+      "category": "tool",
+      "purpose": "Model hail-and-ride / flag-stop boarding between stops via continuous_pickup / continuous_drop_off on routes and stop_times. This is how you build a circulator with continuous pickup and drop-off.",
+      "whenToUse": "On-route boarding/alighting between defined stops (circulators, rural flag-stop service).",
+      "clickPath": "Enable 'Flag-stop service (continuous pickup/drop-off)' in Settings, then set route-level values in the Route editor and per-stop ⚑ overrides in the timetable column header.",
+      "deepLink": { "sidebarSection": "settings" },
+      "plan": "all",
+      "docs": ["/docs/routes-and-shapes/", "/docs/feature-settings/"],
+      "limitations": "Off by default; the controls only appear once the Flag-stop feature is enabled in Settings (or the imported feed already uses continuous_pickup/continuous_drop_off)."
+    },
+    {
+      "id": "import-export",
+      "name": "Import & export feeds",
+      "category": "tool",
+      "purpose": "Start from an existing feed (upload a .zip, pull from your saved feeds, or import from the Mobility Database) and export a spec-clean GTFS .zip.",
+      "whenToUse": "Bringing a feed in to edit, or getting a finished .zip out.",
+      "clickPath": "Top bar → Import (Upload / My Feeds / Mobility Database) and Export.",
+      "deepLink": null,
+      "plan": "all",
+      "docs": ["/docs/import-and-export/"],
+      "limitations": ""
+    },
+    {
+      "id": "geojson-export",
+      "name": "GeoJSON export",
+      "category": "tool",
+      "purpose": "Export route shapes and stops as a GeoJSON FeatureCollection for QGIS/ArcGIS/Mapbox and other GIS tools.",
+      "whenToUse": "You need the feed's geometry in a GIS, not as GTFS.",
+      "clickPath": "Top bar → Export → choose GeoJSON.",
+      "deepLink": null,
+      "plan": "all",
+      "docs": ["/docs/import-and-export/"],
+      "limitations": "Exports geometry (shapes + stops), not the full schedule."
+    },
+    {
+      "id": "draft-links",
+      "name": "Draft & review links",
+      "category": "tool",
+      "purpose": "Share a link to a working feed so stakeholders can review it before you publish.",
+      "whenToUse": "Getting sign-off on a feed before it goes live.",
+      "clickPath": "Bottom panel → Publish tab → draft/review links.",
+      "deepLink": { "bottomTab": "publish" },
+      "plan": "draft_links",
+      "docs": ["/docs/draft-links/"],
+      "limitations": "Requires the Planner plan (FeatureKey draft_links)."
+    },
+    {
+      "id": "mobility-db-submit",
+      "name": "Submit to the Mobility Database",
+      "category": "tool",
+      "purpose": "List a published feed in the canonical open transit catalog.",
+      "whenToUse": "Getting the feed discoverable in the Mobility Database.",
+      "clickPath": "Bottom panel → Publish tab → submit to Mobility Database (feed must be published).",
+      "deepLink": { "bottomTab": "publish" },
+      "plan": "mobility_db_submit",
+      "docs": ["/docs/hosted-publishing/"],
+      "limitations": "Requires the Planner plan (FeatureKey mobility_db_submit)."
+    },
+    {
+      "id": "rider-propensity",
+      "name": "Rider propensity heatmap (demand dots)",
+      "category": "panel",
+      "purpose": "Layer ride-likelihood density onto the map to prioritize where to invest service.",
+      "whenToUse": "Deciding where demand is highest.",
+      "clickPath": "Enable the propensity/demand-dots map layer from the map layer controls.",
+      "deepLink": null,
+      "plan": "all",
+      "docs": ["/docs/rider-propensity/"],
+      "limitations": "A map overlay, not an editable panel."
+    },
+    {
+      "id": "organizations",
+      "name": "Organizations & team workspaces",
+      "category": "panel",
+      "purpose": "Share feeds inside an organization and collaborate with teammates.",
+      "whenToUse": "Working with a team on the same feeds.",
+      "clickPath": "Account → Organizations.",
+      "deepLink": null,
+      "plan": "org_workspace",
+      "docs": ["/docs/organizations/"],
+      "limitations": "Requires the Planner plan (FeatureKey org_workspace). Feeds sync per account/org but there is no live simultaneous multi-user co-editing."
+    },
+    {
+      "id": "accounts-sync",
+      "name": "Accounts & cloud sync",
+      "category": "panel",
+      "purpose": "Sign in to save feeds to your account (R2-backed) and sync across devices; anonymous editing works without an account too.",
+      "whenToUse": "Saving feeds to the cloud or moving between devices.",
+      "clickPath": "Sign in from the top bar; feeds save to your account automatically.",
+      "deepLink": null,
+      "plan": "all",
+      "docs": ["/docs/account-and-cloud-sync/"],
+      "limitations": ""
+    },
+    {
+      "id": "deep-links",
+      "name": "Deep-link imports",
+      "category": "tool",
+      "purpose": "Open GTFS·X on a specific feed via a shareable deep link (e.g. from the Mobility Database).",
+      "whenToUse": "Jumping straight into editing a catalog feed.",
+      "clickPath": "Follow a /import deep link, or the Import dialog's Mobility Database tab.",
+      "deepLink": null,
+      "plan": "all",
+      "docs": ["/docs/deep-links/"],
+      "limitations": ""
+    }
+  ],
+  "notSupported": [
+    {
+      "ask": "Reroute a route by dragging its existing line on the map",
+      "reason": "Routes are edited by drawing or trimming their shape geometry, not by grabbing an existing route line and dragging it to a new path.",
+      "workaround": "Open the route's Shapes tab and edit/trim the shape, or redraw the line (snap-to-road will follow the streets)."
+    },
+    {
+      "ask": "Translate stop/route names into other languages (translations.txt)",
+      "reason": "There is no in-app translations editor; GTFS·X doesn't author translations.txt.",
+      "workaround": "Export the feed and add a translations.txt by hand; keep it out of a re-import so it isn't dropped."
+    },
+    {
+      "ask": "Ferry / boat-specific route tooling (water routing)",
+      "reason": "There are no ferry-specific helpers or on-water route drawing; the map-matching/road tools assume streets.",
+      "workaround": "Create the route, set its route_type to Ferry (4) in the Route editor, and draw the shape by hand (keep the raw drawn line rather than snapping to roads)."
+    },
+    {
+      "ask": "Generate a live GTFS-Realtime TripUpdates or VehiclePositions feed",
+      "reason": "Only GTFS-Realtime Service Alerts are authored in-app; live TripUpdates and VehiclePositions are not produced by GTFS·X.",
+      "workaround": "Publish TripUpdates/VehiclePositions from your AVL/ITS/real-time system; use GTFS·X for the schedule and Service Alerts."
+    },
+    {
+      "ask": "Fully author the whole Fares v2 model in-app (products, leg/transfer rules, rider categories)",
+      "reason": "Fares v2 authoring in-app currently ships the Areas editor (areas.txt + stop_areas.txt); the rest of the v2 model isn't fully editable yet.",
+      "workaround": "Import a feed that already carries those v2 files (they're preserved on export), or hand-edit after export."
+    },
+    {
+      "ask": "Real-time collaborative editing with multiple people in the same feed at once",
+      "reason": "Feeds sync to your account/org, but there's no Google-Docs-style simultaneous multi-user co-editing — one editor at a time per feed.",
+      "workaround": "Use an org workspace to share the feed and coordinate who edits when."
+    },
+    {
+      "ask": "Find-and-replace or bulk-rename across the whole feed (e.g. rename every stop matching a pattern)",
+      "reason": "There's no global find-and-replace tool; edits are made per entity (stop, route, trip) in their panels.",
+      "workaround": "Export the feed, do the bulk edit in the CSV (stops.txt, routes.txt, …), and re-import."
+    },
+    {
+      "ask": "Full edit history / unlimited undo across sessions",
+      "reason": "Undo/redo covers the current editing session only — there's no persistent, unlimited edit history you can scrub back through after a reload.",
+      "workaround": "Use named snapshots (Planner plan) to checkpoint the feed and restore any prior saved state."
+    },
+    {
+      "ask": "Export to NeTEx, TransXChange, or another transit-data format",
+      "reason": "GTFS·X exports GTFS (.zip) and GeoJSON only — it doesn't produce NeTEx, TransXChange, or other transit exchange formats.",
+      "workaround": "Export GTFS and convert to the target format with an external converter."
+    },
+    {
+      "ask": "Plan a rider trip / journey (door-to-door itinerary) inside GTFS·X",
+      "reason": "GTFS·X is an editor and analysis tool, not a trip planner — it won't compute specific rider itineraries. (Access isochrones show the reachable area from a point, not a turn-by-turn journey.)",
+      "workaround": "Publish the feed and let a trip planner that consumes GTFS (Google Maps, Transit app, OpenTripPlanner) route riders."
+    },
+    {
+      "ask": "Import running times from AVL / APC / GPS data to build the schedule automatically",
+      "reason": "GTFS·X doesn't ingest AVL/APC or GPS data; stop times are entered by hand or estimated from driving directions.",
+      "workaround": "Use 'Estimate travel times' (Mapbox driving estimate) as a starting point, then adjust the times in the timetable."
+    },
+    {
+      "ask": "Offline maps or a custom basemap",
+      "reason": "The map renders on Mapbox's basemap and needs a connection; there's no offline mode or custom/self-hosted basemap.",
+      "workaround": null
+    }
+  ]
+}

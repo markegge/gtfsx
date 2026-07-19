@@ -424,12 +424,16 @@ import { eventsRouter } from './events/routes';
 import { importRouter } from './import/routes';
 import { forumRouter } from './forum/routes';
 import { demoLeadRouter } from './marketing/demoLead';
+import { assistantRouter } from './assistant/routes';
 apiRouter.route('/orgs', orgsRouter);
 apiRouter.route('/admin', adminRouter);
 apiRouter.route('/billing', billingRouter);
 apiRouter.route('/events', eventsRouter);
 apiRouter.route('/import', importRouter);
 apiRouter.route('/forum', forumRouter);
+// "Ask GTFS·X" embedded help assistant (issue #68). requireAuth per-route; the
+// streamed chat endpoint rides the same session + CSRF middleware as /api/*.
+apiRouter.route('/assistant', assistantRouter);
 // /book-demo lead form submit (the demo_request conversion emission). Public,
 // cookieless; inherits the X-GB-Client CSRF check. See worker/marketing/demoLead.ts.
 apiRouter.route('/demo-leads', demoLeadRouter);

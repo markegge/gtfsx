@@ -14,6 +14,7 @@ import type { Plan, OwnerType } from '../projects/quotas';
 import { isPlan } from '../projects/quotas';
 import { sendTrialEndingEmail, sendUpgradeNotification } from '../email';
 import { PLAN_CATALOG } from './plans';
+import { insertEvent } from '../events/insert';
 
 const RELEVANT_EVENTS = [
   'checkout.session.completed',
@@ -234,10 +235,35 @@ async function handleCheckoutSessionCompleted(env: Env, session: Stripe.Checkout
     await env.DB.prepare(`UPDATE organization SET stripe_customer_id = ? WHERE id = ?`)
       .bind(customerId, ownerId)
       .run();
+
+    // trial_converted funnel signal: an org that ran the in-app no-card trial
+    // (trial_started_at set) has now subscribed with a card. checkout.session
+    // .completed fires once per subscription, so this counts each conversion
+    // once. Best-effort — logging must never fail the webhook.
+    try {
+      const org = await env.DB.prepare(
+        `SELECT trial_started_at FROM organization WHERE id = ?`,
+      )
+        .bind(ownerId)
+        .first<{ trial_started_at: number | null }>();
+      if (org?.trial_started_at != null) {
+        await insertEvent(env.DB, {
+          kind: 'trial_converted',
+          path: '/pricing',
+          sessionId: ulid(),
+          label: ownerId,
+        });
+      }
+    } catch (err) {
+      console.error('[billing] trial_converted event failed:', err);
+    }
   }
 }
 
-async function syncSubscription(env: Env, sub: Stripe.Subscription): Promise<void> {
+// Exported for a focused conversion-safety test (a trialing org that gets a
+// paid subscription must have plan_expires_at cleared so the expiry cron never
+// downgrades it).
+export async function syncSubscription(env: Env, sub: Stripe.Subscription): Promise<void> {
   const owner = await resolveOwner(env, sub);
   if (!owner) {
     console.warn(`[billing] subscription ${sub.id} has no resolvable owner`);
@@ -311,11 +337,17 @@ async function syncSubscription(env: Env, sub: Stripe.Subscription): Promise<voi
   // explicit cancellation handler downgrades.
   const cachedPlan = sub.status === 'active' || sub.status === 'trialing' ? plan : null;
   if (cachedPlan) {
+    // plan_expires_at = NULL is load-bearing: a paying subscriber must never
+    // carry an expiry, or the nightly comp-grant/trial expiry cron
+    // (expireEnterpriseGrants, guarded on plan_expires_at IS NOT NULL) would
+    // later downgrade them to free. This matters now that the in-app trial
+    // stamps plan_expires_at on the org — converting that org to a paid sub has
+    // to clear it here.
     if (owner.ownerType === 'user') {
       await env.DB.prepare(
         `UPDATE user
             SET plan = ?, stripe_customer_id = ?, plan_status = ?, plan_renewal_at = ?,
-                plan_seat_count = ?, updated_at = ?
+                plan_expires_at = NULL, plan_seat_count = ?, updated_at = ?
           WHERE id = ?`,
       )
         .bind(plan, customerId, sub.status, renewalAt, quantity, now, owner.ownerId)
@@ -324,7 +356,7 @@ async function syncSubscription(env: Env, sub: Stripe.Subscription): Promise<voi
       await env.DB.prepare(
         `UPDATE organization
             SET plan = ?, stripe_customer_id = ?, plan_status = ?, plan_renewal_at = ?,
-                plan_seat_count = ?
+                plan_expires_at = NULL, plan_seat_count = ?
           WHERE id = ?`,
       )
         .bind(plan, customerId, sub.status, renewalAt, quantity, owner.ownerId)

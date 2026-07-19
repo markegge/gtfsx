@@ -176,11 +176,37 @@ export async function sendTrialEndingEmail(
     monthlyPriceLabel: string;
     /** App URL for managing the subscription (Stripe portal or org billing page). */
     manageLink: string;
+    /**
+     * Whether a card is on file. The in-app no-credit-card trial has none, so
+     * the copy must NOT promise a charge or a cancel-to-avoid-billing step —
+     * the workspace just drops back to the free Editor. Defaults to true to
+     * preserve the original Stripe-trial copy for any legacy caller.
+     */
+    hasCard?: boolean;
   },
 ): Promise<void> {
   const date = escapeHtml(opts.trialEndDate);
   const price = escapeHtml(opts.monthlyPriceLabel);
   const manage = escapeHtml(opts.manageLink);
+  const hasCard = opts.hasCard ?? true;
+
+  if (!hasCard) {
+    await send(env, {
+      to,
+      subject: `Your GTFS·X Planner trial ends ${opts.trialEndDate}`,
+      html: wrap(`
+        <p>Your 14-day Planner trial ends on <strong>${date}</strong>. There's no credit card on file, so nothing will be charged, your workspace simply returns to the free Editor on that date.</p>
+        <p style="margin: 18px 0;"><a href="${manage}" style="display: inline-block; background: #8a5a3b; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none;">Subscribe to keep Planner</a></p>
+        <p style="color: #666; font-size: 13px;">Planner is ${price}. Subscribe any time to keep your hosted feeds, embeds, and the full planning suite.</p>
+      `),
+      text:
+        `Your 14-day Planner trial ends on ${opts.trialEndDate}.\n\n` +
+        `There's no credit card on file, so nothing will be charged, your workspace simply returns to the free Editor on that date.\n\n` +
+        `Planner is ${opts.monthlyPriceLabel}. Subscribe any time to keep Planner: ${opts.manageLink}`,
+    });
+    return;
+  }
+
   await send(env, {
     to,
     subject: `Your GTFS·X Planner trial ends ${opts.trialEndDate}`,

@@ -23,6 +23,7 @@ import {
   fetchPlanCatalog,
   openBillingPortal,
   startCheckout,
+  startTrial,
   type PlanCatalogEntry,
   type Plan,
 } from '../../services/billingApi';
@@ -142,6 +143,8 @@ export function PricingPage() {
   const orgsLoaded = useStore((s) => s.orgsLoaded);
   const loadOrgs = useStore((s) => s.loadOrgs);
   const upsertUserOrg = useStore((s) => s.upsertUserOrg);
+  const setActiveWorkspace = useStore((s) => s.setActiveWorkspace);
+  const setCurrentUser = useStore((s) => s.setCurrentUser);
 
   // Context params carried over from the old /upgrade entry points.
   const source = searchParams.get('source'); // 'welcome' = post-signup verify
@@ -186,11 +189,15 @@ export function PricingPage() {
   // path sets this — manual card clicks keep their in-button "Redirecting…"
   // state so the manual flow is left unchanged.
   const [autoCheckoutPhase, setAutoCheckoutPhase] = useState<AutoCheckoutPhase>('idle');
-  // Agency-without-org sub-form. Activated when the user picks Agency and has
-  // no admin org to attach the subscription to. Carries the chosen interval.
+  // Agency-without-org sub-form. Activated when the user picks Agency (to start
+  // a trial OR to subscribe) and has no admin org to attach it to. `mode`
+  // decides what happens after the org is created.
   const [teamOrgPrompt, setTeamOrgPrompt] = useState<
-    null | { name: string; slug: string; interval: 'month' | 'year' }
+    null | { name: string; slug: string; interval: 'month' | 'year'; mode: 'trial' | 'checkout' }
   >(null);
+  // In-app no-card trial flow state.
+  const [trialPending, setTrialPending] = useState(false);
+  const [trialStarted, setTrialStarted] = useState<null | { orgName: string; trialEndsAt: number }>(null);
 
   useEffect(() => {
     if (!authChecked) hydrateAuth();
@@ -228,6 +235,14 @@ export function PricingPage() {
   }, [presetOwnerType, presetOwnerId, adminOrgs]);
 
   const recommendedPlan = featureParam ? cheapestPlanFor(featureParam) : null;
+
+  // No-credit-card trial eligibility (best-effort client gate; the server is
+  // authoritative). The primary CTA is the trial when the user hasn't burned
+  // their one trial and the org that would host it isn't already on a plan.
+  const trialUsed = Boolean(currentUser?.trialUsed);
+  const trialOrg = presetOrg ?? adminOrgs[0] ?? null;
+  const trialOrgHasPlan = Boolean(trialOrg?.plan && trialOrg.plan !== 'free');
+  const canOfferTrial = Boolean(currentUser) && !trialUsed && !trialOrgHasPlan;
 
   const selfServePlans = useMemo(
     () => plans.filter((p) => p.plan !== 'free' && p.plan !== 'enterprise'),
@@ -365,14 +380,13 @@ export function PricingPage() {
       // No org to bill yet: show the create-org form. This is an expected input
       // step, not a surprise redirect, so we don't raise the redirect modal.
       const defaultName = `${currentUser?.displayName ?? 'My'} Transit`;
-      setTeamOrgPrompt({ name: defaultName, slug: slugifyOrgName(defaultName), interval });
+      setTeamOrgPrompt({ name: defaultName, slug: slugifyOrgName(defaultName), interval, mode: 'checkout' });
     }
   }
 
   // Auto-checkout after a deep-link / post-verify return (e.g.
   // /pricing?plan=agency&interval=year). Waits for auth + orgs, fires once, and
-  // skips if the user is already on the requested plan. Planner still funnels
-  // through the org picker / create form via handlePick.
+  // skips if the user is already on the requested plan.
   useEffect(() => {
     if (autoTriggered) return;
     if (!authChecked || !currentUser) return;
@@ -383,6 +397,13 @@ export function PricingPage() {
       return;
     }
     if (currentPlan === directPlanParam) {
+      setAutoTriggered(true);
+      return;
+    }
+    // A trial-eligible user must NOT be auto-redirected to card checkout — that
+    // would contradict the "no credit card required" promise. Land them on the
+    // page with the no-card trial CTA prominent instead of auto-firing Stripe.
+    if (canOfferTrial) {
       setAutoTriggered(true);
       return;
     }
@@ -412,8 +433,9 @@ export function PricingPage() {
   }
 
   // Submit handler for the inline "Create your organization" form. Creates the
-  // org first (plan stays 'free' until the Stripe webhook flips it to 'agency'
-  // after Checkout completes), then starts Planner checkout against the new org.
+  // org first, then either starts the in-app no-card trial on it (mode:'trial')
+  // or starts Planner checkout against it (mode:'checkout' — plan stays 'free'
+  // until the Stripe webhook flips it to 'agency').
   async function handleCreateOrgAndCheckout() {
     if (!teamOrgPrompt) return;
     const name = teamOrgPrompt.name.trim();
@@ -422,11 +444,13 @@ export function PricingPage() {
       setError('Organization name is required.');
       return;
     }
+    const isTrial = teamOrgPrompt.mode === 'trial';
     setError(null);
-    setPendingPlan('agency');
+    if (isTrial) setTrialPending(true);
+    else setPendingPlan('agency');
     try {
       const res = await createOrg({ name, slug });
-      upsertUserOrg({
+      const created: OrgSummary = {
         id: res.organization.id,
         slug: res.organization.slug,
         name: res.organization.name,
@@ -436,20 +460,109 @@ export function PricingPage() {
         memberCount: 1,
         projectCount: 0,
         createdAt: res.organization.createdAt,
-      });
-      await startPaidCheckout('agency', teamOrgPrompt.interval, res.organization.id);
+      };
+      upsertUserOrg(created);
+      if (isTrial) {
+        await runTrial(created);
+      } else {
+        await startPaidCheckout('agency', teamOrgPrompt.interval, res.organization.id);
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : (e as Error)?.message ?? 'Could not create organization.');
-      setPendingPlan(null);
+      if (isTrial) setTrialPending(false);
+      else setPendingPlan(null);
     }
   }
 
-  // ─── Planner org-create sub-step ──────────────────────────────────────────
+  // Start the no-credit-card Planner trial on an org the user administers.
+  // Reflects the new plan into the store immediately (upsert + switch the
+  // active workspace) so the editor unlocks without a reload, marks the user as
+  // having used their trial, and shows the success state.
+  async function runTrial(org: OrgSummary) {
+    setError(null);
+    setTrialPending(true);
+    try {
+      const res = await startTrial(org.id);
+      upsertUserOrg({
+        ...org,
+        plan: 'agency',
+        planStatus: 'active',
+        planExpiresAt: res.trialEndsAt,
+        trialEndsAt: res.trialEndsAt,
+      });
+      setActiveWorkspace({ type: 'org', orgId: org.id, role: org.role });
+      if (currentUser) setCurrentUser({ ...currentUser, trialUsed: true });
+      setTeamOrgPrompt(null);
+      setTrialStarted({ orgName: org.name, trialEndsAt: res.trialEndsAt });
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error)?.message ?? 'Could not start your trial.');
+    } finally {
+      setTrialPending(false);
+    }
+  }
+
+  // Primary CTA for the Planner card: start the no-card trial. Resolves the
+  // hosting org (pinned → first admin org), else opens the org-create form in
+  // trial mode. Logged-out users go to sign-up first.
+  async function handleStartTrial() {
+    if (!currentUser) {
+      navigate(`/signup?next=${encodeURIComponent('/pricing?source=welcome')}`);
+      return;
+    }
+    const org = presetOrg ?? adminOrgs[0];
+    if (org) {
+      await runTrial(org);
+    } else {
+      const defaultName = `${currentUser.displayName ?? 'My'} Transit`;
+      setError(null);
+      setTeamOrgPrompt({ name: defaultName, slug: slugifyOrgName(defaultName), interval: 'year', mode: 'trial' });
+    }
+  }
+
+  // ─── Trial started — success sub-step ─────────────────────────────────────
+  if (trialStarted) {
+    const endsLabel = new Date(trialStarted.trialEndsAt).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    return (
+      <AuthLayout
+        title="Your Planner trial is active"
+        subtitle="No credit card required. You have full access to the planning suite for the next 14 days."
+      >
+        <div className="space-y-4">
+          <TestModeBanner />
+          <div className="rounded-xl border border-teal bg-teal/5 px-4 py-4 text-sm text-brown">
+            <p className="font-semibold text-dark-brown">{trialStarted.orgName} is on Planner until {endsLabel}.</p>
+            <p className="mt-1 text-warm-gray">
+              When the trial ends your workspace drops back to the free Editor automatically. Nothing is charged.
+              Subscribe any time to keep Planner.
+            </p>
+          </div>
+          <Link
+            to="/feeds"
+            className="block w-full rounded-lg bg-teal py-2.5 text-center font-heading text-sm font-bold text-white hover:bg-[#1f7e72]"
+          >
+            Open the editor →
+          </Link>
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  // ─── Planner org-create sub-step (trial or checkout) ──────────────────────
   if (teamOrgPrompt) {
+    const isTrialMode = teamOrgPrompt.mode === 'trial';
+    const busy = isTrialMode ? trialPending : pendingPlan === 'agency';
     return (
       <AuthLayout
         title="Name your organization"
-        subtitle="Planner subscriptions are billed to an organization. We'll create it now and route the subscription to it."
+        subtitle={
+          isTrialMode
+            ? "Planner is organized around a workspace. We'll create yours now and start your free trial in it. No credit card required."
+            : "Planner subscriptions are billed to an organization. We'll create it now and route the subscription to it."
+        }
       >
         <div className="space-y-4">
           <TestModeBanner />
@@ -490,16 +603,22 @@ export function PricingPage() {
                 setError(null);
               }}
               type="button"
-              disabled={pendingPlan === 'agency'}
+              disabled={busy}
             >
               Back
             </AuthButton>
             <AuthButton
               onClick={handleCreateOrgAndCheckout}
               type="button"
-              disabled={pendingPlan === 'agency' || !teamOrgPrompt.name.trim()}
+              disabled={busy || !teamOrgPrompt.name.trim()}
             >
-              {pendingPlan === 'agency' ? 'Creating…' : 'Continue to checkout'}
+              {isTrialMode
+                ? busy
+                  ? 'Starting your trial…'
+                  : 'Start free trial'
+                : busy
+                  ? 'Creating…'
+                  : 'Continue to checkout'}
             </AuthButton>
           </div>
         </div>
@@ -616,10 +735,10 @@ export function PricingPage() {
                   {label.sub && (
                     <p className="mt-0.5 text-xs text-warm-gray">{label.sub}</p>
                   )}
-                  {/* Planner ships with a 14-day trial; show it inline so
-                      the price doesn't look like a hard commitment. */}
+                  {/* Planner ships with a no-card 14-day trial; show it inline
+                      so the price doesn't look like a hard commitment. */}
                   {popular && (
-                    <p className="mt-1 text-xs font-semibold text-coral">14-day free trial · cancel anytime</p>
+                    <p className="mt-1 text-xs font-semibold text-coral">14-day free trial · no credit card required</p>
                   )}
                 </div>
                 <div className="mt-4 flex-1 text-sm text-brown">
@@ -686,13 +805,39 @@ export function PricingPage() {
                       Talk to sales
                     </AuthButton>
                   ) : currentUser ? (
-                    <AuthButton
-                      fullWidth
-                      onClick={() => handlePick(p.plan, cardInterval)}
-                      disabled={pendingPlan !== null}
-                    >
-                      {isPending ? 'Redirecting…' : `Upgrade to ${p.displayName}`}
-                    </AuthButton>
+                    p.plan === 'agency' && canOfferTrial ? (
+                      // Primary path: start the no-credit-card in-app trial.
+                      // Subscribing with a card stays available as a secondary
+                      // action just below.
+                      <div className="space-y-2">
+                        <AuthButton
+                          fullWidth
+                          onClick={handleStartTrial}
+                          disabled={trialPending || pendingPlan !== null}
+                        >
+                          {trialPending ? 'Starting your trial…' : 'Start free trial'}
+                        </AuthButton>
+                        <p className="text-center text-[11px] font-semibold text-teal">
+                          No credit card required
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handlePick('agency', cardInterval)}
+                          disabled={pendingPlan !== null || trialPending}
+                          className="block w-full text-center text-xs font-semibold text-warm-gray hover:text-coral disabled:opacity-50"
+                        >
+                          {isPending ? 'Redirecting…' : 'Or subscribe now with a card'}
+                        </button>
+                      </div>
+                    ) : (
+                      <AuthButton
+                        fullWidth
+                        onClick={() => handlePick(p.plan, cardInterval)}
+                        disabled={pendingPlan !== null}
+                      >
+                        {isPending ? 'Redirecting…' : `Upgrade to ${p.displayName}`}
+                      </AuthButton>
+                    )
                   ) : (
                     <AuthButton
                       fullWidth
@@ -818,8 +963,9 @@ export function PricingPage() {
                     q: 'How does the 14-day free trial work?',
                     a: (
                       <p className="mt-2 text-sm text-warm-gray">
-                        Planner trials get full access for 14 days. A card is required to start; cancel anytime
-                        during the trial from your billing portal and you won't be charged.
+                        Planner trials get full access for 14 days with no credit card required. When the trial
+                        ends your workspace drops back to the free Editor automatically and nothing is charged.
+                        Subscribe any time during or after the trial to keep Planner.
                       </p>
                     ),
                   },

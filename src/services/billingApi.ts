@@ -83,6 +83,10 @@ export function fetchUserBilling(): Promise<OwnerBillingState> {
 }
 
 export interface OrgBillingState extends OwnerBillingState {
+  /** Set while an in-app no-card trial is active; null otherwise. */
+  trialEndsAt?: number | null;
+  /** Non-null once this org has ever started a trial (persists after revert). */
+  trialStartedAt?: number | null;
   quotas: OwnerBillingState['quotas'] & {
     seats: { used: number; limit: number };
   };
@@ -94,6 +98,20 @@ export function fetchOrgBilling(orgId: string): Promise<OrgBillingState> {
 
 export function startCheckout(input: CheckoutInput): Promise<CheckoutResponse> {
   return request<CheckoutResponse>('/api/billing/checkout', { method: 'POST', body: input });
+}
+
+export interface TrialResponse {
+  ok: true;
+  orgId: string;
+  plan: 'agency';
+  trialEndsAt: number;
+  trialDaysLeft: number;
+}
+
+// Start the in-app, no-credit-card 14-day Planner trial on an org the caller
+// administers. Server enforces one-per-org + one-per-user eligibility.
+export function startTrial(orgId: string): Promise<TrialResponse> {
+  return request<TrialResponse>('/api/billing/trial', { method: 'POST', body: { orgId } });
 }
 
 export function openBillingPortal(input: PortalInput): Promise<PortalResponse> {

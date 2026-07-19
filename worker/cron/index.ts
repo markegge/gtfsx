@@ -6,6 +6,7 @@ import {
   expireEnterpriseGrants,
   publishDueSchedules,
   runOwnerDigest,
+  runTrialEndingReminders,
 } from './tasks';
 import { uploadPendingConversions } from '../marketing/ads/oci';
 
@@ -53,6 +54,14 @@ export async function runScheduled(
       console.log('[cron:owner-digest]', JSON.stringify({ sent: result.sent, reason: result.reason }));
     } catch (err) {
       console.error('[cron:owner-digest] failed', err);
+    }
+    // "Your no-card Planner trial ends in 3 days" reminders (in-app trials have
+    // no Stripe subscription, so Stripe's trial_will_end never fires for them).
+    try {
+      const result = await runTrialEndingReminders(env);
+      if (result.sent) console.log('[cron:trial-reminders]', JSON.stringify({ sent: result.sent }));
+    } catch (err) {
+      console.error('[cron:trial-reminders] failed', err);
     }
     return;
   }

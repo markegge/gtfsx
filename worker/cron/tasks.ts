@@ -12,13 +12,16 @@
 // 3. `summarizeWeeklyMetrics` — cache top-level counters in KV so
 //    /api/admin/stats can read them cheaply.
 
+import { ulid } from 'ulidx';
 import type { Env } from '../env';
 import { purgeProject } from '../projects/purge';
 import { performPublish } from '../publication/performPublish';
 import { ApiError } from '../util/errors';
 import { requirePublishAccess } from '../billing/middleware';
 import type { OwnerType } from '../projects/quotas';
-import { sendOwnerDigest, type OwnerDigestMetrics } from '../email';
+import { sendOwnerDigest, sendTrialEndingEmail, type OwnerDigestMetrics } from '../email';
+import { insertEvent } from '../events/insert';
+import { PLAN_CATALOG } from '../billing/plans';
 
 export const DELETE_GRACE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -42,6 +45,21 @@ export const PROJECT_DELETE_GRACE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 // worker/billing/webhooks.ts.)
 export async function expireEnterpriseGrants(env: Env): Promise<{ users: number; orgs: number }> {
   const now = Date.now();
+
+  // Capture the trial orgs about to be reverted (BEFORE the UPDATE flips their
+  // plan) so we can fire a trial_expired funnel signal for each. A self-serve
+  // trial is distinguished from a comp grant by trial_ends_at being non-null —
+  // comp grants never set it — so this counts only real trial expirations.
+  const expiringTrials = await env.DB.prepare(
+    `SELECT id FROM organization
+      WHERE plan = 'agency'
+        AND plan_expires_at IS NOT NULL
+        AND plan_expires_at < ?
+        AND trial_ends_at IS NOT NULL`,
+  )
+    .bind(now)
+    .all<{ id: string }>();
+
   const expiredUsers = await env.DB.prepare(
     `UPDATE user
         SET plan = 'free', plan_status = 'active',
@@ -64,12 +82,106 @@ export async function expireEnterpriseGrants(env: Env): Promise<{ users: number;
     .bind(now)
     .run();
 
+  // trial_expired funnel signal (best-effort; the revert above is the real
+  // work and must not be undone by a logging failure).
+  for (const t of expiringTrials.results ?? []) {
+    try {
+      await insertEvent(env.DB, {
+        kind: 'trial_expired',
+        path: '/pricing',
+        sessionId: ulid(),
+        label: t.id,
+      });
+    } catch {
+      // never block the cron on instrumentation
+    }
+  }
+
   const userCount = expiredUsers.meta?.changes ?? 0;
   const orgCount = expiredOrgs.meta?.changes ?? 0;
   if (userCount || orgCount) {
     console.log(`[cron] expireEnterpriseGrants users=${userCount} orgs=${orgCount}`);
   }
   return { users: userCount, orgs: orgCount };
+}
+
+// ─── Trial-ending reminder (in-app, no-card trial) ──────────────────────────
+//
+// One "your trial ends in 3 days" email per in-app trial. Runs daily. Because
+// the no-card trial has no Stripe subscription, Stripe's trial_will_end webhook
+// never fires for it — this is its replacement. `trial_reminder_sent_at`
+// (migration 0029) guards against re-sending on subsequent daily runs.
+export const TRIAL_REMINDER_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+
+const TRIAL_MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+// Deterministic UTC date formatting (avoids an Intl/timezone dependency in
+// workerd and keeps tests stable): "August 2, 2026".
+function formatTrialEndDate(ms: number): string {
+  const d = new Date(ms);
+  return `${TRIAL_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+}
+
+export async function runTrialEndingReminders(env: Env): Promise<{ sent: number }> {
+  const now = Date.now();
+  const soon = now + TRIAL_REMINDER_WINDOW_MS;
+
+  const rows = await env.DB.prepare(
+    `SELECT id, trial_ends_at
+       FROM organization
+      WHERE plan = 'agency'
+        AND trial_ends_at IS NOT NULL
+        AND trial_ends_at > ?
+        AND trial_ends_at <= ?
+        AND plan_expires_at IS NOT NULL
+        AND trial_reminder_sent_at IS NULL
+        AND deleted_at IS NULL`,
+  )
+    .bind(now, soon)
+    .all<{ id: string; trial_ends_at: number }>();
+
+  const agency = PLAN_CATALOG.find((p) => p.plan === 'agency');
+  const priceLabel = agency?.monthlyPriceUsd ? `$${agency.monthlyPriceUsd}/mo` : '$299/mo';
+
+  let sent = 0;
+  for (const org of rows.results ?? []) {
+    // The org owner is the person to nudge. Oldest owner membership wins.
+    const owner = await env.DB.prepare(
+      `SELECT u.email AS email
+         FROM organization_membership m
+         JOIN user u ON u.id = m.user_id
+        WHERE m.org_id = ? AND m.role = 'owner'
+        ORDER BY m.created_at ASC
+        LIMIT 1`,
+    )
+      .bind(org.id)
+      .first<{ email: string }>();
+    if (!owner?.email) continue;
+
+    const manageLink = `${env.APP_ORIGIN}/pricing?ownerType=org&ownerId=${encodeURIComponent(org.id)}`;
+    try {
+      await sendTrialEndingEmail(env, owner.email, {
+        trialEndDate: formatTrialEndDate(org.trial_ends_at),
+        monthlyPriceLabel: priceLabel,
+        manageLink,
+        hasCard: false,
+      });
+      // Guarded so a re-run (or a race) sends at most once per trial.
+      const upd = await env.DB.prepare(
+        `UPDATE organization SET trial_reminder_sent_at = ? WHERE id = ? AND trial_reminder_sent_at IS NULL`,
+      )
+        .bind(now, org.id)
+        .run();
+      if ((upd.meta?.changes ?? 0) > 0) sent++;
+    } catch (err) {
+      console.error(`[cron] trial-ending reminder failed for org ${org.id}:`, err);
+    }
+  }
+  if (sent) console.log(`[cron] runTrialEndingReminders sent=${sent}`);
+  return { sent };
 }
 
 export interface ReapSummary {

@@ -65,8 +65,10 @@ describe('redirectModalState', () => {
 });
 
 describe('redirectModalCopy', () => {
-  it('Planner (agency) frames the redirect as starting the 14-day trial', () => {
-    expect(redirectModalCopy('agency', 'Planner').title).toBe('Starting your 14-day trial');
+  // The Stripe redirect modal now covers only the DIRECT subscribe path — the
+  // 14-day trial happens in-app with no card — so it never promises a trial.
+  it('Planner (agency) frames the redirect as setting the plan up (no trial promise)', () => {
+    expect(redirectModalCopy('agency', 'Planner').title).toBe('Setting up Planner');
   });
 
   it('a non-trial plan frames it as setting that plan up', () => {

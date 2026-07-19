@@ -276,6 +276,7 @@ orgsRouter.get('/', async (c) => {
   const user = c.var.user!;
   const res = await c.env.DB.prepare(
     `SELECT o.id, o.slug, o.name, o.created_at, o.plan, o.plan_status,
+            o.plan_expires_at, o.trial_ends_at,
             m.role AS role,
             (SELECT COUNT(*) FROM organization_membership mm WHERE mm.org_id = o.id) AS member_count,
             (SELECT COUNT(*) FROM feed_project p
@@ -293,6 +294,8 @@ orgsRouter.get('/', async (c) => {
       created_at: number;
       plan: string | null;
       plan_status: string | null;
+      plan_expires_at: number | null;
+      trial_ends_at: number | null;
       role: OrgRole;
       member_count: number;
       project_count: number;
@@ -305,6 +308,8 @@ orgsRouter.get('/', async (c) => {
     role: r.role,
     plan: (r.plan ?? 'free') as 'free' | 'agency' | 'enterprise',
     planStatus: (r.plan_status ?? 'active') as 'active' | 'past_due' | 'canceled' | 'trialing',
+    planExpiresAt: r.plan_expires_at ?? null,
+    trialEndsAt: r.trial_ends_at ?? null,
     memberCount: r.member_count,
     projectCount: r.project_count,
     createdAt: r.created_at,

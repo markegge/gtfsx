@@ -6,6 +6,7 @@ import { BottomPanel } from './BottomPanel';
 import { WelcomeBanner } from './WelcomeBanner';
 import { PartnerBanner } from './PartnerBanner';
 import { VariantBanner } from '../variants/VariantBanner';
+import { TrialBanner } from '../billing/TrialBanner';
 // Mapbox GL (~450 KB) is the single largest contributor to main-thread
 // script-eval on first load. Lazy-loading it lets the editor chrome paint and
 // become interactive before the map bundle is fetched and initialized.
@@ -71,6 +72,7 @@ export function AppShell() {
       <TopBar />
       <WelcomeBanner />
       <PartnerBanner />
+      <TrialBanner />
       <VariantBanner />
       <div className="flex-1 flex overflow-hidden">
         <LeftRail />

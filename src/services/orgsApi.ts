@@ -13,6 +13,10 @@ export interface OrgSummary {
     | 'agency'
     | 'enterprise';
   planStatus?: 'active' | 'past_due' | 'canceled' | 'trialing';
+  /** Comp-grant / trial expiry (unix ms); null for paid and free orgs. */
+  planExpiresAt?: number | null;
+  /** In-app trial end (unix ms); non-null distinguishes a trial from a comp grant. */
+  trialEndsAt?: number | null;
   memberCount: number;
   projectCount: number;
   createdAt: number;

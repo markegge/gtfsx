@@ -14,6 +14,12 @@ export interface AuthedUser {
     | 'agency'
     | 'enterprise';
   planStatus?: 'active' | 'past_due' | 'canceled' | 'trialing';
+  /**
+   * True once the user has consumed their one self-serve no-card trial.
+   * Populated by GET /api/me; may be undefined on the login/signup response
+   * (treat undefined as "not yet used" — the pricing page rehydrates via /me).
+   */
+  trialUsed?: boolean;
 }
 
 export interface MeResponse {

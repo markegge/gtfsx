@@ -24,6 +24,7 @@ import { sendVerifyEmail } from './email';
 import { projectsRouter } from './projects/routes';
 import { registerAlertRoutes } from './projects/alerts';
 import { computeUserUsage } from './me/usage';
+import { getUserTrialUsed } from './billing/trial';
 import { buildUserExport, EXPORT_RATE_KEY_PREFIX, EXPORT_RATE_WINDOW_SEC } from './me/export';
 
 const emailSchema = z.string().trim().toLowerCase().email();
@@ -76,6 +77,9 @@ export const apiRouter = new Hono<AppContext>();
 apiRouter.get('/me', requireAuth, async (c) => {
   const user = c.var.user!;
   const usage = await computeUserUsage(c.env, user.id);
+  // Whether this user has already consumed their one self-serve trial — drives
+  // whether the pricing page offers the no-card "Start free trial" CTA.
+  const trialUsed = await getUserTrialUsed(c.env, user.id);
   return c.json({
     user: {
       id: user.id,
@@ -85,6 +89,7 @@ apiRouter.get('/me', requireAuth, async (c) => {
       staff: user.staff,
       plan: user.plan,
       planStatus: user.planStatus,
+      trialUsed,
     },
     usage: { user: usage },
   });

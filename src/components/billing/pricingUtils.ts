@@ -61,15 +61,14 @@ export interface RedirectModalCopy {
 }
 
 /**
- * Spinner-state copy, framed for the plan being checked out. Planner (internal
- * id 'agency') ships a 14-day trial, so the redirect reads as "starting your
- * trial"; any other self-serve plan reads as setting that plan up. `planName`
- * is the display name (e.g. from planDisplayName).
+ * Spinner-state copy for the Stripe Checkout hand-off. This modal now covers
+ * only the DIRECT "subscribe now with a card" path — the 14-day trial happens
+ * in-app with no card, so this copy no longer promises a trial. `planName` is
+ * the display name (e.g. from planDisplayName).
  */
-export function redirectModalCopy(plan: Plan | null, planName: string): RedirectModalCopy {
-  const isTrialPlan = plan === 'agency';
+export function redirectModalCopy(_plan: Plan | null, planName: string): RedirectModalCopy {
   return {
-    title: isTrialPlan ? 'Starting your 14-day trial' : `Setting up ${planName}`,
+    title: `Setting up ${planName}`,
     body: "Redirecting you to Stripe's secure checkout…",
   };
 }

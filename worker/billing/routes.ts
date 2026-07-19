@@ -14,6 +14,8 @@ import {
   getOwnerQuotas,
 } from '../projects/quotas';
 import { PLAN_CATALOG } from './plans';
+import { startOrgTrial } from './trial';
+import { insertEvent } from '../events/insert';
 import { ulid } from 'ulidx';
 
 export const billingRouter = new Hono<AppContext>();
@@ -42,6 +44,7 @@ billingRouter.post('/webhooks/stripe', async (c) => {
 billingRouter.use('/me', requireAuth);
 billingRouter.use('/checkout', requireAuth);
 billingRouter.use('/portal', requireAuth);
+billingRouter.use('/trial', requireAuth);
 
 billingRouter.get('/me', async (c) => {
   const user = c.var.user!;
@@ -92,7 +95,8 @@ billingRouter.get('/orgs/:id', async (c) => {
   await requireOrgRole(c.env, user, orgId);
 
   const row = await c.env.DB.prepare(
-    `SELECT plan, plan_status, plan_renewal_at, plan_seat_count, stripe_customer_id, plan_expires_at
+    `SELECT plan, plan_status, plan_renewal_at, plan_seat_count, stripe_customer_id, plan_expires_at,
+            trial_started_at, trial_ends_at
        FROM organization WHERE id = ? AND deleted_at IS NULL`,
   )
     .bind(orgId)
@@ -103,6 +107,8 @@ billingRouter.get('/orgs/:id', async (c) => {
       plan_seat_count: number;
       stripe_customer_id: string | null;
       plan_expires_at: number | null;
+      trial_started_at: number | null;
+      trial_ends_at: number | null;
     }>();
   if (!row) throw notFound('Organization not found');
 
@@ -132,6 +138,8 @@ billingRouter.get('/orgs/:id', async (c) => {
     planRenewalAt: row.plan_renewal_at,
     planSeatCount: row.plan_seat_count,
     planExpiresAt: row.plan_expires_at,
+    trialStartedAt: row.trial_started_at,
+    trialEndsAt: row.trial_ends_at,
     hasStripeCustomer: !!row.stripe_customer_id,
     quotas: {
       projects: { used: usedProjects?.n ?? 0, limit: quotas.projects },
@@ -284,11 +292,10 @@ billingRouter.post('/checkout', async (c) => {
           // delivers a Subscription, not a checkout session.
           initiated_by_user_id: user.id,
         },
-        // 14-day free trial on Planner (internal id 'agency'). Card up front
-        // per Stripe defaults — payment fails closed at trial end if the
-        // card is invalid (Stripe pauses the subscription and emits
-        // invoice.payment_failed which the existing handler logs).
-        trial_period_days: 14,
+        // No Stripe trial_period_days: the 14-day free trial now happens IN-APP
+        // with no card (POST /api/billing/trial). This Checkout path is the
+        // direct "subscribe now with a card" flow — an immediate paid
+        // subscription, whether or not the org already ran the in-app trial.
       },
       success_url: `${c.env.APP_ORIGIN}${billingPath}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${c.env.APP_ORIGIN}${billingPath}?checkout=canceled`,
@@ -326,6 +333,49 @@ billingRouter.post('/checkout', async (c) => {
   });
 
   return c.json({ url: session.url, sessionId: session.id });
+});
+
+// ─── Self-serve no-credit-card trial ────────────────────────────────────────
+//
+// Starts a 14-day Planner (agency) trial on an org the caller administers, with
+// no Stripe involvement. Eligibility (one per org + one per user) and the state
+// transition live in ./trial.ts; this route adds authz + audit + analytics.
+// Idempotent: startOrgTrial re-returns an existing live trial instead of
+// erroring, so a double-submit still lands the user in the editor.
+const trialSchema = z.object({
+  orgId: z.string().min(1),
+});
+
+billingRouter.post('/trial', async (c) => {
+  const user = c.var.user!;
+  const body = await parseJson(c, trialSchema);
+  // Owner/admin of the org may start its trial (same bar as checkout).
+  await requireOrgRole(c.env, user, body.orgId, 'admin');
+
+  const state = await startOrgTrial(c.env, { orgId: body.orgId, userId: user.id });
+
+  await logAudit(c.env, {
+    actorUserId: user.id,
+    subjectType: 'org',
+    subjectId: body.orgId,
+    action: 'billing.trial_started',
+    metadata: { plan: state.plan, trialEndsAt: state.trialEndsAt },
+    ip: clientIp(c.req.raw),
+  });
+
+  // Cookieless funnel signal (best-effort — logging must never block the trial).
+  try {
+    await insertEvent(c.env.DB, {
+      kind: 'trial_started',
+      path: '/pricing',
+      sessionId: ulid(),
+      label: body.orgId,
+    });
+  } catch {
+    // instrumentation never affects the trial
+  }
+
+  return c.json({ ok: true, ...state });
 });
 
 const portalSchema = z.object({

@@ -459,16 +459,16 @@
       "limitations": "Requires the Planner plan (FeatureKey draft_links)."
     },
     {
-      "id": "mobility-db-submit",
-      "name": "Submit to the Mobility Database",
+      "id": "open-catalog",
+      "name": "Public feed catalog (discoverability)",
       "category": "tool",
-      "purpose": "List a published feed in the canonical open transit catalog.",
-      "whenToUse": "Getting the feed discoverable in the Mobility Database.",
-      "clickPath": "Bottom panel → Publish tab → submit to Mobility Database (feed must be published).",
+      "purpose": "Opt a published feed into the public GTFS·X catalog (feeds.gtfsx.com/catalog.json) so open-transit aggregators can discover it.",
+      "whenToUse": "Making a hosted feed publicly discoverable to catalogs like the Mobility Database.",
+      "clickPath": "Bottom panel → Publish tab → opt the feed into the public catalog (feed must be published).",
       "deepLink": { "bottomTab": "publish" },
-      "plan": "mobility_db_submit",
+      "plan": "managed_publishing",
       "docs": ["/docs/hosted-publishing/"],
-      "limitations": "Requires the Planner plan (FeatureKey mobility_db_submit)."
+      "limitations": "Discovery is via the catalog (aggregators pull from it) — GTFS·X does not push directly to the Mobility Database API. You can also submit your feeds.gtfsx.com URL to the Mobility Database yourself via its contribution form."
     },
     {
       "id": "rider-propensity",
@@ -579,6 +579,51 @@
       "ask": "Offline maps or a custom basemap",
       "reason": "The map renders on Mapbox's basemap and needs a connection; there's no offline mode or custom/self-hosted basemap.",
       "workaround": null
+    },
+    {
+      "ask": "Keep a custom (non-spec) column or an extra GTFS file through import/export",
+      "reason": "Unknown columns and unknown files are dropped on import — they aren't preserved or round-tripped (the one named exception is an agency's NTD / external ID).",
+      "workaround": "Re-add the custom column/file to the exported .zip after each export."
+    },
+    {
+      "ask": "Author attributions.txt (data-source credit)",
+      "reason": "attributions.txt isn't modeled in GTFS·X — it's never read on import or written on export.",
+      "workaround": "Add attributions.txt to the exported .zip by hand (it won't survive a re-import)."
+    },
+    {
+      "ask": "Push my feed to the Mobility Database from inside GTFS·X",
+      "reason": "The Mobility Database API rejects third-party pushes, so there's no working in-product push — the button/path is a stub.",
+      "workaround": "Opt your published feed into the public GTFS·X catalog (feeds.gtfsx.com/catalog.json) that aggregators pull from, and/or submit your feeds.gtfsx.com URL to the Mobility Database yourself via its contribution form."
+    },
+    {
+      "ask": "Submit my feed to TransitLand (transit.land) from GTFS·X",
+      "reason": "The in-product TransitLand submission is stubbed — it marks the feed pending for manual review rather than making a real API call.",
+      "workaround": "Submit your feeds.gtfsx.com URL to transit.land directly through its own contribution flow."
+    },
+    {
+      "ask": "Publish my feed at my own domain instead of feeds.gtfsx.com/<slug>",
+      "reason": "Custom publishing domains (per-tenant TLS) are deferred — hosted feeds live under feeds.gtfsx.com.",
+      "workaround": "Point your own domain at the feeds.gtfsx.com URL with a 301 redirect."
+    },
+    {
+      "ask": "Assign drivers/operators to blocks or build a duty roster (runcutting)",
+      "reason": "GTFS·X does vehicle blocking, not crew scheduling/runcutting — that's out of scope.",
+      "workaround": "Export the blocks and do runcutting in dedicated scheduling software."
+    },
+    {
+      "ask": "Auto-generate or auto-push service alerts (e.g. from live disruptions)",
+      "reason": "Service Alerts are authored manually — there's no automatic alert generation or rider push from a live data source.",
+      "workaround": "Write the alert by hand in the Service Alerts panel."
+    },
+    {
+      "ask": "Add a labeled landmark / point-of-interest marker (hospital, mall) to the map",
+      "reason": "There's no generic POI or custom-marker layer — the only points you place are transit stops, which export to stops.txt.",
+      "workaround": null
+    },
+    {
+      "ask": "Import a GeoJSON boundary directly as a GTFS-Flex zone",
+      "reason": "Flex zones are drawn on the map or arrive inside an imported GTFS feed — there's no standalone GeoJSON-to-zone import.",
+      "workaround": "Wrap the GeoJSON as locations.geojson in a minimal GTFS .zip and import that."
     }
   ]
 }

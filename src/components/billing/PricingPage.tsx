@@ -32,6 +32,13 @@ import { ApiError } from '../../services/authApi';
 import { trackCtaClick } from '../../services/trackBeacon';
 import { planDisplayName, cheapestPlanFor, FEATURE_COPY, type FeatureKey } from './planConfig';
 import {
+  canHostTrial,
+  deriveTrialOrgName,
+  resolveTrialStart,
+  slugifyOrgName,
+  trialWorkspaceSlug,
+} from './orgTrial';
+import {
   annualToMonthlyEquivalent,
   annualSavings,
   redirectModalState,
@@ -119,20 +126,6 @@ const FIX_FEED_MAIL =
 const BUILD_FEED_MAIL =
   'mailto:hello@gtfsx.com?subject=GTFS%C2%B7X%20—%20Build%20a%20feed&body=Hi%20Mark%20—%0A%0AAgency%20name%3A%20%0AAgency%20website%3A%20%0ARoute%20count%3A%20%0AService%20type%20(fixed-route%2C%20Flex%2C%20both)%3A%20%0ASchedule%20source%20(spreadsheet%2C%20PDF%2C%20website)%3A%20%0A';
 
-// Slugify an org name down to lowercase ASCII + dashes within the constraint
-// the server enforces (3-63 chars, must start with letter/digit).
-function slugifyOrgName(name: string): string {
-  const cleaned = name
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 63);
-  if (cleaned.length >= 3) return cleaned;
-  return (cleaned || 'team') + '-org';
-}
-
 export function PricingPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -197,7 +190,11 @@ export function PricingPage() {
   >(null);
   // In-app no-card trial flow state.
   const [trialPending, setTrialPending] = useState(false);
-  const [trialStarted, setTrialStarted] = useState<null | { orgName: string; trialEndsAt: number }>(null);
+  const [trialStarted, setTrialStarted] = useState<
+    null | { orgName: string; orgSlug: string; trialEndsAt: number }
+  >(null);
+  // Rare multi-org case: which of the user's eligible admin orgs hosts the trial.
+  const [trialPicker, setTrialPicker] = useState(false);
 
   useEffect(() => {
     if (!authChecked) hydrateAuth();
@@ -238,11 +235,20 @@ export function PricingPage() {
 
   // No-credit-card trial eligibility (best-effort client gate; the server is
   // authoritative). The primary CTA is the trial when the user hasn't burned
-  // their one trial and the org that would host it isn't already on a plan.
+  // their one trial. Which org hosts it is resolved at click time
+  // (resolveTrialStart): a pinned org, the single eligible admin org, a silent
+  // auto-created workspace, or a picker for the rare multi-org case.
   const trialUsed = Boolean(currentUser?.trialUsed);
-  const trialOrg = presetOrg ?? adminOrgs[0] ?? null;
-  const trialOrgHasPlan = Boolean(trialOrg?.plan && trialOrg.plan !== 'free');
-  const canOfferTrial = Boolean(currentUser) && !trialUsed && !trialOrgHasPlan;
+  // Admin orgs with no existing plan — the ones that could host a fresh trial.
+  const eligibleTrialOrgs = useMemo(
+    () => adminOrgs.filter((o) => canHostTrial(o)),
+    [adminOrgs],
+  );
+  // The only hard client-side block: a pinned org (org-scoped entry) that is
+  // already on a plan can't be trialed. Everything else can start a trial
+  // (auto-creating a workspace if the user has none).
+  const pinnedTrialBlocked = Boolean(presetOrg && !canHostTrial(presetOrg));
+  const canOfferTrial = Boolean(currentUser) && !trialUsed && !pinnedTrialBlocked;
 
   const selfServePlans = useMemo(
     () => plans.filter((p) => p.plan !== 'free' && p.plan !== 'enterprise'),
@@ -493,7 +499,8 @@ export function PricingPage() {
       setActiveWorkspace({ type: 'org', orgId: org.id, role: org.role });
       if (currentUser) setCurrentUser({ ...currentUser, trialUsed: true });
       setTeamOrgPrompt(null);
-      setTrialStarted({ orgName: org.name, trialEndsAt: res.trialEndsAt });
+      setTrialPicker(false);
+      setTrialStarted({ orgName: org.name, orgSlug: org.slug, trialEndsAt: res.trialEndsAt });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : (e as Error)?.message ?? 'Could not start your trial.');
     } finally {
@@ -501,21 +508,77 @@ export function PricingPage() {
     }
   }
 
-  // Primary CTA for the Planner card: start the no-card trial. Resolves the
-  // hosting org (pinned → first admin org), else opens the org-create form in
-  // trial mode. Logged-out users go to sign-up first.
+  // Create a workspace to host the trial, silently, for a user with no org.
+  // Retries once with a unique suffix if the derived slug is already taken so a
+  // common default name can't dead-end the frictionless one-click trial.
+  async function createTrialWorkspace(name: string): Promise<OrgSummary> {
+    const baseSlug = slugifyOrgName(name);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const slug = trialWorkspaceSlug(baseSlug, attempt);
+      try {
+        const res = await createOrg({ name, slug });
+        const created: OrgSummary = {
+          id: res.organization.id,
+          slug: res.organization.slug,
+          name: res.organization.name,
+          role: res.organization.role,
+          plan: 'free',
+          planStatus: 'active',
+          memberCount: 1,
+          projectCount: 0,
+          createdAt: res.organization.createdAt,
+        };
+        upsertUserOrg(created);
+        return created;
+      } catch (e) {
+        // Slug collision on the first, pretty slug → retry with a suffix.
+        if (attempt === 0 && e instanceof ApiError && (e.status === 409 || e.code === 'conflict')) continue;
+        throw e;
+      }
+    }
+    throw new Error('Could not create your workspace.');
+  }
+
+  // Auto-create a workspace then start the trial in it — no interstitial. Used
+  // when the user has no org to host the trial (the common solo case).
+  async function autoCreateAndRunTrial() {
+    if (!currentUser) return;
+    setError(null);
+    setTrialPending(true);
+    try {
+      const org = await createTrialWorkspace(deriveTrialOrgName(currentUser));
+      await runTrial(org);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error)?.message ?? 'Could not start your trial.');
+      setTrialPending(false);
+    }
+  }
+
+  // Primary CTA for the Planner card: start the no-card trial with as little
+  // friction as possible. resolveTrialStart picks the path — start in the one
+  // eligible org (single click), silently auto-create a workspace when the user
+  // has none, or (rarely) ask which org when several qualify. Logged-out users
+  // go to sign-up first.
   async function handleStartTrial() {
     if (!currentUser) {
       navigate(`/signup?next=${encodeURIComponent('/pricing?source=welcome')}`);
       return;
     }
-    const org = presetOrg ?? adminOrgs[0];
-    if (org) {
-      await runTrial(org);
-    } else {
-      const defaultName = `${currentUser.displayName ?? 'My'} Transit`;
-      setError(null);
-      setTeamOrgPrompt({ name: defaultName, slug: slugifyOrgName(defaultName), interval: 'year', mode: 'trial' });
+    const action = resolveTrialStart(presetOrg, eligibleTrialOrgs);
+    switch (action.kind) {
+      case 'blocked':
+        setError('This organization already has a plan.');
+        return;
+      case 'use':
+        await runTrial(action.org);
+        return;
+      case 'create':
+        await autoCreateAndRunTrial();
+        return;
+      case 'pick':
+        setError(null);
+        setTrialPicker(true);
+        return;
     }
   }
 
@@ -546,6 +609,71 @@ export function PricingPage() {
           >
             Open the editor →
           </Link>
+          <Link
+            to={`/orgs/${encodeURIComponent(trialStarted.orgSlug)}/billing`}
+            className="block text-center text-xs font-semibold text-warm-gray hover:text-coral"
+          >
+            View trial &amp; billing for {trialStarted.orgName}
+          </Link>
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  // ─── Trial org picker (rare: user administers 2+ trial-eligible orgs) ─────
+  if (trialPicker) {
+    return (
+      <AuthLayout
+        title="Where should your trial go?"
+        subtitle="Planner runs in a workspace. Pick which one starts its free 14-day trial — no credit card required."
+      >
+        <div className="space-y-4">
+          <TestModeBanner />
+          {error && (
+            <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+          <div className="space-y-2">
+            {eligibleTrialOrgs.map((org) => (
+              <button
+                key={org.id}
+                type="button"
+                onClick={() => runTrial(org)}
+                disabled={trialPending}
+                className="flex w-full items-center justify-between rounded-lg border-2 border-sand bg-cream px-4 py-3 text-left hover:border-coral disabled:opacity-50"
+              >
+                <span className="font-semibold text-dark-brown">{org.name}</span>
+                <span className="text-xs font-semibold text-teal">Start trial →</span>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setTrialPicker(false);
+              const defaultName = deriveTrialOrgName(currentUser!);
+              setError(null);
+              setTeamOrgPrompt({ name: defaultName, slug: slugifyOrgName(defaultName), interval: 'year', mode: 'trial' });
+            }}
+            disabled={trialPending}
+            className="block w-full text-center text-xs font-semibold text-warm-gray hover:text-coral disabled:opacity-50"
+          >
+            Or create a new workspace for the trial
+          </button>
+          <div className="flex justify-end pt-1">
+            <AuthButton
+              variant="secondary"
+              type="button"
+              onClick={() => {
+                setTrialPicker(false);
+                setError(null);
+              }}
+              disabled={trialPending}
+            >
+              Back
+            </AuthButton>
+          </div>
         </div>
       </AuthLayout>
     );

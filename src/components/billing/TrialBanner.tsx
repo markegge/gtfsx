@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Banner } from '../ui/Banner';
 import { useStore } from '../../store';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { isOrgOnTrial, trialDaysLeft } from './orgTrial';
 
 // Dismissal is scoped to the UTC day so a dismissed banner reappears the next
 // day (per the spec: dismissible per session, reappears daily).
@@ -38,15 +37,10 @@ export function TrialBanner() {
   const trial = useMemo(() => {
     if (activeWorkspace.type !== 'org') return null;
     const org = userOrgs.find((o) => o.id === activeWorkspace.orgId);
-    if (!org) return null;
-    if (org.plan !== 'agency') return null;
-    const ends = org.trialEndsAt ?? null;
     // Not a trial (paid sub / comp grant), or the org converted to paid
     // (planExpiresAt cleared), or already expired.
-    if (ends == null || org.planExpiresAt == null) return null;
-    if (ends <= now) return null;
-    const daysLeft = Math.max(1, Math.ceil((ends - now) / DAY_MS));
-    return { orgId: org.id, daysLeft };
+    if (!org || !isOrgOnTrial(org, now)) return null;
+    return { orgId: org.id, daysLeft: trialDaysLeft(org.trialEndsAt!, now) };
   }, [activeWorkspace, userOrgs, now]);
 
   if (!trial) return null;

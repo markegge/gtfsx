@@ -13,6 +13,7 @@ import {
 import { ApiError } from '../../services/authApi';
 import { planDisplayName } from './planConfig';
 import { TestModeBanner } from './TestModeBanner';
+import { orgsOnTrial, trialDaysLeft } from './orgTrial';
 
 function formatDate(ms: number | null | undefined): string {
   if (!ms) return '—';
@@ -36,6 +37,9 @@ export function AccountBillingPage() {
   const currentUser = useStore((s) => s.currentUser);
   const authChecked = useStore((s) => s.authChecked);
   const hydrateAuth = useStore((s) => s.hydrateAuth);
+  const userOrgs = useStore((s) => s.userOrgs);
+  const orgsLoaded = useStore((s) => s.orgsLoaded);
+  const loadOrgs = useStore((s) => s.loadOrgs);
 
   const [state, setState] = useState<OwnerBillingState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,6 +81,17 @@ export function AccountBillingPage() {
   useEffect(() => {
     if (authChecked && currentUser) refresh();
   }, [authChecked, currentUser, refresh]);
+
+  // The trial elevates an ORG's plan, never the user's personal plan, so the
+  // billing card below (which is user-scoped) never reflects it. Load the
+  // user's orgs so we can surface any workspace that's currently on a trial.
+  useEffect(() => {
+    if (authChecked && currentUser && !orgsLoaded) loadOrgs();
+  }, [authChecked, currentUser, orgsLoaded, loadOrgs]);
+
+  // Captured once — days-left only changes across calendar days.
+  const [now] = useState(() => Date.now());
+  const trialWorkspaces = orgsOnTrial(userOrgs, now);
 
   // Track whether we're waiting for the webhook to update the cached plan
   // after a successful checkout. Lets us show a single calm "Confirming…"
@@ -168,6 +183,27 @@ export function AccountBillingPage() {
     <AuthLayout title="Billing" subtitle="Manage your plan, seats, and invoices." wide>
       <div className="space-y-6">
         <TestModeBanner />
+        {trialWorkspaces.map((org) => {
+          const daysLeft = trialDaysLeft(org.trialEndsAt!, now);
+          const dayLabel = daysLeft === 1 ? '1 day' : `${daysLeft} days`;
+          return (
+            <div
+              key={org.id}
+              className="rounded-xl border border-teal bg-teal-light/40 p-4 text-sm text-teal flex flex-wrap items-center justify-between gap-3"
+            >
+              <span>
+                Your workspace <span className="font-semibold">{org.name}</span> is on a Planner trial —{' '}
+                <span className="font-semibold">{dayLabel} left</span>. No credit card on file.
+              </span>
+              <Link
+                to={`/orgs/${encodeURIComponent(org.slug)}/billing`}
+                className="font-semibold underline hover:no-underline whitespace-nowrap"
+              >
+                Manage trial &amp; billing →
+              </Link>
+            </div>
+          );
+        })}
         {checkoutFlag === 'success' && (
           <div className="rounded-xl border border-teal bg-teal-light/40 p-4 text-sm text-teal flex items-center gap-3">
             {confirmingPlan && (

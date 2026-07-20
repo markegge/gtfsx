@@ -79,27 +79,32 @@ function oauthResponse(): Response {
 }
 
 function adsSuccessResponse(rowCount: number): Response {
+  // Real Google Ads REST responses are camelCase (`conversionAction`).
   return new Response(JSON.stringify({
-    results: Array.from({ length: rowCount }, (_, i) => ({ gclid: `g${i}`, conversion_action: 'x' })),
+    results: Array.from({ length: rowCount }, (_, i) => ({ gclid: `g${i}`, conversionAction: 'x' })),
   }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 }
 
-function adsPartialFailureResponse(failures: { index: number; message: string }[]): Response {
-  // Mirror Google Ads' partial_failure_error shape (rpc.Status with
-  // GoogleAdsFailure detail containing field_path_elements pointing at
-  // operations[N]).
+// Mirror the REAL Google Ads REST partial-failure shape: camelCase
+// `partialFailureError`, `fieldPathElements` / `fieldName`, and the row-index
+// path element named `conversions` (NOT `operations`). This is exactly the
+// response that the original snake_case parser silently ignored, marking every
+// rejected row as uploaded. Captured verbatim from a live validate_only probe.
+function adsPartialFailureResponse(failures: { index: number; message: string; code?: string }[]): Response {
   return new Response(JSON.stringify({
-    results: [],
-    partial_failure_error: {
+    partialFailureError: {
       code: 3,
-      message: 'partial failure',
+      message: `Multiple errors in 'details'. First error: ${failures[0]?.message ?? ''}`,
       details: [{
+        '@type': 'type.googleapis.com/google.ads.googleads.v24.errors.GoogleAdsFailure',
         errors: failures.map((f) => ({
+          errorCode: { notAllowlistedError: f.code ?? 'CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE' },
           message: f.message,
-          location: { field_path_elements: [{ field_name: 'operations', index: f.index }] },
+          location: { fieldPathElements: [{ fieldName: 'conversions', index: f.index }] },
         })),
       }],
     },
+    jobId: '1285029156557314512',
   }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 }
 
@@ -209,6 +214,9 @@ describe('OCI: uploadPendingConversions', () => {
     await resetDb();
     await dbRun(`DELETE FROM event`);
     clearSecrets();
+    // The uploader is prod-gated on APP_ORIGIN; set the prod origin so the
+    // upload paths run (the env-gate itself is covered by its own test).
+    (testEnv as unknown as Record<string, unknown>).APP_ORIGIN = 'https://www.gtfsx.com';
   });
 
   it('no-ops with configured=false when secrets are missing', async () => {
@@ -451,5 +459,81 @@ describe('OCI: uploadPendingConversions', () => {
 
     await expect(uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now }))
       .rejects.toThrow(/OAuth token exchange failed/);
+  });
+
+  it('REGRESSION: detects a real camelCase partialFailureError instead of marking it uploaded', async () => {
+    // This is the exact failure that hid a month-long outage: Google returns a
+    // per-row rejection in camelCase, the old snake_case parser saw nothing, and
+    // the row was marked uploaded. The row MUST be marked failed, not uploaded.
+    withSecrets();
+    const id = await seedEvent({ gclid: 'gReject', kind: 'paywall_view', ts: FIXED_NOW - 1000 });
+
+    const fetchMock = stubFetch(({ url }) => {
+      if (url.includes('oauth2.googleapis.com')) return oauthResponse();
+      if (url.includes('uploadClickConversions')) {
+        return adsPartialFailureResponse([{
+          index: 0,
+          code: 'CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE',
+          message: 'New integrations for uploading click conversions should use the Data Manager API.',
+        }]);
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now });
+    expect(result.uploaded).toBe(0);
+    expect(result.failedThisRun).toBe(1);
+    expect(result.errors[0]?.message).toMatch(/Data Manager API/);
+
+    const row = await dbGet<{ oci_uploaded_at: number | null; oci_attempts: number; oci_last_error: string | null }>(
+      `SELECT oci_uploaded_at, oci_attempts, oci_last_error FROM event WHERE id = ?`, id,
+    );
+    expect(row!.oci_uploaded_at).toBeNull(); // NOT marked uploaded
+    expect(row!.oci_attempts).toBe(1);
+    expect(row!.oci_last_error).toMatch(/Data Manager API/);
+  });
+
+  it('SAFETY NET: a partial failure with no parseable row index fails the whole batch', async () => {
+    withSecrets();
+    const id = await seedEvent({ gclid: 'gWeird', kind: 'feed_exported', ts: FIXED_NOW - 1000 });
+
+    const fetchMock = stubFetch(({ url }) => {
+      if (url.includes('oauth2.googleapis.com')) return oauthResponse();
+      if (url.includes('uploadClickConversions')) {
+        // partialFailureError present, but no conversions[N] index anywhere.
+        return new Response(JSON.stringify({
+          partialFailureError: { code: 3, message: 'INTERNAL: something went wrong', details: [] },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now });
+    expect(result.uploaded).toBe(0);
+    expect(result.failedThisRun).toBe(1);
+
+    const row = await dbGet<{ oci_uploaded_at: number | null; oci_last_error: string | null }>(
+      `SELECT oci_uploaded_at, oci_last_error FROM event WHERE id = ?`, id,
+    );
+    expect(row!.oci_uploaded_at).toBeNull();
+    expect(row!.oci_last_error).toMatch(/something went wrong/);
+  });
+
+  it('ENV GATE: does not upload from a non-production origin', async () => {
+    withSecrets();
+    (testEnv as unknown as Record<string, unknown>).APP_ORIGIN = 'https://staging.gtfsx.com';
+    await seedEvent({ gclid: 'gStaging', kind: 'feed_exported', ts: FIXED_NOW - 1000 });
+
+    const fetchMock = stubFetch(() => {
+      throw new Error('no network call may happen on a non-prod origin');
+    });
+
+    const result = await uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now });
+    expect(result.configured).toBe(false);
+    expect(result.skippedReason).toMatch(/non-production origin/);
+    expect(result.attempted).toBe(0);
+
+    const row = await dbGet<{ oci_uploaded_at: number | null }>(`SELECT oci_uploaded_at FROM event`);
+    expect(row!.oci_uploaded_at).toBeNull(); // untouched
   });
 });

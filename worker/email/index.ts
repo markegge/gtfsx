@@ -291,6 +291,59 @@ export async function sendDemoLeadNotification(
   });
 }
 
+// Internal alert to the GTFS·X owner inbox when the Google Ads OCI uploader has
+// trouble — any row failures, permanent-failure flags, or a fatal (auth) error.
+// Best-effort and no-op when OWNER_NOTIFY_EMAIL is unset. This is the guard
+// against the failure mode that hid a month-long outage: the uploader marking
+// Google's rejections as "uploaded" with nobody watching. The sample error
+// text is included verbatim so the actual Google message (e.g.
+// CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE) lands in Mark's inbox.
+export interface OciAlertSummary {
+  attempted: number;
+  uploaded: number;
+  failedThisRun: number;
+  markedPermanentlyFailed: number;
+  /** A few representative Google error messages from this run. */
+  sampleErrors: string[];
+  /** Present when the whole run threw (e.g. OAuth token exchange failed). */
+  fatal?: string;
+}
+
+export async function sendOciAlert(env: Env, summary: OciAlertSummary): Promise<void> {
+  const to = env.OWNER_NOTIFY_EMAIL;
+  if (!to) return;
+  const statusUrl = `${env.APP_ORIGIN}/api/admin/events/oci-status`;
+  const headline = summary.fatal
+    ? 'The Google Ads conversion uploader failed to run.'
+    : `The Google Ads conversion uploader had ${summary.failedThisRun} rejected `
+      + `row(s)${summary.markedPermanentlyFailed ? ` (${summary.markedPermanentlyFailed} now permanently failed)` : ''}.`;
+  const samples = summary.sampleErrors.slice(0, 5);
+  const samplesHtml = summary.fatal
+    ? `<p style="margin:14px 0 0;"><strong>Error:</strong><br /><code>${escapeHtml(summary.fatal)}</code></p>`
+    : samples.length
+      ? `<p style="margin:14px 0 0;"><strong>Sample errors from Google:</strong></p><ul>`
+        + samples.map((s) => `<li><code>${escapeHtml(s)}</code></li>`).join('') + `</ul>`
+      : '';
+  await send(env, {
+    to,
+    subject: 'GTFS·X: Google Ads conversion upload needs attention',
+    html: wrap(`
+      <p>⚠️ ${escapeHtml(headline)}</p>
+      <p><strong>Attempted:</strong> ${summary.attempted} &nbsp;·&nbsp;
+         <strong>Uploaded:</strong> ${summary.uploaded} &nbsp;·&nbsp;
+         <strong>Failed:</strong> ${summary.failedThisRun}</p>
+      ${samplesHtml}
+      <p style="margin:18px 0 0;"><a href="${escapeHtml(statusUrl)}">Open the OCI status page</a> for detail.</p>
+    `),
+    text:
+      `${headline}\n\n` +
+      `Attempted: ${summary.attempted}\nUploaded: ${summary.uploaded}\nFailed: ${summary.failedThisRun}\n` +
+      (summary.markedPermanentlyFailed ? `Permanently failed: ${summary.markedPermanentlyFailed}\n` : '') +
+      (summary.fatal ? `\nError:\n${summary.fatal}\n` : samples.length ? `\nSample errors from Google:\n${samples.map((s) => `- ${s}`).join('\n')}\n` : '') +
+      `\nStatus page: ${statusUrl}`,
+  });
+}
+
 /** Metrics rendered by the daily owner digest. Computed in worker/cron/tasks.ts. */
 export interface OwnerDigestMetrics {
   /** New user rows created in the last 24h (matches Admin "signups"). */

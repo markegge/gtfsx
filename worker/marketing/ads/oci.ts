@@ -35,6 +35,12 @@ const BATCH_SIZE = 1000;
 // gclids expire from Google Ads' side at ~90 days. Drop anything older.
 const GCLID_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const MAX_ATTEMPTS = 3;
+// Uploads only run on the production Worker. Even though staging normally lacks
+// the GOOGLE_ADS_* secrets (readOciConfig → null), gate explicitly on the prod
+// origin so a copied secret can never fire test/staging traffic into the live
+// Google Ads account. env.APP_ORIGIN is 'https://www.gtfsx.com' on prod and
+// 'https://staging.gtfsx.com' on staging (wrangler.jsonc vars).
+const PROD_ORIGIN = 'https://www.gtfsx.com';
 // Conversion kinds we can upload. Anything not in this set is ignored by the
 // uploader; the per-run SQL WHERE clause narrows further to the kinds whose
 // conversion action is actually configured (see configuredKinds).
@@ -68,6 +74,9 @@ export function configuredKinds(cfg: OciConfig): UploadedKind[] {
 export interface OciResult {
   ranAt: number;
   configured: boolean;
+  // Set when the run short-circuited without attempting anything (e.g. a
+  // non-production origin). Distinguishes a deliberate skip from configured:false.
+  skippedReason?: string;
   // Counts across this run. `attempted` counts rows actually sent (after the
   // 90-day cutoff filter); `uploaded` counts rows Google accepted.
   attempted: number;
@@ -208,33 +217,57 @@ export function buildConversionPayload(
 // ─── Upload ───────────────────────────────────────────────────────────────
 
 // uploadClickConversions response shape we care about. Successful conversions
-// echo back in `results`; per-row failures appear in `partial_failure_error`
+// echo back in `results`; per-row failures appear in `partialFailureError`
 // as a google.rpc.Status with embedded GoogleAdsFailure details containing
-// the offending operation index.
-interface UploadClickConversionsResponse {
-  results?: Array<{ gclid?: string; conversion_action?: string }>;
-  partial_failure_error?: {
-    code?: number;
-    message?: string;
-    details?: Array<{
-      errors?: Array<{
-        message?: string;
-        location?: { field_path_elements?: Array<{ field_name?: string; index?: number }> };
-      }>;
+// the offending conversion index.
+//
+// CASING: the Google Ads REST API returns proto3-JSON in **camelCase**
+// (`partialFailureError`, `fieldPathElements`, `fieldName`) even though it
+// accepts snake_case in the REQUEST. Reading the response as snake_case (the
+// original bug) made extractRowErrors always return empty → every rejected row
+// was marked "uploaded", which silently masked a month-long outage when the
+// account was de-allowlisted from this endpoint. We read camelCase and keep a
+// snake_case fallback so a shape change in either direction can't re-hide
+// failures.
+interface PartialFailure {
+  code?: number;
+  message?: string;
+  details?: Array<{
+    errors?: Array<{
+      message?: string;
+      location?: {
+        fieldPathElements?: PathElement[];
+        field_path_elements?: PathElement[];
+      };
     }>;
-  };
+  }>;
+}
+interface PathElement { fieldName?: string; field_name?: string; index?: number }
+interface UploadClickConversionsResponse {
+  results?: Array<{ gclid?: string; conversionAction?: string }>;
+  partialFailureError?: PartialFailure;
+  partial_failure_error?: PartialFailure;
+}
+
+// The top-level partial-failure status, whichever casing Google used.
+function partialFailure(resp: UploadClickConversionsResponse): PartialFailure | undefined {
+  return resp.partialFailureError ?? resp.partial_failure_error;
 }
 
 function extractRowErrors(resp: UploadClickConversionsResponse): Map<number, string> {
   const errs = new Map<number, string>();
-  const details = resp.partial_failure_error?.details ?? [];
-  for (const d of details) {
+  for (const d of partialFailure(resp)?.details ?? []) {
     for (const e of d.errors ?? []) {
-      const path = e.location?.field_path_elements ?? [];
-      // The operations[N] path element gives us the row index.
-      const op = path.find((p) => p.field_name === 'operations');
-      if (op && typeof op.index === 'number') {
-        errs.set(op.index, (e.message ?? 'unknown error').slice(0, 500));
+      const loc = e.location ?? {};
+      const path = loc.fieldPathElements ?? loc.field_path_elements ?? [];
+      // The row index lives on the `conversions[N]` path element — the only one
+      // that carries a numeric index. Match on the index itself, not a field
+      // name: the request field is `conversions` (not `operations`, which is
+      // the mutate-endpoint name the original code wrongly looked for), and we
+      // don't want to depend on that name or the JSON casing.
+      const indexed = path.find((p) => typeof p.index === 'number');
+      if (indexed && typeof indexed.index === 'number') {
+        errs.set(indexed.index, (e.message ?? 'unknown error').slice(0, 500));
       }
     }
   }
@@ -323,6 +356,18 @@ export async function uploadPendingConversions(
   deps: UploaderDeps = {},
 ): Promise<OciResult> {
   const now = (deps.now ?? Date.now)();
+
+  // Hard prod-only gate — see PROD_ORIGIN. Runs before config/DB work so a
+  // non-prod worker is an immediate no-op.
+  if (env.APP_ORIGIN !== PROD_ORIGIN) {
+    console.warn(`[oci] skipped — non-production origin (${env.APP_ORIGIN}); uploads run on prod only`);
+    return {
+      ranAt: now, configured: false, skippedReason: `non-production origin (${env.APP_ORIGIN})`,
+      attempted: 0, uploaded: 0, failedThisRun: 0,
+      markedPermanentlyFailed: 0, skippedExpired: 0, errors: [],
+    };
+  }
+
   const cfg = readOciConfig(env);
   if (!cfg) {
     console.warn('[oci] skipped — env not configured (see worker/marketing/ads/README.md)');
@@ -358,6 +403,16 @@ export async function uploadPendingConversions(
     try {
       const resp = await postBatch(cfg, accessToken, payload, deps);
       rowErrors = extractRowErrors(resp);
+      // Safety net: if Google reported a partial failure but we mapped zero
+      // per-row errors (a shape we don't recognize, or a batch-level error with
+      // no conversion index), fail the WHOLE batch rather than silently marking
+      // every row uploaded. Never mark a row success while Google is unhappy.
+      const pf = partialFailure(resp);
+      if (pf && rowErrors.size === 0) {
+        const msg = (pf.message ?? 'partial failure with no parseable row errors').slice(0, 500);
+        console.error('[oci] unmapped partial failure — failing whole batch:', msg);
+        for (let j = 0; j < batch.length; j++) rowErrors.set(j, msg);
+      }
     } catch (err) {
       // Fatal (auth, network, malformed response) — treat every row as
       // failed-this-run so attempts increment and we retry next cron.

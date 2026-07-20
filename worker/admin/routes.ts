@@ -1574,6 +1574,11 @@ adminRouter.get('/events/oci-status', async (c) => {
   <button class="run" id="run-btn">Run upload now</button>
   <pre class="result" id="result" hidden></pre>
 
+  <h2>Recover rejected uploads</h2>
+  <p style="color:#555;">Reset conversion rows that were <em>marked uploaded but rejected by Google</em> (e.g. during the June 2026 endpoint de-allowlisting) back to pending, so the next run re-sends them. Idempotent — Google de-dupes by gclid + action + time — and limited to the 90-day window. Run this only after uploads work again.</p>
+  <button class="run" id="requeue-btn" style="background:#b45309;">Requeue rejected conversions</button>
+  <pre class="result" id="requeue-result" hidden></pre>
+
   <h2>Permanently failed rows (latest 25)</h2>
   <table>
     <thead>
@@ -1610,6 +1615,26 @@ ${failedRows}
         btn.disabled = false; btn.textContent = 'Run upload now';
       }
     });
+    document.getElementById('requeue-btn').addEventListener('click', async function () {
+      if (!confirm('Reset all marked-uploaded conversion rows in the last 90 days back to pending? They will be re-sent on the next run (Google de-dupes, so this is safe).')) return;
+      var btn = this;
+      var out = document.getElementById('requeue-result');
+      btn.disabled = true; btn.textContent = 'Requeuing…';
+      out.hidden = false; out.textContent = 'POST /api/admin/events/oci-requeue …';
+      try {
+        var res = await fetch('/api/admin/events/oci-requeue', {
+          method: 'POST',
+          headers: { 'X-GB-Client': 'web' },
+          credentials: 'include',
+        });
+        var body = await res.text();
+        out.textContent = 'HTTP ' + res.status + '\\n\\n' + body;
+      } catch (err) {
+        out.textContent = 'Network error: ' + (err && err.message ? err.message : err);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Requeue rejected conversions';
+      }
+    });
   </script>
 </body>
 </html>`;
@@ -1642,4 +1667,38 @@ adminRouter.post('/events/oci-run', async (c) => {
     ip: clientIp(c.req.raw),
   });
   return c.json(result);
+});
+
+// Recovery endpoint for the "Requeue rejected conversions" button. Resets
+// conversion-kind rows that were marked uploaded (or sentinel-failed) but were
+// actually rejected by Google — e.g. every row uploaded during the June 2026
+// window when the account was silently de-allowlisted from
+// ConversionUploadService.UploadClickConversions. Clearing oci_uploaded_at /
+// oci_attempts / oci_last_error puts them back in the uploader's pending set so
+// the next run (cron or "Run upload now") re-sends them. Idempotent: Google
+// de-dupes offline click conversions by gclid + conversion action +
+// conversion time, and we bound to the 90-day window so already-expired gclids
+// aren't churned. Owner-triggered only; never runs on its own.
+adminRouter.post('/events/oci-requeue', async (c) => {
+  const staff = c.var.user!;
+  await rateLimit(c.env, { key: `admin:oci-requeue:${staff.id}`, limit: 6, windowSec: 60 });
+  const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+  const res = await c.env.DB.prepare(
+    `UPDATE event
+        SET oci_uploaded_at = NULL, oci_attempts = 0, oci_last_error = NULL
+      WHERE kind IN ('feed_exported', 'paywall_view', 'demo_request')
+        AND gclid IS NOT NULL
+        AND oci_uploaded_at IS NOT NULL
+        AND ts > ?`,
+  ).bind(ninetyDaysAgo).run();
+  const requeued = res.meta.changes ?? 0;
+  await logAudit(c.env, {
+    actorUserId: staff.id,
+    subjectType: 'user',
+    subjectId: staff.id,
+    action: 'admin.oci.requeue',
+    metadata: { requeued },
+    ip: clientIp(c.req.raw),
+  });
+  return c.json({ requeued });
 });

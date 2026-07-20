@@ -9,6 +9,7 @@ import {
   runTrialEndingReminders,
 } from './tasks';
 import { uploadPendingConversions } from '../marketing/ads/oci';
+import { sendOciAlert } from '../email';
 
 // Scheduled worker entry point. Invoked from worker/index.ts#scheduled().
 // Cron triggers are registered in wrangler.jsonc → triggers.crons; we
@@ -39,8 +40,23 @@ export async function runScheduled(
     try {
       const result = await uploadPendingConversions(env);
       console.log('[cron:oci]', JSON.stringify(result));
+      // Alert on any rejection so an OCI failure can never again die silently.
+      if (result.failedThisRun > 0 || result.markedPermanentlyFailed > 0) {
+        await sendOciAlert(env, {
+          attempted: result.attempted,
+          uploaded: result.uploaded,
+          failedThisRun: result.failedThisRun,
+          markedPermanentlyFailed: result.markedPermanentlyFailed,
+          sampleErrors: result.errors.map((e) => e.message),
+        }).catch((e) => console.error('[cron:oci] alert failed', e));
+      }
     } catch (err) {
       console.error('[cron:oci] failed', err);
+      // Fatal (e.g. OAuth token exchange failed) — surface it too.
+      await sendOciAlert(env, {
+        attempted: 0, uploaded: 0, failedThisRun: 0, markedPermanentlyFailed: 0,
+        sampleErrors: [], fatal: err instanceof Error ? err.message : String(err),
+      }).catch((e) => console.error('[cron:oci] alert failed', e));
     }
     return;
   }

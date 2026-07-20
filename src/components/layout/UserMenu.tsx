@@ -174,21 +174,6 @@ export function UserMenuItems({ onClose }: { onClose?: () => void } = {}) {
 
       <div className="border-t border-sand my-1" />
       <button
-        onClick={() => go('/feeds')}
-        className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
-      >
-        My Feeds
-      </button>
-      <button
-        onClick={() => go('/community')}
-        className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors flex items-center justify-between gap-2"
-      >
-        <span>Community</span>
-        <span className="text-[10px] font-bold uppercase tracking-wide bg-teal-light text-teal px-1.5 py-0.5 rounded">
-          New
-        </span>
-      </button>
-      <button
         onClick={() => go('/account')}
         className="w-full text-left px-3 py-2 rounded-md text-sm text-dark-brown hover:bg-cream transition-colors"
       >
@@ -254,7 +239,7 @@ export function UserMenuItems({ onClose }: { onClose?: () => void } = {}) {
 
 /**
  * Shared account menu — renders the signed-in user popover (workspace switcher,
- * My Feeds, Account settings, Admin console, Sign out) when there's a user,
+ * Account settings, Admin console, Sign out) when there's a user,
  * or the "Sign in" CTA otherwise. Use this on every page that needs
  * consistent account navigation.
  */

@@ -29,12 +29,21 @@ import type { Env } from '../../env';
 // *adds* an optional job_id we don't send or read). Last bumped 2026-06-22
 // (v17 → v24). Release notes: https://developers.google.com/google-ads/api/docs/release-notes
 const API_VERSION = 'v24';
+// Data Manager API — Google's supported endpoint for offline event ingestion
+// (the replacement this account was told to use). Versionless host path.
+const DATA_MANAGER_ENDPOINT = 'https://datamanager.googleapis.com/v1/events:ingest';
 // Google Ads uploadClickConversions accepts up to 2000 conversions per call;
 // keep below that with headroom in case we ever extend the payload shape.
 const BATCH_SIZE = 1000;
 // gclids expire from Google Ads' side at ~90 days. Drop anything older.
 const GCLID_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const MAX_ATTEMPTS = 3;
+// Uploads only run on the production Worker. Even though staging normally lacks
+// the GOOGLE_ADS_* secrets (readOciConfig → null), gate explicitly on the prod
+// origin so a copied secret can never fire test/staging traffic into the live
+// Google Ads account. env.APP_ORIGIN is 'https://www.gtfsx.com' on prod and
+// 'https://staging.gtfsx.com' on staging (wrangler.jsonc vars).
+const PROD_ORIGIN = 'https://www.gtfsx.com';
 // Conversion kinds we can upload. Anything not in this set is ignored by the
 // uploader; the per-run SQL WHERE clause narrows further to the kinds whose
 // conversion action is actually configured (see configuredKinds).
@@ -53,21 +62,46 @@ export interface OciConfig {
   // creates the new conversion action in the Ads UI. Unset simply means
   // demo_request rows stay pending (and are surfaced on the admin status
   // page) until GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST is set.
-  conversionActions: {
-    feed_exported: string;
-    paywall_view: string;
-    demo_request?: string;
-  };
+  conversionActions: ConversionActionMap;
+}
+
+// ─── Data Manager API config ────────────────────────────────────────────────
+// The Data Manager API (datamanager.googleapis.com) is Google's supported
+// replacement for the de-allowlisted ConversionUploadService. It needs NO
+// developer token and NO login-customer-id header — the login/manager account
+// is carried in the request body. It reuses the existing OAuth client
+// (GOOGLE_ADS_CLIENT_ID/SECRET) but the refresh token must be minted with the
+// `https://www.googleapis.com/auth/datamanager` scope, and the request carries
+// an x-goog-user-project header naming the GCP project. See README.md.
+export interface DataManagerConfig {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string; // datamanager-scoped
+  projectId: string; // x-goog-user-project
+  operatingAccountId: string; // conversion (operating) account, no hyphens
+  loginAccountId?: string; // manager (MCC) account, when accessed via one
+  conversionActions: ConversionActionMap;
+}
+
+// Conversion-action IDs per kind — the shape shared by both the legacy and the
+// Data Manager configs (feed/paywall required, demo optional).
+export interface ConversionActionMap {
+  feed_exported: string;
+  paywall_view: string;
+  demo_request?: string;
 }
 
 // The kinds this config can actually upload, in ALL_UPLOAD_KINDS order.
-export function configuredKinds(cfg: OciConfig): UploadedKind[] {
+export function configuredKinds(cfg: { conversionActions: ConversionActionMap }): UploadedKind[] {
   return ALL_UPLOAD_KINDS.filter((k) => cfg.conversionActions[k] !== undefined);
 }
 
 export interface OciResult {
   ranAt: number;
   configured: boolean;
+  // Set when the run short-circuited without attempting anything (e.g. a
+  // non-production origin). Distinguishes a deliberate skip from configured:false.
+  skippedReason?: string;
   // Counts across this run. `attempted` counts rows actually sent (after the
   // 90-day cutoff filter); `uploaded` counts rows Google accepted.
   attempted: number;
@@ -115,6 +149,38 @@ export function readOciConfig(env: Env): OciConfig | null {
   };
 }
 
+// Data Manager config. Present (→ preferred over legacy) only when BOTH the
+// datamanager-scoped refresh token AND the GCP project id are set. Everything
+// else is reused from the GOOGLE_ADS_* secrets.
+export function readDataManagerConfig(env: Env): DataManagerConfig | null {
+  const rt = env.GOOGLE_DATAMANAGER_REFRESH_TOKEN;
+  const projectId = env.GOOGLE_DATAMANAGER_PROJECT_ID;
+  const cid = env.GOOGLE_ADS_CLIENT_ID;
+  const cs = env.GOOGLE_ADS_CLIENT_SECRET;
+  const cust = env.GOOGLE_ADS_CUSTOMER_ID;
+  const feedAction = env.GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED;
+  const paywallAction = env.GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW;
+  const demoAction = env.GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST;
+  if (!rt || !projectId || !cid || !cs || !cust || !feedAction || !paywallAction) {
+    return null;
+  }
+  return {
+    clientId: cid,
+    clientSecret: cs,
+    refreshToken: rt,
+    projectId,
+    operatingAccountId: cust,
+    // Include the manager account only when one is configured; when the user
+    // has direct access it's omitted (see README "Data Manager API").
+    loginAccountId: env.GOOGLE_ADS_LOGIN_CUSTOMER_ID || undefined,
+    conversionActions: {
+      feed_exported: feedAction,
+      paywall_view: paywallAction,
+      ...(demoAction ? { demo_request: demoAction } : {}),
+    },
+  };
+}
+
 // ─── OAuth ────────────────────────────────────────────────────────────────
 
 interface OAuthTokenResponse {
@@ -124,7 +190,7 @@ interface OAuthTokenResponse {
 }
 
 export async function exchangeRefreshToken(
-  cfg: OciConfig,
+  cfg: { clientId: string; clientSecret: string; refreshToken: string },
   deps: UploaderDeps = {},
 ): Promise<string> {
   const fetchImpl = deps.fetch ?? fetch;
@@ -169,8 +235,19 @@ export interface PendingRow {
   id: string;
   ts: number;
   kind: UploadedKind;
-  gclid: string;
+  // A row carries at most one of these (first-touch wins client-side). The
+  // legacy path uploads gclid only; the Data Manager path uploads whichever
+  // one is present (gbraid/wbraid close the iOS/consent attribution hole).
+  gclid: string | null;
+  gbraid: string | null;
+  wbraid: string | null;
   attempts: number;
+}
+
+// The identifier we'd report/upload for a row, gclid first. Used for logging
+// and the legacy payload; the DM path builds adIdentifiers explicitly.
+export function rowIdentifier(row: PendingRow): string {
+  return row.gclid ?? row.gbraid ?? row.wbraid ?? '';
 }
 
 export interface UploadPayloadConversion {
@@ -191,6 +268,11 @@ export function buildConversionPayload(
       if (!actionId) {
         throw new Error(`No conversion action configured for kind '${r.kind}'`);
       }
+      // The legacy path uploads gclid only; loadPending (legacy mode) selects
+      // gclid rows, so this is present. Braid-only rows go via the DM path.
+      if (!r.gclid) {
+        throw new Error(`Legacy path row '${r.id}' has no gclid`);
+      }
       return {
         gclid: r.gclid,
         conversion_action: `customers/${cfg.customerId}/conversionActions/${actionId}`,
@@ -208,33 +290,57 @@ export function buildConversionPayload(
 // ─── Upload ───────────────────────────────────────────────────────────────
 
 // uploadClickConversions response shape we care about. Successful conversions
-// echo back in `results`; per-row failures appear in `partial_failure_error`
+// echo back in `results`; per-row failures appear in `partialFailureError`
 // as a google.rpc.Status with embedded GoogleAdsFailure details containing
-// the offending operation index.
-interface UploadClickConversionsResponse {
-  results?: Array<{ gclid?: string; conversion_action?: string }>;
-  partial_failure_error?: {
-    code?: number;
-    message?: string;
-    details?: Array<{
-      errors?: Array<{
-        message?: string;
-        location?: { field_path_elements?: Array<{ field_name?: string; index?: number }> };
-      }>;
+// the offending conversion index.
+//
+// CASING: the Google Ads REST API returns proto3-JSON in **camelCase**
+// (`partialFailureError`, `fieldPathElements`, `fieldName`) even though it
+// accepts snake_case in the REQUEST. Reading the response as snake_case (the
+// original bug) made extractRowErrors always return empty → every rejected row
+// was marked "uploaded", which silently masked a month-long outage when the
+// account was de-allowlisted from this endpoint. We read camelCase and keep a
+// snake_case fallback so a shape change in either direction can't re-hide
+// failures.
+interface PartialFailure {
+  code?: number;
+  message?: string;
+  details?: Array<{
+    errors?: Array<{
+      message?: string;
+      location?: {
+        fieldPathElements?: PathElement[];
+        field_path_elements?: PathElement[];
+      };
     }>;
-  };
+  }>;
+}
+interface PathElement { fieldName?: string; field_name?: string; index?: number }
+interface UploadClickConversionsResponse {
+  results?: Array<{ gclid?: string; conversionAction?: string }>;
+  partialFailureError?: PartialFailure;
+  partial_failure_error?: PartialFailure;
+}
+
+// The top-level partial-failure status, whichever casing Google used.
+function partialFailure(resp: UploadClickConversionsResponse): PartialFailure | undefined {
+  return resp.partialFailureError ?? resp.partial_failure_error;
 }
 
 function extractRowErrors(resp: UploadClickConversionsResponse): Map<number, string> {
   const errs = new Map<number, string>();
-  const details = resp.partial_failure_error?.details ?? [];
-  for (const d of details) {
+  for (const d of partialFailure(resp)?.details ?? []) {
     for (const e of d.errors ?? []) {
-      const path = e.location?.field_path_elements ?? [];
-      // The operations[N] path element gives us the row index.
-      const op = path.find((p) => p.field_name === 'operations');
-      if (op && typeof op.index === 'number') {
-        errs.set(op.index, (e.message ?? 'unknown error').slice(0, 500));
+      const loc = e.location ?? {};
+      const path = loc.fieldPathElements ?? loc.field_path_elements ?? [];
+      // The row index lives on the `conversions[N]` path element — the only one
+      // that carries a numeric index. Match on the index itself, not a field
+      // name: the request field is `conversions` (not `operations`, which is
+      // the mutate-endpoint name the original code wrongly looked for), and we
+      // don't want to depend on that name or the JSON casing.
+      const indexed = path.find((p) => typeof p.index === 'number');
+      if (indexed && typeof indexed.index === 'number') {
+        errs.set(indexed.index, (e.message ?? 'unknown error').slice(0, 500));
       }
     }
   }
@@ -266,7 +372,105 @@ async function postBatch(
   return JSON.parse(text) as UploadClickConversionsResponse;
 }
 
+// ─── Data Manager upload ────────────────────────────────────────────────────
+
+// The ad identifier for a row — gclid preferred, else gbraid, else wbraid. The
+// Data Manager API accepts exactly these keys under adIdentifiers.
+export function buildAdIdentifiers(row: PendingRow): Record<string, string> {
+  if (row.gclid) return { gclid: row.gclid };
+  if (row.gbraid) return { gbraid: row.gbraid };
+  if (row.wbraid) return { wbraid: row.wbraid };
+  return {};
+}
+
+// One Data Manager events:ingest request body for a single row. We send one
+// event per request (volume is tiny) so each row gets an unambiguous accept/
+// reject and its own transactionId dedup — events:ingest partial-failure
+// semantics aren't documented, so per-event is the safe, correct choice.
+export function buildIngestBody(cfg: DataManagerConfig, row: PendingRow): Record<string, unknown> {
+  const actionId = cfg.conversionActions[row.kind];
+  if (!actionId) {
+    throw new Error(`No conversion action configured for kind '${row.kind}'`);
+  }
+  const destination: Record<string, unknown> = {
+    operatingAccount: { accountType: 'GOOGLE_ADS', accountId: cfg.operatingAccountId },
+    productDestinationId: actionId,
+  };
+  if (cfg.loginAccountId) {
+    destination.loginAccount = { accountType: 'GOOGLE_ADS', accountId: cfg.loginAccountId };
+  }
+  return {
+    destinations: [destination],
+    events: [{
+      // RFC 3339; Google normalizes to the account timezone for reporting.
+      eventTimestamp: new Date(row.ts).toISOString(),
+      // Dedup key: our row id (ulid). Re-uploading the same row (e.g. the
+      // requeue recovery) sends the same transactionId, so Google de-dupes and
+      // it can't double-count.
+      transactionId: row.id,
+      eventSource: 'WEB',
+      adIdentifiers: buildAdIdentifiers(row),
+      // No conversionValue/currency — the actions are "Don't use a value".
+    }],
+    validateOnly: false,
+  };
+}
+
+interface IngestEventsResponse {
+  requestId?: string;
+  // Defensive: some ingestion surfaces echo per-event problems in a 200 body.
+  // Treat any error signal as a failure — never repeat the legacy bug of
+  // marking a rejected row "uploaded".
+  error?: { message?: string };
+  errors?: unknown[];
+  warnings?: unknown[];
+}
+
+// Ingest a single row via the Data Manager API. Returns null on success, or an
+// error message string on failure.
+async function ingestOne(
+  cfg: DataManagerConfig,
+  accessToken: string,
+  row: PendingRow,
+  deps: UploaderDeps,
+): Promise<string | null> {
+  const fetchImpl = deps.fetch ?? fetch;
+  const res = await fetchImpl(DATA_MANAGER_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'x-goog-user-project': cfg.projectId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(buildIngestBody(cfg, row)),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    return `events:ingest HTTP ${res.status}: ${text.slice(0, 500)}`;
+  }
+  let parsed: IngestEventsResponse;
+  try {
+    parsed = text ? (JSON.parse(text) as IngestEventsResponse) : {};
+  } catch {
+    // A 2xx with an unparseable body — treat as accepted (nothing to object to).
+    return null;
+  }
+  if (parsed.error?.message) return parsed.error.message.slice(0, 500);
+  if (Array.isArray(parsed.errors) && parsed.errors.length > 0) {
+    return JSON.stringify(parsed.errors).slice(0, 500);
+  }
+  return null;
+}
+
 // ─── DB ────────────────────────────────────────────────────────────────────
+
+// SQL predicate for "row carries an ad identifier we can upload". The legacy
+// path handles gclid only; the Data Manager path also handles gbraid/wbraid.
+function identifierSql(includeBraids: boolean): string {
+  return includeBraids
+    ? '(gclid IS NOT NULL OR gbraid IS NOT NULL OR wbraid IS NOT NULL)'
+    : 'gclid IS NOT NULL';
+}
 
 // Only kinds whose conversion action is configured are selected — an
 // unconfigured kind's rows stay pending (visible on the admin status page)
@@ -276,13 +480,14 @@ async function loadPending(
   now: number,
   limit: number,
   kinds: UploadedKind[],
+  includeBraids: boolean,
 ): Promise<PendingRow[]> {
   const cutoff = now - GCLID_TTL_MS;
   const placeholders = kinds.map(() => '?').join(', ');
   const res = await env.DB.prepare(
-    `SELECT id, ts, kind, gclid, COALESCE(oci_attempts, 0) AS attempts
+    `SELECT id, ts, kind, gclid, gbraid, wbraid, COALESCE(oci_attempts, 0) AS attempts
        FROM event
-      WHERE gclid IS NOT NULL
+      WHERE ${identifierSql(includeBraids)}
         AND oci_uploaded_at IS NULL
         AND kind IN (${placeholders})
         AND ts > ?
@@ -290,23 +495,24 @@ async function loadPending(
       LIMIT ?`,
   )
     .bind(...kinds, cutoff, limit)
-    .all<{ id: string; ts: number; kind: UploadedKind; gclid: string; attempts: number }>();
+    .all<PendingRow>();
   return res.results ?? [];
 }
 
 // Mark rows older than the 90-day cutoff so they stop showing as "pending"
 // on the admin status page. Sentinel -1 = permanently dropped. Covers ALL
 // upload kinds (not just the configured ones): Google would reject the stale
-// gclid regardless, so an unconfigured kind's out-of-window rows are flagged
-// too rather than pending forever.
-async function markExpiredOnly(env: Env, now: number): Promise<number> {
+// identifier regardless, so an unconfigured kind's out-of-window rows are
+// flagged too rather than pending forever. `includeBraids` matches the active
+// path so we don't expire braid-only rows the legacy path can't send.
+async function markExpiredOnly(env: Env, now: number, includeBraids: boolean): Promise<number> {
   const cutoff = now - GCLID_TTL_MS;
   const placeholders = ALL_UPLOAD_KINDS.map(() => '?').join(', ');
   const res = await env.DB.prepare(
     `UPDATE event
         SET oci_uploaded_at = -1,
             oci_last_error = 'expired (>90 days)'
-      WHERE gclid IS NOT NULL
+      WHERE ${identifierSql(includeBraids)}
         AND oci_uploaded_at IS NULL
         AND kind IN (${placeholders})
         AND ts <= ?`,
@@ -316,6 +522,30 @@ async function markExpiredOnly(env: Env, now: number): Promise<number> {
   return res.meta.changes ?? 0;
 }
 
+// ─── Row outcome (shared by both upload paths) ──────────────────────────────
+
+async function markRowUploaded(env: Env, id: string, now: number): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE event SET oci_uploaded_at = ?, oci_last_error = NULL WHERE id = ?`,
+  ).bind(now, id).run();
+}
+
+// Records a failed attempt. Returns true when this attempt tipped the row over
+// MAX_ATTEMPTS into the permanent-fail sentinel (-1).
+async function markRowFailed(env: Env, row: PendingRow, err: string): Promise<boolean> {
+  const nextAttempts = row.attempts + 1;
+  if (nextAttempts >= MAX_ATTEMPTS) {
+    await env.DB.prepare(
+      `UPDATE event SET oci_uploaded_at = -1, oci_attempts = ?, oci_last_error = ? WHERE id = ?`,
+    ).bind(nextAttempts, err, row.id).run();
+    return true;
+  }
+  await env.DB.prepare(
+    `UPDATE event SET oci_attempts = ?, oci_last_error = ? WHERE id = ?`,
+  ).bind(nextAttempts, err, row.id).run();
+  return false;
+}
+
 // ─── Main entry ───────────────────────────────────────────────────────────
 
 export async function uploadPendingConversions(
@@ -323,8 +553,25 @@ export async function uploadPendingConversions(
   deps: UploaderDeps = {},
 ): Promise<OciResult> {
   const now = (deps.now ?? Date.now)();
-  const cfg = readOciConfig(env);
-  if (!cfg) {
+
+  // Hard prod-only gate — see PROD_ORIGIN. Runs before config/DB work so a
+  // non-prod worker is an immediate no-op.
+  if (env.APP_ORIGIN !== PROD_ORIGIN) {
+    console.warn(`[oci] skipped — non-production origin (${env.APP_ORIGIN}); uploads run on prod only`);
+    return {
+      ranAt: now, configured: false, skippedReason: `non-production origin (${env.APP_ORIGIN})`,
+      attempted: 0, uploaded: 0, failedThisRun: 0,
+      markedPermanentlyFailed: 0, skippedExpired: 0, errors: [],
+    };
+  }
+
+  // Prefer the Data Manager API when its credentials are present; otherwise
+  // fall back to the legacy uploadClickConversions path (dead at Google's side
+  // but now loud on failure). Exactly one path is active per run.
+  const dmCfg = readDataManagerConfig(env);
+  const legacyCfg = dmCfg ? null : readOciConfig(env);
+  const activeCfg = dmCfg ?? legacyCfg;
+  if (!activeCfg) {
     console.warn('[oci] skipped — env not configured (see worker/marketing/ads/README.md)');
     return {
       ranAt: now, configured: false,
@@ -332,9 +579,10 @@ export async function uploadPendingConversions(
       markedPermanentlyFailed: 0, skippedExpired: 0, errors: [],
     };
   }
+  const usingDataManager = dmCfg !== null;
 
-  const skippedExpired = await markExpiredOnly(env, now);
-  const rows = await loadPending(env, now, BATCH_SIZE * 5, configuredKinds(cfg));
+  const skippedExpired = await markExpiredOnly(env, now, usingDataManager);
+  const rows = await loadPending(env, now, BATCH_SIZE * 5, configuredKinds(activeCfg), usingDataManager);
   if (rows.length === 0) {
     return {
       ranAt: now, configured: true,
@@ -343,54 +591,75 @@ export async function uploadPendingConversions(
     };
   }
 
-  const accessToken = await exchangeRefreshToken(cfg, deps);
+  const accessToken = await exchangeRefreshToken(activeCfg, deps);
 
   let uploaded = 0;
   let failedThisRun = 0;
   let markedPermanentlyFailed = 0;
   const errors: OciResult['errors'] = [];
 
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE);
-    const payload = buildConversionPayload(cfg, batch);
+  const recordFailure = async (row: PendingRow, err: string): Promise<void> => {
+    failedThisRun++;
+    errors.push({ id: row.id, gclid: rowIdentifier(row), message: err });
+    if (await markRowFailed(env, row, err)) markedPermanentlyFailed++;
+  };
 
-    let rowErrors = new Map<number, string>();
-    try {
-      const resp = await postBatch(cfg, accessToken, payload, deps);
-      rowErrors = extractRowErrors(resp);
-    } catch (err) {
-      // Fatal (auth, network, malformed response) — treat every row as
-      // failed-this-run so attempts increment and we retry next cron.
-      const batchFatalError = err instanceof Error ? err.message : String(err);
-      console.error('[oci] batch POST failed:', batchFatalError);
-      for (let j = 0; j < batch.length; j++) {
-        rowErrors.set(j, batchFatalError.slice(0, 500));
+  if (dmCfg) {
+    // Data Manager path: one event per request → each row gets an unambiguous
+    // accept/reject and its own transactionId dedup.
+    for (const row of rows) {
+      let err: string | null;
+      try {
+        err = await ingestOne(dmCfg, accessToken, row, deps);
+      } catch (e) {
+        err = e instanceof Error ? e.message : String(e);
+      }
+      if (err === null) {
+        await markRowUploaded(env, row.id, now);
+        uploaded++;
+      } else {
+        console.error('[oci] events:ingest failed:', err);
+        await recordFailure(row, err);
       }
     }
+  } else {
+    // Legacy uploadClickConversions path.
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = rows.slice(i, i + BATCH_SIZE);
+      const payload = buildConversionPayload(legacyCfg!, batch);
 
-    for (let j = 0; j < batch.length; j++) {
-      const row = batch[j];
-      const err = rowErrors.get(j);
-      if (err === undefined) {
-        await env.DB.prepare(
-          `UPDATE event SET oci_uploaded_at = ?, oci_last_error = NULL WHERE id = ?`,
-        ).bind(now, row.id).run();
-        uploaded++;
-        continue;
+      let rowErrors = new Map<number, string>();
+      try {
+        const resp = await postBatch(legacyCfg!, accessToken, payload, deps);
+        rowErrors = extractRowErrors(resp);
+        // Safety net: if Google reported a partial failure but we mapped zero
+        // per-row errors (a shape we don't recognize, or a batch-level error
+        // with no conversion index), fail the WHOLE batch rather than silently
+        // marking every row uploaded. Never mark a row success while Google is
+        // unhappy.
+        const pf = partialFailure(resp);
+        if (pf && rowErrors.size === 0) {
+          const msg = (pf.message ?? 'partial failure with no parseable row errors').slice(0, 500);
+          console.error('[oci] unmapped partial failure — failing whole batch:', msg);
+          for (let j = 0; j < batch.length; j++) rowErrors.set(j, msg);
+        }
+      } catch (err) {
+        // Fatal (auth, network, malformed response) — treat every row as
+        // failed-this-run so attempts increment and we retry next cron.
+        const batchFatalError = err instanceof Error ? err.message : String(err);
+        console.error('[oci] batch POST failed:', batchFatalError);
+        for (let j = 0; j < batch.length; j++) rowErrors.set(j, batchFatalError.slice(0, 500));
       }
 
-      failedThisRun++;
-      errors.push({ id: row.id, gclid: row.gclid, message: err });
-      const nextAttempts = row.attempts + 1;
-      if (nextAttempts >= MAX_ATTEMPTS) {
-        await env.DB.prepare(
-          `UPDATE event SET oci_uploaded_at = -1, oci_attempts = ?, oci_last_error = ? WHERE id = ?`,
-        ).bind(nextAttempts, err, row.id).run();
-        markedPermanentlyFailed++;
-      } else {
-        await env.DB.prepare(
-          `UPDATE event SET oci_attempts = ?, oci_last_error = ? WHERE id = ?`,
-        ).bind(nextAttempts, err, row.id).run();
+      for (let j = 0; j < batch.length; j++) {
+        const row = batch[j];
+        const err = rowErrors.get(j);
+        if (err === undefined) {
+          await markRowUploaded(env, row.id, now);
+          uploaded++;
+        } else {
+          await recordFailure(row, err);
+        }
       }
     }
   }

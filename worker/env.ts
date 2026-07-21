@@ -81,9 +81,13 @@ export interface Env {
   GOOGLE_ADS_CLIENT_SECRET?: string;
   GOOGLE_ADS_REFRESH_TOKEN?: string;
   // The GTFS·X Google Ads account id without hyphens, e.g. "1001841562"
-  // (UI shows "100-184-1562"). Doubles as login-customer-id for the
-  // Ads API request — we don't operate under a manager account.
+  // (UI shows "100-184-1562"). This is the OPERATING (conversion) account.
   GOOGLE_ADS_CUSTOMER_ID?: string;
+  // Manager (MCC) account id the operating account is accessed through, no
+  // hyphens. Present as a prod secret. The legacy uploadClickConversions path
+  // didn't use it (it sent the operating id as login-customer-id, which Google
+  // accepted); the Data Manager path sends it as destinations[].loginAccount.
+  GOOGLE_ADS_LOGIN_CUSTOMER_ID?: string;
   // Numeric conversion_action IDs created in the Google Ads UI; we
   // hard-code them in env rather than fetching dynamically every run.
   // Get from Goals → Summary → click the action → URL contains the ID.
@@ -95,6 +99,19 @@ export interface Env {
   // running while the new conversion action is created in the Ads UI —
   // demo_request rows simply stay pending until it's set.
   GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST?: string;
+
+  // Google Ads Data Manager API (datamanager.googleapis.com) — the supported
+  // replacement for the de-allowlisted ConversionUploadService. When BOTH of
+  // these are present the OCI uploader sends via Data Manager; otherwise it
+  // falls back to the (now-loud-on-failure) legacy path. Reuses the
+  // GOOGLE_ADS_CLIENT_ID/SECRET OAuth client, GOOGLE_ADS_CUSTOMER_ID,
+  // GOOGLE_ADS_LOGIN_CUSTOMER_ID, and the GOOGLE_ADS_CONVERSION_ACTION_* ids.
+  // See worker/marketing/ads/README.md → "Data Manager API" for the OAuth
+  // runbook (the refresh token must be minted with the datamanager scope).
+  GOOGLE_DATAMANAGER_REFRESH_TOKEN?: string;
+  // GCP project id for the required x-goog-user-project header (the project the
+  // Data Manager API is enabled on — the same one holding the OAuth client).
+  GOOGLE_DATAMANAGER_PROJECT_ID?: string;
 }
 
 // Hono context variables populated by middleware. Typed as a module augmentation

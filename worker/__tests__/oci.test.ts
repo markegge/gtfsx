@@ -5,12 +5,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ulid } from 'ulidx';
 import {
+  buildAdIdentifiers,
   buildConversionPayload,
+  buildIngestBody,
   exchangeRefreshToken,
   formatConversionDateTime,
+  readDataManagerConfig,
   readOciConfig,
   uploadPendingConversions,
   type OciConfig,
+  type PendingRow,
 } from '../marketing/ads/oci';
 import { applyMigrations, dbGet, dbRun, env as testEnv, resetDb } from './_setup';
 
@@ -30,12 +34,35 @@ const SECRETS = {
   GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST: '333333',
 };
 
+// Data Manager secrets — the presence of these two (refresh token + project id)
+// flips the uploader onto the DM path. Reuses the shared client/customer/action
+// ids. Includes a distinct manager id so loginAccount is exercised.
+const DM_SECRETS = {
+  GOOGLE_DATAMANAGER_REFRESH_TOKEN: 'dm-refresh',
+  GOOGLE_DATAMANAGER_PROJECT_ID: 'gtfsx-ads-oci',
+  GOOGLE_ADS_CLIENT_ID: 'client-id',
+  GOOGLE_ADS_CLIENT_SECRET: 'client-secret',
+  GOOGLE_ADS_CUSTOMER_ID: '1001841562',
+  GOOGLE_ADS_LOGIN_CUSTOMER_ID: '9998887777',
+  GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED: '111111',
+  GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW: '222222',
+  GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST: '333333',
+};
+
+const ALL_SECRET_KEYS = [
+  ...new Set([...Object.keys(SECRETS), ...Object.keys(DM_SECRETS)]),
+];
+
 function withSecrets(): void {
   Object.assign(testEnv, SECRETS);
 }
 
+function withDataManager(): void {
+  Object.assign(testEnv, DM_SECRETS);
+}
+
 function clearSecrets(): void {
-  for (const k of Object.keys(SECRETS)) {
+  for (const k of ALL_SECRET_KEYS) {
     delete (testEnv as unknown as Record<string, unknown>)[k];
   }
 }
@@ -44,22 +71,33 @@ async function seedEvent(opts: {
   ts?: number;
   kind?: string;
   gclid?: string | null;
+  gbraid?: string | null;
+  wbraid?: string | null;
   oci_uploaded_at?: number | null;
   oci_attempts?: number;
 }): Promise<string> {
   const id = ulid();
   await dbRun(
-    `INSERT INTO event (id, ts, kind, path, ref, session_id, country, label, gclid, oci_uploaded_at, oci_attempts, oci_last_error)
-     VALUES (?, ?, ?, '/', NULL, ?, NULL, NULL, ?, ?, ?, NULL)`,
+    `INSERT INTO event (id, ts, kind, path, ref, session_id, country, label, gclid, gbraid, wbraid, oci_uploaded_at, oci_attempts, oci_last_error)
+     VALUES (?, ?, ?, '/', NULL, ?, NULL, NULL, ?, ?, ?, ?, ?, NULL)`,
     id,
     opts.ts ?? FIXED_NOW - 1000,
     opts.kind ?? 'feed_exported',
     `sess-${id}`,
     opts.gclid ?? null,
+    opts.gbraid ?? null,
+    opts.wbraid ?? null,
     opts.oci_uploaded_at ?? null,
     opts.oci_attempts ?? 0,
   );
   return id;
+}
+
+// Data Manager events:ingest success — a 200 with just a requestId.
+function dmSuccessResponse(): Response {
+  return new Response(JSON.stringify({ requestId: 'req-abc-123' }), {
+    status: 200, headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 // Stub fetch with a function that routes by URL.
@@ -79,27 +117,32 @@ function oauthResponse(): Response {
 }
 
 function adsSuccessResponse(rowCount: number): Response {
+  // Real Google Ads REST responses are camelCase (`conversionAction`).
   return new Response(JSON.stringify({
-    results: Array.from({ length: rowCount }, (_, i) => ({ gclid: `g${i}`, conversion_action: 'x' })),
+    results: Array.from({ length: rowCount }, (_, i) => ({ gclid: `g${i}`, conversionAction: 'x' })),
   }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 }
 
-function adsPartialFailureResponse(failures: { index: number; message: string }[]): Response {
-  // Mirror Google Ads' partial_failure_error shape (rpc.Status with
-  // GoogleAdsFailure detail containing field_path_elements pointing at
-  // operations[N]).
+// Mirror the REAL Google Ads REST partial-failure shape: camelCase
+// `partialFailureError`, `fieldPathElements` / `fieldName`, and the row-index
+// path element named `conversions` (NOT `operations`). This is exactly the
+// response that the original snake_case parser silently ignored, marking every
+// rejected row as uploaded. Captured verbatim from a live validate_only probe.
+function adsPartialFailureResponse(failures: { index: number; message: string; code?: string }[]): Response {
   return new Response(JSON.stringify({
-    results: [],
-    partial_failure_error: {
+    partialFailureError: {
       code: 3,
-      message: 'partial failure',
+      message: `Multiple errors in 'details'. First error: ${failures[0]?.message ?? ''}`,
       details: [{
+        '@type': 'type.googleapis.com/google.ads.googleads.v24.errors.GoogleAdsFailure',
         errors: failures.map((f) => ({
+          errorCode: { notAllowlistedError: f.code ?? 'CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE' },
           message: f.message,
-          location: { field_path_elements: [{ field_name: 'operations', index: f.index }] },
+          location: { fieldPathElements: [{ fieldName: 'conversions', index: f.index }] },
         })),
       }],
     },
+    jobId: '1285029156557314512',
   }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 }
 
@@ -209,6 +252,9 @@ describe('OCI: uploadPendingConversions', () => {
     await resetDb();
     await dbRun(`DELETE FROM event`);
     clearSecrets();
+    // The uploader is prod-gated on APP_ORIGIN; set the prod origin so the
+    // upload paths run (the env-gate itself is covered by its own test).
+    (testEnv as unknown as Record<string, unknown>).APP_ORIGIN = 'https://www.gtfsx.com';
   });
 
   it('no-ops with configured=false when secrets are missing', async () => {
@@ -451,5 +497,253 @@ describe('OCI: uploadPendingConversions', () => {
 
     await expect(uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now }))
       .rejects.toThrow(/OAuth token exchange failed/);
+  });
+
+  it('REGRESSION: detects a real camelCase partialFailureError instead of marking it uploaded', async () => {
+    // This is the exact failure that hid a month-long outage: Google returns a
+    // per-row rejection in camelCase, the old snake_case parser saw nothing, and
+    // the row was marked uploaded. The row MUST be marked failed, not uploaded.
+    withSecrets();
+    const id = await seedEvent({ gclid: 'gReject', kind: 'paywall_view', ts: FIXED_NOW - 1000 });
+
+    const fetchMock = stubFetch(({ url }) => {
+      if (url.includes('oauth2.googleapis.com')) return oauthResponse();
+      if (url.includes('uploadClickConversions')) {
+        return adsPartialFailureResponse([{
+          index: 0,
+          code: 'CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE',
+          message: 'New integrations for uploading click conversions should use the Data Manager API.',
+        }]);
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now });
+    expect(result.uploaded).toBe(0);
+    expect(result.failedThisRun).toBe(1);
+    expect(result.errors[0]?.message).toMatch(/Data Manager API/);
+
+    const row = await dbGet<{ oci_uploaded_at: number | null; oci_attempts: number; oci_last_error: string | null }>(
+      `SELECT oci_uploaded_at, oci_attempts, oci_last_error FROM event WHERE id = ?`, id,
+    );
+    expect(row!.oci_uploaded_at).toBeNull(); // NOT marked uploaded
+    expect(row!.oci_attempts).toBe(1);
+    expect(row!.oci_last_error).toMatch(/Data Manager API/);
+  });
+
+  it('SAFETY NET: a partial failure with no parseable row index fails the whole batch', async () => {
+    withSecrets();
+    const id = await seedEvent({ gclid: 'gWeird', kind: 'feed_exported', ts: FIXED_NOW - 1000 });
+
+    const fetchMock = stubFetch(({ url }) => {
+      if (url.includes('oauth2.googleapis.com')) return oauthResponse();
+      if (url.includes('uploadClickConversions')) {
+        // partialFailureError present, but no conversions[N] index anywhere.
+        return new Response(JSON.stringify({
+          partialFailureError: { code: 3, message: 'INTERNAL: something went wrong', details: [] },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now });
+    expect(result.uploaded).toBe(0);
+    expect(result.failedThisRun).toBe(1);
+
+    const row = await dbGet<{ oci_uploaded_at: number | null; oci_last_error: string | null }>(
+      `SELECT oci_uploaded_at, oci_last_error FROM event WHERE id = ?`, id,
+    );
+    expect(row!.oci_uploaded_at).toBeNull();
+    expect(row!.oci_last_error).toMatch(/something went wrong/);
+  });
+
+  it('ENV GATE: does not upload from a non-production origin', async () => {
+    withSecrets();
+    (testEnv as unknown as Record<string, unknown>).APP_ORIGIN = 'https://staging.gtfsx.com';
+    await seedEvent({ gclid: 'gStaging', kind: 'feed_exported', ts: FIXED_NOW - 1000 });
+
+    const fetchMock = stubFetch(() => {
+      throw new Error('no network call may happen on a non-prod origin');
+    });
+
+    const result = await uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now });
+    expect(result.configured).toBe(false);
+    expect(result.skippedReason).toMatch(/non-production origin/);
+    expect(result.attempted).toBe(0);
+
+    const row = await dbGet<{ oci_uploaded_at: number | null }>(`SELECT oci_uploaded_at FROM event`);
+    expect(row!.oci_uploaded_at).toBeNull(); // untouched
+  });
+});
+
+// ─── Data Manager API path ──────────────────────────────────────────────────
+
+describe('OCI: readDataManagerConfig', () => {
+  beforeEach(() => { clearSecrets(); });
+
+  it('returns null without the DM refresh token + project id', () => {
+    withSecrets(); // legacy secrets only
+    expect(readDataManagerConfig(testEnv)).toBeNull();
+  });
+
+  it('returns config when the DM secrets are present', () => {
+    withDataManager();
+    const cfg = readDataManagerConfig(testEnv);
+    expect(cfg).not.toBeNull();
+    expect(cfg!.projectId).toBe('gtfsx-ads-oci');
+    expect(cfg!.operatingAccountId).toBe('1001841562');
+    expect(cfg!.loginAccountId).toBe('9998887777');
+    expect(cfg!.conversionActions.feed_exported).toBe('111111');
+  });
+});
+
+describe('OCI: buildAdIdentifiers / buildIngestBody', () => {
+  const baseRow = (over: Partial<PendingRow>): PendingRow => ({
+    id: 'evt-1', ts: Date.UTC(2026, 4, 26, 14, 0, 0), kind: 'feed_exported',
+    gclid: null, gbraid: null, wbraid: null, attempts: 0, ...over,
+  });
+
+  it('prefers gclid, then gbraid, then wbraid', () => {
+    expect(buildAdIdentifiers(baseRow({ gclid: 'g', gbraid: 'gb', wbraid: 'wb' }))).toEqual({ gclid: 'g' });
+    expect(buildAdIdentifiers(baseRow({ gbraid: 'gb', wbraid: 'wb' }))).toEqual({ gbraid: 'gb' });
+    expect(buildAdIdentifiers(baseRow({ wbraid: 'wb' }))).toEqual({ wbraid: 'wb' });
+  });
+
+  it('builds the events:ingest body with destination, dedup id, RFC3339 time', () => {
+    withDataManager();
+    const cfg = readDataManagerConfig(testEnv)!;
+    const body = buildIngestBody(cfg, baseRow({ id: 'evt-9', gclid: 'gABC', kind: 'paywall_view' }));
+    expect(body).toMatchObject({
+      destinations: [{
+        operatingAccount: { accountType: 'GOOGLE_ADS', accountId: '1001841562' },
+        loginAccount: { accountType: 'GOOGLE_ADS', accountId: '9998887777' },
+        productDestinationId: '222222',
+      }],
+      events: [{
+        eventTimestamp: '2026-05-26T14:00:00.000Z',
+        transactionId: 'evt-9',
+        eventSource: 'WEB',
+        adIdentifiers: { gclid: 'gABC' },
+      }],
+      validateOnly: false,
+    });
+  });
+
+  it('omits loginAccount when no manager id is configured', () => {
+    withDataManager();
+    delete (testEnv as unknown as Record<string, unknown>).GOOGLE_ADS_LOGIN_CUSTOMER_ID;
+    const cfg = readDataManagerConfig(testEnv)!;
+    const body = buildIngestBody(cfg, baseRow({ gclid: 'g' })) as { destinations: Array<Record<string, unknown>> };
+    expect(body.destinations[0].loginAccount).toBeUndefined();
+    expect(body.destinations[0].operatingAccount).toBeDefined();
+  });
+});
+
+describe('OCI: uploadPendingConversions via Data Manager', () => {
+  beforeEach(async () => {
+    await applyMigrations();
+    await resetDb();
+    await dbRun(`DELETE FROM event`);
+    clearSecrets();
+    (testEnv as unknown as Record<string, unknown>).APP_ORIGIN = 'https://www.gtfsx.com';
+  });
+
+  it('uploads via events:ingest (not the legacy endpoint) and marks the row', async () => {
+    withDataManager();
+    const id = await seedEvent({ gclid: 'gA', kind: 'paywall_view', ts: FIXED_NOW - 1000 });
+
+    let ingestBody: Record<string, unknown> | null = null;
+    let ingestHeaders: Record<string, string> = {};
+    let legacyCalled = false;
+    const fetchMock = stubFetch(({ url, init }) => {
+      if (url.includes('oauth2.googleapis.com')) return oauthResponse();
+      if (url.includes('uploadClickConversions')) { legacyCalled = true; return adsSuccessResponse(1); }
+      if (url.includes('datamanager.googleapis.com/v1/events:ingest')) {
+        ingestBody = JSON.parse(String(init?.body ?? '{}'));
+        ingestHeaders = (init?.headers ?? {}) as Record<string, string>;
+        return dmSuccessResponse();
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now });
+    expect(result.configured).toBe(true);
+    expect(result.uploaded).toBe(1);
+    expect(result.failedThisRun).toBe(0);
+    expect(legacyCalled).toBe(false); // DM path only
+
+    expect(ingestHeaders['x-goog-user-project']).toBe('gtfsx-ads-oci');
+    expect(ingestHeaders['Authorization']).toBe('Bearer access-xyz');
+    const ev = (ingestBody as unknown as { events: Array<{ transactionId: string; adIdentifiers: unknown }> }).events[0];
+    expect(ev.transactionId).toBe(id);
+    expect(ev.adIdentifiers).toEqual({ gclid: 'gA' });
+
+    const row = await dbGet<{ oci_uploaded_at: number | null }>(`SELECT oci_uploaded_at FROM event WHERE id = ?`, id);
+    expect(row!.oci_uploaded_at).toBe(FIXED_NOW);
+  });
+
+  it('uploads a gbraid-only row with adIdentifiers.gbraid', async () => {
+    withDataManager();
+    const id = await seedEvent({ gclid: null, gbraid: 'GB123', kind: 'demo_request', ts: FIXED_NOW - 1000 });
+
+    let ident: unknown = null;
+    const fetchMock = stubFetch(({ url, init }) => {
+      if (url.includes('oauth2.googleapis.com')) return oauthResponse();
+      if (url.includes('events:ingest')) {
+        const b = JSON.parse(String(init?.body ?? '{}'));
+        ident = b.events[0].adIdentifiers;
+        return dmSuccessResponse();
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now });
+    expect(result.uploaded).toBe(1);
+    expect(ident).toEqual({ gbraid: 'GB123' });
+    const row = await dbGet<{ oci_uploaded_at: number | null }>(`SELECT oci_uploaded_at FROM event WHERE id = ?`, id);
+    expect(row!.oci_uploaded_at).toBe(FIXED_NOW);
+  });
+
+  it('does NOT mark a row uploaded when events:ingest returns HTTP 403 (not allowlisted)', async () => {
+    withDataManager();
+    const id = await seedEvent({ gclid: 'gBad', kind: 'feed_exported', ts: FIXED_NOW - 1000 });
+
+    const fetchMock = stubFetch(({ url }) => {
+      if (url.includes('oauth2.googleapis.com')) return oauthResponse();
+      if (url.includes('events:ingest')) {
+        return new Response('{"error":{"code":403,"message":"PERMISSION_DENIED"}}', { status: 403 });
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now });
+    expect(result.uploaded).toBe(0);
+    expect(result.failedThisRun).toBe(1);
+    expect(result.errors[0]?.message).toMatch(/HTTP 403/);
+    const row = await dbGet<{ oci_uploaded_at: number | null; oci_attempts: number }>(
+      `SELECT oci_uploaded_at, oci_attempts FROM event WHERE id = ?`, id,
+    );
+    expect(row!.oci_uploaded_at).toBeNull();
+    expect(row!.oci_attempts).toBe(1);
+  });
+
+  it('treats a 200 body carrying an error as a failure (no silent success)', async () => {
+    withDataManager();
+    const id = await seedEvent({ gclid: 'gErr', kind: 'feed_exported', ts: FIXED_NOW - 1000 });
+
+    const fetchMock = stubFetch(({ url }) => {
+      if (url.includes('oauth2.googleapis.com')) return oauthResponse();
+      if (url.includes('events:ingest')) {
+        return new Response(JSON.stringify({ error: { message: 'INVALID_ARGUMENT: bad gclid' } }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now });
+    expect(result.uploaded).toBe(0);
+    expect(result.failedThisRun).toBe(1);
+    const row = await dbGet<{ oci_uploaded_at: number | null }>(`SELECT oci_uploaded_at FROM event WHERE id = ?`, id);
+    expect(row!.oci_uploaded_at).toBeNull();
   });
 });

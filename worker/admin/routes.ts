@@ -1441,13 +1441,13 @@ adminRouter.get('/events/oci-status', async (c) => {
   const ninetyDaysAgo = now - 90 * 24 * 60 * 60 * 1000;
   const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
 
-  // Pending: in-window, gclid set, never uploaded, not flagged failed.
-  // Keep the kind list in sync with ALL_UPLOAD_KINDS in
+  // Pending: in-window, an ad identifier set, never uploaded, not flagged
+  // failed. Keep the kind list in sync with ALL_UPLOAD_KINDS in
   // worker/marketing/ads/oci.ts — demo_request shows here even while its
   // conversion action is unconfigured, so pending rows stay visible.
   const pendingRes = await c.env.DB.prepare(
     `SELECT kind, COUNT(*) AS n FROM event
-      WHERE gclid IS NOT NULL
+      WHERE (gclid IS NOT NULL OR gbraid IS NOT NULL OR wbraid IS NOT NULL)
         AND oci_uploaded_at IS NULL
         AND kind IN ('feed_exported', 'paywall_view', 'demo_request')
         AND ts > ?
@@ -1466,7 +1466,7 @@ adminRouter.get('/events/oci-status', async (c) => {
   // Sentinel -1 means "permanently failed after MAX_ATTEMPTS". Surface the
   // latest failures so Mark can investigate without grepping logs.
   const failedRes = await c.env.DB.prepare(
-    `SELECT id, kind, gclid, ts,
+    `SELECT id, kind, COALESCE(gclid, gbraid, wbraid) AS gclid, ts,
             COALESCE(oci_attempts, 0) AS oci_attempts,
             oci_last_error
        FROM event
@@ -1488,6 +1488,16 @@ adminRouter.get('/events/oci-status', async (c) => {
   // demo_request's action is optional (see readOciConfig) — surface its
   // absence as a note rather than flipping the whole page to "not configured".
   const demoActionPresent = !!c.env.GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST;
+  // Which upload path the cron will actually take. Data Manager is preferred
+  // and wins when its two secrets are present alongside the shared config.
+  const dmActive =
+    !!c.env.GOOGLE_DATAMANAGER_REFRESH_TOKEN
+    && !!c.env.GOOGLE_DATAMANAGER_PROJECT_ID
+    && !!c.env.GOOGLE_ADS_CLIENT_ID
+    && !!c.env.GOOGLE_ADS_CLIENT_SECRET
+    && !!c.env.GOOGLE_ADS_CUSTOMER_ID
+    && !!c.env.GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED
+    && !!c.env.GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW;
 
   const pending = pendingRes.results ?? [];
   const uploaded = uploadedRes.results ?? [];
@@ -1513,13 +1523,15 @@ adminRouter.get('/events/oci-status', async (c) => {
         + `<td style="font-family:monospace;font-size:12px;">${escapeHtml(r.oci_last_error ?? '')}</td>`
         + `</tr>`).join('\n');
 
-  const demoNote = cfgPresent && !demoActionPresent
+  const demoNote = (dmActive || cfgPresent) && !demoActionPresent
     ? `<p class="lead" style="color:#856404;background:#fff3cd;padding:8px 12px;border-radius:4px;"><code>demo_request</code> uploads are <strong>off</strong>: set <code>GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST</code> after creating the conversion action — see <code>worker/marketing/ads/README.md</code>. Pending <code>demo_request</code> rows wait until then.</p>`
     : '';
 
-  const cfgBanner = (cfgPresent
-    ? `<p class="lead" style="color:#155724;background:#d4edda;padding:8px 12px;border-radius:4px;">OCI is configured — daily cron at 09:00 UTC.</p>`
-    : `<p class="lead" style="color:#721c24;background:#f8d7da;padding:8px 12px;border-radius:4px;">OCI is <strong>not configured</strong>. Set the GOOGLE_ADS_* secrets — see <code>worker/marketing/ads/README.md</code>.</p>`)
+  const cfgBanner = (dmActive
+    ? `<p class="lead" style="color:#155724;background:#d4edda;padding:8px 12px;border-radius:4px;">Uploading via the <strong>Data Manager API</strong> — daily cron at 09:00 UTC.</p>`
+    : cfgPresent
+      ? `<p class="lead" style="color:#856404;background:#fff3cd;padding:8px 12px;border-radius:4px;">Data Manager is <strong>not configured</strong> — falling back to the legacy <code>uploadClickConversions</code> path, which is de-allowlisted for this account and will fail loudly. Set <code>GOOGLE_DATAMANAGER_REFRESH_TOKEN</code> + <code>GOOGLE_DATAMANAGER_PROJECT_ID</code> — see <code>worker/marketing/ads/README.md</code>.</p>`
+      : `<p class="lead" style="color:#721c24;background:#f8d7da;padding:8px 12px;border-radius:4px;">OCI is <strong>not configured</strong>. Set the GOOGLE_ADS_* + GOOGLE_DATAMANAGER_* secrets — see <code>worker/marketing/ads/README.md</code>.</p>`)
     + demoNote;
 
   const html = `<!doctype html>
@@ -1574,6 +1586,11 @@ adminRouter.get('/events/oci-status', async (c) => {
   <button class="run" id="run-btn">Run upload now</button>
   <pre class="result" id="result" hidden></pre>
 
+  <h2>Recover rejected uploads</h2>
+  <p style="color:#555;">Reset conversion rows that were <em>marked uploaded but rejected by Google</em> (e.g. during the June 2026 endpoint de-allowlisting) back to pending, so the next run re-sends them. Idempotent — Google de-dupes by gclid + action + time — and limited to the 90-day window. Run this only after uploads work again.</p>
+  <button class="run" id="requeue-btn" style="background:#b45309;">Requeue rejected conversions</button>
+  <pre class="result" id="requeue-result" hidden></pre>
+
   <h2>Permanently failed rows (latest 25)</h2>
   <table>
     <thead>
@@ -1610,6 +1627,26 @@ ${failedRows}
         btn.disabled = false; btn.textContent = 'Run upload now';
       }
     });
+    document.getElementById('requeue-btn').addEventListener('click', async function () {
+      if (!confirm('Reset all marked-uploaded conversion rows in the last 90 days back to pending? They will be re-sent on the next run (Google de-dupes, so this is safe).')) return;
+      var btn = this;
+      var out = document.getElementById('requeue-result');
+      btn.disabled = true; btn.textContent = 'Requeuing…';
+      out.hidden = false; out.textContent = 'POST /api/admin/events/oci-requeue …';
+      try {
+        var res = await fetch('/api/admin/events/oci-requeue', {
+          method: 'POST',
+          headers: { 'X-GB-Client': 'web' },
+          credentials: 'include',
+        });
+        var body = await res.text();
+        out.textContent = 'HTTP ' + res.status + '\\n\\n' + body;
+      } catch (err) {
+        out.textContent = 'Network error: ' + (err && err.message ? err.message : err);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Requeue rejected conversions';
+      }
+    });
   </script>
 </body>
 </html>`;
@@ -1642,4 +1679,38 @@ adminRouter.post('/events/oci-run', async (c) => {
     ip: clientIp(c.req.raw),
   });
   return c.json(result);
+});
+
+// Recovery endpoint for the "Requeue rejected conversions" button. Resets
+// conversion-kind rows that were marked uploaded (or sentinel-failed) but were
+// actually rejected by Google — e.g. every row uploaded during the June 2026
+// window when the account was silently de-allowlisted from
+// ConversionUploadService.UploadClickConversions. Clearing oci_uploaded_at /
+// oci_attempts / oci_last_error puts them back in the uploader's pending set so
+// the next run (cron or "Run upload now") re-sends them. Idempotent: Google
+// de-dupes offline click conversions by gclid + conversion action +
+// conversion time, and we bound to the 90-day window so already-expired gclids
+// aren't churned. Owner-triggered only; never runs on its own.
+adminRouter.post('/events/oci-requeue', async (c) => {
+  const staff = c.var.user!;
+  await rateLimit(c.env, { key: `admin:oci-requeue:${staff.id}`, limit: 6, windowSec: 60 });
+  const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+  const res = await c.env.DB.prepare(
+    `UPDATE event
+        SET oci_uploaded_at = NULL, oci_attempts = 0, oci_last_error = NULL
+      WHERE kind IN ('feed_exported', 'paywall_view', 'demo_request')
+        AND (gclid IS NOT NULL OR gbraid IS NOT NULL OR wbraid IS NOT NULL)
+        AND oci_uploaded_at IS NOT NULL
+        AND ts > ?`,
+  ).bind(ninetyDaysAgo).run();
+  const requeued = res.meta.changes ?? 0;
+  await logAudit(c.env, {
+    actorUserId: staff.id,
+    subjectType: 'user',
+    subjectId: staff.id,
+    action: 'admin.oci.requeue',
+    metadata: { requeued },
+    ip: clientIp(c.req.raw),
+  });
+  return c.json({ requeued });
 });

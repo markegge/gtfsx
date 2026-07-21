@@ -182,6 +182,75 @@ under Goals → Summary within ~3 hours.
 
 ---
 
+## Data Manager API migration (2026-07)
+
+**Why:** around 2026-06-22 Google de-allowlisted this account from the legacy
+`ConversionUploadService.UploadClickConversions` endpoint. Every upload now
+returns `CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE` → *"New integrations for
+uploading click conversions should use the Data Manager API."* This is not a
+version or credential problem (verified across API versions v21–v24); the
+endpoint is simply closed to us. The supported replacement is the **Data Manager
+API** (`datamanager.googleapis.com`).
+
+The uploader now takes the Data Manager path automatically once its two secrets
+are set (`GOOGLE_DATAMANAGER_REFRESH_TOKEN` + `GOOGLE_DATAMANAGER_PROJECT_ID`);
+until then it uses the legacy path, which is dead but now *fails loudly* (emails
+the owner, marks rows failed) instead of silently marking rejections as
+uploaded. The Data Manager path also uploads `gbraid`/`wbraid` clicks, not just
+`gclid`.
+
+**What's different from the legacy path:** no developer token and no
+`login-customer-id` header — the login/manager account and the conversion action
+are carried in the request body. It reuses the existing OAuth client
+(`GOOGLE_ADS_CLIENT_ID`/`SECRET`), but the refresh token must be minted with the
+`https://www.googleapis.com/auth/datamanager` scope (the current one is
+adwords-scoped and won't work), and every request sends an `x-goog-user-project`
+header naming the Cloud project.
+
+### OAuth runbook (the part that needs Mark)
+
+Everything except the account grant is a repeat of the original setup with a new
+scope. The user `mark@eateggs.com` already owns the Ads account, so no extra
+access grant is needed.
+
+1. **Enable the API.** In the SAME Google Cloud project that holds the OAuth
+   client (created in §2 above, e.g. `gtfsx-ads-oci`): APIs & Services → Library
+   → search **"Data Manager API"** → **Enable**.
+2. **Note the project ID.** Cloud console → project picker (or the dashboard
+   "Project ID", e.g. `gtfsx-ads-oci`). This is `GOOGLE_DATAMANAGER_PROJECT_ID`.
+3. **Mint the refresh token** with the datamanager scope. Run the SAME bootstrap
+   snippet as §3 above, reusing the same `CLIENT_ID`/`CLIENT_SECRET`, with only
+   the scope changed:
+
+   ```python
+   # ...identical to the §3 snippet, but:
+   SCOPE = "https://www.googleapis.com/auth/datamanager"
+   ```
+
+   Approve the consent screen; copy the printed `refresh_token`.
+4. **Hand it off.** Paste both values into `.dev.vars` (Claude will
+   `wrangler secret put` them to prod):
+
+   ```
+   GOOGLE_DATAMANAGER_REFRESH_TOKEN=<the refresh_token from step 3>
+   GOOGLE_DATAMANAGER_PROJECT_ID=<the project id from step 2>
+   ```
+
+5. **Verify + backfill** (Claude/owner, after the secrets land): the admin OCI
+   status page (`/api/admin/events/oci-status`) should show *"Uploading via the
+   Data Manager API"*. Hit **Run upload now** to smoke-test, confirm the run
+   reports uploads (not failures), then **Requeue rejected conversions** to
+   re-send the rows that were wrongly marked uploaded during the outage (safe —
+   Google de-dupes by `transactionId`).
+
+**Manager account (`loginAccount`).** The uploader includes
+`destinations[].loginAccount` from `GOOGLE_ADS_LOGIN_CUSTOMER_ID` (a prod secret)
+when present. If a `validateOnly` test ever reports the login/manager account is
+wrong or unnecessary, adjust or unset that secret — the operating account
+(`GOOGLE_ADS_CUSTOMER_ID`) is always sent.
+
+---
+
 ## Operational notes
 
 - **Idempotency.** Once a row is uploaded, `event.oci_uploaded_at` is set to

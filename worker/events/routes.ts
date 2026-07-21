@@ -36,6 +36,11 @@ const TrackSchema = z.object({
   // isn't formally documented by Google; ~50 chars is typical, 256 is a safe
   // ceiling. See migration 0014. Not linked to user_id.
   gclid: z.string().min(1).max(256).nullable().optional(),
+  // gbraid / wbraid — same handling as gclid, captured from ?gbraid= / ?wbraid=
+  // when a plain gclid isn't present (iOS / consent-limited clicks). See
+  // migration 0030. A session normally carries at most one of the three.
+  gbraid: z.string().min(1).max(256).nullable().optional(),
+  wbraid: z.string().min(1).max(256).nullable().optional(),
 });
 
 async function parseJson<T extends z.ZodTypeAny>(
@@ -76,6 +81,8 @@ eventsRouter.post('/track', async (c) => {
     country: c.req.header('CF-IPCountry') ?? null,
     label: body.label ?? null,
     gclid: body.gclid ?? null,
+    gbraid: body.gbraid ?? null,
+    wbraid: body.wbraid ?? null,
   });
 
   return c.body(null, 204);

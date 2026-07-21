@@ -18,13 +18,17 @@ export interface EventInsert {
   country?: string | null;
   label?: string | null;
   gclid?: string | null;
+  // gbraid / wbraid: Google Ads' privacy-safe click ids (iOS app→web / web→web
+  // under consent limits) — carried alongside gclid; a row may have any one.
+  gbraid?: string | null;
+  wbraid?: string | null;
 }
 
 export async function insertEvent(db: D1Database, e: EventInsert): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO event (id, ts, kind, path, ref, session_id, country, label, gclid)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO event (id, ts, kind, path, ref, session_id, country, label, gclid, gbraid, wbraid)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       ulid(),
@@ -36,6 +40,8 @@ export async function insertEvent(db: D1Database, e: EventInsert): Promise<void>
       e.country ?? null,
       e.label ?? null,
       e.gclid ?? null,
+      e.gbraid ?? null,
+      e.wbraid ?? null,
     )
     .run();
 }

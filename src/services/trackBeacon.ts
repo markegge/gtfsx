@@ -10,6 +10,8 @@
 const SESSION_KEY = 'gb_track_session';
 const REF_KEY = 'gb_track_ref';
 const GCLID_KEY = 'gb_track_gclid';
+const GBRAID_KEY = 'gb_track_gbraid';
+const WBRAID_KEY = 'gb_track_wbraid';
 
 function randomId(): string {
   // 16 bytes of entropy as hex — plenty for a session id.
@@ -39,9 +41,9 @@ function getRef(): string | null {
   }
 }
 
-function getGclid(): string | null {
+function getStored(key: string): string | null {
   try {
-    return sessionStorage.getItem(GCLID_KEY);
+    return sessionStorage.getItem(key);
   } catch {
     return null;
   }
@@ -69,20 +71,37 @@ export function captureRefFromUrl(): void {
   }
 }
 
-// Same pattern as captureRefFromUrl, but for Google Ads' ?gclid= identifier.
-// First-touch wins: if a gclid is already stored for the session, leave it
-// alone — a user who arrived via an ad, browsed, and returned organically
-// should still be credited to the original ad click.
+// Capture one `?<param>=` click identifier into sessionStorage and strip it
+// from the address bar. First-touch wins per identifier: if it's already
+// stored, leave it — a user who arrived via an ad, browsed, and returned
+// organically should still be credited to the original ad click. Returns true
+// if it stripped a param (so the caller can push a single replaceState).
+function captureParam(param: string, storageKey: string, params: URLSearchParams): boolean {
+  if (sessionStorage.getItem(storageKey) !== null) return false;
+  const raw = params.get(param);
+  if (!raw) return false;
+  const trimmed = raw.trim().slice(0, 256);
+  if (!trimmed) return false;
+  sessionStorage.setItem(storageKey, trimmed);
+  params.delete(param);
+  return true;
+}
+
+// Capture Google Ads' click identifiers — gclid, and the privacy-safe gbraid
+// (iOS app→web) / wbraid (web→web under consent limits). Capturing only gclid
+// dropped every iOS/consent-limited click (migration 0030); the Data Manager
+// uploader accepts whichever one a session carries. Name kept (called from
+// src/App.tsx) though it now covers all three.
 export function captureGclidFromUrl(): void {
   try {
-    if (sessionStorage.getItem(GCLID_KEY) !== null) return;
     const params = new URLSearchParams(window.location.search);
-    const raw = params.get('gclid');
-    if (!raw) return;
-    const trimmed = raw.trim().slice(0, 256);
-    if (!trimmed) return;
-    sessionStorage.setItem(GCLID_KEY, trimmed);
-    params.delete('gclid');
+    const stripped =
+      [
+        captureParam('gclid', GCLID_KEY, params),
+        captureParam('gbraid', GBRAID_KEY, params),
+        captureParam('wbraid', WBRAID_KEY, params),
+      ].some(Boolean);
+    if (!stripped) return;
     const qs = params.toString();
     const newUrl =
       window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash;
@@ -121,7 +140,9 @@ function send(kind: TrackKind, opts?: { path?: string; label?: string | null }):
         ref: getRef(),
         sessionId: getSessionId(),
         label: opts?.label ?? null,
-        gclid: getGclid(),
+        gclid: getStored(GCLID_KEY),
+        gbraid: getStored(GBRAID_KEY),
+        wbraid: getStored(WBRAID_KEY),
       }),
     }).catch(() => {
       // Network errors are expected (e.g. offline, ad blocker) — silent.

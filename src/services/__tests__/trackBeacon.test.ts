@@ -120,6 +120,27 @@ describe('captureGclidFromUrl', () => {
     expect(dom.win.history.replaceState).not.toHaveBeenCalled();
   });
 
+  it('captures gbraid when there is no gclid (iOS attribution)', async () => {
+    setUrl(dom.win, '/planning/?gbraid=GB_abc123');
+
+    const { captureGclidFromUrl } = await import('../trackBeacon');
+    captureGclidFromUrl();
+
+    expect(dom.store.get('gb_track_gbraid')).toBe('GB_abc123');
+    expect(dom.store.has('gb_track_gclid')).toBe(false);
+    const [, , newUrl] = dom.win.history.replaceState.mock.calls[0];
+    expect(newUrl).toBe('/planning/');
+  });
+
+  it('captures wbraid', async () => {
+    setUrl(dom.win, '/?wbraid=WB_xyz');
+
+    const { captureGclidFromUrl } = await import('../trackBeacon');
+    captureGclidFromUrl();
+
+    expect(dom.store.get('gb_track_wbraid')).toBe('WB_xyz');
+  });
+
   it('preserves other query params when stripping gclid', async () => {
     setUrl(dom.win, '/learn/gtfs-flex/?utm_source=newsletter&gclid=abc123&foo=bar');
 

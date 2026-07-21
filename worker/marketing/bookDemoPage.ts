@@ -207,6 +207,8 @@ button.submit:disabled { opacity: 0.6; cursor: default; }
   function cap(v, n) { return v ? String(v).slice(0, n) : ''; }
   var src = cap(params.get('src') || params.get('utm_campaign') || params.get('utm_source'), 128);
   var gclid = cap(params.get('gclid'), 256);
+  var gbraid = cap(params.get('gbraid'), 256);
+  var wbraid = cap(params.get('wbraid'), 256);
   var ref = cap(document.referrer, 128);
 
   var form = document.getElementById('lead-form');
@@ -225,7 +227,7 @@ button.submit:disabled { opacity: 0.6; cursor: default; }
       org: document.getElementById('org').value.trim(),
       message: document.getElementById('message').value.trim(),
       company_website: document.getElementById('company_website').value,
-      src: src, gclid: gclid, ref: ref,
+      src: src, gclid: gclid, gbraid: gbraid, wbraid: wbraid, ref: ref,
       turnstileToken: turnstileToken
     };
 

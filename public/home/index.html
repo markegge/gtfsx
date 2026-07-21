@@ -625,7 +625,8 @@
 -->
 <script>
 (function () {
-  var SK = 'gb_track_session', RK = 'gb_track_ref', GK = 'gb_track_gclid';
+  var SK = 'gb_track_session', RK = 'gb_track_ref', GK = 'gb_track_gclid',
+      GBK = 'gb_track_gbraid', WBK = 'gb_track_wbraid';
   function rid() {
     var b = new Uint8Array(16);
     (self.crypto || self.msCrypto).getRandomValues(b);
@@ -662,13 +663,17 @@
           ref: get(RK),
           sessionId: sid(),
           label: label || null,
-          gclid: get(GK)
+          gclid: get(GK),
+          gbraid: get(GBK),
+          wbraid: get(WBK)
         })
       }).catch(function () {});
     } catch (_) {}
   }
   capture('ref', RK, 128);
   capture('gclid', GK, 256);
+  capture('gbraid', GBK, 256);
+  capture('wbraid', WBK, 256);
   send('page_view');
   document.addEventListener('click', function (e) {
     var t = e.target;
@@ -681,8 +686,9 @@
     }
   }, { capture: true, passive: true });
 
-  // At click time, carry the captured (or current-URL) gclid onto /book-demo
-  // links so the booking redirect can attribute the demo to the ad click.
+  // At click time, carry the captured (or current-URL) click identifier onto
+  // /book-demo links so the demo submit can attribute the conversion. Covers
+  // gclid and the privacy-safe gbraid/wbraid.
   document.addEventListener('click', function (e) {
     var t = e.target, a = null;
     while (t && t !== document.body) {
@@ -692,10 +698,16 @@
     if (!a) return;
     var href = a.getAttribute('href') || '';
     if (href.indexOf('/book-demo') !== 0) return;
-    var g = get(GK);
-    if (!g) { try { g = new URLSearchParams(location.search).get('gclid'); } catch (_) {} }
-    if (!g || href.indexOf('gclid=') !== -1) return;
-    a.setAttribute('href', href + (href.indexOf('?') === -1 ? '?' : '&') + 'gclid=' + encodeURIComponent(g));
+    var url;
+    try { url = new URLSearchParams(location.search); } catch (_) { url = null; }
+    [['gclid', GK], ['gbraid', GBK], ['wbraid', WBK]].forEach(function (pair) {
+      var param = pair[0];
+      var v = get(pair[1]);
+      if (!v && url) { v = url.get(param); }
+      if (!v || href.indexOf(param + '=') !== -1) return;
+      href += (href.indexOf('?') === -1 ? '?' : '&') + param + '=' + encodeURIComponent(v);
+    });
+    a.setAttribute('href', href);
   }, { capture: true, passive: true });
 })();
 </script>

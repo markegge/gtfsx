@@ -53,6 +53,22 @@ const ADS_SECRET_KEYS = [
   'GOOGLE_ADS_CLIENT_SECRET',
   'GOOGLE_ADS_REFRESH_TOKEN',
   'GOOGLE_ADS_CUSTOMER_ID',
+  'GOOGLE_ADS_LOGIN_CUSTOMER_ID',
+  'GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED',
+  'GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW',
+  'GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST',
+  // Data Manager secrets — cleared too so a DM test can't leak the DM path
+  // into a legacy/config-missing test.
+  'GOOGLE_DATAMANAGER_REFRESH_TOKEN',
+  'GOOGLE_DATAMANAGER_PROJECT_ID',
+];
+// The subset a fully-working Data Manager setup needs (reuses the shared ids).
+const DM_STATUS_KEYS = [
+  'GOOGLE_DATAMANAGER_REFRESH_TOKEN',
+  'GOOGLE_DATAMANAGER_PROJECT_ID',
+  'GOOGLE_ADS_CLIENT_ID',
+  'GOOGLE_ADS_CLIENT_SECRET',
+  'GOOGLE_ADS_CUSTOMER_ID',
   'GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED',
   'GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW',
   'GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST',
@@ -101,29 +117,41 @@ describe('/api/admin/events/oci-status', () => {
     expect(body).toContain('Permanently failed');
   });
 
-  it('staff: shows configured banner when every secret is present', async () => {
+  it('staff: shows the Data Manager banner when its secrets are present', async () => {
     const { client } = await staffClient();
-    for (const k of ADS_SECRET_KEYS) {
+    for (const k of DM_STATUS_KEYS) {
       (testEnv as unknown as Record<string, string>)[k] = 'x';
     }
     const res = await client.get('/api/admin/events/oci-status');
     const body = await res.text();
-    expect(body).toContain('OCI is configured');
+    expect(body).toContain('Uploading via the <strong>Data Manager API</strong>');
     expect(body).not.toContain('not configured');
     // All actions present — no demo_request warning note.
     expect(body).not.toContain('GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST');
   });
 
-  it('staff: core configured but demo action missing → configured banner plus demo note', async () => {
+  it('staff: legacy secrets only → amber "falling back to the legacy" banner', async () => {
     const { client } = await staffClient();
     for (const k of ADS_SECRET_KEYS) {
+      if (k.startsWith('GOOGLE_DATAMANAGER')) continue; // DM absent
+      (testEnv as unknown as Record<string, string>)[k] = 'x';
+    }
+    const res = await client.get('/api/admin/events/oci-status');
+    const body = await res.text();
+    expect(body).toContain('falling back to the legacy');
+    expect(body).toContain('Data Manager is <strong>not configured</strong>');
+  });
+
+  it('staff: DM configured but demo action missing → DM banner plus demo note', async () => {
+    const { client } = await staffClient();
+    for (const k of DM_STATUS_KEYS) {
       if (k === 'GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST') continue;
       (testEnv as unknown as Record<string, string>)[k] = 'x';
     }
     const res = await client.get('/api/admin/events/oci-status');
     const body = await res.text();
     // The page stays green for the two live kinds…
-    expect(body).toContain('OCI is configured');
+    expect(body).toContain('Uploading via the <strong>Data Manager API</strong>');
     // …but flags that demo_request uploads are off until the secret is set.
     expect(body).toContain('GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST');
     expect(body).toContain('uploads are <strong>off</strong>');

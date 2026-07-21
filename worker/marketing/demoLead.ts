@@ -37,6 +37,8 @@ const DemoLeadSchema = z.object({
   message: z.string().trim().max(2000).optional(),
   src: z.string().max(128).optional(),
   gclid: z.string().max(256).optional(),
+  gbraid: z.string().max(256).optional(),
+  wbraid: z.string().max(256).optional(),
   ref: z.string().max(128).optional(),
   // Honeypot — real users leave it empty. Bots that fill every field trip it.
   company_website: z.string().max(200).optional(),
@@ -109,16 +111,18 @@ demoLeadRouter.post('/', async (c) => {
 
   const src = emptyToNull(body.src, 128);
   const gclid = emptyToNull(body.gclid, 256);
+  const gbraid = emptyToNull(body.gbraid, 256);
+  const wbraid = emptyToNull(body.wbraid, 256);
   const ref = emptyToNull(body.ref, 128);
   const message = emptyToNull(body.message, 2000);
   const country = c.req.header('CF-IPCountry') ?? null;
 
   // 1. Durable lead record.
   await c.env.DB.prepare(
-    `INSERT INTO demo_leads (id, created_at, name, email, org, message, src, gclid, ref)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO demo_leads (id, created_at, name, email, org, message, src, gclid, ref, gbraid, wbraid)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(ulid(), Date.now(), body.name, body.email, body.org, message, src, gclid, ref)
+    .bind(ulid(), Date.now(), body.name, body.email, body.org, message, src, gclid, ref, gbraid, wbraid)
     .run();
 
   // 2. Google Ads conversion — same field conventions the old GET used
@@ -131,6 +135,8 @@ demoLeadRouter.post('/', async (c) => {
     country,
     label: src,
     gclid,
+    gbraid,
+    wbraid,
   });
 
   // 3. Best-effort owner notification. A Resend hiccup must not fail the

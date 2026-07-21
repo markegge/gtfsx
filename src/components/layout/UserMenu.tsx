@@ -168,17 +168,10 @@ export function UserMenuItems({ onClose }: { onClose?: () => void } = {}) {
         );
       })}
       {multiOrgBlocked ? (
-        // Already owns an org (non-enterprise): additional orgs are Enterprise.
-        <button
-          onClick={() => go('/pricing?feature=multi_org')}
-          className="w-full text-left px-3 py-1.5 rounded-md text-sm text-coral hover:bg-cream transition-colors flex items-center justify-between gap-2"
-          title="Additional organizations are an Enterprise feature"
-        >
-          <span>+ Create organization…</span>
-          <span className="text-[10px] font-bold uppercase tracking-wide bg-cream text-warm-gray px-1.5 py-0.5 rounded border border-sand">
-            Enterprise
-          </span>
-        </button>
+        // Already owns a non-enterprise org: additional orgs are Enterprise-only.
+        // Per product, the create-org row is hidden entirely here (no upsell) —
+        // the server still enforces this authoritatively (402 multi_org).
+        null
       ) : canCreateOrg ? (
         <button
           onClick={() => setShowCreateOrg(true)}

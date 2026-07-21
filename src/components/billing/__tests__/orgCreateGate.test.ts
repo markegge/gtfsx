@@ -2,6 +2,12 @@
  * The multi-org gate (blockedFromAdditionalOrg): a user may own at most one org
  * unless they own an enterprise-plan org. Mirrors the server rule in
  * worker/billing/plans.ts — kept in parity.
+ *
+ * Drives the three UserMenu "+ Create organization" render states:
+ *   - blocked (returns true)  → the create-org row is HIDDEN entirely (no upsell);
+ *                               the server still enforces it (402 multi_org).
+ *   - not blocked + eligible  → the create dialog opens.
+ *   - not blocked + no Planner → the existing first-org Planner upsell.
  */
 import { describe, expect, it } from 'vitest';
 import { blockedFromAdditionalOrg } from '../planConfig';

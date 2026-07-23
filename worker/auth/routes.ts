@@ -715,12 +715,26 @@ authRouter.get('/magic-link/consume', async (c) => {
   }
   await consumeAuthToken(c.env, resolved.tokenHash);
 
-  // NOTE: phase 1 deliberately SKIPS the 2FA gate here — a magic link already
-  // proves control of the email factor, which is exactly what an email 2FA code
-  // verifies. When method='sms' goes live (phase 2) this must issue an SMS
-  // challenge instead of signing the user straight in.
-
   const ip = clientIp(c.req.raw);
+
+  // 2FA gate. A magic link proves control of the EMAIL factor, so email-method
+  // (and org-required-unenrolled, which falls back to email) 2FA is already
+  // satisfied and we sign the user straight in. An SMS-method user's second
+  // factor is their phone, which the link does NOT prove — so challenge it,
+  // mirroring the Google-OAuth hand-off: no session cookie here, redirect to
+  // /login with the challenge token in the URL fragment.
+  const twofa = await twofaRequirement(c.env, userRow.id);
+  if (twofa.required && twofa.method === 'sms') {
+    const challenge = await startChallenge(c.env, {
+      user: { id: userRow.id, email: userRow.email },
+      purpose: 'login',
+      method: 'sms',
+      ip,
+    });
+    const frag = `twofa=${challenge.token}&method=${challenge.method}&dest=${encodeURIComponent(challenge.destination)}`;
+    return c.redirect(`${c.env.APP_ORIGIN}/login#${frag}`, 302);
+  }
+
   const session = await createSession(c.env, {
     userId: userRow.id,
     ip,

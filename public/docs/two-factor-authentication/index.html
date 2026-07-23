@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
     <title>Two-factor authentication — GTFS·X</title>
-    <meta name="description" content="Enable optional email-based two-factor authentication in GTFS·X, sign in with a verification code, require it for your whole organization, and what's coming with SMS." />
+    <meta name="description" content="Enable optional two-factor authentication in GTFS·X by email or text message, sign in with a verification code, and require it for your whole organization." />
     <link rel="canonical" href="https://www.gtfsx.com/docs/two-factor-authentication/" />
     <meta property="og:title" content="Two-factor authentication — GTFS·X" />
-    <meta property="og:description" content="Enable email 2FA, sign in with a code, require it org-wide, and what's coming with SMS." />
+    <meta property="og:description" content="Enable email or text-message 2FA, sign in with a code, and require it org-wide." />
     <meta property="og:type" content="article" />
     <meta property="og:url" content="https://www.gtfsx.com/docs/two-factor-authentication/" />
     <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
@@ -57,7 +57,7 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "headline": "Two-factor authentication — GTFS·X",
-  "description": "Enable optional email-based two-factor authentication in GTFS·X, sign in with a verification code, require it for your whole organization, and what's coming with SMS.",
+  "description": "Enable optional two-factor authentication in GTFS·X by email or text message, sign in with a verification code, and require it for your whole organization.",
   "image": "https://www.gtfsx.com/og-default.png",
   "author": {
     "@type": "Organization",
@@ -103,7 +103,7 @@
 
       <h2 id="what-it-is">What it is</h2>
       <p>With 2FA on, signing in takes two steps: your usual password (or magic-link click), then a 6-digit code emailed to your address. The code expires after 10 minutes and can only be used once. This protects your account even if your password is ever compromised elsewhere, since a stolen password alone isn't enough to sign in.</p>
-      <p>Today GTFS·X supports email codes. Text-message (SMS) codes are planned — see <a href="#sms">Text message (coming soon)</a> below.</p>
+      <p>GTFS·X sends codes by email, and by text message (SMS) when text-message verification is enabled on your account — see <a href="#sms">Text message codes</a> below.</p>
 
       <h2 id="enabling">Enabling email 2FA</h2>
       <ol>
@@ -114,15 +114,16 @@
       <p>From then on, every sign-in — password or magic link's follow-up step — asks for a fresh code.</p>
 
       <h2 id="signing-in">Signing in with a code</h2>
-      <p>Once 2FA is on, entering your password (or completing a Google sign-in) takes you to a code-entry screen instead of straight into the editor. GTFS·X emails a new 6-digit code each time; enter it to finish signing in. If you don't see it, use the <strong>Resend code</strong> link (available once the cooldown between sends expires) — codes can be resent a limited number of times per sign-in attempt. If a code expires or you run out of attempts, just sign in again to get a fresh one.</p>
-      <p>Magic-link sign-in doesn't currently prompt for a 2FA code — clicking the link already proves you control the email address, which is the same factor a 2FA code proves.</p>
+      <p>Once 2FA is on, entering your password (or completing a Google sign-in) takes you to a code-entry screen instead of straight into the editor. GTFS·X sends a new 6-digit code each time — by email or text message, matching the method you chose — and you enter it to finish signing in. If you don't see it, use the <strong>Resend code</strong> link (available once the cooldown between sends expires) — codes can be resent a limited number of times per sign-in attempt. If a code expires or you run out of attempts, just sign in again to get a fresh one.</p>
+      <p>If you sign in with a magic link and use <strong>email</strong> 2FA, you won't be asked for a separate code — clicking the link already proves you control your email address, the same factor an email code proves. If you use <strong>text-message</strong> 2FA, a magic link still prompts for a texted code, since your phone is a separate factor from your email.</p>
 
       <h2 id="org-requirement">Requiring 2FA for your organization</h2>
       <p>Organization owners and admins can require two-factor authentication for every member, regardless of each member's individual setting. Open <a href="/docs/organizations/">Organization settings</a> → <strong>Security</strong> and check <strong>Require two-factor authentication for all members</strong>.</p>
       <p>Members who haven't enabled 2FA on their own account are still covered: when the org requires it, they're emailed a verification code at each sign-in automatically, using their account email. Members can't turn 2FA off for their own account while their organization requires it.</p>
 
-      <h2 id="sms">Text message (coming soon)</h2>
-      <p>SMS-delivered codes are on the roadmap and show up as a disabled option in Account settings today. Once available, it'll be an alternative to email codes, not a replacement — email 2FA works the same way it does now.</p>
+      <h2 id="sms">Text message codes</h2>
+      <p>When text-message verification is enabled on your account, you can receive codes by SMS instead of email. In <a href="/account">Account settings</a> → <strong>Two-factor authentication</strong>, choose <strong>Text message</strong>, enter your phone number in international format (starting with <code>+</code> and your country code), and confirm the code we text you. Standard message and data rates may apply, and you can reply <strong>STOP</strong> to opt out at any time. Once your number is verified, turn on text-message codes to make SMS your second factor.</p>
+      <p>Text-message codes are an alternative to email codes, not a replacement — email 2FA keeps working exactly as described above, and you can switch back to it whenever you like. If the <strong>Text message</strong> option still shows as <em>coming soon</em>, it isn't enabled on your account yet; use email codes in the meantime.</p>
 
       <h2 id="turning-off">Turning it off</h2>
       <p>Open <a href="/account">Account settings</a> → <strong>Two-factor authentication</strong> and click <strong>Disable</strong>. GTFS·X emails a confirmation code first, the same as enabling — enter it to turn 2FA off. This option isn't available while your organization requires 2FA; ask an admin to change the org-wide setting instead.</p>

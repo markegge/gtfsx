@@ -503,16 +503,16 @@
   {
     "url": "/docs/two-factor-authentication/",
     "title": "Two-factor authentication",
-    "description": "Enable optional email-based two-factor authentication in GTFS·X, sign in with a verification code, require it for your whole organization, and what's coming with SMS.",
+    "description": "Enable optional two-factor authentication in GTFS·X by email or text message, sign in with a verification code, and require it for your whole organization.",
     "headings": [
       "What it is",
       "Enabling email 2FA",
       "Signing in with a code",
       "Requiring 2FA for your organization",
-      "Text message (coming soon)",
+      "Text message codes",
       "Turning it off",
       "See also"
     ],
-    "text": "Docs · Accounts & teams · Two-factor authentication Two-factor authentication Two-factor authentication (2FA) adds a one-time email code to your sign-in, on top of your password or magic link. It's optional and off by default — turn it on for your own account in Account settings, or ask an org admin to require it for every member. What it is With 2FA on, signing in takes two steps: your usual password (or magic-link click), then a 6-digit code emailed to your address. The code expires after 10 minutes and can only be used once. Today GTFS·X supports email codes; text-message (SMS) codes are planned. Enabling email 2FA Go to Account settings and find the Two-factor authentication section. Click Enable two-factor authentication — GTFS·X emails a 6-digit code to your account's email address. Enter the code and confirm. Signing in with a code Once 2FA is on, entering your password (or completing a Google sign-in) takes you to a code-entry screen instead of straight into the editor. Use Resend code if you don't see it. Requiring 2FA for your organization Organization owners and admins can require two-factor authentication for every member from Organization settings → Security. Members who haven't enabled 2FA individually are still covered — they're emailed a code automatically at each sign-in."
+    "text": "Docs · Accounts & teams · Two-factor authentication Two-factor authentication Two-factor authentication (2FA) adds a one-time code to your sign-in, on top of your password or magic link. It's optional and off by default — turn it on for your own account in Account settings, or ask an org admin to require it for every member. What it is With 2FA on, signing in takes two steps: your usual password (or magic-link click), then a 6-digit code sent to your email address or, when enabled, by text message. The code expires after 10 minutes and can only be used once. GTFS·X sends codes by email, and by text message (SMS) when text-message verification is enabled on your account. Enabling email 2FA Go to Account settings and find the Two-factor authentication section. Click Enable two-factor authentication — GTFS·X emails a 6-digit code to your account's email address. Enter the code and confirm. Signing in with a code Once 2FA is on, entering your password (or completing a Google sign-in) takes you to a code-entry screen instead of straight into the editor. Use Resend code if you don't see it. Requiring 2FA for your organization Organization owners and admins can require two-factor authentication for every member from Organization settings → Security. Members who haven't enabled 2FA individually are still covered — they're emailed a code automatically at each sign-in. Text message codes When text-message verification is enabled on your account, choose Text message in Account settings, add your phone number in international format, and confirm the code we text you. Message and data rates may apply; reply STOP to opt out. It's an alternative to email codes, not a replacement."
   }
 ]

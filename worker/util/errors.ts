@@ -19,6 +19,8 @@ export type ErrorCode =
   | 'twofa_expired'
   | 'twofa_org_required'
   | 'sms_unavailable'
+  | 'sms_invalid_phone'
+  | 'sms_phone_required'
   | 'token_invalid'
   | 'token_expired'
   | 'rt_breakage'
@@ -71,6 +73,10 @@ export const twofaOrgRequired = () =>
   new ApiError(403, 'twofa_org_required', 'Your organization requires two-factor authentication');
 export const smsUnavailable = () =>
   new ApiError(400, 'sms_unavailable', 'Text-message verification is not available yet');
+export const smsInvalidPhone = (msg = 'That phone number is not a valid SMS number') =>
+  new ApiError(400, 'sms_invalid_phone', msg);
+export const smsPhoneRequired = (msg = 'Add and verify a phone number first') =>
+  new ApiError(400, 'sms_phone_required', msg);
 export const tokenInvalid = () => new ApiError(400, 'token_invalid', 'Invalid or unknown token');
 export const tokenExpired = () => new ApiError(400, 'token_expired', 'This link has expired — please request a new one');
 export const rtBreakage = (extra?: Record<string, unknown>) =>

@@ -145,3 +145,15 @@ export function disableTwofa(): Promise<{ challenge: string }> {
 export function confirmTwofa(input: { challenge: string; code: string }): Promise<void> {
   return request('/api/me/twofa/confirm', { method: 'POST', body: input });
 }
+
+// SMS phone enrollment (Twilio Verify). `addPhone` texts a code to the number;
+// `verifyPhone` confirms it and stores the number as the user's verified phone.
+// Both 400 with `sms_unavailable` when SMS isn't enabled on the account.
+
+export function addPhone(input: { phone: string }): Promise<{ phone_masked: string }> {
+  return request<{ phone_masked: string }>('/api/me/phone', { method: 'POST', body: input });
+}
+
+export function verifyPhone(input: { code: string }): Promise<{ phone_masked: string }> {
+  return request<{ phone_masked: string }>('/api/me/phone/verify', { method: 'POST', body: input });
+}

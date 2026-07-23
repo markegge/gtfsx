@@ -5,9 +5,13 @@ import type { AppContext } from './env';
 import { requireAuth } from './auth/middleware';
 import {
   ApiError,
+  badGateway,
   conflict,
   forbidden,
   invalidCredentials,
+  rateLimited,
+  smsInvalidPhone,
+  smsPhoneRequired,
   smsUnavailable,
   twofaOrgRequired,
   validationFailed,
@@ -15,10 +19,12 @@ import {
 import {
   startChallenge,
   verifyChallengeCode,
+  verifyPhoneEnrollment,
   maskPhone,
   twilioConfigured,
   type TwofaMethod,
 } from './auth/twofa';
+import { TwilioVerifyError } from './sms';
 import { hashPassword, verifyPassword } from './util/crypto';
 import { logAudit } from './util/audit';
 import { clientIp } from './util/rateLimit';
@@ -88,6 +94,34 @@ async function orgRequires2fa(env: AppContext['Bindings'], userId: string): Prom
     .bind(userId)
     .first<{ n: number }>();
   return !!row;
+}
+
+// Basic E.164 normalization: strip common formatting, then require a leading
+// '+' and 7–15 digits (first digit non-zero). Twilio Verify normalizes further,
+// but rejecting obvious junk up front gives a clean 400 without a round trip.
+function normalizePhone(raw: string): string | null {
+  const cleaned = raw.replace(/[\s\-().]/g, '');
+  return /^\+[1-9]\d{6,14}$/.test(cleaned) ? cleaned : null;
+}
+
+// Turn an error from the SMS layer into the ApiError we surface. Our own
+// ApiErrors (wrong/expired code, from verifyPhoneEnrollment) pass through; a
+// TwilioVerifyError maps by kind; anything else bubbles up as a 500.
+function twilioToApiError(err: unknown): unknown {
+  if (err instanceof ApiError) return err;
+  if (err instanceof TwilioVerifyError) {
+    switch (err.kind) {
+      case 'invalid_number':
+        return smsInvalidPhone();
+      case 'rate_limited':
+        return rateLimited('Too many verification attempts — try again later');
+      case 'unavailable':
+        return smsUnavailable();
+      default:
+        return badGateway('Text-message verification is temporarily unavailable');
+    }
+  }
+  return err;
 }
 
 // FROZEN CONTRACT — the in-app upgrade-nudge frontend POSTs this exact shape.
@@ -333,8 +367,28 @@ apiRouter.get('/me/twofa', requireAuth, async (c) => {
 apiRouter.post('/me/twofa/enable', requireAuth, async (c) => {
   const body = await parseJson(c, twofaEnableSchema);
   const user = c.var.user!;
-  // SMS enrollment arrives in phase 2 (Twilio Verify).
-  if (body.method === 'sms') throw smsUnavailable();
+
+  if (body.method === 'sms') {
+    // SMS as the 2FA method requires Twilio configured AND an already-verified
+    // phone on file (added via /me/phone + /me/phone/verify).
+    if (!twilioConfigured(c.env)) throw smsUnavailable();
+    const row = await c.env.DB.prepare(`SELECT phone, phone_verified_at FROM user WHERE id = ?`)
+      .bind(user.id)
+      .first<{ phone: string | null; phone_verified_at: number | null }>();
+    if (!row?.phone || !row.phone_verified_at) {
+      throw smsPhoneRequired('Add and verify a phone number before enabling text-message two-factor authentication');
+    }
+    const challenge = await startChallenge(c.env, {
+      user: { id: user.id, email: user.email },
+      purpose: 'enroll',
+      method: 'sms',
+      metadata: { enrollMethod: 'sms' },
+      ip: clientIp(c.req.raw),
+    }).catch((err) => {
+      throw twilioToApiError(err);
+    });
+    return c.json({ challenge: challenge.token });
+  }
 
   const challenge = await startChallenge(c.env, {
     user: { id: user.id, email: user.email },
@@ -412,17 +466,70 @@ apiRouter.post('/me/twofa/confirm', requireAuth, async (c) => {
   return c.json({ method: 'none' });
 });
 
-// SMS enrollment stubs — build the surface now so the contract is stable, but
-// phone verification is phase 2 (Twilio Verify). Parsing validates the shape;
-// the handlers return sms_unavailable until Twilio is wired up.
+// SMS phone enrollment (Twilio Verify). When Twilio isn't configured both
+// endpoints return sms_unavailable, keeping the contract stable but inert.
+//
+// POST /me/phone: validate + normalize the number, ask Twilio to text a code,
+// and stash the pending number on an enroll_phone challenge. The number isn't
+// written to the user until it's verified.
 apiRouter.post('/me/phone', requireAuth, async (c) => {
-  await parseJson(c, phoneSchema);
-  throw smsUnavailable();
+  const body = await parseJson(c, phoneSchema);
+  const user = c.var.user!;
+  if (!twilioConfigured(c.env)) throw smsUnavailable();
+
+  const phone = normalizePhone(body.phone);
+  if (!phone) {
+    throw smsInvalidPhone('Enter a phone number in international format, e.g. +14065551234');
+  }
+
+  await startChallenge(c.env, {
+    user: { id: user.id, email: user.email },
+    purpose: 'enroll_phone',
+    method: 'sms',
+    phone,
+    metadata: { pendingPhone: phone },
+    ip: clientIp(c.req.raw),
+  }).catch((err) => {
+    throw twilioToApiError(err);
+  });
+
+  return c.json({ phone_masked: maskPhone(phone) });
 });
 
+// POST /me/phone/verify: check the code against Twilio, then persist the number
+// and the SMS-consent evidence (timestamp + IP). The disclosure that "Msg &
+// data rates may apply" is shown in the UI at the point the number is submitted.
 apiRouter.post('/me/phone/verify', requireAuth, async (c) => {
-  await parseJson(c, phoneVerifySchema);
-  throw smsUnavailable();
+  const body = await parseJson(c, phoneVerifySchema);
+  const user = c.var.user!;
+  if (!twilioConfigured(c.env)) throw smsUnavailable();
+  const ip = clientIp(c.req.raw);
+
+  let phone: string;
+  try {
+    ({ phone } = await verifyPhoneEnrollment(c.env, { userId: user.id, code: body.code.trim(), ip }));
+  } catch (err) {
+    throw twilioToApiError(err);
+  }
+
+  const now = Date.now();
+  await c.env.DB.prepare(
+    `UPDATE user
+        SET phone = ?, phone_verified_at = ?, sms_consent_at = ?, sms_consent_ip = ?, updated_at = ?
+      WHERE id = ?`,
+  )
+    .bind(phone, now, now, ip, now, user.id)
+    .run();
+
+  await logAudit(c.env, {
+    actorUserId: user.id,
+    subjectType: 'user',
+    subjectId: user.id,
+    action: 'user.phone_verified',
+    ip,
+  });
+
+  return c.json({ phone_masked: maskPhone(phone) });
 });
 
 apiRouter.delete('/me', requireAuth, async (c) => {

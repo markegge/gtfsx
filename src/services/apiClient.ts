@@ -32,6 +32,8 @@ export type ApiErrorCode =
   | 'twofa_expired'
   | 'twofa_org_required'
   | 'sms_unavailable'
+  | 'sms_invalid_phone'
+  | 'sms_phone_required'
   | 'internal'
   | 'network_error'
   | 'unknown';

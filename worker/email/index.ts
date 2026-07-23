@@ -122,6 +122,23 @@ export async function sendMagicLink(env: Env, to: string, link: string): Promise
   });
 }
 
+export async function send2faCode(env: Env, to: string, code: string): Promise<void> {
+  await send(env, {
+    to,
+    subject: 'Your GTFS·X verification code',
+    html: wrap(`
+      <p>Use this code to finish signing in:</p>
+      <p style="font-size: 32px; font-weight: 700; letter-spacing: 6px; margin: 16px 0; color: #1a1a1a;">${code}</p>
+      <p style="color: #666; font-size: 13px;">This code expires in 10 minutes.</p>
+      <p style="color: #666; font-size: 13px;">If you didn't try to sign in, reset your password — someone may have it.</p>
+    `),
+    text:
+      `Your GTFS·X verification code is ${code}\n\n` +
+      `This code expires in 10 minutes.\n\n` +
+      `If you didn't try to sign in, reset your password — someone may have it.`,
+  });
+}
+
 export async function sendPasswordReset(env: Env, to: string, link: string): Promise<void> {
   await send(env, {
     to,

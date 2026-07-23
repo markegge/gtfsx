@@ -39,6 +39,7 @@ export async function resetDb(): Promise<void> {
   const tables = [
     'audit_event',
     'auth_token',
+    'twofa_challenge',
     'session',
     'credential',
     'forum_post_upvote',

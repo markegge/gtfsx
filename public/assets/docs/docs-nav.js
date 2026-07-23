@@ -16,6 +16,7 @@
       pages: [
         { path: '/docs/quick-start/',             title: 'Quick Start' },
         { path: '/docs/account-and-cloud-sync/',  title: 'Account & Cloud Sync' },
+        { path: '/docs/two-factor-authentication/', title: 'Two-Factor Authentication' },
         { path: '/docs/pricing/',                 title: 'Pricing & Plans' },
         { path: '/docs/feature-settings/',        title: 'Feature Settings' },
         { path: '/docs/organizations/',           title: 'Organizations' }

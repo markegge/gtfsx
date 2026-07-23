@@ -8,8 +8,17 @@ import {
   conflict,
   forbidden,
   invalidCredentials,
+  smsUnavailable,
+  twofaOrgRequired,
   validationFailed,
 } from './util/errors';
+import {
+  startChallenge,
+  verifyChallengeCode,
+  maskPhone,
+  twilioConfigured,
+  type TwofaMethod,
+} from './auth/twofa';
 import { hashPassword, verifyPassword } from './util/crypto';
 import { logAudit } from './util/audit';
 import { clientIp } from './util/rateLimit';
@@ -51,6 +60,35 @@ const changePasswordSchema = z.object({
 const deleteMeSchema = z.object({
   password: z.string().min(1).max(256).optional(),
 });
+
+const twofaEnableSchema = z.object({
+  method: z.enum(['email', 'sms']),
+});
+
+const twofaConfirmSchema = z.object({
+  challenge: z.string().min(1).max(2048),
+  code: z.string().trim().min(1).max(12),
+});
+
+const phoneSchema = z.object({
+  phone: z.string().trim().min(1).max(20),
+});
+
+const phoneVerifySchema = z.object({
+  code: z.string().trim().min(1).max(12),
+});
+
+async function orgRequires2fa(env: AppContext['Bindings'], userId: string): Promise<boolean> {
+  const row = await env.DB.prepare(
+    `SELECT 1 AS n FROM organization_membership m
+       JOIN organization o ON o.id = m.org_id
+      WHERE m.user_id = ? AND o.require_2fa = 1 AND o.deleted_at IS NULL
+      LIMIT 1`,
+  )
+    .bind(userId)
+    .first<{ n: number }>();
+  return !!row;
+}
 
 // FROZEN CONTRACT — the in-app upgrade-nudge frontend POSTs this exact shape.
 const proIntentSchema = z.object({
@@ -275,6 +313,116 @@ apiRouter.post('/me/change-password', requireAuth, async (c) => {
   });
 
   return c.body(null, 204);
+});
+
+// ─── Two-factor authentication (account settings) ──────────────────────────
+
+apiRouter.get('/me/twofa', requireAuth, async (c) => {
+  const user = c.var.user!;
+  const row = await c.env.DB.prepare(`SELECT twofa_method, phone FROM user WHERE id = ?`)
+    .bind(user.id)
+    .first<{ twofa_method: string; phone: string | null }>();
+  return c.json({
+    method: row?.twofa_method ?? 'none',
+    org_required: await orgRequires2fa(c.env, user.id),
+    phone_masked: row?.phone ? maskPhone(row.phone) : null,
+    sms_available: twilioConfigured(c.env),
+  });
+});
+
+apiRouter.post('/me/twofa/enable', requireAuth, async (c) => {
+  const body = await parseJson(c, twofaEnableSchema);
+  const user = c.var.user!;
+  // SMS enrollment arrives in phase 2 (Twilio Verify).
+  if (body.method === 'sms') throw smsUnavailable();
+
+  const challenge = await startChallenge(c.env, {
+    user: { id: user.id, email: user.email },
+    purpose: 'enroll',
+    method: 'email',
+    metadata: { enrollMethod: 'email' },
+    ip: clientIp(c.req.raw),
+  });
+  return c.json({ challenge: challenge.token });
+});
+
+apiRouter.post('/me/twofa/disable', requireAuth, async (c) => {
+  const user = c.var.user!;
+  // An org-wide requirement can't be opted out of by a member.
+  if (await orgRequires2fa(c.env, user.id)) throw twofaOrgRequired();
+
+  const row = await c.env.DB.prepare(`SELECT twofa_method FROM user WHERE id = ?`)
+    .bind(user.id)
+    .first<{ twofa_method: string }>();
+  // Deliver the confirmation code over the enrolled method (email today).
+  const method: TwofaMethod = row?.twofa_method === 'sms' ? 'sms' : 'email';
+  const challenge = await startChallenge(c.env, {
+    user: { id: user.id, email: user.email },
+    purpose: 'disable',
+    method,
+    ip: clientIp(c.req.raw),
+  });
+  return c.json({ challenge: challenge.token });
+});
+
+apiRouter.post('/me/twofa/confirm', requireAuth, async (c) => {
+  const body = await parseJson(c, twofaConfirmSchema);
+  const user = c.var.user!;
+
+  const result = await verifyChallengeCode(c.env, {
+    token: body.challenge,
+    code: body.code,
+    allowedPurposes: ['enroll', 'disable'],
+    requireUserId: user.id,
+    ip: clientIp(c.req.raw),
+  });
+
+  const now = Date.now();
+  if (result.purpose === 'enroll') {
+    const enrollMethod = result.metadata?.enrollMethod === 'sms' ? 'sms' : 'email';
+    await c.env.DB.prepare(
+      `UPDATE user SET twofa_method = ?, twofa_enrolled_at = ?, updated_at = ? WHERE id = ?`,
+    )
+      .bind(enrollMethod, now, now, user.id)
+      .run();
+    await logAudit(c.env, {
+      actorUserId: user.id,
+      subjectType: 'user',
+      subjectId: user.id,
+      action: 'user.twofa_enabled',
+      metadata: { method: enrollMethod },
+      ip: clientIp(c.req.raw),
+    });
+    return c.json({ method: enrollMethod });
+  }
+
+  // disable
+  await c.env.DB.prepare(
+    `UPDATE user SET twofa_method = 'none', twofa_enrolled_at = NULL, updated_at = ? WHERE id = ?`,
+  )
+    .bind(now, user.id)
+    .run();
+  await logAudit(c.env, {
+    actorUserId: user.id,
+    subjectType: 'user',
+    subjectId: user.id,
+    action: 'user.twofa_disabled',
+    ip: clientIp(c.req.raw),
+  });
+  return c.json({ method: 'none' });
+});
+
+// SMS enrollment stubs — build the surface now so the contract is stable, but
+// phone verification is phase 2 (Twilio Verify). Parsing validates the shape;
+// the handlers return sms_unavailable until Twilio is wired up.
+apiRouter.post('/me/phone', requireAuth, async (c) => {
+  await parseJson(c, phoneSchema);
+  throw smsUnavailable();
+});
+
+apiRouter.post('/me/phone/verify', requireAuth, async (c) => {
+  await parseJson(c, phoneVerifySchema);
+  throw smsUnavailable();
 });
 
 apiRouter.delete('/me', requireAuth, async (c) => {

@@ -3,11 +3,12 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { useStore } from '../../store';
 import { AuthLayout } from '../auth/AuthLayout';
 import { AuthButton } from '../auth/AuthButton';
-import { FormField } from '../ui/FormField';
+import { CheckboxField, FormField } from '../ui/FormField';
 import { Modal } from '../ui/Modal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { RoleBadge } from '../layout/UserMenu';
 import { ApiError } from '../../services/authApi';
+import { apiRequest, restParseError } from '../../services/apiClient';
 import {
   createInvitation,
   deleteOrg,
@@ -78,6 +79,8 @@ export function OrgSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [requireTwofaSaving, setRequireTwofaSaving] = useState(false);
+  const [requireTwofaError, setRequireTwofaError] = useState<string | null>(null);
 
   const [editingMeta, setEditingMeta] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -413,6 +416,27 @@ export function OrgSettingsPage() {
     }
   };
 
+  // require_2fa isn't in the shared OrgInfo type (see the `plan` cast on
+  // matchingOrg above for the same pattern) — read/write it locally rather
+  // than widening orgsApi.ts for a single field.
+  const handleToggleRequire2fa = async (checked: boolean) => {
+    setRequireTwofaError(null);
+    setRequireTwofaSaving(true);
+    try {
+      const res = await apiRequest<{ organization: OrgInfo & { requireTwofa?: boolean } }>(
+        `/api/orgs/${encodeURIComponent(org.id)}`,
+        { method: 'PATCH', body: { require_2fa: checked } },
+        { parseError: restParseError },
+      );
+      setDetail({ ...detail, organization: res.organization });
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Could not update setting';
+      setRequireTwofaError(msg);
+    } finally {
+      setRequireTwofaSaving(false);
+    }
+  };
+
   // After the imported feed is loaded into the editor store, persist it as a
   // new org-owned project (mirrors SaveAsDialog), then open it in the editor.
   // ImportDialog renders the create error inline and keeps itself open on
@@ -679,6 +703,25 @@ export function OrgSettingsPage() {
                   ))}
                 </tbody>
               </table>
+            )}
+          </section>
+        )}
+
+        {isAdmin && (
+          <section className="bg-white border border-sand rounded-2xl p-6 mb-5">
+            <h2 className="font-heading font-bold text-lg text-dark-brown mb-4">Security</h2>
+            <CheckboxField
+              label="Require two-factor authentication for all members"
+              checked={(org as { requireTwofa?: boolean }).requireTwofa ?? false}
+              onChange={handleToggleRequire2fa}
+              disabled={requireTwofaSaving}
+              hint="Members without two-factor authentication set up will be emailed a verification code at each sign-in."
+              containerClassName=""
+            />
+            {requireTwofaError && (
+              <div className="mt-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm">
+                {requireTwofaError}
+              </div>
             )}
           </section>
         )}

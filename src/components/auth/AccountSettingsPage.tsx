@@ -8,10 +8,15 @@ import {
   ApiError,
   changeEmail,
   changePassword,
+  confirmTwofa,
   deleteAccount,
+  disableTwofa,
+  enableTwofa,
+  getTwofa,
   logout,
   logoutAll,
   updateProfile,
+  type TwofaStatus,
 } from '../../services/authApi';
 import {
   downloadMyExport,
@@ -103,6 +108,8 @@ export function AccountSettingsPage() {
       <ChangeEmailSection />
       <Divider />
       <ChangePasswordSection />
+      <Divider />
+      <TwoFactorSection email={currentUser.email} />
       <Divider />
       <SessionsSection onSignedOut={() => {
         clearAuth();
@@ -298,6 +305,207 @@ function ChangePasswordSection() {
           {saved && <span className="text-sm text-teal">Password updated.</span>}
         </div>
       </form>
+    </section>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Two-factor authentication — optional, off by default. Email codes only for
+// now; SMS is shown as a disabled option until Twilio Verify is wired up.
+// ───────────────────────────────────────────────────────────────────────────
+
+function TwoFactorSection({ email }: { email: string }) {
+  const [status, setStatus] = useState<TwofaStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [pending, setPending] = useState<'enroll' | 'disable' | null>(null);
+  const [challenge, setChallenge] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [working, setWorking] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      setStatus(await getTwofa());
+    } catch (err) {
+      setLoadError(err instanceof ApiError ? err.message : 'Could not load two-factor status');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const startEnable = async () => {
+    setActionError(null);
+    setNotice(null);
+    setWorking(true);
+    try {
+      const res = await enableTwofa({ method: 'email' });
+      setChallenge(res.challenge);
+      setPending('enroll');
+      setCode('');
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Could not start enrollment');
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const startDisable = async () => {
+    setActionError(null);
+    setNotice(null);
+    setWorking(true);
+    try {
+      const res = await disableTwofa();
+      setChallenge(res.challenge);
+      setPending('disable');
+      setCode('');
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'twofa_org_required') {
+        setActionError("Your organization requires two-factor authentication, so it can't be turned off here.");
+      } else {
+        setActionError(err instanceof ApiError ? err.message : 'Could not start');
+      }
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const cancelPending = () => {
+    setPending(null);
+    setChallenge(null);
+    setCode('');
+    setActionError(null);
+  };
+
+  const handleConfirm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pending || !challenge) return;
+    setActionError(null);
+    setWorking(true);
+    try {
+      await confirmTwofa({ challenge, code: code.trim() });
+      setNotice(pending === 'enroll' ? 'Two-factor authentication is on.' : 'Two-factor authentication is off.');
+      setPending(null);
+      setChallenge(null);
+      setCode('');
+      await load();
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'twofa_invalid_code') {
+        const attemptsLeft = typeof err.extra.attempts_left === 'number' ? err.extra.attempts_left : undefined;
+        setActionError(
+          attemptsLeft !== undefined
+            ? `Incorrect code. ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} left.`
+            : 'Incorrect code.',
+        );
+        setCode('');
+      } else if (err instanceof ApiError && err.code === 'twofa_expired') {
+        setActionError('That code expired. Start again.');
+        setPending(null);
+        setChallenge(null);
+      } else {
+        setActionError(err instanceof ApiError ? err.message : 'Could not confirm');
+      }
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  return (
+    <section>
+      <SectionHeader
+        title="Two-factor authentication"
+        description="Add a one-time code to your sign-in, sent by email. Optional, and off by default."
+      />
+      {loading && <p className="text-sm text-warm-gray">Loading…</p>}
+      {loadError && (
+        <div className="px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm">{loadError}</div>
+      )}
+      {!loading && !loadError && status && (
+        <>
+          {status.org_required && (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm">
+              Your organization requires two-factor authentication for all members.
+              {status.method === 'none' && " You'll be emailed a code the next time you sign in."}
+            </div>
+          )}
+          {notice && !pending && (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-teal-light text-teal text-sm">{notice}</div>
+          )}
+          {actionError && !pending && (
+            <div className="mb-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm">
+              {actionError}
+            </div>
+          )}
+
+          {pending ? (
+            <form onSubmit={handleConfirm} className="border border-sand rounded-lg p-4 bg-cream">
+              <p className="text-sm text-dark-brown mb-3">
+                Enter the 6-digit code we sent to <span className="font-mono">{email}</span>.
+              </p>
+              <FormField label="Verification code" error={actionError ?? undefined}>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="123456"
+                  className="w-full px-3 py-2 border-2 rounded-lg text-lg font-mono tracking-[0.4em] text-center text-dark-brown bg-cream transition-colors border-sand focus:outline-none focus:border-coral focus:bg-white"
+                />
+              </FormField>
+              <div className="flex items-center gap-3">
+                <AuthButton type="submit" disabled={working || code.length !== 6}>
+                  {working ? 'Confirming…' : pending === 'enroll' ? 'Turn on' : 'Turn off'}
+                </AuthButton>
+                <AuthButton type="button" variant="secondary" onClick={cancelPending} disabled={working}>
+                  Cancel
+                </AuthButton>
+              </div>
+            </form>
+          ) : status.method === 'none' ? (
+            <div>
+              <div className="space-y-2 mb-3">
+                <label className="flex items-center gap-2 text-sm text-dark-brown">
+                  <input type="radio" name="twofa-method" checked readOnly />
+                  Email code
+                </label>
+                <label className="flex items-center gap-2 text-sm text-warm-gray cursor-not-allowed">
+                  <input type="radio" name="twofa-method" disabled />
+                  Text message (coming soon)
+                </label>
+              </div>
+              <AuthButton onClick={startEnable} disabled={working}>
+                {working ? 'Starting…' : 'Enable two-factor authentication'}
+              </AuthButton>
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Badge variant="success">On</Badge>
+                <span className="text-sm text-dark-brown">Email code</span>
+              </div>
+              <AuthButton variant="secondary" onClick={startDisable} disabled={working || status.org_required}>
+                {working ? 'Starting…' : 'Disable'}
+              </AuthButton>
+              {status.org_required && (
+                <p className="mt-2 text-xs text-warm-gray">
+                  Your organization requires 2FA, so it can't be turned off here.
+                </p>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </section>
   );
 }

@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <title>Two-factor authentication — GTFS·X</title>
+    <meta name="description" content="Enable optional email-based two-factor authentication in GTFS·X, sign in with a verification code, require it for your whole organization, and what's coming with SMS." />
+    <link rel="canonical" href="https://www.gtfsx.com/docs/two-factor-authentication/" />
+    <meta property="og:title" content="Two-factor authentication — GTFS·X" />
+    <meta property="og:description" content="Enable email 2FA, sign in with a code, require it org-wide, and what's coming with SMS." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.gtfsx.com/docs/two-factor-authentication/" />
+    <meta property="og:image" content="https://www.gtfsx.com/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@gtfsxapp" />
+    <meta name="twitter:image" content="https://www.gtfsx.com/og-default.png" />
+    <style>
+      :root { --bg:#FFF8F0; --ink:#2A1F18; --muted:#6B5A4D; --accent:#E8734A; --rule:#EADBC8; --sand:#FBF6EE; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Inter", sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+      footer, main { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+      .site-header { position: sticky; top: 0; z-index: 10; background:#fff; border-bottom:1px solid var(--rule); height:56px; display:flex; align-items:center; padding: 0 20px; gap:16px; }
+      .site-header .brand { display:inline-flex; align-items:center; gap:10px; text-decoration:none; flex-shrink:0; }
+      .site-header .brand img { height:36px; width:auto; }
+      .site-header nav { display:flex; gap:4px; margin-left:12px; }
+      .site-header nav a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; padding:8px 12px; border-radius:6px; }
+      .site-header nav a:hover, .site-header nav a.active { color:var(--ink); background:var(--bg); }
+      .site-header .actions { margin-left:auto; display:flex; align-items:center; gap:12px; }
+      .site-header .cta { background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot a { color:var(--muted); text-decoration:none; font-weight:600; font-size:14px; }
+      .site-header .user-slot .user-avatar { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; font-size:13px; text-decoration:none; }
+      @media (max-width: 720px) { .site-header nav, .site-header .cta { display:none; } .site-header .brand img { height:30px; } }
+      main { padding-top: 24px; padding-bottom: 60px; }
+      .crumbs { color:var(--muted); font-size:0.9rem; margin: 0 0 12px; }
+      .crumbs a { color:var(--muted); text-decoration:none; }
+      h1 { font-size: 2.2rem; line-height:1.2; margin: 0 0 12px; }
+      h2 { font-size: 1.4rem; margin-top: 2.4rem; border-top:1px solid var(--rule); padding-top:1.6rem; }
+      h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+      .lede { font-size: 1.15rem; color:var(--muted); }
+      .callout { background:#fff; border:1px solid var(--rule); border-left:4px solid var(--accent); border-radius:8px; padding:16px 20px; margin: 24px 0; }
+      a { color: var(--accent); }
+      ul, ol { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+      code, kbd { background:var(--sand); padding: 1px 6px; border-radius:4px; font-size:0.9em; }
+      .see-also { background:#fff; border:1px solid var(--rule); border-radius:10px; padding:18px 22px; margin: 36px 0 0; }
+      .see-also h2 { all: unset; font-weight:700; display:block; margin-bottom:6px; font-size:1.1rem; }
+      .see-also ul { margin: 8px 0 0; }
+      footer { border-top: 1px solid var(--rule); padding-top:20px; padding-bottom:40px; color:var(--muted); font-size:0.95rem; display:flex; flex-wrap:wrap; gap:18px; margin-top:32px; }
+      footer a { color: var(--muted); text-decoration:none; }
+      footer a:hover { color:var(--accent); }
+    </style>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Two-factor authentication — GTFS·X",
+  "description": "Enable optional email-based two-factor authentication in GTFS·X, sign in with a verification code, require it for your whole organization, and what's coming with SMS.",
+  "image": "https://www.gtfsx.com/og-default.png",
+  "author": {
+    "@type": "Organization",
+    "name": "GTFS·X",
+    "url": "https://www.gtfsx.com/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "GTFS·X",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://www.gtfsx.com/gtfsx-lockup.svg"
+    }
+  },
+  "datePublished": "2026-07-23",
+  "dateModified": "2026-07-23",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://www.gtfsx.com/docs/two-factor-authentication/"
+  }
+}
+  </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><img src="/gtfsx-lockup.svg" alt="GTFS·X" /></a>
+      <nav>
+        <a href="/about/">About</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="/learn/gtfs/">Learn</a>
+        <a href="/community">Community</a>
+        <a href="/help">Help</a>
+      </nav>
+      <div class="actions">
+        <a href="/" class="cta">Open editor</a>
+        <div id="user-slot" class="user-slot"><a href="/login">Sign in</a></div>
+      </div>
+    </header>
+    <main>
+      <div class="crumbs"><a href="/docs/">Docs</a> · Accounts &amp; teams · Two-factor authentication</div>
+      <h1>Two-factor authentication</h1>
+      <p class="lede">Two-factor authentication (2FA) adds a one-time email code to your sign-in, on top of your password or magic link. It's optional and off by default — turn it on for your own account in Account settings, or ask an org admin to require it for every member.</p>
+
+      <h2 id="what-it-is">What it is</h2>
+      <p>With 2FA on, signing in takes two steps: your usual password (or magic-link click), then a 6-digit code emailed to your address. The code expires after 10 minutes and can only be used once. This protects your account even if your password is ever compromised elsewhere, since a stolen password alone isn't enough to sign in.</p>
+      <p>Today GTFS·X supports email codes. Text-message (SMS) codes are planned — see <a href="#sms">Text message (coming soon)</a> below.</p>
+
+      <h2 id="enabling">Enabling email 2FA</h2>
+      <ol>
+        <li>Go to <a href="/account">Account settings</a> and find the <strong>Two-factor authentication</strong> section.</li>
+        <li>Click <strong>Enable two-factor authentication</strong>. GTFS·X emails a 6-digit code to your account's email address.</li>
+        <li>Enter the code and confirm. Two-factor authentication is now on for your account.</li>
+      </ol>
+      <p>From then on, every sign-in — password or magic link's follow-up step — asks for a fresh code.</p>
+
+      <h2 id="signing-in">Signing in with a code</h2>
+      <p>Once 2FA is on, entering your password (or completing a Google sign-in) takes you to a code-entry screen instead of straight into the editor. GTFS·X emails a new 6-digit code each time; enter it to finish signing in. If you don't see it, use the <strong>Resend code</strong> link (available once the cooldown between sends expires) — codes can be resent a limited number of times per sign-in attempt. If a code expires or you run out of attempts, just sign in again to get a fresh one.</p>
+      <p>Magic-link sign-in doesn't currently prompt for a 2FA code — clicking the link already proves you control the email address, which is the same factor a 2FA code proves.</p>
+
+      <h2 id="org-requirement">Requiring 2FA for your organization</h2>
+      <p>Organization owners and admins can require two-factor authentication for every member, regardless of each member's individual setting. Open <a href="/docs/organizations/">Organization settings</a> → <strong>Security</strong> and check <strong>Require two-factor authentication for all members</strong>.</p>
+      <p>Members who haven't enabled 2FA on their own account are still covered: when the org requires it, they're emailed a verification code at each sign-in automatically, using their account email. Members can't turn 2FA off for their own account while their organization requires it.</p>
+
+      <h2 id="sms">Text message (coming soon)</h2>
+      <p>SMS-delivered codes are on the roadmap and show up as a disabled option in Account settings today. Once available, it'll be an alternative to email codes, not a replacement — email 2FA works the same way it does now.</p>
+
+      <h2 id="turning-off">Turning it off</h2>
+      <p>Open <a href="/account">Account settings</a> → <strong>Two-factor authentication</strong> and click <strong>Disable</strong>. GTFS·X emails a confirmation code first, the same as enabling — enter it to turn 2FA off. This option isn't available while your organization requires 2FA; ask an admin to change the org-wide setting instead.</p>
+
+      <div class="see-also">
+        <h2>See also</h2>
+        <ul>
+          <li><a href="/docs/account-and-cloud-sync/">Accounts and cloud sync</a> — sign-in methods, account settings, and account deletion.</li>
+          <li><a href="/docs/organizations/">Organizations &amp; team workspaces</a> — member roles and org-wide settings, including the 2FA requirement.</li>
+          <li><a href="/privacy-policy/">Privacy policy</a> — what GTFS·X stores about you.</li>
+        </ul>
+      </div>
+    </main>
+    <style>
+footer.gx-footer { max-width: none; width: 100%; margin: 0; padding: 0; background: #3D2E22; color: #FFF8F0; font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif; box-sizing: border-box; }
+footer.gx-footer * { box-sizing: border-box; }
+footer.gx-footer a { text-decoration: none; }
+footer.gx-footer .gx-wrap { max-width: 1180px; margin: 0 auto; padding: 64px 28px 36px; }
+footer.gx-footer .gx-top { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 36px; }
+footer.gx-footer .gx-lockup { height: 28px; width: auto; display: block; margin-bottom: 16px; }
+footer.gx-footer .gx-blurb { font-size: 13.5px; color: rgba(255,248,240,0.6); line-height: 1.55; max-width: 240px; margin: 0; }
+footer.gx-footer .gx-social { display: flex; gap: 10px; margin-top: 18px; }
+footer.gx-footer .gx-social a { width: 34px; height: 34px; border-radius: 9px; background: rgba(255,248,240,0.08); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #FFF8F0; transition: background 0.12s; }
+footer.gx-footer .gx-social a:hover { background: #E8734A; }
+footer.gx-footer .gx-col h4 { font-family: "Nunito", ui-rounded, system-ui, sans-serif; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.07em; color: rgba(255,248,240,0.5); margin: 0 0 16px; }
+footer.gx-footer .gx-col a { display: block; font-size: 14px; color: rgba(255,248,240,0.82); margin-bottom: 11px; transition: color 0.12s; }
+footer.gx-footer .gx-col a:hover { color: #E8734A; }
+footer.gx-footer .gx-bottom { max-width: 1180px; margin: 48px auto 0; padding: 24px 28px 0; border-top: 1px solid rgba(255,248,240,0.12); display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 13px; color: rgba(255,248,240,0.5); }
+footer.gx-footer .gx-mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+@media (max-width: 780px) { footer.gx-footer .gx-top { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 480px) { footer.gx-footer .gx-top { grid-template-columns: 1fr; } }
+</style>
+<footer class="gx-footer">
+  <div class="gx-wrap">
+    <div class="gx-top">
+      <div>
+        <img class="gx-lockup" src="/gtfsx-lockup-on-dark.svg" alt="GTFS·X" width="100" height="28">
+        <p class="gx-blurb">The fast, easy GTFS editor and service planner. Built for transit agencies, planners, and consultants.</p>
+        <div class="gx-social">
+          <a href="https://twitter.com/gtfsxapp" aria-label="GTFS·X on X">X</a>
+          <a href="https://www.linkedin.com/company/gtfsx" aria-label="GTFS·X on LinkedIn">in</a>
+          <a href="https://github.com/GTFS-X/gtfsx" aria-label="GTFS·X on GitHub">gh</a>
+        </div>
+      </div>
+      <div class="gx-col">
+        <h4>Product</h4>
+        <a href="/editor">Editor</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/planning">Planning</a>
+        <a href="/docs/hosted-publishing/">Publishing</a>
+      </div>
+      <div class="gx-col">
+        <h4>Learn</h4>
+        <a href="/learn/gtfs/">What is GTFS</a>
+        <a href="/learn/gtfs-flex/">What is GTFS-Flex</a>
+        <a href="/learn/publish-gtfs-feed/">Publish a GTFS feed</a>
+        <a href="/docs/">Docs</a>
+      </div>
+      <div class="gx-col">
+        <h4>Compare</h4>
+        <a href="/compare/trillium/">vs Trillium</a>
+        <a href="/compare/remix/">vs Remix</a>
+        <a href="/compare/gtfs-builder-rtap/">vs RTAP</a>
+      </div>
+      <div class="gx-col">
+        <h4>Company</h4>
+        <a href="/about/">About</a>
+        <a href="/feed-health/">GTFS Dashboard</a>
+        <a href="/community/announcements">Announcements</a>
+        <a href="mailto:hello@gtfsx.com">Contact</a>
+        <a href="/use-cases/state-dot/">State DOTs</a>
+      </div>
+    </div>
+    <div class="gx-bottom">
+      <span>© 2026 GTFS·X · Vector &amp; Vertex</span>
+      <span class="gx-mono">hello@gtfsx.com</span>
+    </div>
+  </div>
+</footer>
+    <script>
+      (function () {
+        fetch('/api/me', { credentials: 'include', headers: { 'X-GB-Client': 'web' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.user) return;
+            var slot = document.getElementById('user-slot');
+            if (!slot) return;
+            var label = data.user.displayName || data.user.email || '';
+            var initial = (label.charAt(0) || '?').toUpperCase();
+            var escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            slot.innerHTML = '<a href="/account" class="user-avatar" title="' + escaped + '">' + initial + '</a>';
+          })
+          .catch(function () { /* keep "Sign in" */ });
+      })();
+    </script>
+    <script src="/assets/site-nav.js"></script>
+      <script src="/assets/docs/docs-nav.js"></script>
+</body>
+</html>

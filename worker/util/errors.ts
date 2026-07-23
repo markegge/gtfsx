@@ -14,6 +14,11 @@ export type ErrorCode =
   | 'invalid_credentials'
   | 'email_unverified'
   | 'email_send_failed'
+  | 'twofa_required'
+  | 'twofa_invalid_code'
+  | 'twofa_expired'
+  | 'twofa_org_required'
+  | 'sms_unavailable'
   | 'token_invalid'
   | 'token_expired'
   | 'rt_breakage'
@@ -54,6 +59,18 @@ export const emailUnverified = (extra?: Record<string, unknown>) =>
   new ApiError(403, 'email_unverified', 'Please verify your email address before signing in', extra);
 export const emailSendFailed = () =>
   new ApiError(502, 'email_send_failed', 'Verification email send failed. Please contact the administrator.');
+// Two-factor authentication. `twofaRequired` carries the challenge token, the
+// masked destination, the method, and the resend cooldown as extras.
+export const twofaRequired = (extra?: Record<string, unknown>) =>
+  new ApiError(403, 'twofa_required', 'Two-factor authentication required', extra);
+export const twofaInvalidCode = (extra?: Record<string, unknown>) =>
+  new ApiError(400, 'twofa_invalid_code', 'That code is incorrect', extra);
+export const twofaExpired = () =>
+  new ApiError(400, 'twofa_expired', 'This verification code has expired — start again');
+export const twofaOrgRequired = () =>
+  new ApiError(403, 'twofa_org_required', 'Your organization requires two-factor authentication');
+export const smsUnavailable = () =>
+  new ApiError(400, 'sms_unavailable', 'Text-message verification is not available yet');
 export const tokenInvalid = () => new ApiError(400, 'token_invalid', 'Invalid or unknown token');
 export const tokenExpired = () => new ApiError(400, 'token_expired', 'This link has expired — please request a new one');
 export const rtBreakage = (extra?: Record<string, unknown>) =>

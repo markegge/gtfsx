@@ -108,3 +108,40 @@ export function deleteAccount(input: { password?: string }): Promise<void> {
 export function resendVerification(input: { email: string }): Promise<void> {
   return request('/auth/verify-resend', { method: 'POST', body: input });
 }
+
+// ─── Two-factor authentication ─────────────────────────────────────────────
+// Email codes only today. `challenge` is an opaque token the client holds
+// between steps (never the code itself); ApiError.extra carries the
+// spec-defined extras (challenge/method/destination/resend_cooldown_sec on
+// twofa_required, attempts_left on twofa_invalid_code).
+
+export function verify2fa(input: { challenge: string; code: string }): Promise<{ user: AuthedUser }> {
+  return request<{ user: AuthedUser }>('/auth/2fa/verify', { method: 'POST', body: input });
+}
+
+export function resend2fa(input: { challenge: string }): Promise<{ resend_cooldown_sec: number }> {
+  return request<{ resend_cooldown_sec: number }>('/auth/2fa/resend', { method: 'POST', body: input });
+}
+
+export interface TwofaStatus {
+  method: 'none' | 'email' | 'sms';
+  org_required: boolean;
+  phone_masked: string | null;
+  sms_available: boolean;
+}
+
+export function getTwofa(): Promise<TwofaStatus> {
+  return request<TwofaStatus>('/api/me/twofa');
+}
+
+export function enableTwofa(input: { method: 'email' | 'sms' }): Promise<{ challenge: string }> {
+  return request<{ challenge: string }>('/api/me/twofa/enable', { method: 'POST', body: input });
+}
+
+export function disableTwofa(): Promise<{ challenge: string }> {
+  return request<{ challenge: string }>('/api/me/twofa/disable', { method: 'POST' });
+}
+
+export function confirmTwofa(input: { challenge: string; code: string }): Promise<void> {
+  return request('/api/me/twofa/confirm', { method: 'POST', body: input });
+}

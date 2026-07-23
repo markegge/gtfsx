@@ -27,6 +27,11 @@ export type ApiErrorCode =
   | 'rate_limited'
   | 'token_invalid'
   | 'token_expired'
+  | 'twofa_required'
+  | 'twofa_invalid_code'
+  | 'twofa_expired'
+  | 'twofa_org_required'
+  | 'sms_unavailable'
   | 'internal'
   | 'network_error'
   | 'unknown';

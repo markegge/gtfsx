@@ -5,6 +5,7 @@ import { generateToken } from '../util/crypto';
 import { clientIp } from '../util/rateLimit';
 import { logAudit } from '../util/audit';
 import { createSession, sessionCookie } from './session';
+import { twofaRequirement, startChallenge } from './twofa';
 import { sendWelcomeEmail } from '../email';
 
 // ─── Google OAuth: server-side authorization-code flow (issue #20) ───────────
@@ -339,6 +340,40 @@ googleRouter.get('/callback', async (c) => {
     }
   }
 
+  // Audit the account-level action (link/create) regardless of the 2FA gate —
+  // those DB writes already committed.
+  if (auditAction !== 'session.login') {
+    await logAudit(c.env, {
+      actorUserId: userId,
+      subjectType: 'user',
+      subjectId: userId,
+      action: auditAction,
+      metadata: { provider: 'google' },
+      ip,
+    });
+  }
+
+  // ─── 2FA gate ──────────────────────────────────────────────────────────────
+  // Same gate as password login. Instead of a JSON 403 we redirect to /login
+  // with the challenge token in the URL FRAGMENT (never the query, so the token
+  // stays out of request logs). No session cookie is set here.
+  const twofa = await twofaRequirement(c.env, userId);
+  if (twofa.required) {
+    const acct = await c.env.DB.prepare(`SELECT email FROM user WHERE id = ?`)
+      .bind(userId)
+      .first<{ email: string }>();
+    const challenge = await startChallenge(c.env, {
+      user: { id: userId, email: acct?.email ?? email },
+      purpose: 'login',
+      method: twofa.method,
+      ip,
+    });
+    c.header('Set-Cookie', clearStateCookie());
+    c.header('Cache-Control', 'no-store');
+    const frag = `twofa=${challenge.token}&method=${challenge.method}&dest=${encodeURIComponent(challenge.destination)}`;
+    return c.redirect(`${origin}/login#${frag}`, 302);
+  }
+
   // ─── Establish the session ─────────────────────────────────────────────────
   const session = await createSession(c.env, {
     userId,
@@ -351,16 +386,6 @@ googleRouter.get('/callback', async (c) => {
   c.header('Set-Cookie', sessionCookie(session.token, session.expiresAt), { append: true });
   c.header('Cache-Control', 'no-store');
 
-  if (auditAction !== 'session.login') {
-    await logAudit(c.env, {
-      actorUserId: userId,
-      subjectType: 'user',
-      subjectId: userId,
-      action: auditAction,
-      metadata: { provider: 'google' },
-      ip,
-    });
-  }
   await logAudit(c.env, {
     actorUserId: userId,
     subjectType: 'session',

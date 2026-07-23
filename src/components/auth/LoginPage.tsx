@@ -4,10 +4,16 @@ import { FormField } from '../ui/FormField';
 import { AuthLayout } from './AuthLayout';
 import { AuthButton } from './AuthButton';
 import { GoogleSignInButton, AuthDivider } from './GoogleSignInButton';
-import { login, requestMagicLink, resendVerification, ApiError } from '../../services/authApi';
+import { login, requestMagicLink, resendVerification, verify2fa, resend2fa, ApiError } from '../../services/authApi';
 import { useStore } from '../../store';
 
 type Tab = 'password' | 'magic';
+
+interface TwofaChallenge {
+  challenge: string;
+  method: string;
+  destination: string;
+}
 
 export function LoginPage() {
   const [searchParams] = useSearchParams();
@@ -32,6 +38,18 @@ export function LoginPage() {
 
   const [loading, setLoading] = useState(false);
 
+  // Set when password login (or the Google OAuth redirect) reports a 2FA
+  // code is required. Stays local — it never touches the Zustand store,
+  // since it isn't real auth state until the code is verified.
+  const [twofa, setTwofa] = useState<TwofaChallenge | null>(null);
+  const [twofaCode, setTwofaCode] = useState('');
+  const [twofaError, setTwofaError] = useState<string | null>(null);
+  const [twofaExpired, setTwofaExpired] = useState(false);
+  const [verifyingTwofa, setVerifyingTwofa] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendingTwofa, setResendingTwofa] = useState(false);
+  const [twofaResent, setTwofaResent] = useState(false);
+
   const magicLinkInvalid = searchParams.get('error') === 'magic_link_invalid';
   const resetSuccess = searchParams.get('reset') === '1';
 
@@ -47,6 +65,29 @@ export function LoginPage() {
     if (searchParams.get('tab') === 'magic') setTab('magic');
   }, [searchParams]);
 
+  // Google OAuth 2FA hand-off: on success, google.ts redirects to
+  // /login#twofa=<token>&method=email&dest=<masked> instead of returning
+  // JSON (the token can't go in a query string / server log). Parse it once
+  // on mount and strip the fragment so a refresh doesn't re-trigger it.
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash.startsWith('#twofa=')) return;
+    const params = new URLSearchParams(hash.slice(1));
+    const challenge = params.get('twofa');
+    const method = params.get('method') ?? 'email';
+    const destination = params.get('dest') ?? '';
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    if (!challenge) return;
+    setTwofa({ challenge, method, destination });
+    setResendCooldown(60);
+  }, []);
+
+  useEffect(() => {
+    if (!twofa || resendCooldown <= 0) return;
+    const id = window.setTimeout(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => window.clearTimeout(id);
+  }, [twofa, resendCooldown]);
+
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
@@ -59,7 +100,17 @@ export function LoginPage() {
       const next = searchParams.get('next');
       navigate(next && next.startsWith('/') ? next : '/');
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'email_unverified') {
+      if (err instanceof ApiError && err.code === 'twofa_required') {
+        const challenge = typeof err.extra.challenge === 'string' ? err.extra.challenge : '';
+        const method = typeof err.extra.method === 'string' ? err.extra.method : 'email';
+        const destination = typeof err.extra.destination === 'string' ? err.extra.destination : '';
+        const cooldown = typeof err.extra.resend_cooldown_sec === 'number' ? err.extra.resend_cooldown_sec : 60;
+        setTwofa({ challenge, method, destination });
+        setTwofaCode('');
+        setTwofaError(null);
+        setTwofaExpired(false);
+        setResendCooldown(cooldown);
+      } else if (err instanceof ApiError && err.code === 'email_unverified') {
         const echoed = typeof err.extra.email === 'string' ? err.extra.email : email.trim();
         setUnverifiedEmail(echoed);
       } else {
@@ -97,6 +148,126 @@ export function LoginPage() {
       setLoading(false);
     }
   };
+
+  const handleVerifyTwofa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!twofa) return;
+    setTwofaError(null);
+    setVerifyingTwofa(true);
+    try {
+      const { user } = await verify2fa({ challenge: twofa.challenge, code: twofaCode.trim() });
+      setCurrentUser(user);
+      const next = searchParams.get('next');
+      navigate(next && next.startsWith('/') ? next : '/');
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'twofa_invalid_code') {
+        const attemptsLeft = typeof err.extra.attempts_left === 'number' ? err.extra.attempts_left : undefined;
+        setTwofaError(
+          attemptsLeft !== undefined
+            ? `Incorrect code. ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} left.`
+            : 'Incorrect code.',
+        );
+        setTwofaCode('');
+      } else if (err instanceof ApiError && err.code === 'twofa_expired') {
+        setTwofaExpired(true);
+      } else {
+        setTwofaError(err instanceof ApiError ? err.message : 'Could not verify code');
+      }
+    } finally {
+      setVerifyingTwofa(false);
+    }
+  };
+
+  const handleResendTwofa = async () => {
+    if (!twofa || resendCooldown > 0) return;
+    setResendingTwofa(true);
+    setTwofaError(null);
+    setTwofaResent(false);
+    try {
+      const { resend_cooldown_sec } = await resend2fa({ challenge: twofa.challenge });
+      setResendCooldown(resend_cooldown_sec ?? 60);
+      setTwofaResent(true);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'twofa_expired') {
+        setTwofaExpired(true);
+      } else {
+        setTwofaError(err instanceof ApiError ? err.message : 'Could not resend code');
+      }
+    } finally {
+      setResendingTwofa(false);
+    }
+  };
+
+  const handleBackFromTwofa = () => {
+    setTwofa(null);
+    setTwofaCode('');
+    setTwofaError(null);
+    setTwofaExpired(false);
+    setTwofaResent(false);
+    setResendCooldown(0);
+    setPassword('');
+  };
+
+  if (twofa) {
+    return (
+      <AuthLayout
+        title="Enter your code"
+        subtitle={
+          twofa.destination
+            ? `We sent a 6-digit code to ${twofa.destination}.`
+            : 'Enter the 6-digit code we sent you.'
+        }
+      >
+        {twofaExpired ? (
+          <div>
+            <div className="mb-4 px-3 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm">
+              That code has expired or ran out of attempts. Sign in again to get a new one.
+            </div>
+            <AuthButton variant="secondary" fullWidth onClick={handleBackFromTwofa}>
+              Back to sign in
+            </AuthButton>
+          </div>
+        ) : (
+          <form onSubmit={handleVerifyTwofa}>
+            <FormField label="Verification code" error={twofaError ?? undefined}>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
+                maxLength={6}
+                value={twofaCode}
+                onChange={(e) => setTwofaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="123456"
+                className="w-full px-3 py-2 border-2 rounded-lg text-lg font-mono tracking-[0.4em] text-center text-dark-brown bg-cream transition-colors border-sand focus:outline-none focus:border-coral focus:bg-white"
+              />
+            </FormField>
+            <AuthButton type="submit" fullWidth disabled={verifyingTwofa || twofaCode.length !== 6}>
+              {verifyingTwofa ? 'Verifying…' : 'Verify'}
+            </AuthButton>
+            <div className="flex items-center justify-between mt-4 text-sm">
+              <button type="button" onClick={handleBackFromTwofa} className="text-coral hover:underline">
+                Back
+              </button>
+              {resendCooldown > 0 ? (
+                <span className="text-warm-gray">Resend code in {resendCooldown}s</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResendTwofa}
+                  disabled={resendingTwofa}
+                  className="text-coral hover:underline disabled:opacity-60"
+                >
+                  {resendingTwofa ? 'Sending…' : 'Resend code'}
+                </button>
+              )}
+            </div>
+            {twofaResent && resendCooldown > 0 && <p className="mt-2 text-xs text-teal">New code sent.</p>}
+          </form>
+        )}
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout

@@ -52,6 +52,7 @@ interface OrgRow {
   brand_logo_r2_key: string | null;
   brand_logo_content_type: string | null;
   brand_logo_updated_at: number | null;
+  require_2fa: number;
 }
 
 interface OrgMembershipRow {
@@ -83,7 +84,8 @@ async function parseJson<T extends z.ZodTypeAny>(
 async function fetchOrg(env: Env, orgId: string): Promise<OrgRow | null> {
   const row = await env.DB.prepare(
     `SELECT id, slug, name, created_at, deleted_at,
-            brand_logo_r2_key, brand_logo_content_type, brand_logo_updated_at
+            brand_logo_r2_key, brand_logo_content_type, brand_logo_updated_at,
+            require_2fa
        FROM organization WHERE id = ?`,
   )
     .bind(orgId)
@@ -139,6 +141,7 @@ function shapeOrg(row: OrgRow) {
     name: row.name,
     createdAt: row.created_at,
     brandLogoUpdatedAt: row.brand_logo_r2_key ? row.brand_logo_updated_at : null,
+    requireTwofa: row.require_2fa === 1,
   };
 }
 
@@ -167,6 +170,7 @@ const createOrgSchema = z.object({
 const patchOrgSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   slug: z.string().optional(),
+  require_2fa: z.boolean().optional(),
 });
 
 const roleSchema: z.ZodType<OrgRole> = z.enum(['owner', 'admin', 'editor', 'viewer']);
@@ -288,6 +292,7 @@ orgsRouter.post('/', async (c) => {
           brand_logo_r2_key: null,
           brand_logo_content_type: null,
           brand_logo_updated_at: null,
+          require_2fa: 0,
         }),
         role: 'owner' as OrgRole,
         plan: initialPlan,
@@ -543,6 +548,10 @@ orgsRouter.patch('/:id', async (c) => {
     updates.push('slug = ?');
     binds.push(body.slug);
   }
+  if (body.require_2fa !== undefined && (body.require_2fa ? 1 : 0) !== org.require_2fa) {
+    updates.push('require_2fa = ?');
+    binds.push(body.require_2fa ? 1 : 0);
+  }
 
   if (updates.length === 0) {
     return c.json({ organization: shapeOrg(org) });
@@ -564,7 +573,11 @@ orgsRouter.patch('/:id', async (c) => {
     subjectType: 'org',
     subjectId: id,
     action: 'org.update',
-    metadata: { name: body.name !== undefined, slug: body.slug !== undefined },
+    metadata: {
+      name: body.name !== undefined,
+      slug: body.slug !== undefined,
+      require_2fa: body.require_2fa !== undefined,
+    },
     ip: clientIp(c.req.raw),
   });
   return c.json({ organization: fresh ? shapeOrg(fresh) : shapeOrg(org) });

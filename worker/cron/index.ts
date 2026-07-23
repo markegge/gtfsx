@@ -9,6 +9,7 @@ import {
   runTrialEndingReminders,
 } from './tasks';
 import { uploadPendingConversions } from '../marketing/ads/oci';
+import { reapExpiredTwofaChallenges } from '../auth/twofa';
 import { sendOciAlert } from '../email';
 
 // Scheduled worker entry point. Invoked from worker/index.ts#scheduled().
@@ -108,5 +109,12 @@ export async function runScheduled(
     await expireEnterpriseGrants(env);
   } catch (err) {
     console.error('[cron] expireEnterpriseGrants failed', err);
+  }
+
+  // Purge expired/consumed 2FA challenge rows (short-lived; 10-min TTL).
+  try {
+    await reapExpiredTwofaChallenges(env);
+  } catch (err) {
+    console.error('[cron] reapExpiredTwofaChallenges failed', err);
   }
 }

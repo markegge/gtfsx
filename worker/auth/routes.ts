@@ -8,6 +8,7 @@ import {
   emailUnverified,
   forbidden,
   invalidCredentials,
+  twofaRequired,
   validationFailed,
 } from '../util/errors';
 import { hashPassword, verifyPassword } from '../util/crypto';
@@ -28,6 +29,12 @@ import {
 } from './tokens';
 import { requireAuth } from './middleware';
 import { googleRouter } from './google';
+import {
+  twofaRequirement,
+  startChallenge,
+  verifyChallengeCode,
+  resendChallenge,
+} from './twofa';
 import { sendVerifyEmail, sendMagicLink, sendPasswordReset, sendWelcomeEmail } from '../email';
 import { verifyTurnstile } from '../util/turnstile';
 
@@ -557,6 +564,26 @@ authRouter.post('/login', async (c) => {
     throw emailUnverified({ email: user.email });
   }
 
+  // 2FA gate. Placed AFTER the status gates so it never changes the error
+  // surface for unverified/disabled accounts. When required, we send a code,
+  // set NO session cookie, and return 403 twofa_required with the challenge
+  // token — the SPA completes the login via POST /auth/2fa/verify.
+  const twofa = await twofaRequirement(c.env, user.id);
+  if (twofa.required) {
+    const challenge = await startChallenge(c.env, {
+      user: { id: user.id, email: user.email },
+      purpose: 'login',
+      method: twofa.method,
+      ip,
+    });
+    throw twofaRequired({
+      method: challenge.method,
+      challenge: challenge.token,
+      destination: challenge.destination,
+      resend_cooldown_sec: challenge.resendCooldownSec,
+    });
+  }
+
   const session = await createSession(c.env, {
     userId: user.id,
     ip,
@@ -574,6 +601,66 @@ authRouter.post('/login', async (c) => {
   });
 
   return c.json({ user: shapeUser(user) });
+});
+
+// ─── 2FA: verify a login challenge ───────────────────────────────────────────
+const twofaVerifySchema = z.object({
+  challenge: z.string().min(1).max(2048),
+  code: z.string().trim().min(1).max(12),
+});
+
+const twofaResendSchema = z.object({
+  challenge: z.string().min(1).max(2048),
+});
+
+authRouter.post('/2fa/verify', async (c) => {
+  const body = await parseJson(c, twofaVerifySchema);
+  const ip = clientIp(c.req.raw);
+
+  const { userId } = await verifyChallengeCode(c.env, {
+    token: body.challenge,
+    code: body.code,
+    allowedPurposes: ['login'],
+    ip,
+  });
+
+  // The account could have been disabled between challenge issue and verify.
+  const userRow = await c.env.DB.prepare(
+    `SELECT id, email, display_name, status, staff, deleted_at, plan, plan_status FROM user WHERE id = ?`,
+  )
+    .bind(userId)
+    .first<UserRow>();
+  if (!userRow || userRow.status !== 'active') {
+    throw forbidden('Account unavailable');
+  }
+
+  const session = await createSession(c.env, {
+    userId,
+    ip,
+    userAgent: c.req.header('User-Agent') ?? null,
+  });
+  c.header('Set-Cookie', sessionCookie(session.token, session.expiresAt));
+
+  await logAudit(c.env, {
+    actorUserId: userId,
+    subjectType: 'session',
+    subjectId: userId,
+    action: 'session.login',
+    metadata: { method: '2fa' },
+    ip,
+  });
+
+  return c.json({ user: shapeUser(userRow) });
+});
+
+// ─── 2FA: resend the login code ──────────────────────────────────────────────
+authRouter.post('/2fa/resend', async (c) => {
+  const body = await parseJson(c, twofaResendSchema);
+  const { resendCooldownSec } = await resendChallenge(c.env, {
+    token: body.challenge,
+    ip: clientIp(c.req.raw),
+  });
+  return c.json({ resend_cooldown_sec: resendCooldownSec });
 });
 
 // ─── Magic link request ────────────────────────────────────────────────────
@@ -627,6 +714,11 @@ authRouter.get('/magic-link/consume', async (c) => {
       .run();
   }
   await consumeAuthToken(c.env, resolved.tokenHash);
+
+  // NOTE: phase 1 deliberately SKIPS the 2FA gate here — a magic link already
+  // proves control of the email factor, which is exactly what an email 2FA code
+  // verifies. When method='sms' goes live (phase 2) this must issue an SMS
+  // challenge instead of signing the user straight in.
 
   const ip = clientIp(c.req.raw);
   const session = await createSession(c.env, {

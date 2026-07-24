@@ -14,6 +14,7 @@ const PRERENDERED_PREFIXES = [
   '/embed-demo/',
   '/learn/',
   '/privacy-policy/',
+  '/sms-terms/',
   '/pricing/',
   '/demo/',
   '/use-cases/',

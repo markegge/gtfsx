@@ -94,12 +94,14 @@ function setupSmsCapture(): SmsCapture {
 type MutableEnv = Record<string, string | undefined>;
 function setTwilioEnv(): void {
   (env as MutableEnv).TWILIO_ACCOUNT_SID = 'ACtest';
-  (env as MutableEnv).TWILIO_AUTH_TOKEN = 'test-token';
+  (env as MutableEnv).TWILIO_API_KEY_SID = 'SKtest';
+  (env as MutableEnv).TWILIO_API_KEY_SECRET = 'test-secret';
   (env as MutableEnv).TWILIO_VERIFY_SERVICE_SID = 'VAtest';
 }
 function clearTwilioEnv(): void {
   (env as MutableEnv).TWILIO_ACCOUNT_SID = undefined;
-  (env as MutableEnv).TWILIO_AUTH_TOKEN = undefined;
+  (env as MutableEnv).TWILIO_API_KEY_SID = undefined;
+  (env as MutableEnv).TWILIO_API_KEY_SECRET = undefined;
   (env as MutableEnv).TWILIO_VERIFY_SERVICE_SID = undefined;
 }
 

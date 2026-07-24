@@ -23,14 +23,16 @@ export class TwilioVerifyError extends Error {
   }
 }
 
-/** All three Twilio Verify secrets present → SMS 2FA is available. */
+/** All four Twilio Verify secrets present → SMS 2FA is available. */
 export function smsAvailable(env: Env): boolean {
-  return Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_VERIFY_SERVICE_SID);
+  return Boolean(
+    env.TWILIO_ACCOUNT_SID && env.TWILIO_API_KEY_SID && env.TWILIO_API_KEY_SECRET && env.TWILIO_VERIFY_SERVICE_SID,
+  );
 }
 
 function authHeader(env: Env): string {
-  // HTTP basic auth: base64("AccountSid:AuthToken").
-  return 'Basic ' + btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`);
+  // HTTP basic auth via Twilio API key: base64("ApiKeySid:ApiKeySecret").
+  return 'Basic ' + btoa(`${env.TWILIO_API_KEY_SID}:${env.TWILIO_API_KEY_SECRET}`);
 }
 
 function serviceUrl(env: Env, resource: string): string {

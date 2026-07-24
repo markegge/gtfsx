@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { FormField } from '../ui/FormField';
+import { FormField, CheckboxField } from '../ui/FormField';
 import { Badge } from '../ui/Badge';
 import { AuthLayout } from './AuthLayout';
 import { AuthButton } from './AuthButton';
@@ -344,6 +344,9 @@ function TwoFactorSection({ email }: { email: string }) {
   const [smsStep, setSmsStep] = useState<'idle' | 'phone' | 'phone-code'>('idle');
   const [phone, setPhone] = useState('');
   const [phoneCode, setPhoneCode] = useState('');
+  // Explicit SMS consent, captured at the phone-enrollment step. Off by default;
+  // the user must check it before we'll text a verification code.
+  const [smsConsent, setSmsConsent] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -365,6 +368,7 @@ function TwoFactorSection({ email }: { email: string }) {
     setSmsStep('idle');
     setPhone('');
     setPhoneCode('');
+    setSmsConsent(false);
   };
 
   const startEnableEmail = async () => {
@@ -619,11 +623,13 @@ function TwoFactorSection({ email }: { email: string }) {
                   smsStep={smsStep}
                   phone={phone}
                   phoneCode={phoneCode}
+                  consent={smsConsent}
                   working={working}
                   actionError={actionError}
                   codeInputClass={codeInputClass}
                   onPhoneChange={setPhone}
                   onPhoneCodeChange={setPhoneCode}
+                  onConsentChange={setSmsConsent}
                   onAddPhone={handleAddPhone}
                   onVerifyPhone={handleVerifyPhone}
                   onEnable={startEnableSms}
@@ -663,7 +669,7 @@ function TwoFactorSection({ email }: { email: string }) {
 }
 
 // The SMS enrollment sub-flow shown when a user picks "Text message" while 2FA
-// is off: add a phone number (with the carrier-rates disclosure), confirm the
+// is off: add a phone number (with the SMS consent checkbox), confirm the
 // texted code, then turn on SMS as the method. When a verified number already
 // exists we skip straight to the enable step and offer to change it.
 function SmsEnroll({
@@ -671,11 +677,13 @@ function SmsEnroll({
   smsStep,
   phone,
   phoneCode,
+  consent,
   working,
   actionError,
   codeInputClass,
   onPhoneChange,
   onPhoneCodeChange,
+  onConsentChange,
   onAddPhone,
   onVerifyPhone,
   onEnable,
@@ -686,11 +694,13 @@ function SmsEnroll({
   smsStep: 'idle' | 'phone' | 'phone-code';
   phone: string;
   phoneCode: string;
+  consent: boolean;
   working: boolean;
   actionError: string | null;
   codeInputClass: string;
   onPhoneChange: (v: string) => void;
   onPhoneCodeChange: (v: string) => void;
+  onConsentChange: (v: boolean) => void;
   onAddPhone: (e: React.FormEvent) => void;
   onVerifyPhone: (e: React.FormEvent) => void;
   onEnable: () => void;
@@ -747,9 +757,19 @@ function SmsEnroll({
         </FormField>
         <p className="text-xs text-warm-gray mb-3">
           Use international format, starting with <span className="font-mono">+</span> and your country code.
-          Msg &amp; data rates may apply. Reply STOP to opt out at any time.
         </p>
-        <AuthButton type="submit" disabled={working || phone.trim().length < 8}>
+        <CheckboxField
+          label="I agree to receive SMS verification codes and account/security alerts from GTFS·X. Msg & data rates may apply. Msg frequency varies. Reply STOP to opt out, HELP for help."
+          checked={consent}
+          onChange={onConsentChange}
+          containerClassName="mb-1"
+        />
+        <p className="text-xs text-warm-gray mb-3 ml-6">
+          See our{' '}
+          <a href="/sms-terms/" className="text-coral hover:underline">SMS terms</a> and{' '}
+          <a href="/privacy-policy/" className="text-coral hover:underline">privacy policy</a>.
+        </p>
+        <AuthButton type="submit" disabled={working || phone.trim().length < 8 || !consent}>
           {working ? 'Sending…' : 'Send code'}
         </AuthButton>
       </form>

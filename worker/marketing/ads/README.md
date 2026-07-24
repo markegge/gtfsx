@@ -93,13 +93,14 @@ does not expire unless you revoke it manually.
 
 ### 4. Conversion action IDs
 
-Three conversion actions map to the three uploaded event kinds:
+Four conversion actions map to the four uploaded event kinds:
 
 | Name | Category | Event kind | Status |
 |---|---|---|---|
 | `feed_exported` | Converted lead | `feed_exported` | exists (created 2026-05-26) |
 | `paywall_view` | Qualified lead | `paywall_view` | exists (created 2026-05-26) |
 | `demo_request` | Book appointment | `demo_request` (POST `/api/demo-leads`, the /book-demo lead-form submit) | exists (created 2026-07-12, ctId 7682006138) |
+| `sign_up` | Sign-up | `sign_up` (POST `/auth/signup`, fresh account signup carrying an ad click id) | needs creation (see §4) |
 
 > **`demo_request` now fires on the lead-form submit, not a redirect click.**
 > `/book-demo` used to 302 straight to the booking calendar and count the
@@ -155,6 +156,24 @@ uploads are unaffected. Pending `demo_request` rows accumulate (visible on
 is missing) and upload on the first cron run after it's set — rows older
 than 90 days are expired, same as the other kinds.
 
+#### Creating the `sign_up` conversion action (one-time, Ads UI)
+
+Same procedure as `demo_request` above — create an **Import → Track
+conversions from clicks** action named `sign_up` (category **Sign-up**,
+*Don't use a value*, Count **One**, 90-day window), then store its numeric ID:
+
+```bash
+wrangler versions secret put GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP   # numeric ID
+```
+
+The `sign_up` event is written server-side by the `/auth/signup` fresh-signup
+path (`insertEvent('sign_up', …)`) — only when the signup carried a captured
+ad click id (gclid/gbraid/wbraid), and only on a genuinely fresh signup (never
+on a login or a pending-verification retry). Organic signups write nothing.
+This secret is **optional** in exactly the same way as `demo_request`: leave it
+unset and the other three kinds keep uploading while `sign_up` rows stay
+pending (yellow note on the admin status page) until it's set.
+
 ### 5. Store everything as Worker secrets
 
 ```bash
@@ -167,6 +186,7 @@ wrangler secret put GOOGLE_ADS_CUSTOMER_ID            # <your-customer-id> (no h
 wrangler secret put GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED   # numeric ID
 wrangler secret put GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW    # numeric ID
 wrangler secret put GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST    # numeric ID (optional — see §4)
+wrangler secret put GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP         # numeric ID (optional — see §4)
 ```
 
 The cron triggers automatically at 09:00 UTC the next day. To smoke-test

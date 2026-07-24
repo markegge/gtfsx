@@ -1,6 +1,6 @@
 // Google Ads Offline Conversion Import (OCI) — server-side conversion
 // uploader. Pushes gclid-stamped `event` rows (feed_exported, paywall_view,
-// demo_request) to Google Ads as offline conversions. This is the cookieless
+// demo_request, sign_up) to Google Ads as offline conversions. This is the cookieless
 // replacement for the standard gtag.js conversion pixel and preserves the
 // locked no-cookies analytics architecture (see docs/GOOGLE_ADS_PLAN.md §3.2).
 //
@@ -47,8 +47,8 @@ const PROD_ORIGIN = 'https://www.gtfsx.com';
 // Conversion kinds we can upload. Anything not in this set is ignored by the
 // uploader; the per-run SQL WHERE clause narrows further to the kinds whose
 // conversion action is actually configured (see configuredKinds).
-export type UploadedKind = 'feed_exported' | 'paywall_view' | 'demo_request';
-const ALL_UPLOAD_KINDS: UploadedKind[] = ['feed_exported', 'paywall_view', 'demo_request'];
+export type UploadedKind = 'feed_exported' | 'paywall_view' | 'demo_request' | 'sign_up';
+const ALL_UPLOAD_KINDS: UploadedKind[] = ['feed_exported', 'paywall_view', 'demo_request', 'sign_up'];
 
 export interface OciConfig {
   developerToken: string;
@@ -57,11 +57,12 @@ export interface OciConfig {
   refreshToken: string;
   customerId: string;
   // feed_exported / paywall_view are required — the uploader refuses to run
-  // without them (live in prod since 2026-05-26). demo_request is OPTIONAL:
-  // making it required would silently no-op the two live uploads until Mark
-  // creates the new conversion action in the Ads UI. Unset simply means
-  // demo_request rows stay pending (and are surfaced on the admin status
-  // page) until GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST is set.
+  // without them (live in prod since 2026-05-26). demo_request and sign_up are
+  // OPTIONAL: making either required would silently no-op the two live uploads
+  // until Mark creates the new conversion action in the Ads UI. Unset simply
+  // means that kind's rows stay pending (and are surfaced on the admin status
+  // page) until GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST /
+  // GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP is set.
   conversionActions: ConversionActionMap;
 }
 
@@ -84,11 +85,12 @@ export interface DataManagerConfig {
 }
 
 // Conversion-action IDs per kind — the shape shared by both the legacy and the
-// Data Manager configs (feed/paywall required, demo optional).
+// Data Manager configs (feed/paywall required, demo/sign_up optional).
 export interface ConversionActionMap {
   feed_exported: string;
   paywall_view: string;
   demo_request?: string;
+  sign_up?: string;
 }
 
 // The kinds this config can actually upload, in ALL_UPLOAD_KINDS order.
@@ -132,6 +134,7 @@ export function readOciConfig(env: Env): OciConfig | null {
   const paywallAction = env.GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW;
   // Optional — see the OciConfig.conversionActions comment above.
   const demoAction = env.GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST;
+  const signUpAction = env.GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP;
   if (!dev || !cid || !cs || !rt || !cust || !feedAction || !paywallAction) {
     return null;
   }
@@ -145,6 +148,7 @@ export function readOciConfig(env: Env): OciConfig | null {
       feed_exported: feedAction,
       paywall_view: paywallAction,
       ...(demoAction ? { demo_request: demoAction } : {}),
+      ...(signUpAction ? { sign_up: signUpAction } : {}),
     },
   };
 }
@@ -161,6 +165,7 @@ export function readDataManagerConfig(env: Env): DataManagerConfig | null {
   const feedAction = env.GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED;
   const paywallAction = env.GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW;
   const demoAction = env.GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST;
+  const signUpAction = env.GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP;
   if (!rt || !projectId || !cid || !cs || !cust || !feedAction || !paywallAction) {
     return null;
   }
@@ -177,6 +182,7 @@ export function readDataManagerConfig(env: Env): DataManagerConfig | null {
       feed_exported: feedAction,
       paywall_view: paywallAction,
       ...(demoAction ? { demo_request: demoAction } : {}),
+      ...(signUpAction ? { sign_up: signUpAction } : {}),
     },
   };
 }

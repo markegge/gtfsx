@@ -19,6 +19,9 @@ describe('auth /signup + /verify', () => {
   beforeEach(async () => {
     await applyMigrations();
     await resetDb();
+    // resetDb doesn't truncate `event` — clear it so the sign_up conversion
+    // assertions below start from a clean slate (mirrors oci.test.ts).
+    await dbRun(`DELETE FROM event`);
     capture = setupEmailCapture();
   });
 
@@ -393,6 +396,79 @@ describe('auth /signup + /verify', () => {
     const body = (await res.json()) as { error: string; message: string };
     expect(body.error).toBe('email_send_failed');
     expect(body.message).toMatch(/contact the administrator/i);
+  });
+
+  // ─── Google Ads `sign_up` conversion event ────────────────────────────────
+  // A fresh signup carrying an ad click id writes a click-ID-stamped `sign_up`
+  // row into the cookieless `event` table (the OCI cron uploads it). Fires once
+  // per fresh signup only — never on organic signups, retries, or logins.
+
+  it('fresh signup with a gclid writes a click-ID-stamped sign_up event', async () => {
+    const client = makeClient();
+    const res = await client.post('/auth/signup', {
+      email: 'convert@example.com',
+      displayName: 'Convert',
+      password: 'correct-horse-battery',
+      gclid: 'GCLID-abc123',
+    });
+    expect(res.status).toBe(200);
+
+    const ev = await dbGet<{ kind: string; gclid: string | null; path: string }>(
+      `SELECT kind, gclid, path FROM event WHERE kind = 'sign_up'`,
+    );
+    expect(ev).not.toBeNull();
+    expect(ev!.gclid).toBe('GCLID-abc123');
+    expect(ev!.path).toBe('/signup');
+  });
+
+  it('fresh signup forwards gbraid when no gclid is present', async () => {
+    const client = makeClient();
+    await client.post('/auth/signup', {
+      email: 'braid@example.com',
+      displayName: 'Braid',
+      password: 'correct-horse-battery',
+      gbraid: 'GBRAID-xyz',
+    });
+    const ev = await dbGet<{ gclid: string | null; gbraid: string | null }>(
+      `SELECT gclid, gbraid FROM event WHERE kind = 'sign_up'`,
+    );
+    expect(ev).not.toBeNull();
+    expect(ev!.gbraid).toBe('GBRAID-xyz');
+    expect(ev!.gclid).toBeNull();
+  });
+
+  it('fresh signup WITHOUT any click id writes no sign_up event', async () => {
+    const client = makeClient();
+    const res = await client.post('/auth/signup', {
+      email: 'organic@example.com',
+      displayName: 'Organic',
+      password: 'correct-horse-battery',
+    });
+    expect(res.status).toBe(200);
+    const ev = await dbGet(`SELECT id FROM event WHERE kind = 'sign_up'`);
+    expect(ev).toBeNull();
+  });
+
+  it('a pending_verification retry does NOT write a second sign_up event', async () => {
+    const client = makeClient();
+    // First fresh signup with a click id → one sign_up event.
+    await client.post('/auth/signup', {
+      email: 'retryconv@example.com',
+      displayName: 'First',
+      password: 'first-password-long',
+      gclid: 'GCLID-first',
+    });
+    // Second submit for the same still-pending email → retry path, not fresh.
+    await client.post('/auth/signup', {
+      email: 'retryconv@example.com',
+      displayName: 'Second',
+      password: 'second-password-long',
+      gclid: 'GCLID-second',
+    });
+    const count = await dbGet<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM event WHERE kind = 'sign_up'`,
+    );
+    expect(count!.n).toBe(1);
   });
 });
 

@@ -1443,13 +1443,13 @@ adminRouter.get('/events/oci-status', async (c) => {
 
   // Pending: in-window, an ad identifier set, never uploaded, not flagged
   // failed. Keep the kind list in sync with ALL_UPLOAD_KINDS in
-  // worker/marketing/ads/oci.ts — demo_request shows here even while its
-  // conversion action is unconfigured, so pending rows stay visible.
+  // worker/marketing/ads/oci.ts — demo_request / sign_up show here even while
+  // their conversion action is unconfigured, so pending rows stay visible.
   const pendingRes = await c.env.DB.prepare(
     `SELECT kind, COUNT(*) AS n FROM event
       WHERE (gclid IS NOT NULL OR gbraid IS NOT NULL OR wbraid IS NOT NULL)
         AND oci_uploaded_at IS NULL
-        AND kind IN ('feed_exported', 'paywall_view', 'demo_request')
+        AND kind IN ('feed_exported', 'paywall_view', 'demo_request', 'sign_up')
         AND ts > ?
       GROUP BY kind`,
   ).bind(ninetyDaysAgo).all<OciPendingRow>();
@@ -1488,6 +1488,8 @@ adminRouter.get('/events/oci-status', async (c) => {
   // demo_request's action is optional (see readOciConfig) — surface its
   // absence as a note rather than flipping the whole page to "not configured".
   const demoActionPresent = !!c.env.GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST;
+  // sign_up's action is optional the same way as demo_request's.
+  const signUpActionPresent = !!c.env.GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP;
   // Which upload path the cron will actually take. Data Manager is preferred
   // and wins when its two secrets are present alongside the shared config.
   const dmActive =
@@ -1527,12 +1529,17 @@ adminRouter.get('/events/oci-status', async (c) => {
     ? `<p class="lead" style="color:#856404;background:#fff3cd;padding:8px 12px;border-radius:4px;"><code>demo_request</code> uploads are <strong>off</strong>: set <code>GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST</code> after creating the conversion action — see <code>worker/marketing/ads/README.md</code>. Pending <code>demo_request</code> rows wait until then.</p>`
     : '';
 
+  const signUpNote = (dmActive || cfgPresent) && !signUpActionPresent
+    ? `<p class="lead" style="color:#856404;background:#fff3cd;padding:8px 12px;border-radius:4px;"><code>sign_up</code> uploads are <strong>off</strong>: set <code>GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP</code> after creating the conversion action — see <code>worker/marketing/ads/README.md</code>. Pending <code>sign_up</code> rows wait until then.</p>`
+    : '';
+
   const cfgBanner = (dmActive
     ? `<p class="lead" style="color:#155724;background:#d4edda;padding:8px 12px;border-radius:4px;">Uploading via the <strong>Data Manager API</strong> — daily cron at 09:00 UTC.</p>`
     : cfgPresent
       ? `<p class="lead" style="color:#856404;background:#fff3cd;padding:8px 12px;border-radius:4px;">Data Manager is <strong>not configured</strong> — falling back to the legacy <code>uploadClickConversions</code> path, which is de-allowlisted for this account and will fail loudly. Set <code>GOOGLE_DATAMANAGER_REFRESH_TOKEN</code> + <code>GOOGLE_DATAMANAGER_PROJECT_ID</code> — see <code>worker/marketing/ads/README.md</code>.</p>`
       : `<p class="lead" style="color:#721c24;background:#f8d7da;padding:8px 12px;border-radius:4px;">OCI is <strong>not configured</strong>. Set the GOOGLE_ADS_* + GOOGLE_DATAMANAGER_* secrets — see <code>worker/marketing/ads/README.md</code>.</p>`)
-    + demoNote;
+    + demoNote
+    + signUpNote;
 
   const html = `<!doctype html>
 <html lang="en">

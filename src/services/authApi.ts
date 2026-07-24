@@ -53,6 +53,12 @@ export function signup(input: {
   // Raw invitation token from the email link. When present + valid, the
   // server skips email verification and logs the user in immediately.
   invitationToken?: string;
+  // Google Ads click identifiers captured for this session (see
+  // getStoredClickIds). Forwarded so the server can stamp the `sign_up`
+  // conversion event; omitted for organic signups.
+  gclid?: string;
+  gbraid?: string;
+  wbraid?: string;
 }): Promise<SignupResponse> {
   return request<SignupResponse>('/auth/signup', { method: 'POST', body: input });
 }

@@ -37,6 +37,7 @@ import {
 } from './twofa';
 import { sendVerifyEmail, sendMagicLink, sendPasswordReset, sendWelcomeEmail } from '../email';
 import { verifyTurnstile } from '../util/turnstile';
+import { insertEvent } from '../events/insert';
 
 const emailSchema = z.string().trim().toLowerCase().email();
 const passwordSchema = z.string().min(10).max(256);
@@ -60,6 +61,13 @@ const signupSchema = z.object({
   turnstileToken: z.string().max(2048).optional(),
   next: z.string().max(512).optional(),
   invitationToken: z.string().max(2048).optional(),
+  // Google Ads click identifiers, forwarded by the signup form from the
+  // session store (captureGclidFromUrl → sessionStorage). Same shape/caps as
+  // the analytics beacon + demo-lead form. Used only to stamp the server-side
+  // `sign_up` conversion event on a FRESH signup — never persisted on `user`.
+  gclid: z.string().max(256).optional(),
+  gbraid: z.string().max(256).optional(),
+  wbraid: z.string().max(256).optional(),
 });
 
 const loginSchema = z.object({
@@ -159,6 +167,22 @@ async function parseJson<T extends z.ZodTypeAny>(c: { req: { json: () => Promise
   return result.data;
 }
 
+// `event.session_id` is NOT NULL and a signup POST has no client beacon
+// session — mint a random id per event (same shape as the client's and the
+// demo-lead form's, see worker/marketing/demoLead.ts).
+function randomSessionId(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Trim + cap a forwarded click identifier → null when empty. zod already caps
+// at 256; this collapses empty strings the client may send to NULL.
+function clickId(value: string | undefined): string | null {
+  const trimmed = value?.trim().slice(0, 256);
+  return trimmed && trimmed.length > 0 ? trimmed : null;
+}
+
 export const authRouter = new Hono<AppContext>();
 
 authRouter.get('/ping', (c) => c.json({ ok: true }));
@@ -211,6 +235,11 @@ authRouter.post('/signup', async (c) => {
   }
 
   let autoActivatedUserId: string | null = null;
+  // Set true only on a genuinely fresh account creation (new user row, or a
+  // reactivated deleted_soft one) — NOT on the pending_verification retry path
+  // and NOT on the 409 conflict path. Gates the `sign_up` conversion event so
+  // it fires once per real signup, never on logins or repeat submissions.
+  let freshSignup = false;
 
   await withMinDelay(200, async () => {
     const existing = await findUserByEmail(c.env, body.email);
@@ -321,6 +350,7 @@ authRouter.post('/signup', async (c) => {
 
       if (autoActivate) {
         autoActivatedUserId = userId;
+        freshSignup = true;
         await logAudit(c.env, {
           actorUserId: userId,
           subjectType: 'user',
@@ -364,7 +394,37 @@ authRouter.post('/signup', async (c) => {
       action: 'user.signup',
       ip,
     });
+    freshSignup = true;
   });
+
+  // Google Ads `sign_up` conversion. Fires once per FRESH signup that carried
+  // an ad click id — mirrors the demo_request emission (worker/marketing/
+  // demoLead.ts): a cookieless, click-ID-stamped `event` row the OCI cron
+  // uploads (worker/marketing/ads/oci.ts). Written here (after the account is
+  // durably created + any verify email sent) so a rolled-back signup leaves no
+  // conversion behind. Organic signups (no click id) write nothing — there's
+  // nothing to attribute. Best-effort: an analytics write must never fail the
+  // signup that already succeeded.
+  const gclid = clickId(body.gclid);
+  const gbraid = clickId(body.gbraid);
+  const wbraid = clickId(body.wbraid);
+  if (freshSignup && (gclid || gbraid || wbraid)) {
+    try {
+      await insertEvent(c.env.DB, {
+        kind: 'sign_up',
+        path: '/signup',
+        ref: null,
+        sessionId: randomSessionId(),
+        country: c.req.header('CF-IPCountry') ?? null,
+        label: null,
+        gclid,
+        gbraid,
+        wbraid,
+      });
+    } catch (err) {
+      console.error('[signup] sign_up conversion event insert failed', err);
+    }
+  }
 
   // Invitation-driven signup: log the user in right now so the SPA can
   // redirect them straight to /orgs/accept without another round-trip

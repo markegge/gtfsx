@@ -111,6 +111,11 @@ export interface Env {
   // running while the new conversion action is created in the Ads UI —
   // demo_request rows simply stay pending until it's set.
   GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST?: string;
+  // sign_up (a fresh account signup carrying an ad click id — written
+  // server-side by the /auth/signup fresh-signup path). Optional in exactly
+  // the same way as demo_request: unset keeps the other uploads running and
+  // sign_up rows stay pending until it's set.
+  GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP?: string;
 
   // Google Ads Data Manager API (datamanager.googleapis.com) — the supported
   // replacement for the de-allowlisted ConversionUploadService. When BOTH of

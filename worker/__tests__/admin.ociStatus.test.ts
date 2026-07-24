@@ -57,6 +57,7 @@ const ADS_SECRET_KEYS = [
   'GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED',
   'GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW',
   'GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST',
+  'GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP',
   // Data Manager secrets — cleared too so a DM test can't leak the DM path
   // into a legacy/config-missing test.
   'GOOGLE_DATAMANAGER_REFRESH_TOKEN',
@@ -72,6 +73,7 @@ const DM_STATUS_KEYS = [
   'GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED',
   'GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW',
   'GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST',
+  'GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP',
 ];
 function clearAdsSecrets() {
   for (const k of ADS_SECRET_KEYS) {
@@ -126,8 +128,9 @@ describe('/api/admin/events/oci-status', () => {
     const body = await res.text();
     expect(body).toContain('Uploading via the <strong>Data Manager API</strong>');
     expect(body).not.toContain('not configured');
-    // All actions present — no demo_request warning note.
+    // All actions present — no demo_request / sign_up warning note.
     expect(body).not.toContain('GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST');
+    expect(body).not.toContain('GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP');
   });
 
   it('staff: legacy secrets only → amber "falling back to the legacy" banner', async () => {
@@ -157,6 +160,23 @@ describe('/api/admin/events/oci-status', () => {
     expect(body).toContain('uploads are <strong>off</strong>');
   });
 
+  it('staff: DM configured but sign_up action missing → DM banner plus sign_up note', async () => {
+    const { client } = await staffClient();
+    for (const k of DM_STATUS_KEYS) {
+      if (k === 'GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP') continue;
+      (testEnv as unknown as Record<string, string>)[k] = 'x';
+    }
+    const res = await client.get('/api/admin/events/oci-status');
+    const body = await res.text();
+    // The page stays green for the configured kinds…
+    expect(body).toContain('Uploading via the <strong>Data Manager API</strong>');
+    // …but flags that sign_up uploads are off until the secret is set.
+    expect(body).toContain('GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP');
+    expect(body).toContain('uploads are <strong>off</strong>');
+    // demo_request is fully configured here → no demo note.
+    expect(body).not.toContain('GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST');
+  });
+
   it('counts pending demo_request rows alongside the original kinds', async () => {
     const { client } = await staffClient();
     const now = Date.now();
@@ -170,6 +190,21 @@ describe('/api/admin/events/oci-status', () => {
     // Pending: 1 feed_exported + 2 demo_request = 3 total.
     expect(body).toMatch(/Pending[^]*?>3</);
     expect(body).toContain('demo_request');
+  });
+
+  it('counts pending sign_up rows alongside the original kinds', async () => {
+    const { client } = await staffClient();
+    const now = Date.now();
+    await seedEvent({ kind: 'feed_exported', gclid: 'gP1', ts: now - 5000 });
+    await seedEvent({ kind: 'sign_up', gclid: 'gS1', ts: now - 6000 });
+    await seedEvent({ kind: 'sign_up', gclid: 'gS2', ts: now - 7000 });
+
+    const res = await client.get('/api/admin/events/oci-status');
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    // Pending: 1 feed_exported + 2 sign_up = 3 total.
+    expect(body).toMatch(/Pending[^]*?>3</);
+    expect(body).toContain('sign_up');
   });
 
   it('counts pending, uploaded, and permanently failed', async () => {

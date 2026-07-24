@@ -32,6 +32,7 @@ const SECRETS = {
   GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED: '111111',
   GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW: '222222',
   GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST: '333333',
+  GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP: '444444',
 };
 
 // Data Manager secrets — the presence of these two (refresh token + project id)
@@ -47,6 +48,7 @@ const DM_SECRETS = {
   GOOGLE_ADS_CONVERSION_ACTION_FEED_EXPORTED: '111111',
   GOOGLE_ADS_CONVERSION_ACTION_PAYWALL_VIEW: '222222',
   GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST: '333333',
+  GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP: '444444',
 };
 
 const ALL_SECRET_KEYS = [
@@ -166,6 +168,7 @@ describe('OCI: readOciConfig', () => {
     expect(cfg!.conversionActions.feed_exported).toBe('111111');
     expect(cfg!.conversionActions.paywall_view).toBe('222222');
     expect(cfg!.conversionActions.demo_request).toBe('333333');
+    expect(cfg!.conversionActions.sign_up).toBe('444444');
   });
 
   it('demo_request action is optional: config still valid without it', () => {
@@ -175,6 +178,15 @@ describe('OCI: readOciConfig', () => {
     expect(cfg).not.toBeNull();
     expect(cfg!.conversionActions.feed_exported).toBe('111111');
     expect(cfg!.conversionActions.demo_request).toBeUndefined();
+  });
+
+  it('sign_up action is optional: config still valid without it', () => {
+    withSecrets();
+    delete (testEnv as unknown as Record<string, unknown>).GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP;
+    const cfg = readOciConfig(testEnv);
+    expect(cfg).not.toBeNull();
+    expect(cfg!.conversionActions.feed_exported).toBe('111111');
+    expect(cfg!.conversionActions.sign_up).toBeUndefined();
   });
 });
 
@@ -426,6 +438,68 @@ describe('OCI: uploadPendingConversions', () => {
     expect(row!.oci_uploaded_at).toBe(FIXED_NOW);
   });
 
+  it('uploads sign_up rows against the sign_up conversion action', async () => {
+    withSecrets();
+    const signUpId = await seedEvent({ gclid: 'gSignup', kind: 'sign_up', ts: FIXED_NOW - 1000 });
+
+    const fetchMock = stubFetch(({ url, init }) => {
+      if (url.includes('oauth2.googleapis.com')) return oauthResponse();
+      if (url.includes('uploadClickConversions')) {
+        const body = JSON.parse(String(init?.body ?? '{}'));
+        expect(body.conversions).toHaveLength(1);
+        expect(body.conversions[0].gclid).toBe('gSignup');
+        expect(body.conversions[0].conversion_action).toBe(
+          'customers/1001841562/conversionActions/444444',
+        );
+        return adsSuccessResponse(1);
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now });
+    expect(result.attempted).toBe(1);
+    expect(result.uploaded).toBe(1);
+
+    const row = await dbGet<{ oci_uploaded_at: number | null }>(`SELECT oci_uploaded_at FROM event WHERE id = ?`, signUpId);
+    expect(row!.oci_uploaded_at).toBe(FIXED_NOW);
+  });
+
+  it('sign_up action unset: sign_up rows stay pending, other kinds still upload, stale sign_up rows expire', async () => {
+    withSecrets();
+    delete (testEnv as unknown as Record<string, unknown>).GOOGLE_ADS_CONVERSION_ACTION_SIGN_UP;
+    const ninetyOneDays = 91 * 24 * 60 * 60 * 1000;
+    const feedId = await seedEvent({ gclid: 'gFeed', kind: 'feed_exported', ts: FIXED_NOW - 2000 });
+    const signUpId = await seedEvent({ gclid: 'gSignup', kind: 'sign_up', ts: FIXED_NOW - 1000 });
+    const staleSignUpId = await seedEvent({ gclid: 'gSignupOld', kind: 'sign_up', ts: FIXED_NOW - ninetyOneDays });
+
+    const fetchMock = stubFetch(({ url, init }) => {
+      if (url.includes('oauth2.googleapis.com')) return oauthResponse();
+      if (url.includes('uploadClickConversions')) {
+        const body = JSON.parse(String(init?.body ?? '{}'));
+        // Only the feed_exported row goes up — sign_up is unconfigured.
+        expect(body.conversions).toHaveLength(1);
+        expect(body.conversions[0].gclid).toBe('gFeed');
+        return adsSuccessResponse(1);
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await uploadPendingConversions(testEnv, { fetch: fetchMock as unknown as typeof fetch, now });
+    expect(result.attempted).toBe(1);
+    expect(result.uploaded).toBe(1);
+    expect(result.skippedExpired).toBe(1); // stale sign_up row expired even while unconfigured
+
+    const feed = await dbGet<{ oci_uploaded_at: number | null }>(`SELECT oci_uploaded_at FROM event WHERE id = ?`, feedId);
+    const signUp = await dbGet<{ oci_uploaded_at: number | null }>(`SELECT oci_uploaded_at FROM event WHERE id = ?`, signUpId);
+    const stale = await dbGet<{ oci_uploaded_at: number | null; oci_last_error: string | null }>(
+      `SELECT oci_uploaded_at, oci_last_error FROM event WHERE id = ?`, staleSignUpId,
+    );
+    expect(feed!.oci_uploaded_at).toBe(FIXED_NOW);
+    expect(signUp!.oci_uploaded_at).toBeNull(); // pending until the action is configured
+    expect(stale!.oci_uploaded_at).toBe(-1);
+    expect(stale!.oci_last_error).toMatch(/expired/i);
+  });
+
   it('demo action unset: demo_request rows stay pending, other kinds still upload, stale demo rows expire', async () => {
     withSecrets();
     delete (testEnv as unknown as Record<string, unknown>).GOOGLE_ADS_CONVERSION_ACTION_DEMO_REQUEST;
@@ -594,6 +668,7 @@ describe('OCI: readDataManagerConfig', () => {
     expect(cfg!.operatingAccountId).toBe('1001841562');
     expect(cfg!.loginAccountId).toBe('9998887777');
     expect(cfg!.conversionActions.feed_exported).toBe('111111');
+    expect(cfg!.conversionActions.sign_up).toBe('444444');
   });
 });
 

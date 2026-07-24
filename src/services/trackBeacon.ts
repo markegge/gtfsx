@@ -111,6 +111,23 @@ export function captureGclidFromUrl(): void {
   }
 }
 
+// The Google Ads click identifiers captured for this session (gclid/gbraid/
+// wbraid), first-touch, from sessionStorage. Forwarded by conversion forms —
+// e.g. the signup form stamps them onto its POST so the server can emit a
+// click-ID-attributed `sign_up` event (mirrors the demo-lead carry-through).
+// Returns nulls when nothing was captured or storage is blocked.
+export function getStoredClickIds(): {
+  gclid: string | null;
+  gbraid: string | null;
+  wbraid: string | null;
+} {
+  return {
+    gclid: getStored(GCLID_KEY),
+    gbraid: getStored(GBRAID_KEY),
+    wbraid: getStored(WBRAID_KEY),
+  };
+}
+
 // Keep in sync with the zod enum in worker/events/routes.ts. demo_request is
 // recorded server-side by GET /book-demo (worker/marketing/bookDemo.ts) — it
 // is listed for type parity only and has no client beacon call site.

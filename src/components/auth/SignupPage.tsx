@@ -6,6 +6,7 @@ import { AuthButton } from './AuthButton';
 import { GoogleSignInButton, AuthDivider } from './GoogleSignInButton';
 import { TurnstileWidget } from './TurnstileWidget';
 import { signup, resendVerification, ApiError } from '../../services/authApi';
+import { getStoredClickIds } from '../../services/trackBeacon';
 import { turnstileSiteKey } from '../../utils/featureFlags';
 import { useStore } from '../../store';
 
@@ -64,6 +65,9 @@ export function SignupPage() {
     setGeneralError(null);
     setLoading(true);
     try {
+      // Forward any captured ad click id so the server can attribute the
+      // Google Ads `sign_up` conversion (first-touch, from sessionStorage).
+      const clickIds = getStoredClickIds();
       const res = await signup({
         email: email.trim(),
         displayName: displayName.trim(),
@@ -71,6 +75,9 @@ export function SignupPage() {
         turnstileToken: turnstileToken ?? undefined,
         next: nextPath || undefined,
         invitationToken,
+        gclid: clickIds.gclid ?? undefined,
+        gbraid: clickIds.gbraid ?? undefined,
+        wbraid: clickIds.wbraid ?? undefined,
       });
       // Auto-activated invitee: skip the "check your email" screen and head
       // straight to the accept page (or wherever `next` points).
